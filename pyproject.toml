@@ -1,0 +1,110 @@
+[project]
+name = "docir"
+version = "0.1.0"
+description = "Doc-Index CLI — git-backed markdown documents with a derived SQLite/FTS5/semantic index, served by a warm local daemon."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Sergei Konovalov" }]
+dependencies = [
+    "typer>=0.15",
+    "rich>=13.9",
+    "pyyaml>=6.0",
+    "python-frontmatter>=1.1",
+    "sqlalchemy>=2.0",
+    "alembic>=1.14",
+    "pydantic-settings>=2.7",
+]
+
+[project.optional-dependencies]
+# Real ONNX semantic embeddings. Kept optional so the default install and the
+# test suite stay light and hermetic and fall back to the deterministic embedder.
+embeddings = ["fastembed>=0.5"]
+
+[project.scripts]
+docir = "docir.presentation.cli.app:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "ruff>=0.9",
+    "ty>=0.0.1a1",
+    "vulture>=2.14",
+]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "docir"
+module-root = "src"
+
+# ---------------------------------------------------------------------------
+# Ruff — linter + formatter (refined against docs.astral.sh/ruff)
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+extend-exclude = ["migrations", "src/docir/infrastructure/persistence/alembic"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "C4", "SIM", "RUF"]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401"]
+"tests/**" = ["N802", "N803", "S101"]
+
+# ---------------------------------------------------------------------------
+# ty — Astral type checker (refined against docs.astral.sh/ty)
+# ---------------------------------------------------------------------------
+[tool.ty.environment]
+python-version = "3.12"
+root = ["./src"]
+
+[tool.ty.src]
+include = ["src"]
+# The fastembed adapter imports an optional, not-installed dependency and is
+# exercised only when the `embeddings` extra is present.
+exclude = ["src/docir/infrastructure/embedding/fastembed_embedder.py"]
+
+[tool.ty.terminal]
+output-format = "concise"
+
+# ---------------------------------------------------------------------------
+# Vulture — dead-code finder
+# ---------------------------------------------------------------------------
+[tool.vulture]
+paths = ["src"]
+min_confidence = 70
+exclude = ["*/alembic/*"]
+ignore_decorators = ["@app.command", "@app.callback", "@tag_app.command", "@daemon_app.command"]
+
+# ---------------------------------------------------------------------------
+# Pytest / coverage
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = ["slow: end-to-end tests that spawn a real daemon subprocess"]
+
+[tool.coverage.run]
+source = ["docir"]
+branch = true
+omit = [
+    "*/alembic/*",
+    "*/infrastructure/embedding/fastembed_embedder.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@abstractmethod",
+]

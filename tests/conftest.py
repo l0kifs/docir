@@ -1,0 +1,107 @@
+"""Shared pytest fixtures.
+
+Every fixture keeps the system hermetic by pointing ``DOCIR_HOME`` at a temp
+directory and forcing in-process execution. All tests are fully synchronous;
+the only async surface (the embedding scheduler) is exercised through its
+synchronous ``flush`` interface.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable, Iterator
+from datetime import date
+
+import pytest
+
+from docir.application.dispatcher import Dispatcher
+from docir.domain.ports.clock import Clock
+from docir.domain.ports.unit_of_work import UnitOfWork
+from docir.infrastructure.config.settings import Settings
+from docir.infrastructure.persistence.database import (
+    create_index_engine,
+    create_session_factory,
+    run_migrations,
+)
+from docir.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from docir.presentation.composition import Container, build_container
+
+FIXED_DATE = date(2026, 7, 7)
+
+
+class FixedClock(Clock):
+    """A clock frozen to a fixed date for deterministic timestamps."""
+
+    def __init__(self, day: date = FIXED_DATE) -> None:
+        self._day = day
+
+    def today(self) -> date:
+        return self._day
+
+
+@pytest.fixture
+def settings(tmp_path, monkeypatch) -> Settings:
+    home = tmp_path / "docir"
+    monkeypatch.setenv("DOCIR_HOME", str(home))
+    monkeypatch.setenv("DOCIR_NO_DAEMON", "1")
+    monkeypatch.delenv("DOCIR_EMBEDDER", raising=False)
+    return Settings.resolve()
+
+
+@pytest.fixture
+def container(settings: Settings) -> Iterator[Container]:
+    built = build_container(settings, background_embeddings=False, clock=FixedClock())
+    try:
+        yield built
+    finally:
+        built.close()
+
+
+@pytest.fixture
+def dispatcher(container: Container) -> Dispatcher:
+    return container.dispatcher
+
+
+@pytest.fixture
+def uow_factory(settings: Settings) -> Iterator[Callable[[], UnitOfWork]]:
+    """A migrated, isolated unit-of-work factory for persistence-level tests."""
+    settings.ensure_directories()
+    run_migrations(settings.database_url)
+    engine = create_index_engine(settings.database_url)
+    session_factory = create_session_factory(engine)
+
+    def factory() -> UnitOfWork:
+        return SqlAlchemyUnitOfWork(session_factory)
+
+    try:
+        yield factory
+    finally:
+        engine.dispose()
+
+
+@pytest.fixture
+def seeded(dispatcher: Dispatcher) -> Dispatcher:
+    """A dispatcher pre-loaded with two tags and two related documents."""
+    dispatcher.dispatch("tag_add", {"key": "auth", "description": "Auth and tokens."})
+    dispatcher.dispatch("tag_add", {"key": "api", "description": "HTTP API surface."})
+    dispatcher.dispatch(
+        "add",
+        {
+            "type": "decision",
+            "title": "Auth strategy",
+            "description": "How the service authenticates API clients and refreshes tokens.",
+            "tags": ["auth", "api"],
+            "body": "We use JWT access tokens with refresh rotation.",
+        },
+    )
+    dispatcher.dispatch(
+        "add",
+        {
+            "type": "issue",
+            "title": "Token refresh bug",
+            "description": "Refresh token handling fails on renewal.",
+            "tags": ["auth"],
+            "related": ["adr-0001"],
+            "body": "The refresh endpoint returns 500 on token rotation.",
+        },
+    )
+    return dispatcher

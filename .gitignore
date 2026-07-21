@@ -221,3 +221,4 @@ __marimo__/
 examples/.workspace/
 
 .DS_Store
+.local-data/

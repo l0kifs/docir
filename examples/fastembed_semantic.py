@@ -18,8 +18,8 @@ from __future__ import annotations
 
 import importlib.util
 
-from docir.domain.ports.embedder import Embedder
-from docir.infrastructure.embedding.deterministic_embedder import DeterministicEmbedder
+from docir.platform.embedding import Embedder
+from docir.platform.embedding.deterministic import DeterministicEmbedder
 
 QUERY = "how do we handle refresh token rotation on renewal"
 
@@ -56,7 +56,7 @@ def main() -> None:
         print("then re-run:  uv run python examples/fastembed_semantic.py")
         return
 
-    from docir.infrastructure.embedding.fastembed_embedder import FastEmbedEmbedder
+    from docir.platform.embedding.fastembed import FastEmbedEmbedder
 
     print(f"query: {QUERY!r}\ncandidates:")
     for name, text in CANDIDATES.items():

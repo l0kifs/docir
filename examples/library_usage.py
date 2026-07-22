@@ -12,8 +12,8 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from docir.infrastructure.config.settings import Settings
-from docir.presentation.composition import build_container
+from docir.config.settings import Settings
+from docir.entry_points.composition import build_container
 
 
 def main() -> None:

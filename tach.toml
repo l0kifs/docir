@@ -1,0 +1,198 @@
+# Tach — module-boundary enforcement (docs/architecture-rules.md §8).
+#
+# The codebase is a set of vertical bounded contexts (modules/) over shared
+# technical capabilities (platform/), wired by entry_points/. Every allowed
+# dependency is declared below; anything undeclared fails `tach check`.
+#
+# Public surface (§8.2): each business module is split into `domain`,
+# `application`, `infra`, and `api` sub-modules. Outside code (entry_points and
+# other modules) may depend ONLY on a module's `api`; the dependency graph —
+# not a separate interface list — is what enforces that, because `api` is a
+# distinct module and the internals are never listed as an allowed dependency.
+#
+# Baseline (§8.1, §12.1): the derived index is a single shared SQLite schema and
+# one shared unit-of-work spanning all three contexts (see ADR-0002). Its
+# repositories and file stores therefore map each context's domain entities,
+# so `platform/persistence` and `platform/filesystem` depend on `*.domain`.
+# These are the ONLY grandfathered edges; each is marked `deprecated = true`
+# so it is reported and may only shrink, never grow.
+
+source_roots = ["src"]
+forbid_circular_dependencies = true
+exclude = [
+    "**/__pycache__",
+    "**/tests",
+    "**/alembic/**",
+    "docs",
+    "examples",
+    "build",
+    "dist",
+]
+
+[rules]
+require_ignore_directive_reasons = "error"
+unused_ignore_directives = "error"
+
+# ---------------------------------------------------------------------------
+# Root
+# ---------------------------------------------------------------------------
+[[modules]]
+path = "docir"
+utility = true                       # just __init__ (__version__)
+
+[[modules]]
+path = "docir.__main__"
+depends_on = ["docir.entry_points"]
+
+[[modules]]
+path = "docir.config"
+depends_on = []
+
+# ---------------------------------------------------------------------------
+# platform/ — shared technical capability (leaf, except the baseline edges)
+# ---------------------------------------------------------------------------
+[[modules]]
+path = "docir.platform"
+depends_on = []
+
+[[modules]]
+path = "docir.platform.errors"
+depends_on = []
+
+[[modules]]
+path = "docir.platform.clock"
+depends_on = []
+
+[[modules]]
+path = "docir.platform.embedding"
+depends_on = []
+
+[[modules]]
+path = "docir.platform.transport"
+depends_on = ["docir.platform.errors"]
+
+[[modules]]
+path = "docir.platform.filesystem"
+depends_on = [
+    "docir.platform.errors",
+    { path = "docir.modules.documents.domain", deprecated = true },
+    { path = "docir.modules.tags.domain", deprecated = true },
+]
+
+[[modules]]
+path = "docir.platform.persistence"
+depends_on = [
+    "docir.platform.embedding",
+    { path = "docir.modules.documents.domain", deprecated = true },
+    { path = "docir.modules.tags.domain", deprecated = true },
+    { path = "docir.modules.indexing.domain", deprecated = true },
+]
+
+# ---------------------------------------------------------------------------
+# modules/ — bounded contexts
+# ---------------------------------------------------------------------------
+[[modules]]
+path = "docir.modules"
+depends_on = []
+
+# -- documents --------------------------------------------------------------
+[[modules]]
+path = "docir.modules.documents"
+depends_on = []
+
+[[modules]]
+path = "docir.modules.documents.domain"
+depends_on = ["docir.platform.errors", "docir.platform.embedding"]
+
+[[modules]]
+path = "docir.modules.documents.application"
+depends_on = [
+    "docir.modules.documents.domain",
+    "docir.modules.indexing.api",
+    "docir.platform.clock",
+    "docir.platform.embedding",
+    "docir.platform.errors",
+    "docir.platform.filesystem",
+    "docir.platform.persistence",
+]
+
+[[modules]]
+path = "docir.modules.documents.infra"
+depends_on = ["docir.modules.documents.domain", "docir.platform.errors"]
+
+[[modules]]
+path = "docir.modules.documents.api"
+depends_on = ["docir.modules.documents.application", "docir.modules.documents.infra"]
+
+# -- tags -------------------------------------------------------------------
+[[modules]]
+path = "docir.modules.tags"
+depends_on = []
+
+[[modules]]
+path = "docir.modules.tags.domain"
+depends_on = []
+
+[[modules]]
+path = "docir.modules.tags.application"
+depends_on = [
+    "docir.modules.tags.domain",
+    "docir.platform.clock",
+    "docir.platform.errors",
+    "docir.platform.filesystem",
+    "docir.platform.persistence",
+]
+
+[[modules]]
+path = "docir.modules.tags.api"
+depends_on = ["docir.modules.tags.application"]
+
+# -- indexing ---------------------------------------------------------------
+[[modules]]
+path = "docir.modules.indexing"
+depends_on = []
+
+[[modules]]
+path = "docir.modules.indexing.domain"
+depends_on = ["docir.platform.embedding"]
+
+[[modules]]
+path = "docir.modules.indexing.application"
+depends_on = ["docir.platform.embedding", "docir.platform.persistence"]
+
+[[modules]]
+path = "docir.modules.indexing.infra"
+depends_on = [
+    "docir.modules.indexing.application",
+    "docir.platform.embedding",
+    "docir.platform.persistence",
+]
+
+[[modules]]
+path = "docir.modules.indexing.api"
+depends_on = [
+    "docir.modules.indexing.application",
+    "docir.modules.indexing.domain",
+    "docir.modules.indexing.infra",
+    "docir.platform.embedding",
+    "docir.platform.persistence",
+]
+
+# ---------------------------------------------------------------------------
+# entry_points/ — thin wiring (imports module apis only)
+# ---------------------------------------------------------------------------
+[[modules]]
+path = "docir.entry_points"
+depends_on = [
+    "docir",
+    "docir.config",
+    "docir.modules.documents.api",
+    "docir.modules.indexing.api",
+    "docir.modules.tags.api",
+    "docir.platform.clock",
+    "docir.platform.embedding",
+    "docir.platform.errors",
+    "docir.platform.filesystem",
+    "docir.platform.persistence",
+    "docir.platform.transport",
+]

@@ -1,0 +1,53 @@
+---
+name: CI
+
+'on':
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Lint, type-check, boundaries, tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history so contract-sync can diff against the base
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Lint (ruff)
+        run: uv run ruff check .
+
+      - name: Format check (ruff)
+        run: uv run ruff format --check .
+
+      - name: Type check (ty)
+        run: uv run ty check
+
+      - name: Dead-code scan (vulture)
+        run: uv run vulture
+
+      - name: Module boundaries (tach)
+        run: uv run tach check
+
+      - name: Contract sync (api.* <-> CONTRACT.md)
+        run: uv run python scripts/check_contract_sync.py
+
+      - name: Tests + coverage
+        run: uv run pytest --cov=docir --cov-fail-under=90

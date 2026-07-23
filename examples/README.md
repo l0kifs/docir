@@ -6,10 +6,13 @@ they never touch your real `~/.docir`.
 ## 1. CLI walkthrough — `quickstart.sh`
 
 A complete end-to-end tour of the `docir` command line, reproducing the
-architecture's agent flow: register tags → record a decision and a related
-issue → discover context → read a decision → add a new decision → resolve the
-issue → query, search, and run a graph health check. Each command is echoed
-before it runs, and the generated markdown files are printed at the end.
+architecture's agent flow: register tags → record a decision (with an `owner`)
+and an issue linked by a **typed edge** → discover context as a body-less
+**skeleton** → read the full decision → record a successor that **supersedes**
+the original → retire it and resolve the issue → re-**verify** a doc's freshness
+→ query, search, and run a Tier 1 graph health check → inspect the **core +
+profiles** schema. Each command is echoed before it runs, and the generated
+markdown (typed `related`, `owner`/`verified`) is printed at the end.
 
 ```bash
 ./examples/quickstart.sh
@@ -22,7 +25,9 @@ It writes to `examples/.workspace/` (reset on every run) and runs in-process
 
 Drives docir programmatically through the application dispatcher instead of the
 CLI — useful for embedding it in another Python tool. Shows tag registration,
-document creation, hybrid `context` retrieval, and a validated status update.
+document creation with a typed `depends_on` edge and an `owner`, skeleton
+`context` retrieval (no body) vs. `get` (full body), a validated status
+transition, and stamping `verified` to reset the staleness clock.
 
 ```bash
 uv run python examples/library_usage.py

@@ -22,13 +22,14 @@ dependencies = [
 embeddings = ["fastembed>=0.5"]
 
 [project.scripts]
-docir = "docir.presentation.cli.app:main"
+docir = "docir.entry_points.cli.app:main"
 
 [dependency-groups]
 dev = [
     "pytest>=8.3",
     "pytest-cov>=6.0",
     "ruff>=0.9",
+    "tach>=0.35.0",
     "ty>=0.0.1a1",
     "vulture>=2.14",
 ]
@@ -48,7 +49,7 @@ module-root = "src"
 line-length = 100
 target-version = "py312"
 src = ["src", "tests"]
-extend-exclude = ["migrations", "src/docir/infrastructure/persistence/alembic"]
+extend-exclude = ["migrations", "src/docir/platform/persistence/alembic"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "C4", "SIM", "RUF"]
@@ -69,7 +70,7 @@ root = ["./src"]
 include = ["src"]
 # The fastembed adapter imports an optional, not-installed dependency and is
 # exercised only when the `embeddings` extra is present.
-exclude = ["src/docir/infrastructure/embedding/fastembed_embedder.py"]
+exclude = ["src/docir/platform/embedding/fastembed.py"]
 
 [tool.ty.terminal]
 output-format = "concise"
@@ -96,7 +97,7 @@ source = ["docir"]
 branch = true
 omit = [
     "*/alembic/*",
-    "*/infrastructure/embedding/fastembed_embedder.py",
+    "*/platform/embedding/fastembed.py",
 ]
 
 [tool.coverage.report]

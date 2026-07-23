@@ -2,11 +2,12 @@
 #
 # quickstart.sh — a complete, self-contained walkthrough of the docir CLI.
 #
-# It reproduces the architecture's end-to-end agent flow: discover context,
-# read a decision, record a new decision, resolve an issue, then query/verify.
-# Everything runs against a throwaway workspace under examples/.workspace so it
-# never touches your real ~/.docir, and in-process (no daemon) so it is fully
-# deterministic.
+# It reproduces the architecture's end-to-end agent flow — discover context,
+# read a decision, record a successor, supersede the old one, resolve an issue —
+# and shows the capabilities layered on top: typed relation edges, the
+# skeleton-first read contract, staleness stewardship, and the core+profiles
+# schema. Everything runs against a throwaway workspace under examples/.workspace
+# (never your real ~/.docir) and in-process (no daemon) so it is deterministic.
 #
 # Run it from anywhere:  ./examples/quickstart.sh
 set -euo pipefail
@@ -28,51 +29,68 @@ docir tag add auth --description "Authentication, authorization, tokens, session
 docir tag add api  --description "Public/internal HTTP API surface and versioning."
 docir tag list
 
-echo "==> 2. Record an existing decision and a related open issue"
+echo "==> 2. Record a decision (with an owner) and a related issue (a TYPED edge)"
 docir add --type decision \
   --title "Auth strategy" \
   --description "How the service authenticates API clients and refreshes tokens." \
   --tags auth,api \
+  --owner platform-team \
   --body "The service authenticates clients with short-lived JWT access tokens."
 
+# The issue *depends on* the decision — a typed edge (<id>:<kind>), not a bare link.
 docir add --type issue \
   --title "Token refresh bug" \
   --description "Refresh tokens are not rotated on renewal, so old tokens stay valid." \
   --tags auth \
-  --related adr-0001 \
+  --related adr-0001:depends_on \
   --body "Reproduced on staging: the refresh endpoint returns the same token."
 
-echo "==> 3. An agent discovers the relevant context for a new task"
-# Hybrid (lexical + semantic) ranking, then one-hop relation traversal.
+echo "==> 3. An agent discovers context — a SKELETON (title/description, no body)"
+# context/query/search return body-less skeletons, so the agent scans cheaply
+# and then fetches only the bodies it needs by id (step 4).
 docir context "implement a new authentication endpoint" --limit 3
 
-echo "==> 4. Read the full decision before writing code"
+echo "==> 4. Read the full decision before writing code (get carries the body)"
 docir get adr-0001
 
-echo "==> 5. Record a new decision that came out of the work"
+echo "==> 5. Accept the decision, then record a successor that SUPERSEDES it"
+docir update adr-0001 --status accepted
 docir add --type decision \
   --title "Refresh token rotation" \
   --description "When and how refresh tokens are rotated on renewal." \
   --tags auth,api \
-  --related adr-0001 \
+  --owner platform-team \
+  --related adr-0001:supersedes \
   --body "On each renewal we issue a new refresh token and revoke the previous one."
 
-echo "==> 6. Resolve the issue (a status-only change; validated transition)"
+echo "==> 6. Retire the old decision and resolve the issue (validated transitions)"
+docir update adr-0001 --status superseded
 docir update issue-0001 --status resolved
 
-echo "==> 7. Structured query — resolved issues are hidden by default"
-docir query --type decision
-docir query --type issue                 # empty: issue-0001 is resolved
-docir query --type issue --include-resolved
+echo "==> 7. Staleness is data — confirm a doc is still correct"
+# Stamps today as the last-verified date; 'docir check' warns when a doc drifts
+# past its type's review cadence (decisions: 365 days).
+docir update adr-0002 --verified
 
-echo "==> 8. Full-text search and a Tier 1 graph health check"
+echo "==> 8. Structured query — superseded/resolved docs are hidden by default"
+docir query --type decision                 # only adr-0002 (adr-0001 is superseded)
+docir query --type decision --include-resolved
 docir search "refresh token rotation"
+
+echo "==> 9. Tier 1 graph health check (cycles, orphans, dangling, stale, unknown type)"
 docir check
 
-echo "==> 9. The generated markdown files (git is the source of truth)"
+echo "==> 10. The schema: a frozen core + the 'software' profile"
+# Swap or add profiles (research / ops / legal) to generalize docir beyond
+# software without touching the base types.
+cat "$DOCIR_HOME/docs-schema.yaml"
+
+echo
+echo "==> 11. The generated markdown files (git is the source of truth)"
 find "$DOCIR_HOME/docs" -name '*.md' | sort
 echo
 echo "----- docs/decisions/adr-0002-refresh-token-rotation.md -----"
+# Note the typed edge (related: {to: adr-0001, kind: supersedes}) plus owner/verified.
 cat "$DOCIR_HOME/docs/decisions/adr-0002-refresh-token-rotation.md"
 
 echo

@@ -100,9 +100,14 @@ description: How the service authenticates API clients and refreshes tokens.
 type: decision
 status: accepted
 tags: [auth, api]
-related: [adr-0003, issue-12]
+related:                          # typed edges: bare id = relates_to
+  - adr-0003
+  - to: adr-0001
+    kind: supersedes
 created: 2026-06-15
 updated: 2026-06-30
+owner: platform-team             # optional: staleness steward
+verified: 2026-06-30             # optional: last human re-confirmation
 ---
 ```
 Body: standard markdown, human-readable, diffs cleanly in git.
@@ -117,9 +122,11 @@ Body: standard markdown, human-readable, diffs cleanly in git.
 | `type` | yes | `docs add` (fixed at creation) | Document type (`decision`, `issue`, `architecture`, ...); determines which schema/status enum from `docs-schema.yaml` applies |
 | `status` | yes | `docs add` (default), `docs update --status` | Type-specific enum (e.g. `decision`: proposed/accepted/rejected/superseded; `issue`: open/resolved). Transitions are validated against `docs-schema.yaml` |
 | `tags` | no | `docs add --tags`, `docs update --set-field tags` | List of tag keys for `docs query --tag` filtering. Each key must exist in the tag registry (Tier 0 validation) — free-form tags are rejected, preventing synonym sprawl |
-| `related` | no | `docs add --related`, `docs update` | List of other document ids this one links to; forms the relation graph used for traversal and Tier 1 graph checks |
+| `related` | no | `docs add --related`, `docs update` | List of **typed edges** to other documents (`<id>` = default `relates_to`, or `{to, kind}`); forms the relation graph used for traversal and Tier 1 graph checks. Kinds come from the schema's `relation_types` registry (unknown kind = Tier 0 error); a type may whitelist kinds/targets via `allowed_relations` |
 | `created` | yes | `docs add` (auto) | Set once, never modified afterward; used for audit/sort queries |
 | `updated` | yes | CLI (auto, every write) | Refreshed on every `docs update`, metadata or body |
+| `owner` | no | `docs add --owner`, `docs update --set-owner` | Optional steward, surfaced by the staleness check; written only when set |
+| `verified` | no | `docs update --verified` | Optional date a human last re-confirmed the doc is still correct; resets the staleness clock (staleness measures from `verified`, else `updated`) |
 | `archived` | no | `docs archive` / `docs unarchive` | Absent by default; `true` removes the document from active search (FTS, embeddings) while keeping the file and index rows |
 
 `created` is set once by `docs add` and never modified afterward. `updated`
@@ -251,13 +258,35 @@ it changed:
 Required fields, valid status enums, and allowed status transitions (e.g.
 `open → resolved`, not the reverse without an explicit override) are
 defined in a `docs-schema.yaml` config, not hardcoded in the CLI — new
-document types can be added without changing CLI code.
+document types can be added without changing CLI code. A type also declares its
+`review_days` staleness cadence and, optionally, `allowed_relations`
+(`{kind: [target types]}`) constraining which typed edges it may declare. The
+valid relation kinds are a top-level `relation_types` registry (permissive when
+absent, for schemas predating typed edges).
+
+**Core + profiles.** The schema is composed, not monolithic: a frozen
+domain-agnostic **core** (the `decision` type, the relation registry, cadences)
+plus named **profiles** that layer domain types — `software`
+(issue/architecture), `research`, `ops`, `legal`. A `docs-schema.yaml` selects
+them with `profiles: [..]`; the loader merges `core → profiles → the file's
+inline overrides`. The default is `profiles: [software]`. This keeps
+generalizing docir to a new domain a matter of picking a profile rather than
+mutating the base schema. See ADR-0005/0006/0007 for typed edges, staleness, and
+profiles respectively.
 
 ## Read path
 
 Agent → `docs context "<task>"` → hybrid scoring (FTS5 + semantic) +
 related-graph traversal → returns a small relevant subset instead of the
 whole `docs/` folder.
+
+**Two-tier retrieval (skeleton → body).** `context`, `query`, and `search`
+return *skeletons* — frontmatter, tags, typed `related`, and the
+`owner`/`verified`/`stale` fields, but **not the body**. The agent scans those to
+judge relevance and then fetches only the bodies it needs with `docs get <id>`.
+Keeping bodies out of result sets is where the context savings come from; the
+`description` field (indexed and shown in listings) is what makes the skeleton
+enough to judge relevance.
 
 ### Semantic layer (fastembed)
 
@@ -409,6 +438,8 @@ Only checks that are cheap and essentially free of false positives:
 - Invalid status transition (e.g. `resolved → open` without an explicit
   override flag)
 - A `related` id that does not exist in the index
+- A relation `kind` not in the `relation_types` registry, or one the source
+  type's `allowed_relations` whitelist forbids for that target type
 - Malformed frontmatter (not valid YAML, wrong types)
 
 ### Tier 1 — structural warnings (async, non-blocking, via `docs check`)
@@ -421,8 +452,16 @@ problem":
 - Orphan documents (no incoming or outgoing relations) — candidates for
   archiving, analogous to dead code
 - Layering violations — a higher-level doc type (e.g. `architecture`)
-  depending on a lower-level one (e.g. `issue`), signaling an
-  architecture doc too tightly coupled to a transient problem
+  *depending on* a lower-level one (e.g. `issue`), signaling an
+  architecture doc too tightly coupled to a transient problem. Lateral edge
+  kinds (`supersedes`, `contradicts`) are exempt — they are not dependencies
+- Stale documents — past their type's `review_days` cadence (measured from
+  `verified`, else `updated`); an honest re-verification signal, reset by
+  `docs update <id> --verified`. Types with no cadence are never flagged
+- Unknown type — a document whose `type` is not in the active schema (e.g. a
+  profile was disabled after docs of its types were written, or a foreign file
+  was reindexed). Such docs escape the per-type grammar, so they are surfaced
+  rather than silently skipped
 
 ### Tier 2 — advisory/style (opt-in only, via `docs lint --deep`)
 

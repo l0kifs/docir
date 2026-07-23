@@ -13,17 +13,17 @@ from datetime import date
 
 import pytest
 
-from docir.application.dispatcher import Dispatcher
-from docir.domain.ports.clock import Clock
-from docir.domain.ports.unit_of_work import UnitOfWork
-from docir.infrastructure.config.settings import Settings
-from docir.infrastructure.persistence.database import (
+from docir.config.settings import Settings
+from docir.entry_points.composition import Container, build_container
+from docir.entry_points.dispatch import Dispatcher
+from docir.platform.clock import Clock
+from docir.platform.persistence.engine import (
     create_index_engine,
     create_session_factory,
     run_migrations,
 )
-from docir.infrastructure.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from docir.presentation.composition import Container, build_container
+from docir.platform.persistence.sqlalchemy_uow import SqlAlchemyUnitOfWork
+from docir.platform.persistence.unit_of_work import UnitOfWork
 
 FIXED_DATE = date(2026, 7, 7)
 

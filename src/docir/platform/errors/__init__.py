@@ -54,6 +54,14 @@ class UnknownRelatedError(ValidationError):
     """A ``related`` id does not exist in the index."""
 
 
+class UnknownRelationKindError(ValidationError):
+    """A ``related`` edge names a relation kind not in the schema registry."""
+
+
+class DisallowedRelationError(ValidationError):
+    """A relation kind (or its target type) is not permitted by the source type."""
+
+
 # --- Lookups ---------------------------------------------------------------
 
 

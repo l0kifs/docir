@@ -1,4 +1,11 @@
-"""Parse ``docs-schema.yaml`` into the domain :class:`Schema`."""
+"""Parse ``docs-schema.yaml`` into the domain :class:`Schema`.
+
+A schema file either lists ``profiles:`` (the frozen core is merged with the
+named bundled profiles and the file's own inline overrides) or defines its
+types inline the old way. Inline-only files stay fully backward compatible:
+no core is injected and relation kinds are unconstrained unless the file opts in
+with its own ``relation_types``.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +15,11 @@ import yaml
 
 from docir.modules.documents.domain.schema import Schema, TypeSchema
 from docir.modules.documents.infra.default_schema import DEFAULT_SCHEMA_YAML
+from docir.modules.documents.infra.profiles import (
+    CORE_SCHEMA_YAML,
+    PROFILE_NAMES,
+    PROFILE_YAMLS,
+)
 from docir.platform.errors import SchemaError
 
 
@@ -29,14 +41,62 @@ def parse_schema(raw: object) -> Schema:
     """Turn a parsed YAML mapping into a validated :class:`Schema`."""
     if not isinstance(raw, dict):
         raise SchemaError("schema root must be a mapping")
+    if "profiles" in raw:
+        return _merge_profiled(raw)
+
     types_raw = raw.get("types")
     if not isinstance(types_raw, dict) or not types_raw:
-        raise SchemaError("schema must define a non-empty 'types' mapping")
+        raise SchemaError("schema must define a non-empty 'types' mapping (or 'profiles')")
+    return Schema(
+        types=_parse_types_mapping(types_raw),
+        relation_types=frozenset(_parse_relation_types(raw.get("relation_types"))),
+    )
 
-    types: dict[str, TypeSchema] = {}
-    for name, spec in types_raw.items():
-        types[str(name)] = _parse_type(str(name), spec)
-    return Schema(types=types)
+
+def _merge_profiled(raw: object) -> Schema:
+    """Merge ``core -> named profiles -> the file's inline overrides``."""
+    if not isinstance(raw, dict):
+        raise SchemaError("schema root must be a mapping")
+    profiles = raw.get("profiles")
+    if not isinstance(profiles, list):
+        raise SchemaError("'profiles' must be a list of profile names")
+
+    fragments: list[object] = [yaml.safe_load(CORE_SCHEMA_YAML)]
+    for name in profiles:
+        key = str(name)
+        if key not in PROFILE_YAMLS:
+            known = ", ".join(PROFILE_NAMES)
+            raise SchemaError(f"unknown profile {key!r}; available profiles: {known}")
+        fragments.append(yaml.safe_load(PROFILE_YAMLS[key]))
+    fragments.append({k: v for k, v in raw.items() if k != "profiles"})
+
+    merged_types: dict[str, TypeSchema] = {}
+    merged_kinds: set[str] = set()
+    for fragment in fragments:
+        if not isinstance(fragment, dict):
+            continue
+        merged_kinds.update(_parse_relation_types(fragment.get("relation_types")))
+        types_raw = fragment.get("types")
+        if isinstance(types_raw, dict):
+            merged_types.update(_parse_types_mapping(types_raw))
+
+    if not merged_types:
+        raise SchemaError("resolved schema has no types after merging profiles")
+    return Schema(types=merged_types, relation_types=frozenset(merged_kinds))
+
+
+def _parse_relation_types(value: object) -> set[str]:
+    if value is None:
+        return set()
+    if not isinstance(value, list):
+        raise SchemaError("'relation_types' must be a list of kind names")
+    return {str(item) for item in value}
+
+
+def _parse_types_mapping(types_raw: object) -> dict[str, TypeSchema]:
+    if not isinstance(types_raw, dict):
+        return {}
+    return {str(name): _parse_type(str(name), spec) for name, spec in types_raw.items()}
 
 
 def _parse_type(name: str, spec: object) -> TypeSchema:
@@ -74,8 +134,12 @@ def _parse_type(name: str, spec: object) -> TypeSchema:
         raise SchemaError(f"type {name!r} 'inactive_statuses' must be a list")
 
     level = spec.get("level", 0)
-    if not isinstance(level, int):
+    if not isinstance(level, int) or isinstance(level, bool):
         raise SchemaError(f"type {name!r} 'level' must be an integer")
+
+    review_days = spec.get("review_days", 0)
+    if not isinstance(review_days, int) or isinstance(review_days, bool):
+        raise SchemaError(f"type {name!r} 'review_days' must be an integer")
 
     id_style = str(spec.get("id_style", "sequential"))
     if id_style not in ("sequential", "random"):
@@ -91,4 +155,23 @@ def _parse_type(name: str, spec: object) -> TypeSchema:
         level=level,
         inactive_statuses=tuple(str(s) for s in inactive),
         id_style=id_style,
+        allowed_relations=_parse_allowed_relations(name, spec.get("allowed_relations")),
+        review_days=review_days,
     )
+
+
+def _parse_allowed_relations(name: str, value: object) -> dict[str, tuple[str, ...]]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise SchemaError(f"type {name!r} 'allowed_relations' must be a mapping")
+    allowed: dict[str, tuple[str, ...]] = {}
+    for kind, targets in value.items():
+        if targets is None:
+            targets = []
+        if not isinstance(targets, list):
+            raise SchemaError(
+                f"type {name!r} allowed_relations {kind!r} must be a list of target types"
+            )
+        allowed[str(kind)] = tuple(str(t) for t in targets)
+    return allowed

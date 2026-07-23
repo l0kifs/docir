@@ -86,3 +86,57 @@ class TestSchema:
                     "b": TypeSchema("b", "p", (), ("s",), "s", {"s": frozenset()}),
                 }
             )
+
+
+def _obligation_type() -> TypeSchema:
+    return TypeSchema(
+        name="obligation",
+        prefix="obl",
+        required_fields=(),
+        statuses=("open", "fulfilled"),
+        default_status="open",
+        transitions={"open": frozenset({"fulfilled"}), "fulfilled": frozenset()},
+        allowed_relations={"implements": ("policy",), "relates_to": ()},
+        review_days=90,
+    )
+
+
+class TestRelationConstraints:
+    def test_allows_relation_permissive_without_whitelist(self) -> None:
+        # A type with no allowed_relations mapping permits any kind to any target.
+        assert _decision_type().allows_relation("supersedes", "decision")
+
+    def test_allows_listed_kind_to_listed_target(self) -> None:
+        assert _obligation_type().allows_relation("implements", "policy")
+
+    def test_rejects_listed_kind_to_unlisted_target(self) -> None:
+        assert not _obligation_type().allows_relation("implements", "obligation")
+
+    def test_rejects_unlisted_kind(self) -> None:
+        assert not _obligation_type().allows_relation("supersedes", "policy")
+
+    def test_empty_target_list_allows_any_target(self) -> None:
+        assert _obligation_type().allows_relation("relates_to", "anything")
+
+    def test_is_known_relation_kind(self) -> None:
+        schema = Schema(
+            types={"decision": _decision_type()},
+            relation_types=frozenset({"relates_to", "supersedes"}),
+        )
+        assert schema.is_known_relation_kind("supersedes")
+        assert not schema.is_known_relation_kind("bogus")
+
+    def test_unconfigured_registry_accepts_any_kind(self) -> None:
+        # An empty relation_types set means kinds are unconstrained (legacy).
+        assert _schema().is_known_relation_kind("whatever")
+
+    def test_review_days_for(self) -> None:
+        schema = Schema(types={"obligation": _obligation_type()})
+        assert schema.review_days_for("obligation") == 90
+
+    def test_allowed_relation_kind_must_be_registered(self) -> None:
+        with pytest.raises(SchemaError):
+            Schema(
+                types={"obligation": _obligation_type()},
+                relation_types=frozenset({"relates_to"}),  # 'implements' missing
+            )

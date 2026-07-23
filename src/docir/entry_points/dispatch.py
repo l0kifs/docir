@@ -80,6 +80,7 @@ class Dispatcher:
             related=_tuple(payload, "related"),
             body=_str(payload, "body", default=""),
             status=_opt_str(payload, "status"),
+            owner=_opt_str(payload, "owner"),
             wait_embeddings=_bool(payload, "wait_embeddings"),
         )
         return asdict(self._documents.add(request))
@@ -92,6 +93,8 @@ class Dispatcher:
             set_description=_opt_str(payload, "set_description"),
             set_tags=_opt_tuple(payload, "set_tags"),
             set_related=_opt_tuple(payload, "set_related"),
+            set_owner=_opt_str(payload, "set_owner"),
+            mark_verified=_bool(payload, "mark_verified"),
             append_section=_opt_pair(payload, "append_section"),
             replace_section=_opt_pair(payload, "replace_section"),
             replace_body=_opt_str(payload, "replace_body"),

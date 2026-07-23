@@ -18,6 +18,7 @@ from docir.platform.errors import (
     InvalidStatusTransitionError,
     StaleWriteError,
     UnknownRelatedError,
+    UnknownRelationKindError,
     UnknownTagError,
     ValidationError,
 )
@@ -152,6 +153,66 @@ class TestUpdate:
         )
         assert list(view["tags"]) == ["api"]
         assert list(view["related"]) == []
+
+    def test_set_owner_and_mark_verified(self, seeded: Dispatcher) -> None:
+        view = seeded.dispatch(
+            "update", {"doc_id": "adr-0001", "set_owner": "platform-team", "mark_verified": True}
+        )
+        assert view["owner"] == "platform-team"
+        assert view["verified"] == FIXED_DATE.isoformat()
+
+
+class TestTypedEdges:
+    def test_typed_edge_round_trips(self, seeded: Dispatcher) -> None:
+        view = seeded.dispatch(
+            "add",
+            {
+                "type": "decision",
+                "title": "Successor",
+                "description": "d",
+                "related": ["adr-0001:supersedes"],
+            },
+        )
+        assert list(view["related"]) == [{"target": "adr-0001", "kind": "supersedes"}]
+
+    def test_bare_id_defaults_to_relates_to(self, seeded: Dispatcher) -> None:
+        view = seeded.dispatch(
+            "add",
+            {"type": "decision", "title": "Linked", "description": "d", "related": ["adr-0001"]},
+        )
+        assert view["related"][0]["kind"] == "relates_to"
+
+    def test_unknown_relation_kind_rejected(self, seeded: Dispatcher) -> None:
+        with pytest.raises(UnknownRelationKindError):
+            seeded.dispatch(
+                "add",
+                {
+                    "type": "decision",
+                    "title": "Bad",
+                    "description": "d",
+                    "related": ["adr-0001:teleports_to"],
+                },
+            )
+
+
+class TestSkeletonReadPaths:
+    """The two-tier contract: list paths omit the body; `get` carries it."""
+
+    def test_query_and_search_and_context_omit_body(self, seeded: Dispatcher) -> None:
+        for command, payload in (
+            ("query", {}),
+            ("search", {"text": "auth"}),
+            ("context", {"task": "auth refresh"}),
+        ):
+            results = seeded.dispatch(command, payload)
+            assert results, f"{command} returned nothing"
+            for row in results:
+                assert "body" not in row, f"{command} leaked a body into the skeleton"
+                assert "title" in row and "description" in row
+
+    def test_get_includes_body(self, seeded: Dispatcher) -> None:
+        full = seeded.dispatch("get", {"doc_id": "adr-0001"})
+        assert full.get("body")
 
 
 class TestQuerySearchContext:

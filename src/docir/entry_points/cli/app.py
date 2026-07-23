@@ -62,8 +62,12 @@ def add(
     title: Annotated[str, typer.Option("--title")],
     description: Annotated[str, typer.Option("--description")],
     tags: Annotated[str | None, typer.Option("--tags", help="Comma-separated.")] = None,
-    related: Annotated[str | None, typer.Option("--related")] = None,
+    related: Annotated[
+        str | None,
+        typer.Option("--related", help="Comma-separated <id> or <id>:<kind> typed edges."),
+    ] = None,
     status: Annotated[str | None, typer.Option("--status")] = None,
+    owner: Annotated[str | None, typer.Option("--owner", help="Steward for staleness.")] = None,
     body: Annotated[str | None, typer.Option("--body")] = None,
     body_file: Annotated[Path | None, typer.Option("--body-file")] = None,
     stdin: Annotated[bool, typer.Option("--stdin")] = False,
@@ -77,6 +81,7 @@ def add(
         "tags": _split_csv(tags),
         "related": _split_csv(related),
         "status": status,
+        "owner": owner,
         "body": resolve_body(body, body_file, stdin),
         "wait_embeddings": wait_embeddings,
     }
@@ -90,7 +95,14 @@ def update(
     set_title: Annotated[str | None, typer.Option("--set-title")] = None,
     set_description: Annotated[str | None, typer.Option("--set-description")] = None,
     set_tags: Annotated[str | None, typer.Option("--set-tags")] = None,
-    set_related: Annotated[str | None, typer.Option("--set-related")] = None,
+    set_related: Annotated[
+        str | None,
+        typer.Option("--set-related", help="Comma-separated <id> or <id>:<kind> typed edges."),
+    ] = None,
+    set_owner: Annotated[str | None, typer.Option("--set-owner", help="Staleness steward.")] = None,
+    verified: Annotated[
+        bool, typer.Option("--verified", help="Stamp today as the last-verified date.")
+    ] = False,
     append_section: Annotated[str | None, typer.Option("--append-section")] = None,
     replace_section: Annotated[str | None, typer.Option("--replace-section")] = None,
     replace_body: Annotated[bool, typer.Option("--replace-body")] = False,
@@ -112,6 +124,8 @@ def update(
         "set_description": set_description,
         "set_tags": None if set_tags is None else _split_csv(set_tags),
         "set_related": None if set_related is None else _split_csv(set_related),
+        "set_owner": set_owner,
+        "mark_verified": verified,
         "append_section": [append_section, body_text] if append_section else None,
         "replace_section": [replace_section, body_text] if replace_section else None,
         "replace_body": body_text if replace_body else None,

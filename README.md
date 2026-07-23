@@ -10,9 +10,17 @@
 
 A CLI for git-backed markdown documents (decisions, issues, architecture notes)
 with a derived, read-optimized index. Git is the source of truth; the SQLite
-index (metadata + FTS5 full-text + relation graph + semantic embeddings) is a
-rebuildable projection. AI agents never edit markdown directly — every write
-goes through the CLI, which guarantees frontmatter/schema consistency.
+index (metadata + FTS5 full-text + a **typed** relation graph + semantic
+embeddings) is a rebuildable projection. AI agents never edit markdown directly —
+every write goes through the CLI, which guarantees frontmatter/schema consistency.
+
+Documents are constrained by a per-type schema (required fields, status grammar,
+and allowed relations); relation edges carry a *kind* (`supersedes`,
+`depends_on`, `implements`, …); the read paths return body-less *skeletons* so an
+agent scans cheaply and fetches bodies by id; a per-type review cadence plus
+`owner`/`verified` fields make staleness explicit; and a frozen domain-agnostic
+**core** plus swappable **profiles** (software / research / ops / legal)
+generalize it beyond software without mutating the base schema.
 
 See [docs/doc-index-architecture.md](docs/doc-index-architecture.md) for the
 full design.

@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.entities.relation import Relation
 from docir.modules.documents.domain.value_objects.queries import DocumentFilter
+from docir.modules.documents.domain.value_objects.relations import RelatedRef
 from docir.modules.indexing.domain.results import SearchHit
 from docir.modules.tags.domain.entities.tag import Tag
 from docir.platform.embedding.vector import Embedding
@@ -69,14 +70,19 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
         row.body = document.body
         row.path = document.path
         row.content_hash = document.content_hash()
+        row.owner = document.owner
+        row.verified = None if document.verified is None else document.verified.isoformat()
 
         self._session.execute(delete(DocumentTagRow).where(DocumentTagRow.doc_id == document.id))
         self._session.execute(delete(RelationRow).where(RelationRow.source == document.id))
         self._session.flush()
         for key in document.tags:
             self._session.add(DocumentTagRow(doc_id=document.id, tag_key=key))
-        for target in document.related:
-            self._session.add(RelationRow(source=document.id, target=target))
+        # At most one edge per ordered pair (kind is not in the primary key);
+        # if the source lists a target twice, the last kind wins.
+        edges: dict[str, str] = {ref.target: ref.kind for ref in document.related}
+        for target, kind in edges.items():
+            self._session.add(RelationRow(source=document.id, target=target, kind=kind))
         self._session.flush()
 
     def get(self, doc_id: str) -> Document | None:
@@ -84,7 +90,7 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
         if row is None:
             return None
         tags = self._tags_for(doc_id)
-        related = self._outgoing_for(doc_id)
+        related = self._related_for(doc_id)
         return _to_document(row, tags, related)
 
     def exists(self, doc_id: str) -> bool:
@@ -129,8 +135,10 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
         return sorted(self._session.scalars(stmt).all())
 
     def relations(self) -> list[Relation]:
-        rows = self._session.execute(select(RelationRow.source, RelationRow.target)).all()
-        return [Relation(source=src, target=tgt) for src, tgt in rows]
+        rows = self._session.execute(
+            select(RelationRow.source, RelationRow.target, RelationRow.kind)
+        ).all()
+        return [Relation(source=src, target=tgt, kind=kind) for src, tgt, kind in rows]
 
     # -- helpers ------------------------------------------------------------
 
@@ -150,24 +158,34 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
         )
         return list(self._session.scalars(stmt).all())
 
+    def _related_for(self, doc_id: str) -> list[RelatedRef]:
+        stmt = (
+            select(RelationRow.target, RelationRow.kind)
+            .where(RelationRow.source == doc_id)
+            .order_by(RelationRow.target)
+        )
+        return [
+            RelatedRef(target=tgt, kind=kind) for tgt, kind in self._session.execute(stmt).all()
+        ]
+
     def _hydrate(self, rows: list[DocumentRow]) -> list[Document]:
         if not rows:
             return []
         ids = [row.id for row in rows]
         tag_map: dict[str, list[str]] = {row.id: [] for row in rows}
-        rel_map: dict[str, list[str]] = {row.id: [] for row in rows}
+        rel_map: dict[str, list[RelatedRef]] = {row.id: [] for row in rows}
         for doc_id, key in self._session.execute(
             select(DocumentTagRow.doc_id, DocumentTagRow.tag_key)
             .where(DocumentTagRow.doc_id.in_(ids))
             .order_by(DocumentTagRow.tag_key)
         ).all():
             tag_map[doc_id].append(key)
-        for source, target in self._session.execute(
-            select(RelationRow.source, RelationRow.target)
+        for source, target, kind in self._session.execute(
+            select(RelationRow.source, RelationRow.target, RelationRow.kind)
             .where(RelationRow.source.in_(ids))
             .order_by(RelationRow.target)
         ).all():
-            rel_map[source].append(target)
+            rel_map[source].append(RelatedRef(target=target, kind=kind))
         return [_to_document(row, tuple(tag_map[row.id]), rel_map[row.id]) for row in rows]
 
 
@@ -312,7 +330,7 @@ class SqlAlchemyEmbeddingRepository(EmbeddingRepository):
 # -- module helpers ---------------------------------------------------------
 
 
-def _to_document(row: DocumentRow, tags: tuple[str, ...], related: list[str]) -> Document:
+def _to_document(row: DocumentRow, tags: tuple[str, ...], related: list[RelatedRef]) -> Document:
     return Document(
         id=row.id,
         title=row.title,
@@ -326,6 +344,8 @@ def _to_document(row: DocumentRow, tags: tuple[str, ...], related: list[str]) ->
         archived=row.archived,
         body=row.body,
         path=row.path,
+        owner=row.owner,
+        verified=None if row.verified is None else date.fromisoformat(row.verified),
     )
 
 

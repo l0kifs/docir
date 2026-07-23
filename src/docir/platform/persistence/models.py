@@ -36,6 +36,9 @@ class DocumentRow(Base):
     body: Mapped[str] = mapped_column(Text, nullable=False, default="")
     path: Mapped[str | None] = mapped_column(String, nullable=True)
     content_hash: Mapped[str] = mapped_column(String, nullable=False, default="")
+    # Stewardship metadata for staleness (both optional).
+    owner: Mapped[str] = mapped_column(String, nullable=False, default="")
+    verified: Mapped[str | None] = mapped_column(String, nullable=True)
 
     tags: Mapped[list[DocumentTagRow]] = relationship(
         cascade="all, delete-orphan", passive_deletes=True
@@ -54,6 +57,9 @@ class RelationRow(Base):
         String, ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True
     )
     target: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    # The typed edge kind (``relates_to``, ``supersedes``, ``depends_on`` ...).
+    # Not part of the primary key: at most one edge kind per ordered pair.
+    kind: Mapped[str] = mapped_column(String, nullable=False, default="relates_to")
 
 
 class TagRow(Base):

@@ -125,9 +125,33 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   id are invisible in the index (it dedupes by primary key). That scan is the merge-into-`main`
   guard; `docir check --strict` exits 1 for CI.
 - **Validation is three tiers and mixing them is the documented overengineering trap.** Tier 0 is a
-  hard, synchronous compiler-style gate (missing field, bad status/transition, unknown tag/related);
-  Tier 1 (`docir check`) is non-blocking structural graph warnings; Tier 2 (`docir lint --deep`) is
-  advisory heuristics (embedding similarity, scope creep). Never promote a heuristic to a hard error.
+  hard, synchronous compiler-style gate (missing field, bad status/transition, unknown tag/related,
+  unknown/disallowed relation kind); Tier 1 (`docir check`) is non-blocking structural graph warnings
+  (incl. **staleness** and **unknown-type**); Tier 2 (`docir lint --deep`) is advisory heuristics (embedding similarity,
+  scope creep). Never promote a heuristic to a hard error.
+- **Relation edges are typed (ADR-0005).** `related` entries carry a `kind` (`RelatedRef{target,
+  kind}`); the on-disk form is a bare id for the default `relates_to` (so pre-typed files round-trip
+  unchanged) or a `{to, kind}` mapping. `relations.kind` is a **non-key** column — one kind per
+  ordered `(source, target)` pair — added by migration `0002`. The `relation_types` registry is
+  **permissive when empty** (schemas predating typed edges accept any kind). Per-type
+  `allowed_relations` is a whitelist enforced at Tier 0.
+- **Staleness is data, not a heuristic (ADR-0006).** Optional `owner`/`verified` frontmatter +
+  per-type `review_days`; `docir check` emits a Tier 1 `stale` finding and read views carry a `stale`
+  flag. `MaintenanceService`/`DocumentService` need a `Clock` for "today". **AST-anchored** staleness
+  is intentionally *not* built — human `--verified` is the honest baseline; anchoring is a future
+  additive layer.
+- **Read paths return skeletons (two-tier retrieval).** `query`/`search`/`context` return
+  `DocumentSummary` (frontmatter + typed edges + staleness, **no body**); only `get` returns the full
+  `DocumentView` with the body. Do not add the body back to the list paths — the skeleton is the
+  context-saving contract.
+- **The schema is core + profiles (ADR-0007).** `infra/profiles.py` holds a frozen domain-agnostic
+  core (the `decision` type + relation registry + cadences) and bundled profiles (software/research/
+  ops/legal). A `docs-schema.yaml` with a `profiles:` key merges `core -> profiles -> inline`; a file
+  with no `profiles:` key parses inline-only (fully backward compatible). The default is
+  `profiles: [software]`, which resolves to exactly `decision`/`issue`/`architecture`. The core is
+  always merged when a `profiles:` key is present (you can't disable it that way); disabling a
+  profile after its docs exist leaves them with a type the schema no longer knows — `docir check`
+  flags those as `unknown-type` (schema resolution does not re-key or migrate existing files).
 - **Alembic owns the schema and must sit beside the engine.** `run_migrations`
   (`platform/persistence/engine.py`) resolves the migration dir via `Path(__file__).parent /
   "alembic"`; moving `engine.py` without the `alembic/` folder silently breaks migrations. The FTS5

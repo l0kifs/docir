@@ -12,6 +12,8 @@ import hashlib
 from dataclasses import dataclass, field, replace
 from datetime import date
 
+from docir.modules.documents.domain.value_objects.relations import RelatedRef
+
 
 @dataclass
 class Document:
@@ -25,11 +27,15 @@ class Document:
     created: date
     updated: date
     tags: tuple[str, ...] = ()
-    related: tuple[str, ...] = ()
+    related: tuple[RelatedRef, ...] = ()
     archived: bool = False
     body: str = ""
     # Filesystem path relative to the docs root; ``None`` before persistence.
     path: str | None = field(default=None)
+    # Optional stewardship metadata (staleness). ``owner`` is a free-form name;
+    # ``verified`` is the date a human last re-confirmed the doc is still true.
+    owner: str = ""
+    verified: date | None = None
 
     def embedding_text(self) -> str:
         """The text embedded for semantic search: title + description + body.
@@ -55,12 +61,22 @@ class Document:
             # insertion order and the index's sorted order) never affects the
             # hash — only genuine content changes do.
             ",".join(sorted(self.tags)),
-            ",".join(sorted(self.related)),
+            ",".join(sorted(f"{ref.kind}:{ref.target}" for ref in self.related)),
             str(self.archived),
+            self.owner,
+            "" if self.verified is None else self.verified.isoformat(),
             self.body.strip("\n"),
         ]
         digest = hashlib.sha256("\x1f".join(parts).encode("utf-8"))
         return digest.hexdigest()
+
+    def stale_reference_date(self) -> date:
+        """The date staleness is measured from: last verification, else last edit."""
+        return self.verified or self.updated
+
+    def related_targets(self) -> tuple[str, ...]:
+        """Just the target ids of the outgoing edges (kind-agnostic)."""
+        return tuple(ref.target for ref in self.related)
 
     def with_updates(self, **changes: object) -> Document:
         """Return a copy with the given fields replaced (frontmatter patch)."""

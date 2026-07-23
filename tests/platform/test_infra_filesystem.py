@@ -7,6 +7,7 @@ from datetime import date
 import pytest
 
 from docir.modules.documents.domain.entities.document import Document
+from docir.modules.documents.domain.value_objects.relations import RelatedRef
 from docir.modules.tags.domain.entities.tag import Tag
 from docir.platform.errors import DocumentNotFoundError, ValidationError
 from docir.platform.filesystem.markdown_store import MarkdownDocumentFileStore
@@ -31,7 +32,7 @@ def _doc(**kw: object) -> Document:
         "created": date(2026, 1, 1),
         "updated": date(2026, 1, 2),
         "tags": ("auth",),
-        "related": ("adr-0002",),
+        "related": (RelatedRef("adr-0002"),),
         "body": "# Heading\n\nSome body.",
     }
     defaults.update(kw)
@@ -47,9 +48,27 @@ class TestMarkdownStore:
         assert loaded.id == "adr-0001"
         assert loaded.title == "Auth strategy"
         assert loaded.tags == ("auth",)
-        assert loaded.related == ("adr-0002",)
+        assert loaded.related == (RelatedRef("adr-0002"),)
         assert loaded.created == date(2026, 1, 1)
         assert "Some body" in loaded.body
+
+    def test_typed_edges_and_stewardship_round_trip(self, tmp_path) -> None:
+        # A default-kind edge stays a bare id on disk; a typed edge serializes as
+        # a {to, kind} mapping. owner/verified round-trip when set.
+        store = MarkdownDocumentFileStore(tmp_path)
+        doc = _doc(
+            related=(RelatedRef("adr-0002"), RelatedRef("adr-0003", "supersedes")),
+            owner="platform-team",
+            verified=date(2026, 6, 1),
+        )
+        rel = store.write(doc)
+        raw = (tmp_path / rel).read_text(encoding="utf-8")
+        assert "- adr-0002\n" in raw  # bare id for the default kind
+        assert "kind: supersedes" in raw  # typed edge as a mapping
+        loaded = store.read(rel)
+        assert loaded.related == (RelatedRef("adr-0002"), RelatedRef("adr-0003", "supersedes"))
+        assert loaded.owner == "platform-team"
+        assert loaded.verified == date(2026, 6, 1)
 
     def test_archived_flag_persisted(self, tmp_path) -> None:
         store = MarkdownDocumentFileStore(tmp_path)
@@ -68,6 +87,19 @@ class TestMarkdownStore:
         store = MarkdownDocumentFileStore(tmp_path)
         with pytest.raises(DocumentNotFoundError):
             store.read("decisions/nope.md")
+
+    def test_related_mapping_without_target_is_malformed(self, tmp_path) -> None:
+        store = MarkdownDocumentFileStore(tmp_path)
+        bad = tmp_path / "decisions" / "adr-0001-bad.md"
+        bad.parent.mkdir(parents=True)
+        bad.write_text(
+            "---\nid: adr-0001\ntitle: T\ndescription: d\ntype: decision\n"
+            "status: proposed\ncreated: '2026-01-01'\nupdated: '2026-01-01'\n"
+            "tags: []\nrelated:\n- kind: supersedes\n---\n\nbody\n",  # no 'to'
+            encoding="utf-8",
+        )
+        with pytest.raises(ValidationError):
+            store.read("decisions/adr-0001-bad.md")
 
     def test_delete_is_safe_when_missing(self, tmp_path) -> None:
         store = MarkdownDocumentFileStore(tmp_path)

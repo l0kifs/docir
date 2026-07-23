@@ -7,6 +7,7 @@ from datetime import date
 
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.value_objects.queries import DocumentFilter
+from docir.modules.documents.domain.value_objects.relations import RelatedRef
 from docir.modules.tags.domain.entities.tag import Tag
 from docir.platform.embedding.vector import Embedding
 from docir.platform.persistence.repositories import count_documents
@@ -42,13 +43,13 @@ class TestDocumentRepository:
     def test_save_get_with_tags_and_relations(self, uow_factory: Factory) -> None:
         with uow_factory() as uow:
             uow.documents.save(_doc("adr-0002"))
-            uow.documents.save(_doc("adr-0001", tags=("auth",), related=("adr-0002",)))
+            uow.documents.save(_doc("adr-0001", tags=("auth",), related=(RelatedRef("adr-0002"),)))
             uow.commit()
         with uow_factory() as uow:
             doc = uow.documents.get("adr-0001")
             assert doc is not None
             assert doc.tags == ("auth",)
-            assert doc.related == ("adr-0002",)
+            assert doc.related == (RelatedRef("adr-0002"),)
             assert uow.documents.exists("adr-0001")
             assert not uow.documents.exists("nope")
             assert uow.documents.get("nope") is None
@@ -66,13 +67,19 @@ class TestDocumentRepository:
     def test_relations_graph(self, uow_factory: Factory) -> None:
         with uow_factory() as uow:
             uow.documents.save(_doc("adr-0002"))
-            uow.documents.save(_doc("adr-0001", related=("adr-0002",)))
+            uow.documents.save(_doc("adr-0001", related=(RelatedRef("adr-0002", "supersedes"),)))
             uow.commit()
         with uow_factory() as uow:
             assert uow.documents.outgoing("adr-0001") == ["adr-0002"]
             assert uow.documents.incoming("adr-0002") == ["adr-0001"]
+            # The typed edge kind round-trips through the relations table.
+            assert uow.documents.get("adr-0001").related == (RelatedRef("adr-0002", "supersedes"),)
             rels = uow.documents.relations()
-            assert (rels[0].source, rels[0].target) == ("adr-0001", "adr-0002")
+            assert (rels[0].source, rels[0].target, rels[0].kind) == (
+                "adr-0001",
+                "adr-0002",
+                "supersedes",
+            )
 
     def test_delete_cascades(self, uow_factory: Factory) -> None:
         with uow_factory() as uow:

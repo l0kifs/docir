@@ -9,13 +9,16 @@ Tier 1/2, not here.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.schema import CORE_REQUIRED_FIELDS, Schema
+from docir.modules.documents.domain.value_objects.relations import RelatedRef
 from docir.platform.errors import (
+    DisallowedRelationError,
     MissingRequiredFieldError,
     UnknownRelatedError,
+    UnknownRelationKindError,
     UnknownTagError,
 )
 
@@ -61,3 +64,30 @@ class Tier0Validator:
         for ref in related:
             if ref not in existing:
                 raise UnknownRelatedError(f"related document {ref!r} does not exist in the index")
+
+    def validate_relation_kinds(
+        self,
+        source_type: str,
+        refs: Iterable[RelatedRef],
+        id_to_type: Mapping[str, str],
+    ) -> None:
+        """Each edge's kind must be registered and permitted by the source type.
+
+        Runs *after* :meth:`validate_related` has confirmed the targets exist, so
+        an unknown target (absent from ``id_to_type``) is left to that check.
+        """
+        source_schema = self._schema.get(source_type)
+        for ref in refs:
+            if not self._schema.is_known_relation_kind(ref.kind):
+                known = ", ".join(sorted(self._schema.relation_types)) or "<none>"
+                raise UnknownRelationKindError(
+                    f"unknown relation kind {ref.kind!r}; known kinds: {known}"
+                )
+            target_type = id_to_type.get(ref.target)
+            if target_type is None:
+                continue
+            if not source_schema.allows_relation(ref.kind, target_type):
+                raise DisallowedRelationError(
+                    f"type {source_type!r} may not declare a {ref.kind!r} relation "
+                    f"to a {target_type!r} document ({ref.target!r})"
+                )

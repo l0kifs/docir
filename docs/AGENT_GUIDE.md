@@ -37,6 +37,12 @@ markdown files by hand.**
 | `docir search "<text>"` | Full-text only. |
 | `docir query --type decision --status accepted --tag auth` | Structured filter; repeatable `--type/--status/--tag`. |
 
+**Two-tier read (skeleton → body).** `context` / `query` / `search` return
+*skeletons* — id, title, description, tags, typed `related`, `owner`,
+`verified`, `stale` — **but not the body**. Scan those to judge relevance, then
+pull only the bodies you need with `docir get <id>`. This is the cheap path;
+never dump every body.
+
 Default read path **hides** resolved/archived docs. Add `--include-resolved`
 (query/search/context) or use `docir get` to see them.
 
@@ -44,11 +50,14 @@ Default read path **hides** resolved/archived docs. Add `--include-resolved`
 
 ```
 docir add --type decision --title "..." --description "..." \
-  [--tags auth,api] [--related adr-0001,issue-0003] [--status ...] \
-  (--stdin | --body "..." | --body-file f.md)
+  [--tags auth,api] [--related adr-0001,arch-0002:implements] [--status ...] \
+  [--owner platform-team] (--stdin | --body "..." | --body-file f.md)
 
 docir update <id> --status resolved             # metadata patch
 docir update <id> --set-description "..."        # keep summary current on edits
+docir update <id> --set-related adr-0001:supersedes   # replace typed edges
+docir update <id> --set-owner platform-team     # assign a steward
+docir update <id> --verified                     # stamp today as last-verified
 docir update <id> --append-section "Resolution" --body "Fixed in PR 42"
 docir update <id> --replace-section "Context" --body "..."
 docir update <id> --replace-body --force --body "..."   # full overwrite
@@ -62,6 +71,27 @@ docir delete <id> [--force]
   if the file changed on disk — `docir get` first).
 - When a body edit changes what the doc is about, update `--set-description`
   in the same call; it drives search quality.
+
+## Typed edges (`related`)
+
+Each `related` entry is a **typed edge**: a target id plus a relation *kind*.
+
+- Compact form: `<id>` (defaults to `relates_to`) or `<id>:<kind>` —
+  e.g. `--related adr-0007:supersedes,issue-0003:depends_on`.
+- Core kinds: `relates_to` (default), `supersedes`, `depends_on`, `implements`,
+  `contradicts`, `refines`. An unknown kind is a Tier 0 error (like an unknown
+  tag). Some types constrain which kinds/targets they allow.
+- Prefer a typed edge over prose when a real relationship exists — traversal is
+  exact and cheap. Model "A replaces B" as `A --supersedes--> B` (not only a
+  status change on B).
+
+## Staleness (`owner` / `verified`)
+
+For docs that need periodic human re-confirmation, set an `--owner` and, when you
+(or a human) confirm a doc is still correct, run `docir update <id> --verified`.
+A type's review cadence (`review_days` in the schema) drives a non-blocking
+`stale` warning in `docir check` and a `stale` flag on read views. Editing the
+body does not equal verifying it — `--verified` is the explicit signal.
 
 ## Tags (must exist before use)
 
@@ -87,9 +117,15 @@ docir tag rm auth [--force]         # --force strips it from docs; else blocked
 | issue | open → resolved | resolved |
 | architecture | draft → active → deprecated | deprecated |
 
+The default schema is the frozen **core** (`decision`) plus the **software**
+profile (`issue`, `architecture`). Other bundled profiles add domain types —
+`research` (hypothesis/experiment/finding), `ops` (runbook/incident/postmortem),
+`legal` (policy/contract/obligation) — enabled per install with
+`profiles: [..]` in `~/.docir/docs-schema.yaml`.
+
 ## Checks & maintenance (non-blocking)
 
-- `docir check` — Tier 1 warnings: cycles, orphans, layering, **dangling** `related` links, **duplicate ids**. Run before finishing.
+- `docir check` — Tier 1 warnings: cycles, orphans, layering, **dangling** `related` links, **duplicate ids**, **stale** docs (past their review cadence), **unknown type** (a doc whose `type` isn't in the active schema — e.g. its profile was disabled). Run before finishing.
 - `docir check --strict` — exits nonzero on any issue; use as a **CI / pre-merge gate** to catch duplicate ids or dangling refs a branch merge introduced before they reach `main`.
 - `docir lint --deep` — Tier 2 advisories (duplicate content, oversized docs).
 - `docir reindex [--changed]` — after a doc file was hand-edited, merged, or freshly cloned.

@@ -11,8 +11,10 @@ from __future__ import annotations
 from docir.modules.documents.application.dto import (
     AddDocumentRequest,
     ContextRequest,
+    DocumentSummary,
     DocumentView,
     QueryRequest,
+    RelatedView,
     SearchRequest,
     UpdateDocumentRequest,
 )
@@ -27,10 +29,12 @@ __all__ = [
     "AddDocumentRequest",
     "ContextRequest",
     "DocumentService",
+    "DocumentSummary",
     "DocumentView",
     "MaintenanceService",
     "QueryRequest",
     "ReindexResult",
+    "RelatedView",
     "SearchRequest",
     "UpdateDocumentRequest",
     "load_schema",

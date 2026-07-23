@@ -13,6 +13,7 @@ from collections.abc import Callable
 from docir.modules.documents.application.dto import (
     AddDocumentRequest,
     ContextRequest,
+    DocumentSummary,
     DocumentView,
     QueryRequest,
     SearchRequest,
@@ -27,6 +28,7 @@ from docir.modules.documents.domain.services.markdown_sections import (
 )
 from docir.modules.documents.domain.services.validation import Tier0Validator
 from docir.modules.documents.domain.value_objects.queries import DocumentFilter
+from docir.modules.documents.domain.value_objects.relations import RelatedRef
 from docir.modules.indexing.api import EmbeddingScheduler, HybridScorer
 from docir.platform.clock import Clock
 from docir.platform.embedding import Embedder
@@ -43,6 +45,11 @@ UnitOfWorkFactory = Callable[[], UnitOfWork]
 
 # How many FTS candidates to pull before hybrid fusion in ``docs context``.
 _CONTEXT_CANDIDATES = 25
+
+
+def _parse_refs(tokens: tuple[str, ...]) -> tuple[RelatedRef, ...]:
+    """Parse ``<id>`` / ``<id>:<kind>`` CLI tokens into typed edges."""
+    return tuple(RelatedRef.parse(token) for token in tokens if token.strip())
 
 
 def _require_positive_limit(limit: int) -> None:
@@ -85,12 +92,13 @@ class DocumentService:
         status = request.status or self._schema.default_status_for(request.type)
         self._validator.validate_status(request.type, status)
         today = self._clock.today()
+        refs = _parse_refs(request.related)
 
         with self._uow_factory() as uow:
             self._validator.validate_tags(request.tags, [tag.key for tag in uow.tags.all()])
-            self._validator.validate_related(
-                request.related, [doc.id for doc in uow.documents.all()]
-            )
+            id_to_type = {doc.id: doc.type for doc in uow.documents.all()}
+            self._validator.validate_related([ref.target for ref in refs], id_to_type)
+            self._validator.validate_relation_kinds(request.type, refs, id_to_type)
             doc_id = IdGenerator(self._schema, uow.documents).next_id(request.type)
             document = Document(
                 id=str(doc_id),
@@ -101,9 +109,10 @@ class DocumentService:
                 created=today,
                 updated=today,
                 tags=tuple(request.tags),
-                related=tuple(request.related),
+                related=refs,
                 archived=False,
                 body=request.body,
+                owner=request.owner or "",
             )
             self._validator.validate_required_fields(document)
             path = self._file_store.write(document)
@@ -114,7 +123,7 @@ class DocumentService:
             uow.commit()
 
         self._schedule_embedding(document.id, wait=request.wait_embeddings)
-        return DocumentView.from_document(document)
+        return DocumentView.from_document(document, stale=self._is_stale(document))
 
     def update(self, request: UpdateDocumentRequest) -> DocumentView:
         """Patch metadata and/or edit the body (``docs update``)."""
@@ -131,7 +140,7 @@ class DocumentService:
             content_changed |= self._apply_body(request, base, changes, stale)
 
             if not changes:
-                return DocumentView.from_document(base)
+                return DocumentView.from_document(base, stale=self._is_stale(base))
 
             changes["updated"] = self._clock.today()
             updated = base.with_updates(**changes)
@@ -147,7 +156,7 @@ class DocumentService:
 
         if content_changed:
             self._schedule_embedding(updated.id, wait=request.wait_embeddings)
-        return DocumentView.from_document(updated)
+        return DocumentView.from_document(updated, stale=self._is_stale(updated))
 
     def archive(self, doc_id: str) -> DocumentView:
         """Soft-remove a document from active search (``docs archive``)."""
@@ -161,7 +170,7 @@ class DocumentService:
             uow.search.remove(doc_id)
             uow.embeddings.remove(doc_id)
             uow.commit()
-        return DocumentView.from_document(updated)
+        return DocumentView.from_document(updated, stale=self._is_stale(updated))
 
     def unarchive(self, doc_id: str) -> DocumentView:
         """Restore a document to active search (``docs unarchive``)."""
@@ -176,7 +185,7 @@ class DocumentService:
             uow.embeddings.mark_dirty(doc_id)
             uow.commit()
         self._schedule_embedding(doc_id, wait=False)
-        return DocumentView.from_document(updated)
+        return DocumentView.from_document(updated, stale=self._is_stale(updated))
 
     def delete(self, doc_id: str, *, force: bool = False) -> None:
         """Hard-delete the file and all index rows (``docs delete``)."""
@@ -202,10 +211,10 @@ class DocumentService:
         """Return one document in full, regardless of status (``docs get``)."""
         with self._uow_factory() as uow:
             document = self._require(uow, doc_id)
-            return DocumentView.from_document(document)
+            return DocumentView.from_document(document, stale=self._is_stale(document))
 
-    def query(self, request: QueryRequest) -> list[DocumentView]:
-        """Structured metadata filtering (``docs query``)."""
+    def query(self, request: QueryRequest) -> list[DocumentSummary]:
+        """Structured metadata filtering (``docs query``) — skeleton results."""
         _require_positive_limit(request.limit)
         spec = DocumentFilter(
             types=request.types,
@@ -217,28 +226,28 @@ class DocumentService:
         )
         with self._uow_factory() as uow:
             documents = uow.documents.query(spec)
-        return [DocumentView.from_document(doc) for doc in documents[: request.limit]]
+        return [self._summary(doc) for doc in documents[: request.limit]]
 
-    def search(self, request: SearchRequest) -> list[DocumentView]:
-        """Full-text search over active documents (``docs search``)."""
+    def search(self, request: SearchRequest) -> list[DocumentSummary]:
+        """Full-text search over active documents (``docs search``) — skeletons."""
         _require_positive_limit(request.limit)
         inactive = self._schema.inactive_statuses()
         with self._uow_factory() as uow:
             hits = uow.search.search(request.text, limit=request.limit * 2)
-            views: list[DocumentView] = []
+            views: list[DocumentSummary] = []
             for hit in hits:
                 document = uow.documents.get(hit.doc_id)
                 if document is None:
                     continue
                 if not request.include_inactive and document.status in inactive:
                     continue
-                views.append(DocumentView.from_document(document, score=-hit.bm25))
+                views.append(self._summary(document, score=-hit.bm25))
                 if len(views) >= request.limit:
                     break
         return views
 
-    def context(self, request: ContextRequest) -> list[DocumentView]:
-        """Ranked, minimal relevant document set (``docs context``)."""
+    def context(self, request: ContextRequest) -> list[DocumentSummary]:
+        """Ranked, minimal relevant document set (``docs context``) — skeletons."""
         _require_positive_limit(request.limit)
         query_vector = self._embedder.embed(request.task)
         inactive = self._schema.inactive_statuses()
@@ -248,7 +257,7 @@ class DocumentService:
             semantic = self._scorer.semantic_ranking(query_vector, uow.embeddings.active_vectors())
             fused = self._scorer.fuse(hits, semantic)
 
-            selected: dict[str, DocumentView] = {}
+            selected: dict[str, DocumentSummary] = {}
             for fscore in fused:
                 if len(selected) >= request.limit:
                     break
@@ -257,7 +266,7 @@ class DocumentService:
                     continue
                 if not request.include_inactive and document.status in inactive:
                     continue
-                selected[document.id] = DocumentView.from_document(document, score=fscore.score)
+                selected[document.id] = self._summary(document, score=fscore.score)
 
             self._augment_with_related(uow, selected)
 
@@ -265,7 +274,27 @@ class DocumentService:
 
     # -- helpers ------------------------------------------------------------
 
-    def _augment_with_related(self, uow: UnitOfWork, selected: dict[str, DocumentView]) -> None:
+    def _summary(
+        self,
+        document: Document,
+        *,
+        score: float | None = None,
+        via_graph: bool = False,
+    ) -> DocumentSummary:
+        return DocumentSummary.from_document(
+            document, stale=self._is_stale(document), score=score, via_graph=via_graph
+        )
+
+    def _is_stale(self, document: Document) -> bool:
+        """Whether the document is past its type's review cadence (staleness)."""
+        if document.type not in self._schema.types:
+            return False
+        cadence = self._schema.review_days_for(document.type)
+        if cadence <= 0:
+            return False
+        return (self._clock.today() - document.stale_reference_date()).days > cadence
+
+    def _augment_with_related(self, uow: UnitOfWork, selected: dict[str, DocumentSummary]) -> None:
         """Pull each selected document's ``related`` neighbours one hop out."""
         seeds = list(selected)
         for seed in seeds:
@@ -275,7 +304,7 @@ class DocumentService:
                 neighbour = uow.documents.get(neighbour_id)
                 if neighbour is None or neighbour.archived:
                     continue
-                selected[neighbour_id] = DocumentView.from_document(neighbour, via_graph=True)
+                selected[neighbour_id] = self._summary(neighbour, via_graph=True)
 
     def _apply_metadata(
         self,
@@ -302,10 +331,15 @@ class DocumentService:
             self._validator.validate_tags(request.set_tags, [tag.key for tag in uow.tags.all()])
             changes["tags"] = tuple(request.set_tags)
         if request.set_related is not None:
-            self._validator.validate_related(
-                request.set_related, [doc.id for doc in uow.documents.all()]
-            )
-            changes["related"] = tuple(request.set_related)
+            refs = _parse_refs(request.set_related)
+            id_to_type = {doc.id: doc.type for doc in uow.documents.all()}
+            self._validator.validate_related([ref.target for ref in refs], id_to_type)
+            self._validator.validate_relation_kinds(base.type, refs, id_to_type)
+            changes["related"] = refs
+        if request.set_owner is not None:
+            changes["owner"] = request.set_owner
+        if request.mark_verified:
+            changes["verified"] = self._clock.today()
         return content_changed
 
     def _apply_body(

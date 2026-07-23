@@ -16,10 +16,13 @@ from docir.modules.documents.domain.services.markdown_sections import (
 )
 from docir.modules.documents.domain.services.similarity_lint import SimilarityLinter
 from docir.modules.documents.domain.services.validation import Tier0Validator
+from docir.modules.documents.domain.value_objects.relations import RelatedRef
 from docir.platform.embedding.vector import Embedding
 from docir.platform.errors import (
+    DisallowedRelationError,
     MissingRequiredFieldError,
     UnknownRelatedError,
+    UnknownRelationKindError,
     UnknownTagError,
     ValidationError,
 )
@@ -85,6 +88,62 @@ class TestTier0Validator:
         validator.validate_related(["adr-0001"], ["adr-0001"])
 
 
+def _typed_schema() -> Schema:
+    # A registry of kinds, a permissive `decision`, and a constrained `issue`
+    # that may only `implements` a `decision`.
+    return Schema(
+        types={
+            "decision": TypeSchema(
+                "decision", "adr", (), ("proposed",), "proposed", {"proposed": frozenset()}
+            ),
+            "issue": TypeSchema(
+                "issue",
+                "issue",
+                (),
+                ("open",),
+                "open",
+                {"open": frozenset()},
+                allowed_relations={"implements": ("decision",), "relates_to": ()},
+            ),
+        },
+        relation_types=frozenset({"relates_to", "implements", "supersedes"}),
+    )
+
+
+class TestRelationKindValidation:
+    def test_allowed_kind_and_target_passes(self) -> None:
+        validator = Tier0Validator(_typed_schema())
+        validator.validate_relation_kinds(
+            "issue", [RelatedRef("adr-0001", "implements")], {"adr-0001": "decision"}
+        )
+
+    def test_unknown_kind_rejected(self) -> None:
+        validator = Tier0Validator(_typed_schema())
+        with pytest.raises(UnknownRelationKindError):
+            validator.validate_relation_kinds(
+                "decision", [RelatedRef("adr-0001", "bogus")], {"adr-0001": "decision"}
+            )
+
+    def test_kind_not_whitelisted_for_source_rejected(self) -> None:
+        validator = Tier0Validator(_typed_schema())
+        with pytest.raises(DisallowedRelationError):
+            validator.validate_relation_kinds(
+                "issue", [RelatedRef("adr-0001", "supersedes")], {"adr-0001": "decision"}
+            )
+
+    def test_disallowed_target_type_rejected(self) -> None:
+        validator = Tier0Validator(_typed_schema())
+        with pytest.raises(DisallowedRelationError):
+            validator.validate_relation_kinds(
+                "issue", [RelatedRef("issue-0002", "implements")], {"issue-0002": "issue"}
+            )
+
+    def test_missing_target_deferred_to_existence_check(self) -> None:
+        # An unknown target is left to validate_related; this must not raise.
+        validator = Tier0Validator(_typed_schema())
+        validator.validate_relation_kinds("issue", [RelatedRef("adr-9999", "implements")], {})
+
+
 class TestGraphChecker:
     def test_orphan_detected(self) -> None:
         issues = GraphChecker(_schema()).check([_doc("adr-0001")], [])
@@ -115,6 +174,52 @@ class TestGraphChecker:
         rels = [Relation("issue-0001", "adr-9999")]
         issues = GraphChecker(_schema()).check(docs, rels)
         assert any(i.kind == "dangling" for i in issues)
+
+    def test_unknown_type_flagged(self) -> None:
+        # A doc whose type is not in the active schema (e.g. a disabled profile).
+        docs = [_doc("hyp-0001", "hypothesis")]
+        issues = GraphChecker(_schema()).check(docs, [])
+        assert any(i.kind == "unknown-type" and "hyp-0001" in i.doc_ids for i in issues)
+
+    def test_supersedes_edge_exempt_from_layering(self) -> None:
+        # A supersedes edge is lateral (replacement), not a downward dependency.
+        docs = [_doc("arch-0001", "decision"), _doc("issue-0001", "issue")]
+        rels = [Relation("arch-0001", "issue-0001", "supersedes")]
+        issues = GraphChecker(_schema()).check(docs, rels)
+        assert not any(i.kind == "layering" for i in issues)
+
+
+def _stale_schema() -> Schema:
+    return Schema(
+        types={
+            "decision": TypeSchema(
+                "decision",
+                "adr",
+                (),
+                ("proposed",),
+                "proposed",
+                {"proposed": frozenset()},
+                review_days=30,
+            )
+        }
+    )
+
+
+class TestStalenessCheck:
+    def test_stale_document_flagged(self) -> None:
+        doc = _doc("adr-0001", updated=date(2026, 1, 1), owner="team")
+        issues = GraphChecker(_stale_schema()).check([doc], [], today=date(2026, 7, 7))
+        assert any(i.kind == "stale" and "team" in i.message for i in issues)
+
+    def test_recent_verification_resets_the_clock(self) -> None:
+        doc = _doc("adr-0001", updated=date(2026, 1, 1), verified=date(2026, 7, 1))
+        issues = GraphChecker(_stale_schema()).check([doc], [], today=date(2026, 7, 7))
+        assert not any(i.kind == "stale" for i in issues)
+
+    def test_no_date_skips_staleness(self) -> None:
+        doc = _doc("adr-0001", updated=date(2026, 1, 1))
+        issues = GraphChecker(_stale_schema()).check([doc], [])
+        assert not any(i.kind == "stale" for i in issues)
 
 
 class TestSimilarityLinter:

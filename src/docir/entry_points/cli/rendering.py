@@ -32,11 +32,17 @@ def render_document(view: Mapping[str, object]) -> None:
     )
     lines = [header, "", str(view.get("description", ""))]
     tags = _join(view.get("tags"))
-    related = _join(view.get("related"))
+    related = _format_related(view.get("related"))
     if tags:
         lines.append(f"[dim]tags:[/] {tags}")
     if related:
         lines.append(f"[dim]related:[/] {related}")
+    if view.get("owner"):
+        lines.append(f"[dim]owner:[/] {view['owner']}")
+    if view.get("verified"):
+        lines.append(f"[dim]verified:[/] {view['verified']}")
+    if view.get("stale"):
+        lines.append("[yellow]⚠ stale — past its review cadence[/]")
     if view.get("archived"):
         lines.append("[yellow]archived[/]")
     body = str(view.get("body", "")).strip()
@@ -60,8 +66,10 @@ def render_document_list(views: Sequence[Mapping[str, object]]) -> None:
     if has_score:
         table.add_column("score", justify="right")
     for view in views:
+        marker = " ↗" if view.get("via_graph") else ""
+        marker += " ⚠" if view.get("stale") else ""
         row = [
-            str(view["id"]) + (" ↗" if view.get("via_graph") else ""),
+            str(view["id"]) + marker,
             str(view["type"]),
             str(view["status"]),
             str(view["title"]),
@@ -100,6 +108,21 @@ def _join(value: object) -> str:
     if isinstance(value, list | tuple):
         return ", ".join(str(item) for item in value)
     return ""
+
+
+def _format_related(value: object) -> str:
+    """Format typed edges as ``target (kind)`` (kind omitted when generic)."""
+    if not isinstance(value, list | tuple):
+        return ""
+    parts: list[str] = []
+    for item in value:
+        if isinstance(item, dict):
+            target = str(item.get("target", ""))
+            kind = str(item.get("kind", ""))
+            parts.append(f"{target} [dim]({kind})[/]" if kind and kind != "relates_to" else target)
+        else:
+            parts.append(str(item))
+    return ", ".join(parts)
 
 
 def render_message(message: str) -> None:

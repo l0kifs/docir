@@ -52,6 +52,13 @@ class TypeSchema:
     # only within one shared index) or ``random`` (collision-resistant across
     # independent clones/branches). See DocId.
     id_style: str = "sequential"
+    # Per-type relation whitelist: ``kind -> allowed target types`` (an empty
+    # target list means "any type"). An *empty* mapping means the type is
+    # unconstrained (any registered kind, any target) — the permissive default.
+    allowed_relations: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    # Review cadence in days for staleness. ``0`` means the type is never
+    # considered stale (no human re-verification is expected).
+    review_days: int = 0
 
     def is_valid_status(self, status: str) -> bool:
         return status in self.statuses
@@ -62,12 +69,30 @@ class TypeSchema:
             return True
         return target in self.transitions.get(current, frozenset())
 
+    def allows_relation(self, kind: str, target_type: str) -> bool:
+        """Whether this source type may declare a ``kind`` edge to ``target_type``.
+
+        An empty ``allowed_relations`` mapping is permissive (any kind, any
+        target). Otherwise it is a whitelist: the kind must be listed, and the
+        target's type must be in that kind's allowed set (empty set = any type).
+        """
+        if not self.allowed_relations:
+            return True
+        if kind not in self.allowed_relations:
+            return False
+        targets = self.allowed_relations[kind]
+        return not targets or target_type in targets
+
 
 @dataclass(frozen=True, slots=True)
 class Schema:
     """The full set of document-type grammars."""
 
     types: dict[str, TypeSchema] = field(default_factory=dict)
+    # The registry of valid relation kinds (``supersedes``, ``depends_on`` ...).
+    # An *empty* set means relation kinds are unconstrained — the permissive
+    # backward-compatible default for schemas that predate typed edges.
+    relation_types: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
         prefixes: dict[str, str] = {}
@@ -83,6 +108,21 @@ class Schema:
                     f"{prefixes[type_schema.prefix]!r} and {type_schema.name!r}"
                 )
             prefixes[type_schema.prefix] = type_schema.name
+            if self.relation_types:
+                for kind in type_schema.allowed_relations:
+                    if kind not in self.relation_types:
+                        raise SchemaError(
+                            f"type {type_schema.name!r} allows unknown relation "
+                            f"kind {kind!r}; add it to 'relation_types'"
+                        )
+
+    def is_known_relation_kind(self, kind: str) -> bool:
+        """Whether ``kind`` is a registered relation kind (always true if unconfigured)."""
+        return not self.relation_types or kind in self.relation_types
+
+    def review_days_for(self, doc_type: str) -> int:
+        """The review cadence in days for a type (``0`` = never stale)."""
+        return self.get(doc_type).review_days
 
     def get(self, doc_type: str) -> TypeSchema:
         try:

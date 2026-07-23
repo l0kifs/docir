@@ -15,6 +15,7 @@ from docir.modules.documents.domain.schema import Schema
 from docir.modules.documents.domain.services.graph_checks import CheckIssue, GraphChecker
 from docir.modules.documents.domain.services.similarity_lint import LintFinding, SimilarityLinter
 from docir.modules.indexing.api import EmbeddingScheduler
+from docir.platform.clock import Clock
 from docir.platform.embedding import Embedder
 from docir.platform.filesystem.ports import DocumentFileStore, TagFileStore
 from docir.platform.persistence.unit_of_work import UnitOfWork
@@ -42,6 +43,7 @@ class MaintenanceService:
         scheduler: EmbeddingScheduler,
         embedder: Embedder,
         schema: Schema,
+        clock: Clock,
     ) -> None:
         self._uow_factory = uow_factory
         self._file_store = file_store
@@ -49,6 +51,7 @@ class MaintenanceService:
         self._scheduler = scheduler
         self._embedder = embedder
         self._schema = schema
+        self._clock = clock
         self._graph_checker = GraphChecker(schema)
         self._linter = SimilarityLinter()
 
@@ -91,7 +94,7 @@ class MaintenanceService:
         with self._uow_factory() as uow:
             documents = uow.documents.all()
             relations = uow.documents.relations()
-        issues = self._graph_checker.check(documents, relations)
+        issues = self._graph_checker.check(documents, relations, self._clock.today())
         issues.extend(self._find_duplicate_ids())
         issues.extend(self._find_malformed())
         return issues

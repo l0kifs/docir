@@ -106,3 +106,70 @@ def test_check_reports_malformed_file(dispatcher: Dispatcher, settings: Settings
     )
     issues = dispatcher.dispatch("check", {})
     assert any(i["kind"] == "malformed" for i in issues)
+
+
+def test_check_reports_unknown_type(dispatcher: Dispatcher, settings: Settings) -> None:
+    # A file whose type is not in the active schema (e.g. its profile was
+    # disabled) is surfaced, not silently skipped — its grammar can't be enforced.
+    (settings.docs_root / "hyp-0001-guess.md").write_text(
+        "---\n"
+        "created: '2026-07-07'\n"
+        "description: a guess\n"
+        "id: hyp-0001\n"
+        "related: []\n"
+        "status: proposed\n"
+        "tags: []\n"
+        "title: A guess\n"
+        "type: hypothesis\n"  # not in the default (software) schema
+        "updated: '2026-07-07'\n"
+        "---\n\nbody\n",
+        encoding="utf-8",
+    )
+    dispatcher.dispatch("reindex", {})
+    issues = dispatcher.dispatch("check", {})
+    assert any(i["kind"] == "unknown-type" and "hyp-0001" in i["doc_ids"] for i in issues)
+
+
+def _stale_decision_file(*, verified: str | None) -> str:
+    # A `decision` (365-day cadence) last touched in early 2024 — far past due
+    # against the fixture clock (2026-07-07) unless recently verified.
+    verified_line = f"verified: '{verified}'\n" if verified else ""
+    return (
+        "---\n"
+        "created: '2024-01-01'\n"
+        "description: an old accepted decision\n"
+        "id: adr-0001\n"
+        "owner: platform-team\n"
+        "related: []\n"
+        "status: accepted\n"
+        "tags: []\n"
+        "title: Old decision\n"
+        "type: decision\n"
+        "updated: '2024-01-01'\n"
+        f"{verified_line}"
+        "---\n\nbody\n"
+    )
+
+
+def test_check_reports_stale_documents(dispatcher: Dispatcher, settings: Settings) -> None:
+    decisions = settings.docs_root / "decisions"
+    decisions.mkdir(parents=True, exist_ok=True)
+    (decisions / "adr-0001-old.md").write_text(
+        _stale_decision_file(verified=None), encoding="utf-8"
+    )
+    dispatcher.dispatch("reindex", {})
+    issues = dispatcher.dispatch("check", {})
+    assert any(i["kind"] == "stale" and "adr-0001" in i["doc_ids"] for i in issues)
+    # The staleness is also carried on the read side (skeleton + full view).
+    assert dispatcher.dispatch("get", {"doc_id": "adr-0001"})["stale"] is True
+
+
+def test_recent_verification_clears_staleness(dispatcher: Dispatcher, settings: Settings) -> None:
+    decisions = settings.docs_root / "decisions"
+    decisions.mkdir(parents=True, exist_ok=True)
+    (decisions / "adr-0001-old.md").write_text(
+        _stale_decision_file(verified="2026-07-01"), encoding="utf-8"
+    )
+    dispatcher.dispatch("reindex", {})
+    issues = dispatcher.dispatch("check", {})
+    assert not any(i["kind"] == "stale" for i in issues)

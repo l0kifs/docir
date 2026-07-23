@@ -17,6 +17,10 @@ import yaml
 
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.services.slugify import slugify
+from docir.modules.documents.domain.value_objects.relations import (
+    DEFAULT_RELATION_KIND,
+    RelatedRef,
+)
 from docir.platform.errors import DocumentNotFoundError, ValidationError
 from docir.platform.filesystem.ports import DocumentFileStore
 
@@ -92,18 +96,25 @@ class MarkdownDocumentFileStore(DocumentFileStore):
             "type": document.type,
             "status": document.status,
             "tags": list(document.tags),
-            "related": list(document.related),
+            "related": _render_related(document.related),
             "created": document.created.isoformat(),
             "updated": document.updated.isoformat(),
         }
         if document.archived:
             metadata["archived"] = True
+        # Stewardship metadata is written only when set, so untyped/unowned docs
+        # keep a minimal, clean frontmatter block.
+        if document.owner:
+            metadata["owner"] = document.owner
+        if document.verified is not None:
+            metadata["verified"] = document.verified.isoformat()
         post = frontmatter.Post(content=document.body)
         post.metadata.update(metadata)
         return frontmatter.dumps(post) + "\n"
 
     def _to_document(self, metadata: dict[str, object], body: str, path: str) -> Document:
         try:
+            verified_raw = metadata.get("verified")
             return Document(
                 id=str(metadata["id"]),
                 title=str(metadata["title"]),
@@ -113,10 +124,12 @@ class MarkdownDocumentFileStore(DocumentFileStore):
                 created=_as_date(metadata["created"]),
                 updated=_as_date(metadata["updated"]),
                 tags=_as_str_tuple(metadata.get("tags")),
-                related=_as_str_tuple(metadata.get("related")),
+                related=_as_related_tuple(metadata.get("related")),
                 archived=bool(metadata.get("archived", False)),
                 body=body,
                 path=path,
+                owner=str(metadata.get("owner", "")),
+                verified=None if verified_raw is None else _as_date(verified_raw),
             )
         except (KeyError, ValueError) as exc:
             # KeyError: a required field is absent. ValueError: a field is present
@@ -138,3 +151,35 @@ def _as_str_tuple(value: object) -> tuple[str, ...]:
     if isinstance(value, list | tuple):
         return tuple(str(item) for item in value)
     return ()
+
+
+def _render_related(related: tuple[RelatedRef, ...]) -> list[object]:
+    """Serialize edges: a bare id for the default kind, a mapping otherwise.
+
+    Default-kind edges stay bare strings so documents authored before typed
+    edges (``related: [adr-0001]``) round-trip byte-for-byte.
+    """
+    rendered: list[object] = []
+    for ref in related:
+        if ref.kind == DEFAULT_RELATION_KIND:
+            rendered.append(ref.target)
+        else:
+            rendered.append({"to": ref.target, "kind": ref.kind})
+    return rendered
+
+
+def _as_related_tuple(value: object) -> tuple[RelatedRef, ...]:
+    """Parse the ``related`` frontmatter (bare ids and/or ``{to, kind}`` maps)."""
+    if not isinstance(value, list | tuple):
+        return ()
+    refs: list[RelatedRef] = []
+    for item in value:
+        if isinstance(item, dict):
+            target = str(item.get("to", "")).strip()
+            if not target:
+                raise ValueError(f"related entry {item!r} is missing a 'to' id")
+            kind = str(item.get("kind", DEFAULT_RELATION_KIND)).strip() or DEFAULT_RELATION_KIND
+            refs.append(RelatedRef(target=target, kind=kind))
+        else:
+            refs.append(RelatedRef(target=str(item).strip()))
+    return tuple(refs)

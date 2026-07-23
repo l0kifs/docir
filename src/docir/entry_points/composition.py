@@ -119,7 +119,7 @@ def build_container(
     document_service = DocumentService(uow_factory, file_store, scheduler, embedder, clock, schema)
     tag_service = TagService(uow_factory, tag_file_store, file_store, clock)
     maintenance_service = MaintenanceService(
-        uow_factory, file_store, tag_file_store, scheduler, embedder, schema
+        uow_factory, file_store, tag_file_store, scheduler, embedder, schema, clock
     )
     dispatcher = Dispatcher(document_service, tag_service, maintenance_service)
     return Container(settings=settings, dispatcher=dispatcher, scheduler=scheduler, engine=engine)

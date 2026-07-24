@@ -62,6 +62,7 @@ lets the same commands run either in-process (`--no-daemon`) or over the socket.
 
 ```bash
 uv sync                       # create the environment
+uv run docir init             # scope docs to this repo (./.docir); optional — else global ~/.docir
 uv run docir tag add auth --description "Authentication and tokens."
 uv run docir add --type decision --title "Auth strategy" \
     --description "How the service authenticates API clients." \
@@ -76,7 +77,11 @@ add `--agent agents` for an `AGENTS.md` block, `--global` to install for every p
 and re-run `docir agent update` after upgrading docir. See
 [docs/AGENT_GUIDE.md](docs/AGENT_GUIDE.md).
 
-All state lives under `~/.docir/` (override with `DOCIR_HOME`).
+State lives in one resolved store per invocation: `--home` → `DOCIR_HOME` → a
+project-local `.docir/` found by walking up from the working directory (created
+by `docir init`, the way git finds `.git`) → the global `~/.docir` default. Run
+`docir init` in a repo to keep its docs with the code (`.docir/docs/` +
+`docs-schema.yaml` are committed; the derived index is gitignored).
 
 ## Development
 

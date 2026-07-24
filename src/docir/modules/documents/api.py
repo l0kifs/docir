@@ -23,9 +23,13 @@ from docir.modules.documents.application.services.maintenance_service import (
     MaintenanceService,
     ReindexResult,
 )
+from docir.modules.documents.infra.default_schema import DEFAULT_SCHEMA_YAML
+from docir.modules.documents.infra.profiles import PROFILE_NAMES
 from docir.modules.documents.infra.schema_loader import load_schema
 
 __all__ = [
+    "DEFAULT_SCHEMA_YAML",
+    "PROFILE_NAMES",
     "AddDocumentRequest",
     "ContextRequest",
     "DocumentService",

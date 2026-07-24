@@ -20,6 +20,12 @@ files and the derived index never disagree.
 - `MaintenanceService.reindex_embeddings()/flush_embeddings() -> int`
 - `load_schema(path) -> Schema` — load the per-type document schema
 
+## Public constants
+- `DEFAULT_SCHEMA_YAML: str` — the bundled default `docs-schema.yaml` body
+  (`profiles: [software]` over the frozen core), written by `docir init`.
+- `PROFILE_NAMES: tuple[str, ...]` — the bundled schema profile names
+  (`software`/`research`/`ops`/`legal`), for validating `docir init --profiles`.
+
 The read paths return `DocumentSummary` (frontmatter, tags, typed `related`,
 `owner`/`verified`/`stale` — but **no body**); fetch bodies by id with `get`,
 which returns the full `DocumentView`. A `related` entry is a typed edge

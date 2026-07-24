@@ -11,7 +11,10 @@ machine-checked, and invariants that look like cruft but are load-bearing.
 
 ## Commands
 
-One `uv`-managed package, Python 3.12+. All state lives under `~/.docir/` (`DOCIR_HOME` overrides).
+One `uv`-managed package, Python 3.12+. State lives in a single resolved store per invocation.
+Home precedence (highest first): `--home` → `DOCIR_HOME` → a project-local `.docir/` discovered by
+walking up from the CWD (created by `docir init`; the git model) → the global `~/.docir` default
+(ADR-0009). Discovery is inert whenever a home is explicitly given (every test sets `DOCIR_HOME`).
 
 ```bash
 uv sync                                          # create/refresh the environment
@@ -172,6 +175,13 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   self-shuts-down after an idle timeout. It is spawned as a detached `python -m docir daemon serve`,
   so `src/docir/__main__.py → entry_points.cli.app:main` and the hidden `daemon serve` command must
   keep working. `daemon serve` builds a container with `background_embeddings=True`.
+- **`docir init` scopes a repo to a project-local `.docir/` store (ADR-0009).** It is a bootstrap
+  operation in the composition root (`initialize_store`), run in-process by a thin CLI command (no
+  daemon/dispatcher). It writes `docs-schema.yaml` + a `.gitignore` for the derived index and runs
+  migrations via the normal startup path. `Settings.resolve` discovers the store by walking up for
+  `.docir/` (`config/settings.discover_project_home`), so the commit story is `.docir/docs/` +
+  `docs-schema.yaml` committed, index gitignored. Do not reach into `documents.infra` for the schema —
+  `DEFAULT_SCHEMA_YAML`/`PROFILE_NAMES` are exported from `documents.api`.
 - **`docir agent install/update` bypasses the daemon/dispatcher on purpose (ADR-0008).** The
   `agents` module installs AI-assistant instruction files (a Claude skill / an `AGENTS.md` block)
   from one packaged template (`modules/agents/infra/templates/skill.md`, the canonical guide — edit

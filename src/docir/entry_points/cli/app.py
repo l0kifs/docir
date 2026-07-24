@@ -13,10 +13,11 @@ from typing import Annotated
 import typer
 
 from docir import __version__
-from docir.config.settings import Settings
+from docir.config.settings import PROJECT_STORE_DIRNAME, Settings
 from docir.entry_points.cli import rendering
 from docir.entry_points.cli.body_input import resolve_body
 from docir.entry_points.cli.runner import CliState, execute, get_state, run_local, set_state
+from docir.entry_points.composition import InitResult, initialize_store
 from docir.entry_points.daemon.cmds import daemon_app
 from docir.modules.agents.api import (
     AGENT_NAMES,
@@ -26,6 +27,7 @@ from docir.modules.agents.api import (
     UpdateRequest,
     build_agent_service,
 )
+from docir.modules.documents.api import PROFILE_NAMES
 
 app = typer.Typer(
     help="Doc-Index CLI — git-backed markdown documents with a semantic index.",
@@ -61,6 +63,35 @@ def main_callback(
 def version() -> None:
     """Print the docir version."""
     rendering.render_message(__version__)
+
+
+@app.command()
+def init(
+    directory: Annotated[Path, typer.Argument(help="Project directory to initialize.")] = Path("."),
+    profiles: Annotated[
+        str | None,
+        typer.Option(
+            "--profiles", help=f"Comma-separated schema profiles ({', '.join(PROFILE_NAMES)})."
+        ),
+    ] = None,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Overwrite an existing docs-schema.yaml / .gitignore."),
+    ] = False,
+) -> None:
+    """Create a project-local docir store (./.docir) that commands auto-discover.
+
+    Scopes this repo's docs to the repo instead of the global ~/.docir store:
+    commands run anywhere inside the tree find the store by walking up for
+    .docir (the git model). Commit .docir/docs/ and .docir/docs-schema.yaml; the
+    derived index is gitignored for you.
+    """
+    home = directory.resolve() / PROJECT_STORE_DIRNAME
+    settings = Settings.resolve(home=home, use_daemon=False)
+    result = run_local(
+        lambda: initialize_store(settings, profiles=_split_csv(profiles), force=force)
+    )
+    _emit_init(result)
 
 
 # -- write path -------------------------------------------------------------
@@ -426,6 +457,19 @@ def _emit_or_message(data: object, message: str) -> None:
         rendering.emit_json(data)
     else:
         rendering.render_message(message)
+
+
+def _emit_init(result: InitResult) -> None:
+    data = {
+        "home": str(result.home),
+        "profiles": list(result.profiles),
+        "schema_written": result.schema_written,
+        "gitignore_written": result.gitignore_written,
+    }
+    if get_state().json_output:
+        rendering.emit_json(data)
+    else:
+        rendering.render_init(data)
 
 
 def _emit_setup(result: SetupResult) -> None:

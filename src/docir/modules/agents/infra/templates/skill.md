@@ -1,6 +1,6 @@
 ---
 name: docir
-description: Use docir to read and write this project's git-backed design docs — decisions/ADRs, issues, architecture notes — instead of editing markdown by hand. Trigger whenever the repo uses docir (a `docir` command is available, a `~/.docir` dir exists, or docs carry docir frontmatter) and you are about to implement a feature (pull relevant decisions first), record or resolve a decision/issue/ADR, or search project knowledge. Covers the read path (`docir context/get/search/query`) and the write path (`docir add/update/archive`) — every doc write MUST go through the CLI.
+description: Use docir to read and write this project's git-backed design docs — decisions/ADRs, issues, architecture notes — instead of editing markdown by hand. Trigger whenever the repo uses docir (a `docir` command is available, a `.docir/` store exists in the repo or `~/.docir`, or docs carry docir frontmatter) and you are about to implement a feature (pull relevant decisions first), record or resolve a decision/issue/ADR, search project knowledge, or restructure/migrate existing markdown docs into docir. Covers the read path (`docir context/get/search/query`) and the write path (`docir init/add/update/archive`) — every doc write MUST go through the CLI.
 ---
 
 # docir — Agent Guide
@@ -24,6 +24,25 @@ Use docir whenever this repo manages design docs with it (a `docir` command, a
 docir is the ONLY sanctioned way to read/write these docs — **never edit the
 markdown files by hand.**
 
+## Set up in a project
+
+docir keeps docs in **one store**. By default that is the global `~/.docir`
+store (shared by every project). To scope docs to *this* repo, run **`docir
+init`** once — it creates a `.docir/` store in the repo that every `docir`
+command auto-discovers by walking up from the working directory (the way git
+finds `.git`):
+
+```
+docir init                       # create ./.docir (default profiles: software)
+docir init --profiles research   # choose a schema profile that fits the docs
+```
+
+Commit `.docir/docs/` and `.docir/docs-schema.yaml`; the derived index is
+gitignored for you. If you skip `docir init`, docs go to the global `~/.docir`
+store — fine for personal notes, but **not** what you want for a repo whose docs
+should live with the code. Check where you are with `docir query --limit 1` (it
+operates on the discovered store).
+
 ## Core loop
 
 1. **Discover** before coding: `docir context "<task>"` → minimal ranked set.
@@ -31,7 +50,8 @@ markdown files by hand.**
 3. **Implement** (outside docir).
 4. **Record** new decisions/issues: `docir add ...`.
 5. **Update** status when resolving: `docir update <id> --status resolved`.
-6. **Commit** the changed `docs/*.md` files (the index is derived; not committed).
+6. **Commit** the changed docs under the store (`.docir/docs/*.md` in a project;
+   the index is derived and gitignored).
 
 ## Read
 
@@ -76,6 +96,31 @@ docir delete <id> [--force]
   if the file changed on disk — `docir get` first).
 - When a body edit changes what the doc is about, update `--set-description`
   in the same call; it drives search quality.
+
+## Migrating existing docs into docir
+
+To restructure a repo's existing markdown (design notes, ADRs, RFCs) into docir,
+work in this order — the constraints below make any other order fail:
+
+1. **Init first** and pick a fitting profile (see *Set up in a project*). Default
+   types are `decision`/`issue`/`architecture`; enable `research`/`ops`/`legal`
+   in `docs-schema.yaml`, or add inline `types:`, for docs that don't fit — a doc
+   whose `type` isn't in the schema is a Tier 0 error.
+2. **Register tags** you'll apply: `docir tag add <key> --description "..."`
+   (every `--tags` key must exist first).
+3. **Add each source doc one at a time** (there is no bulk import). Map it to a
+   type and write a real `--description` (it drives search); strip any existing
+   YAML frontmatter from the body first:
+   ```
+   docir add --type decision --title "..." --description "..." --stdin < old/adr-001.md
+   ```
+   **Never invent ids** — docir assigns them (`adr-0001`, …). Record the returned
+   id for each source file so you can link them next.
+4. **Wire relationships in a second pass**, after every doc exists and has an id:
+   `docir update <id> --set-related <other-id>:supersedes`. Links can't be set in
+   step 3 because every `--related` target must already exist.
+5. **Validate**: `docir check --strict` — it flags dangling links, duplicate ids,
+   unknown types, and stale docs. Fix, then remove or keep the originals.
 
 ## Typed edges (`related`)
 

@@ -27,6 +27,25 @@ HOME_ENV = "DOCIR_HOME"
 NO_DAEMON_ENV = "DOCIR_NO_DAEMON"
 #: Idle timeout (seconds) before the daemon shuts itself down.
 DEFAULT_IDLE_TIMEOUT = 900.0
+#: The per-project store directory name, discovered by walking up from the CWD
+#: (the ``.git`` model). ``docir init`` creates one; commands then scope to it.
+PROJECT_STORE_DIRNAME = ".docir"
+
+
+def discover_project_home(start: Path | None = None) -> Path | None:
+    """Walk up from ``start`` (default CWD) for a ``.docir`` store directory.
+
+    Returns the first ``.docir`` directory found on the path to the filesystem
+    root, or ``None`` if there is none — mirroring how git locates ``.git``. This
+    is what makes a project-local store (created by ``docir init``) take effect
+    without setting ``DOCIR_HOME`` in every shell.
+    """
+    current = (start or Path.cwd()).resolve()
+    for directory in (current, *current.parents):
+        candidate = directory / PROJECT_STORE_DIRNAME
+        if candidate.is_dir():
+            return candidate
+    return None
 
 
 class Settings(BaseSettings):
@@ -64,16 +83,25 @@ class Settings(BaseSettings):
         """Build settings, applying the inverted ``DOCIR_NO_DAEMON`` semantics.
 
         The daemon is used by default; a set ``DOCIR_NO_DAEMON`` env var (or an
-        explicit ``use_daemon=False``) forces in-process execution. Passing
-        ``home`` overrides the ``DOCIR_HOME`` env var for that call.
+        explicit ``use_daemon=False``) forces in-process execution.
+
+        Home precedence, highest first: an explicit ``home`` argument (the
+        ``--home`` flag) → the ``DOCIR_HOME`` env var → a project-local
+        ``.docir`` discovered by walking up from the CWD → the global
+        ``~/.docir`` default. The discovery step is what lets ``docir init``
+        scope a repo's docs to the repo without exporting ``DOCIR_HOME``.
         """
         if use_daemon is None:
             use_daemon = os.environ.get(NO_DAEMON_ENV, "") == ""
-        # Omitting ``home`` lets pydantic read DOCIR_HOME / the default factory;
-        # passing it takes precedence over the env var for this call.
-        if home is None:
+        if home is not None:
+            return cls(home=Path(home), use_daemon=use_daemon)
+        if os.environ.get(HOME_ENV):
+            # Let pydantic read DOCIR_HOME (env_prefix DOCIR_ + field ``home``).
             return cls(use_daemon=use_daemon)
-        return cls(home=Path(home), use_daemon=use_daemon)
+        discovered = discover_project_home()
+        if discovered is not None:
+            return cls(home=discovered, use_daemon=use_daemon)
+        return cls(use_daemon=use_daemon)
 
     # -- derived paths ------------------------------------------------------
 

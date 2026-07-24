@@ -11,12 +11,15 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from sqlalchemy import Engine
 
 from docir.config.settings import Settings
 from docir.entry_points.dispatch import Dispatcher
 from docir.modules.documents.api import (
+    DEFAULT_SCHEMA_YAML,
+    PROFILE_NAMES,
     DocumentService,
     MaintenanceService,
     load_schema,
@@ -26,7 +29,7 @@ from docir.modules.tags.api import TagService
 from docir.platform.clock import Clock, SystemClock
 from docir.platform.embedding import Embedder
 from docir.platform.embedding.deterministic import DeterministicEmbedder
-from docir.platform.errors import DocirError
+from docir.platform.errors import DocirError, SchemaError
 from docir.platform.filesystem.markdown_store import MarkdownDocumentFileStore
 from docir.platform.filesystem.tag_store import YamlTagFileStore
 from docir.platform.persistence.engine import (
@@ -134,3 +137,72 @@ def build_in_process_executor(
 
 
 UnitOfWorkFactory = Callable[[], UnitOfWork]
+
+
+# -- store initialization (``docir init``) ----------------------------------
+
+#: What ``docir init`` gitignores inside the store: the derived index and the
+#: daemon's runtime files. Only ``docs/`` + ``docs-schema.yaml`` are committed.
+_STORE_GITIGNORE = """\
+# docir derived index + daemon runtime — rebuildable from docs/, do not commit.
+index.db
+index.db-journal
+index.db-wal
+index.db-shm
+daemon.pid
+daemon.log
+"""
+
+
+@dataclass(frozen=True)
+class InitResult:
+    """The outcome of ``docir init`` — where the store is and what was written."""
+
+    home: Path
+    profiles: tuple[str, ...]
+    schema_written: bool
+    gitignore_written: bool
+
+
+def initialize_store(
+    settings: Settings, *, profiles: tuple[str, ...] = (), force: bool = False
+) -> InitResult:
+    """Create/validate a docir store at ``settings.home`` (the ``docir init`` core).
+
+    Writes a ``docs-schema.yaml`` (default, or with the requested ``profiles``)
+    and a ``.gitignore`` for the derived index, ensures the directory layout, and
+    runs migrations — the same startup path every command uses, so an initialized
+    store is immediately valid. Existing files are preserved unless ``force``.
+    """
+    unknown = [name for name in profiles if name not in PROFILE_NAMES]
+    if unknown:
+        available = ", ".join(PROFILE_NAMES)
+        raise SchemaError(f"unknown profile(s): {', '.join(unknown)}; available: {available}")
+
+    settings.ensure_directories()
+
+    schema_path = settings.schema_path
+    schema_written = force or not schema_path.exists()
+    if schema_written:
+        schema_path.write_text(_schema_yaml(profiles), encoding="utf-8")
+
+    gitignore_path = settings.home / ".gitignore"
+    gitignore_written = force or not gitignore_path.exists()
+    if gitignore_written:
+        gitignore_path.write_text(_STORE_GITIGNORE, encoding="utf-8")
+
+    run_migrations(settings.database_url)
+    load_schema(schema_path)  # validate the merged core + profiles (raises SchemaError)
+    return InitResult(
+        home=settings.home,
+        profiles=profiles or ("software",),
+        schema_written=schema_written,
+        gitignore_written=gitignore_written,
+    )
+
+
+def _schema_yaml(profiles: tuple[str, ...]) -> str:
+    """The ``docs-schema.yaml`` body: the default, or with a swapped profiles line."""
+    if not profiles:
+        return DEFAULT_SCHEMA_YAML
+    return DEFAULT_SCHEMA_YAML.replace("profiles: [software]", f"profiles: [{', '.join(profiles)}]")

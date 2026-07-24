@@ -125,6 +125,25 @@ def _format_related(value: object) -> str:
     return ", ".join(parts)
 
 
+def render_init(result: Mapping[str, object]) -> None:
+    """Render the outcome of ``docir init``."""
+    console.print(f"[green]initialized[/] docir store at [bold]{result.get('home')}[/]")
+    profiles = _join(result.get("profiles"))
+    schema_note = (
+        f"docs-schema.yaml (profiles: {profiles})"
+        if result.get("schema_written")
+        else ("docs-schema.yaml [dim](kept existing)[/]")
+    )
+    gitignore_note = (
+        ".gitignore" if result.get("gitignore_written") else ".gitignore [dim](kept existing)[/]"
+    )
+    console.print(f"  [dim]schema:[/]    {schema_note}")
+    console.print(f"  [dim]gitignore:[/] {gitignore_note}")
+    console.print(
+        "[dim]commit docs/ and docs-schema.yaml under the store; the index is gitignored.[/]"
+    )
+
+
 def render_setup(files: Sequence[Mapping[str, object]]) -> None:
     """Render the outcome of ``docir agent install/update``."""
     if not files:

@@ -5,8 +5,6 @@
   </picture>
 </p>
 
-# docir
-
 **doc**uments as **IR** — a CLI that *compiles* git-backed markdown into a verifiable,
 read-optimized index for AI coding agents.
 

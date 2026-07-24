@@ -1,16 +1,19 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/logo/docir-lockup-dark.png" />
-    <img src="assets/logo/docir-lockup.png" alt="docir" width="240" />
-  </picture>
-</p>
+<div align="center">
 
-**doc**uments as **IR** — a CLI that *compiles* git-backed markdown into a verifiable,
-read-optimized index for AI coding agents.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/logo/docir-lockup-dark.png" />
+  <img src="assets/logo/docir-lockup.png" alt="docir" width="260" />
+</picture>
+
+**doc**uments as **IR** — a CLI that *compiles* git-backed markdown<br />into a verifiable, read-optimized index for AI coding agents.
 
 [![PyPI](https://img.shields.io/pypi/v/docir)](https://pypi.org/project/docir/) [![Python](https://img.shields.io/pypi/pyversions/docir)](https://pypi.org/project/docir/) [![CI](https://img.shields.io/github/actions/workflow/status/skonovalov/docir/ci.yml)](../../actions) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 [The idea](#the-idea) · [Quickstart](#quickstart) · [Why not just…](#why-not-just) · [Commands](#commands) · [Docs](docs/)
+
+</div>
+
+---
 
 ## The idea
 

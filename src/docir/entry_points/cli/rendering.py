@@ -125,5 +125,27 @@ def _format_related(value: object) -> str:
     return ", ".join(parts)
 
 
+def render_setup(files: Sequence[Mapping[str, object]]) -> None:
+    """Render the outcome of ``docir agent install/update``."""
+    if not files:
+        console.print("[dim]nothing to install or update[/]")
+        return
+    colors = {"created": "green", "updated": "cyan", "skipped": "dim"}
+    for file in files:
+        action = str(file.get("action", ""))
+        previous = file.get("previous_version")
+        new = file.get("new_version")
+        if action == "updated" and previous and previous != new:
+            version = f"v{previous} → v{new}"
+        elif new:
+            version = f"v{new}"
+        else:
+            version = ""
+        note = file.get("note")
+        suffix = f" [dim]({note})[/]" if note else ""
+        color = colors.get(action, "white")
+        console.print(f"[{color}]{action:<9}[/] {file.get('path')}  [dim]{version}[/]{suffix}")
+
+
 def render_message(message: str) -> None:
     console.print(message)

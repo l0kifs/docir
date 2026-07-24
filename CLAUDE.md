@@ -70,12 +70,15 @@ src/docir/
 ├── modules/
 │   ├── documents/   api.py + CONTRACT.md + domain/application/infra   (the document aggregate; write + read + maintenance)
 │   ├── tags/        api.py + CONTRACT.md + domain/application          (the tag registry)
-│   └── indexing/    api.py + CONTRACT.md + domain/application/infra    (hybrid ranking + the embedding scheduler)
+│   ├── indexing/    api.py + CONTRACT.md + domain/application/infra    (hybrid ranking + the embedding scheduler)
+│   └── agents/      api.py + CONTRACT.md + domain/application/infra    (installs AI-assistant instructions; ADR-0008)
 └── entry_points/  cli · daemon · composition · dispatch                (wiring only, no business logic)
 ```
 
 Dependencies flow **`entry_points → modules → platform → config`**, and between modules only
 **`tags → documents → indexing`**. There are no cycles, and tach fails the build if you introduce one.
+`agents` is a self-contained leaf (depends only on `platform.errors`); it owns no index/DB state, so
+it has no shared-index baseline edges.
 
 - **Each module exposes exactly one public file, `api.py`.** Code outside a module (entry_points, or
   another module) may import **only** that module's `api`, never its `domain`/`application`/`infra`.
@@ -169,6 +172,14 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   self-shuts-down after an idle timeout. It is spawned as a detached `python -m docir daemon serve`,
   so `src/docir/__main__.py → entry_points.cli.app:main` and the hidden `daemon serve` command must
   keep working. `daemon serve` builds a container with `background_embeddings=True`.
+- **`docir agent install/update` bypasses the daemon/dispatcher on purpose (ADR-0008).** The
+  `agents` module installs AI-assistant instruction files (a Claude skill / an `AGENTS.md` block)
+  from one packaged template (`modules/agents/infra/templates/skill.md`, the canonical guide — edit
+  it there, not `docs/AGENT_GUIDE.md`, which is now a pointer). It touches no index/DB, so the CLI
+  builds the service directly via `agents.api.build_agent_service(__version__)` and runs it
+  in-process — like `version` and `daemon serve`, not through the `RequestExecutor`/`Dispatcher`.
+  Generated files carry a `<!-- docir:vX -->` stamp so `update` reports a version transition; a
+  foreign `AGENTS.md` is never rewritten (only docir's marker block is).
 - **All exceptions live in `platform/errors`.** `DocirError` is the base and carries an `exit_code`;
   `entry_points/cli/runner.py` maps that onto the process exit code. Raise a typed subclass, not a
   bare `DocirError`, so the CLI reports the right code.

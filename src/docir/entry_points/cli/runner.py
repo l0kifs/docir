@@ -7,6 +7,7 @@ mapping a domain error's exit code onto the process exit code.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import typer
@@ -14,6 +15,7 @@ import typer
 from docir.config.settings import Settings
 from docir.entry_points.cli import rendering
 from docir.entry_points.composition import Container, build_in_process_executor
+from docir.platform.errors import DocirError
 from docir.platform.transport.messages import Request, RequestExecutor, Response
 
 
@@ -48,6 +50,19 @@ def execute(command: str, payload: dict[str, object]) -> object:
         if closer is not None:
             closer.close()
     return _unwrap(response)
+
+
+def run_local[T](action: Callable[[], T]) -> T:
+    """Run an in-process action, mapping a domain error onto the exit code.
+
+    For commands that do not go through the daemon/dispatcher (e.g. ``agent``),
+    so they still report a domain error the same way :func:`execute` does.
+    """
+    try:
+        return action()
+    except DocirError as exc:
+        rendering.render_error({"message": str(exc)})
+        raise typer.Exit(code=exc.exit_code) from exc
 
 
 def _build_executor(

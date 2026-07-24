@@ -108,3 +108,16 @@ class DaemonError(DocirError):
     """The daemon transport failed in a way the caller must handle."""
 
     exit_code = 7
+
+
+# --- Agent instruction setup -----------------------------------------------
+
+
+class AgentSetupError(DocirError):
+    """A ``docir agent install/update`` request is not satisfiable as asked.
+
+    Raised for usage errors such as requesting a global install of a target that
+    has no global location (e.g. ``AGENTS.md``).
+    """
+
+    exit_code = 2

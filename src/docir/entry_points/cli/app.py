@@ -16,8 +16,16 @@ from docir import __version__
 from docir.config.settings import Settings
 from docir.entry_points.cli import rendering
 from docir.entry_points.cli.body_input import resolve_body
-from docir.entry_points.cli.runner import CliState, execute, get_state, set_state
+from docir.entry_points.cli.runner import CliState, execute, get_state, run_local, set_state
 from docir.entry_points.daemon.cmds import daemon_app
+from docir.modules.agents.api import (
+    AGENT_NAMES,
+    DEFAULT_AGENTS,
+    InstallRequest,
+    SetupResult,
+    UpdateRequest,
+    build_agent_service,
+)
 
 app = typer.Typer(
     help="Doc-Index CLI — git-backed markdown documents with a semantic index.",
@@ -25,7 +33,9 @@ app = typer.Typer(
     add_completion=False,
 )
 tag_app = typer.Typer(help="Manage the tag registry.", no_args_is_help=True)
+agent_app = typer.Typer(help="Install AI-assistant instructions for docir.", no_args_is_help=True)
 app.add_typer(tag_app, name="tag")
+app.add_typer(agent_app, name="agent")
 app.add_typer(daemon_app, name="daemon")
 
 
@@ -261,6 +271,55 @@ def tag_rm(
     _emit_or_message(data, f"removed tag {key}")
 
 
+# -- agent instructions -----------------------------------------------------
+
+
+@agent_app.command("install")
+def agent_install(
+    directory: Annotated[Path, typer.Argument(help="Project directory.")] = Path("."),
+    agent: Annotated[
+        list[str] | None,
+        typer.Option("--agent", help=f"Target(s): {', '.join(AGENT_NAMES)}. Repeatable."),
+    ] = None,
+    use_global: Annotated[
+        bool,
+        typer.Option("--global", help="Install the skill under ~/ instead of the project."),
+    ] = False,
+) -> None:
+    """Install docir's agent instructions (a Claude skill and/or an AGENTS.md block)."""
+    service = build_agent_service(__version__)
+    request = InstallRequest(
+        project_root=directory.resolve(),
+        global_root=Path.home(),
+        agents=tuple(agent) if agent else DEFAULT_AGENTS,
+        use_global=use_global,
+    )
+    _emit_setup(run_local(lambda: service.install(request)))
+
+
+@agent_app.command("update")
+def agent_update(
+    directory: Annotated[Path, typer.Argument(help="Project directory.")] = Path("."),
+    agent: Annotated[
+        list[str] | None,
+        typer.Option("--agent", help="Add a target that isn't installed yet. Repeatable."),
+    ] = None,
+    use_global: Annotated[
+        bool,
+        typer.Option("--global", help="Refresh the skill under ~/ instead of the project."),
+    ] = False,
+) -> None:
+    """Refresh already-installed agent instructions to the current docir version."""
+    service = build_agent_service(__version__)
+    request = UpdateRequest(
+        project_root=directory.resolve(),
+        global_root=Path.home(),
+        agents=tuple(agent) if agent else (),
+        use_global=use_global,
+    )
+    _emit_setup(run_local(lambda: service.update(request)))
+
+
 # -- maintenance ------------------------------------------------------------
 
 
@@ -367,6 +426,24 @@ def _emit_or_message(data: object, message: str) -> None:
         rendering.emit_json(data)
     else:
         rendering.render_message(message)
+
+
+def _emit_setup(result: SetupResult) -> None:
+    files = [
+        {
+            "target": file.target,
+            "path": file.path,
+            "action": file.action.value,
+            "previous_version": file.previous_version,
+            "new_version": file.new_version,
+            "note": file.note,
+        }
+        for file in result.files
+    ]
+    if get_state().json_output:
+        rendering.emit_json(files)
+    else:
+        rendering.render_setup(files)
 
 
 def main() -> None:

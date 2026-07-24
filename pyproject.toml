@@ -82,7 +82,13 @@ output-format = "concise"
 paths = ["src"]
 min_confidence = 70
 exclude = ["*/alembic/*"]
-ignore_decorators = ["@app.command", "@app.callback", "@tag_app.command", "@daemon_app.command"]
+ignore_decorators = [
+    "@app.command",
+    "@app.callback",
+    "@tag_app.command",
+    "@daemon_app.command",
+    "@agent_app.command",
+]
 
 # ---------------------------------------------------------------------------
 # Pytest / coverage

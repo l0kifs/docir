@@ -40,6 +40,7 @@ public file (`api.py`) described by a `CONTRACT.md`.
 | `documents` | The document lifecycle — content, metadata, relations; the single write path and the read paths (get / query / search / context) plus index maintenance. |
 | `tags` | The tag registry — the controlled vocabulary that classifies documents, kept consistent across every document that uses it. |
 | `indexing` | The relevance engine — hybrid lexical + semantic ranking for context retrieval and the deferred embedding-recompute scheduler. |
+| `agents` | Installs the AI-assistant instructions that teach a coding agent to drive docir — a Claude Code skill and/or an `AGENTS.md` block, from one packaged template. |
 
 ### Shared layers
 
@@ -66,8 +67,14 @@ uv run docir add --type decision --title "Auth strategy" \
     --description "How the service authenticates API clients." \
     --tags auth --stdin < draft.md
 uv run docir context "implement a new auth endpoint"   # ranked relevant set
+uv run docir agent install                             # teach this repo's AI agent to use docir
 uv run docir --help                                    # all commands
 ```
+
+`docir agent install` writes a Claude Code skill (`.claude/skills/docir/SKILL.md`);
+add `--agent agents` for an `AGENTS.md` block, `--global` to install for every project,
+and re-run `docir agent update` after upgrading docir. See
+[docs/AGENT_GUIDE.md](docs/AGENT_GUIDE.md).
 
 All state lives under `~/.docir/` (override with `DOCIR_HOME`).
 

@@ -1,146 +1,27 @@
 # docir — Agent Guide
 
-Git-backed markdown docs (decisions, issues, architecture) with a derived index
-(full-text + relation graph + semantic search). Files are the source of truth;
-every write goes through the `docir` CLI to keep frontmatter/schema valid.
+The canonical agent guide now **ships with docir** as a packaged instruction
+template and is installed into a project (or globally) with one command — it is
+no longer maintained as a copy here (see
+[ADR-0008](adr/ADR-0008-agent-instruction-scaffolding.md)).
 
-Prefix all commands with `docir`. Add `--json` for machine-readable output.
+## Install it
 
-## When to use
-
-Use docir whenever this repo manages design docs with it (a `docir` command, a
-`~/.docir` dir, or `docs/*.md` with docir frontmatter are present):
-
-- **Before implementing** a feature — pull the relevant decisions/issues first.
-- When **recording** a new decision/ADR or issue you discovered.
-- When **resolving or updating** an existing doc.
-- When **searching** project knowledge.
-
-docir is the ONLY sanctioned way to read/write these docs — **never edit the
-markdown files by hand.**
-
-## Core loop
-
-1. **Discover** before coding: `docir context "<task>"` → minimal ranked set.
-2. **Read** the ones that matter: `docir get <id>`.
-3. **Implement** (outside docir).
-4. **Record** new decisions/issues: `docir add ...`.
-5. **Update** status when resolving: `docir update <id> --status resolved`.
-6. **Commit** the changed `docs/*.md` files (the index is derived; not committed).
-
-## Read
-
-| Command | Use |
-|---|---|
-| `docir context "<task>" [--limit N]` | Best first step: hybrid (lexical+semantic) ranking + 1-hop related docs. Graph-pulled items marked `via_graph`. |
-| `docir get <id>` | Full doc (body included); works for any status. |
-| `docir search "<text>"` | Full-text only. |
-| `docir query --type decision --status accepted --tag auth` | Structured filter; repeatable `--type/--status/--tag`. |
-
-**Two-tier read (skeleton → body).** `context` / `query` / `search` return
-*skeletons* — id, title, description, tags, typed `related`, `owner`,
-`verified`, `stale` — **but not the body**. Scan those to judge relevance, then
-pull only the bodies you need with `docir get <id>`. This is the cheap path;
-never dump every body.
-
-Default read path **hides** resolved/archived docs. Add `--include-resolved`
-(query/search/context) or use `docir get` to see them.
-
-## Write
-
-```
-docir add --type decision --title "..." --description "..." \
-  [--tags auth,api] [--related adr-0001,arch-0002:implements] [--status ...] \
-  [--owner platform-team] (--stdin | --body "..." | --body-file f.md)
-
-docir update <id> --status resolved             # metadata patch
-docir update <id> --set-description "..."        # keep summary current on edits
-docir update <id> --set-related adr-0001:supersedes   # replace typed edges
-docir update <id> --set-owner platform-team     # assign a steward
-docir update <id> --verified                     # stamp today as last-verified
-docir update <id> --append-section "Resolution" --body "Fixed in PR 42"
-docir update <id> --replace-section "Context" --body "..."
-docir update <id> --replace-body --force --body "..."   # full overwrite
-docir archive <id> | docir unarchive <id>
-docir delete <id> [--force]
+```bash
+docir agent install                 # Claude Code skill → ./.claude/skills/docir/SKILL.md
+docir agent install --agent agents  # also write an AGENTS.md block (cross-assistant)
+docir agent install --global        # install the skill under ~/ for every project
+docir agent update                  # refresh installed instructions after upgrading docir
 ```
 
-- Prefer `--stdin` for multi-line markdown bodies (no shell-escaping).
-- Body edits, safest→riskiest: `--append-section` (default choice) →
-  `--replace-section` → `--replace-body` (needs `--force`; fails "stale write"
-  if the file changed on disk — `docir get` first).
-- When a body edit changes what the doc is about, update `--set-description`
-  in the same call; it drives search quality.
+`install` is idempotent; `update` auto-detects what is installed, refreshes it to
+the running docir version, and never rewrites a foreign `AGENTS.md` (it only
+replaces docir's own `<!-- docir:start/end -->` block, or appends one when you
+pass `--agent agents`).
 
-## Typed edges (`related`)
+## Source of truth
 
-Each `related` entry is a **typed edge**: a target id plus a relation *kind*.
-
-- Compact form: `<id>` (defaults to `relates_to`) or `<id>:<kind>` —
-  e.g. `--related adr-0007:supersedes,issue-0003:depends_on`.
-- Core kinds: `relates_to` (default), `supersedes`, `depends_on`, `implements`,
-  `contradicts`, `refines`. An unknown kind is a Tier 0 error (like an unknown
-  tag). Some types constrain which kinds/targets they allow.
-- Prefer a typed edge over prose when a real relationship exists — traversal is
-  exact and cheap. Model "A replaces B" as `A --supersedes--> B` (not only a
-  status change on B).
-
-## Staleness (`owner` / `verified`)
-
-For docs that need periodic human re-confirmation, set an `--owner` and, when you
-(or a human) confirm a doc is still correct, run `docir update <id> --verified`.
-A type's review cadence (`review_days` in the schema) drives a non-blocking
-`stale` warning in `docir check` and a `stale` flag on read views. Editing the
-body does not equal verifying it — `--verified` is the explicit signal.
-
-## Tags (must exist before use)
-
-```
-docir tag add auth --description "Authentication, tokens, sessions."
-docir tag list
-docir tag rename auth authn         # rewrites every referencing doc
-docir tag rm auth [--force]         # --force strips it from docs; else blocked
-```
-
-## Hard rules (Tier 0 — these fail the write)
-
-- Never edit `docs/*.md` directly. Always use the CLI.
-- `id` is auto-assigned `<prefix>-NNNN`; never invent one. Prefixes: decision→`adr`, issue→`issue`, architecture→`arch`.
-- Every `--tags` key must be registered first; every `--related` id must exist.
-- `--status` must be a valid transition (see below); use `--override` to force.
-
-## Types & statuses (default schema)
-
-| type | statuses (→ = allowed transition) | hidden by default |
-|---|---|---|
-| decision | proposed → accepted / rejected; accepted → superseded / rejected | rejected, superseded |
-| issue | open → resolved | resolved |
-| architecture | draft → active → deprecated | deprecated |
-
-The default schema is the frozen **core** (`decision`) plus the **software**
-profile (`issue`, `architecture`). Other bundled profiles add domain types —
-`research` (hypothesis/experiment/finding), `ops` (runbook/incident/postmortem),
-`legal` (policy/contract/obligation) — enabled per install with
-`profiles: [..]` in `~/.docir/docs-schema.yaml`.
-
-## Checks & maintenance (non-blocking)
-
-- `docir check` — Tier 1 warnings: cycles, orphans, layering, **dangling** `related` links, **duplicate ids**, **stale** docs (past their review cadence), **unknown type** (a doc whose `type` isn't in the active schema — e.g. its profile was disabled). Run before finishing.
-- `docir check --strict` — exits nonzero on any issue; use as a **CI / pre-merge gate** to catch duplicate ids or dangling refs a branch merge introduced before they reach `main`.
-- `docir lint --deep` — Tier 2 advisories (duplicate content, oversized docs).
-- `docir reindex [--changed]` — after a doc file was hand-edited, merged, or freshly cloned.
-
-## Working across git branches
-
-Only `docs/*.md` + `tags.yaml` are committed; the index is derived and gitignored.
-After any merge/pull: `docir reindex --all` then `docir check --strict`. If several
-people author docs on concurrent branches, set `id_style: random` per type in
-`docs-schema.yaml` — it mints collision-resistant ids (`adr-3f9a2b1c7d4e`) so two
-branches never allocate the same id. The default `sequential` style (`adr-0007`)
-is only collision-free within one shared index.
-
-## Notes
-
-- Exit codes are nonzero on error (2=validation, 4=not-found, 5=conflict, 6=stale). With `--json`, errors go to stderr.
-- Semantic vectors are computed async; add `--wait-embeddings` to a write (or `docir embed --flush`) if you must `context`-search immediately after.
-- All state lives under `~/.docir` (override `DOCIR_HOME`); the index is disposable and rebuildable from files.
+The guide's content lives in the packaged template
+[`src/docir/modules/agents/infra/templates/skill.md`](../src/docir/modules/agents/infra/templates/skill.md).
+Edit it there — the Claude skill installs it verbatim and `AGENTS.md` embeds the
+same body with its frontmatter stripped.

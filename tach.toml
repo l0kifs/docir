@@ -178,6 +178,34 @@ depends_on = [
     "docir.platform.persistence",
 ]
 
+# -- agents -----------------------------------------------------------------
+# A self-contained bounded context: it installs AI-assistant instruction files
+# (a Claude skill / an AGENTS.md block) from a packaged template. It owns no
+# index/DB state, so it has NO shared-index baseline edges — a clean module.
+[[modules]]
+path = "docir.modules.agents"
+depends_on = []
+
+[[modules]]
+path = "docir.modules.agents.domain"
+depends_on = []
+
+[[modules]]
+path = "docir.modules.agents.application"
+depends_on = ["docir.modules.agents.domain", "docir.platform.errors"]
+
+[[modules]]
+path = "docir.modules.agents.infra"
+depends_on = ["docir.modules.agents.application"]
+
+[[modules]]
+path = "docir.modules.agents.api"
+depends_on = [
+    "docir.modules.agents.application",
+    "docir.modules.agents.domain",
+    "docir.modules.agents.infra",
+]
+
 # ---------------------------------------------------------------------------
 # entry_points/ — thin wiring (imports module apis only)
 # ---------------------------------------------------------------------------
@@ -186,6 +214,7 @@ path = "docir.entry_points"
 depends_on = [
     "docir",
     "docir.config",
+    "docir.modules.agents.api",
     "docir.modules.documents.api",
     "docir.modules.indexing.api",
     "docir.modules.tags.api",

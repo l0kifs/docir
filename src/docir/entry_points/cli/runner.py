@@ -7,6 +7,7 @@ mapping a domain error's exit code onto the process exit code.
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -25,9 +26,26 @@ class CliState:
 
     settings: Settings
     json_output: bool = False
+    pretty: bool = False
+    trim: bool = True
 
 
 _state: CliState | None = None
+
+
+def use_json(state: CliState) -> bool:
+    """Whether to emit compact JSON instead of Rich tables/panels.
+
+    Agents capture stdout (a pipe, not a TTY) and so get JSON automatically;
+    a human at a terminal gets tables. ``--json`` forces JSON everywhere,
+    ``--pretty`` forces tables everywhere.
+    """
+    if state.pretty:
+        return False
+    if state.json_output:
+        return True
+    isatty = getattr(sys.stdout, "isatty", None)
+    return not (callable(isatty) and isatty())
 
 
 def set_state(state: CliState) -> None:

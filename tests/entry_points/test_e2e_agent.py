@@ -72,6 +72,12 @@ class TestAgentInstall:
         assert payload[0]["target"] == "claude"
         assert payload[0]["action"] == "created"
 
+    def test_pretty_output(self, tmp_path: Path) -> None:
+        # --pretty exercises the human render_setup path (not the JSON default).
+        result = run("--pretty", "agent", "install", str(tmp_path))
+        assert result.exit_code == 0
+        assert "created" in result.stdout
+
 
 class TestAgentUpdate:
     def test_update_refreshes_installed_files(self, tmp_path: Path) -> None:

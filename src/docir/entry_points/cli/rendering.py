@@ -1,8 +1,17 @@
-"""Rich rendering of command responses (with a JSON escape hatch for agents)."""
+"""Rich rendering for humans + a compact-JSON path for agents.
+
+The output is token-aware. At a TTY the responses render as Rich tables/panels;
+when stdout is piped (an AI agent capturing output) or ``--json`` is passed,
+commands emit compact single-line JSON instead. By default that JSON is
+*trimmed* — fields carrying no information (empty strings, empty lists, nulls)
+are dropped and the relevance ``score`` is rounded — so an agent reads an absent
+field as its default. ``--no-trim`` keeps the full-fidelity payload.
+"""
 
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Mapping, Sequence
 
 from rich.console import Console
@@ -12,10 +21,40 @@ from rich.table import Table
 console = Console()
 error_console = Console(stderr=True)
 
+_SCORE_DECIMALS = 4
 
-def emit_json(data: object) -> None:
-    """Print a raw JSON representation (used with the global --json flag)."""
-    console.print_json(json.dumps(data))
+
+def emit_json(data: object, *, trim: bool = True) -> None:
+    """Print compact single-line JSON — the token-efficient path for agents.
+
+    With ``trim`` (the default) empty fields are omitted and ``score`` rounded;
+    pass ``trim=False`` (the CLI's ``--no-trim``) to keep the full payload.
+    """
+    payload = _trim(data) if trim else data
+    sys.stdout.write(json.dumps(payload, separators=(",", ":"), ensure_ascii=False) + "\n")
+
+
+def _trim(value: object) -> object:
+    """Drop information-free fields (empty str/list/map, null) and round scores.
+
+    Never drops ``False`` or a numeric ``0`` — only genuinely empty values — so an
+    omitted key always means "the default", never a real zero. Recurses into
+    nested lists and maps.
+    """
+    if isinstance(value, Mapping):
+        result: dict[str, object] = {}
+        for key, item in value.items():
+            if key == "score" and isinstance(item, float):
+                result[str(key)] = round(item, _SCORE_DECIMALS)
+                continue
+            trimmed = _trim(item)
+            if trimmed is None or trimmed == "" or trimmed == [] or trimmed == {}:
+                continue
+            result[str(key)] = trimmed
+        return result
+    if isinstance(value, list | tuple):
+        return [_trim(item) for item in value]
+    return value
 
 
 def render_error(error: Mapping[str, object]) -> None:

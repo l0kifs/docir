@@ -42,6 +42,12 @@ class TestInit:
         assert payload["schema_written"] is True
         assert payload["profiles"] == ["software"]
 
+    def test_pretty_output(self, tmp_path: Path) -> None:
+        # --pretty exercises the human render_init path (not the JSON default).
+        result = run("--pretty", "init", str(tmp_path))
+        assert result.exit_code == 0
+        assert "initialized" in result.stdout.lower()
+
 
 class TestDiscoveryThroughCli:
     def test_add_lands_in_the_discovered_store(self, tmp_path: Path, monkeypatch) -> None:

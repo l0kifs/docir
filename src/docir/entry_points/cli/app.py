@@ -16,7 +16,14 @@ from docir import __version__
 from docir.config.settings import PROJECT_STORE_DIRNAME, Settings
 from docir.entry_points.cli import rendering
 from docir.entry_points.cli.body_input import resolve_body
-from docir.entry_points.cli.runner import CliState, execute, get_state, run_local, set_state
+from docir.entry_points.cli.runner import (
+    CliState,
+    execute,
+    get_state,
+    run_local,
+    set_state,
+    use_json,
+)
 from docir.entry_points.composition import InitResult, initialize_store
 from docir.entry_points.daemon.cmds import daemon_app
 from docir.modules.agents.api import (
@@ -51,12 +58,20 @@ def main_callback(
         bool, typer.Option("--no-daemon", help="Run in-process, bypass the daemon.")
     ] = False,
     json_output: Annotated[
-        bool, typer.Option("--json", help="Emit raw JSON instead of tables.")
+        bool,
+        typer.Option("--json", help="Force compact JSON (already the default when piped)."),
+    ] = False,
+    pretty: Annotated[
+        bool, typer.Option("--pretty", help="Force rich tables even when output is piped.")
+    ] = False,
+    no_trim: Annotated[
+        bool,
+        typer.Option("--no-trim", help="Keep empty fields and full-precision scores in JSON."),
     ] = False,
 ) -> None:
     """Resolve global options and initialize CLI state."""
     settings = Settings.resolve(home, use_daemon=False if no_daemon else None)
-    set_state(CliState(settings=settings, json_output=json_output))
+    set_state(CliState(settings=settings, json_output=json_output, pretty=pretty, trim=not no_trim))
 
 
 @app.command()
@@ -277,8 +292,8 @@ def tag_list() -> None:
     """List every registered tag."""
     data = execute("tag_list", {})
     state = get_state()
-    if state.json_output:
-        rendering.emit_json(data)
+    if use_json(state):
+        rendering.emit_json(data, trim=state.trim)
     else:
         rendering.render_tags(_as_list(data))
 
@@ -380,8 +395,8 @@ def check(
     data = execute("check", {})
     state = get_state()
     issues = _as_list(data)
-    if state.json_output:
-        rendering.emit_json(data)
+    if use_json(state):
+        rendering.emit_json(data, trim=state.trim)
     else:
         rendering.render_findings(issues, empty="no structural issues")
     if strict and issues:
@@ -398,8 +413,8 @@ def lint(
         raise typer.Exit(code=0)
     data = execute("lint", {})
     state = get_state()
-    if state.json_output:
-        rendering.emit_json(data)
+    if use_json(state):
+        rendering.emit_json(data, trim=state.trim)
     else:
         rendering.render_findings(_as_list(data), empty="no advisory findings")
 
@@ -437,24 +452,24 @@ def _as_list(data: object) -> list[dict[str, object]]:
 
 def _emit_document(data: object) -> None:
     state = get_state()
-    if state.json_output:
-        rendering.emit_json(data)
+    if use_json(state):
+        rendering.emit_json(data, trim=state.trim)
     elif isinstance(data, dict):
         rendering.render_document({str(key): value for key, value in data.items()})
 
 
 def _emit_document_list(data: object) -> None:
     state = get_state()
-    if state.json_output:
-        rendering.emit_json(data)
+    if use_json(state):
+        rendering.emit_json(data, trim=state.trim)
     else:
         rendering.render_document_list(_as_list(data))
 
 
 def _emit_or_message(data: object, message: str) -> None:
     state = get_state()
-    if state.json_output:
-        rendering.emit_json(data)
+    if use_json(state):
+        rendering.emit_json(data, trim=state.trim)
     else:
         rendering.render_message(message)
 
@@ -466,8 +481,9 @@ def _emit_init(result: InitResult) -> None:
         "schema_written": result.schema_written,
         "gitignore_written": result.gitignore_written,
     }
-    if get_state().json_output:
-        rendering.emit_json(data)
+    state = get_state()
+    if use_json(state):
+        rendering.emit_json(data, trim=state.trim)
     else:
         rendering.render_init(data)
 
@@ -484,8 +500,9 @@ def _emit_setup(result: SetupResult) -> None:
         }
         for file in result.files
     ]
-    if get_state().json_output:
-        rendering.emit_json(files)
+    state = get_state()
+    if use_json(state):
+        rendering.emit_json(files, trim=state.trim)
     else:
         rendering.render_setup(files)
 

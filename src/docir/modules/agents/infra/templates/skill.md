@@ -9,7 +9,12 @@ Git-backed markdown docs (decisions, issues, architecture) with a derived index
 (full-text + relation graph + semantic search). Files are the source of truth;
 every write goes through the `docir` CLI to keep frontmatter/schema valid.
 
-Prefix all commands with `docir`. Add `--json` for machine-readable output.
+Prefix all commands with `docir`. **When you capture a command's output it is
+already compact single-line JSON** — stdout isn't a TTY, so you don't need
+`--json` (it forces the same). To save tokens, fields that hold no value are
+omitted: **an absent field means its default** — no `owner`/`verified`/`related`,
+empty `tags` — and the relevance `score` is rounded. Pass `--no-trim` for the
+full, unrounded payload, or `--pretty` to force the human table view.
 
 ## When to use
 
@@ -191,6 +196,6 @@ is only collision-free within one shared index.
 
 ## Notes
 
-- Exit codes are nonzero on error (2=validation, 4=not-found, 5=conflict, 6=stale). With `--json`, errors go to stderr.
+- Errors print `error: <message>` to **stderr** with a nonzero exit code (2=validation, 4=not-found, 5=conflict, 6=stale), so a captured stdout stays clean JSON.
 - Semantic vectors are computed async; add `--wait-embeddings` to a write (or `docir embed --flush`) if you must `context`-search immediately after.
 - All state lives under `~/.docir` (override `DOCIR_HOME`); the index is disposable and rebuildable from files.

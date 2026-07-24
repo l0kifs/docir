@@ -7,6 +7,8 @@ presentation -> application -> infrastructure stack via the command line.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from typer.testing import CliRunner
 
@@ -178,6 +180,41 @@ class TestMaintenanceCommands:
         run("add", "--type", "decision", "--title", "Orphan", "--description", "d")
         assert run("check").exit_code == 0
         assert run("check", "--strict").exit_code == 1
+
+
+class TestOutputModes:
+    """Token-aware output: JSON when captured (non-TTY), tables under --pretty."""
+
+    def test_captured_output_defaults_to_compact_json(self) -> None:
+        # CliRunner captures stdout (not a TTY) — an agent gets compact JSON free.
+        _seed_tag()
+        run("add", "--type", "decision", "--title", "J", "--description", "d", "--tags", "auth")
+        out = run("query", "--type", "decision").stdout.strip()
+        assert out.startswith("[")  # JSON array, not a Rich table
+        assert "\n" not in out  # single line = compact
+        assert "┏" not in out and "─" not in out
+        assert json.loads(out)[0]["id"] == "adr-0001"
+
+    def test_pretty_forces_tables_even_when_piped(self) -> None:
+        _seed_tag()
+        run("add", "--type", "decision", "--title", "J", "--description", "d", "--tags", "auth")
+        assert "adr-0001" in run("--pretty", "get", "adr-0001").stdout  # render_document
+        listed = run("--pretty", "query", "--type", "decision").stdout  # render_document_list
+        assert "adr-0001" in listed and ("─" in listed or "┃" in listed)
+        assert "auth" in run("--pretty", "tag", "list").stdout  # render_tags
+        assert run("--pretty", "check").exit_code == 0  # render_findings
+        assert run("--pretty", "lint", "--deep").exit_code == 0  # render_findings (advisory)
+        assert run("--pretty", "reindex").exit_code == 0  # render_message path
+
+    def test_trim_drops_empty_fields_by_default(self) -> None:
+        run("add", "--type", "decision", "--title", "J", "--description", "d")
+        assert '"owner"' not in run("get", "adr-0001").stdout  # empty owner omitted
+        assert '"related"' not in run("get", "adr-0001").stdout  # empty list omitted
+
+    def test_no_trim_keeps_empty_fields(self) -> None:
+        run("add", "--type", "decision", "--title", "J", "--description", "d")
+        full = run("--no-trim", "get", "adr-0001").stdout
+        assert '"owner"' in full and '"related"' in full
 
 
 class TestErrorHandling:

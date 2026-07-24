@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo/docir-lockup-dark.png" />
+    <img src="assets/logo/docir-lockup.png" alt="docir" width="240" />
+  </picture>
+</p>
+
 # docir
 
 **doc**uments as **IR** — a CLI that *compiles* git-backed markdown into a verifiable,

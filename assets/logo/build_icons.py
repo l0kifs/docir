@@ -29,15 +29,19 @@ def render(svg_path: str, size: int) -> Image.Image:
 
 def flatten(img: Image.Image, bg: tuple[int, int, int] = INK) -> Image.Image:
     """Composite over an opaque background (square, no alpha) for Apple/manifest."""
-    base = Image.new("RGBA", img.size, bg + (255,))
+    base = Image.new("RGBA", img.size, (*bg, 255))
     base.alpha_composite(img)
     return base.convert("RGB")
 
 
 def main() -> None:
     # Transparent, rounded PNGs (web / manifest use).
-    for size, name in [(16, "icon-16.png"), (32, "icon-32.png"),
-                       (192, "icon-192.png"), (512, "icon-512.png")]:
+    for size, name in [
+        (16, "icon-16.png"),
+        (32, "icon-32.png"),
+        (192, "icon-192.png"),
+        (512, "icon-512.png"),
+    ]:
         render(TILE, size).save(os.path.join(HERE, name))
 
     # Apple touch icon: fully opaque square, 180px (iOS applies its own mask).
@@ -53,10 +57,7 @@ def main() -> None:
         append_images=rest,
     )
 
-    produced = sorted(
-        f for f in os.listdir(HERE)
-        if f.endswith((".png", ".ico"))
-    )
+    produced = sorted(f for f in os.listdir(HERE) if f.endswith((".png", ".ico")))
     print("built:", ", ".join(produced))
 
 

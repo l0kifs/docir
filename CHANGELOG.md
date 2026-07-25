@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-25
+
+Packaging and README fixes so the PyPI project page renders correctly. No code changes.
+
+### Fixed
+
+- **PyPI project page logo.** The README lockup used a repository-relative image path,
+  which PyPI cannot resolve; switched to absolute `raw.githubusercontent.com` URLs so the
+  logo renders on both PyPI and GitHub.
+- **`python` version badge showed "missing".** Added Python trove `classifiers`
+  (`3.12`, `3.13`) so the `shields.io` `pypi/pyversions` badge resolves; also added
+  standard audience/topic/license classifiers for PyPI discoverability.
+
 ## [0.1.0] - 2026-07-24
 
 Initial public release. `docir` compiles git-backed markdown documents into a derived,
@@ -47,5 +60,6 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/l0kifs/docir/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/l0kifs/docir/releases/tag/v0.1.0

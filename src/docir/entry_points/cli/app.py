@@ -34,7 +34,7 @@ from docir.modules.agents.api import (
     UpdateRequest,
     build_agent_service,
 )
-from docir.modules.documents.api import PROFILE_NAMES
+from docir.modules.documents.api import PROFILE_NAMES, describe_schema, load_schema
 
 app = typer.Typer(
     help="Doc-Index CLI — git-backed markdown documents with a semantic index.",
@@ -43,8 +43,10 @@ app = typer.Typer(
 )
 tag_app = typer.Typer(help="Manage the tag registry.", no_args_is_help=True)
 agent_app = typer.Typer(help="Install AI-assistant instructions for docir.", no_args_is_help=True)
+schema_app = typer.Typer(help="Inspect and validate the document schema.", no_args_is_help=True)
 app.add_typer(tag_app, name="tag")
 app.add_typer(agent_app, name="agent")
+app.add_typer(schema_app, name="schema")
 app.add_typer(daemon_app, name="daemon")
 
 
@@ -107,6 +109,33 @@ def init(
         lambda: initialize_store(settings, profiles=_split_csv(profiles), force=force)
     )
     _emit_init(result)
+
+
+# -- schema introspection ---------------------------------------------------
+#
+# Both commands run in-process, bypassing the daemon/dispatcher, because
+# ``build_container`` loads the schema: a file too broken to start the store
+# would otherwise make the very commands meant to diagnose it unreachable.
+
+
+@schema_app.command("show")
+def schema_show() -> None:
+    """Print the fully merged schema (core + profiles + inline overrides).
+
+    This is what validation actually enforces — the raw docs-schema.yaml only
+    lists the ingredients.
+    """
+    settings = get_state().settings
+    schema = run_local(lambda: load_schema(settings.schema_path))
+    _emit_schema(describe_schema(schema))
+
+
+@schema_app.command("validate")
+def schema_validate() -> None:
+    """Check docs-schema.yaml parses and merges cleanly; exit nonzero if not."""
+    settings = get_state().settings
+    schema = run_local(lambda: load_schema(settings.schema_path))
+    rendering.render_schema_valid(str(settings.schema_path), len(schema.types))
 
 
 # -- write path -------------------------------------------------------------
@@ -486,6 +515,14 @@ def _emit_init(result: InitResult) -> None:
         rendering.emit_json(data, trim=state.trim)
     else:
         rendering.render_init(data)
+
+
+def _emit_schema(data: dict[str, object]) -> None:
+    state = get_state()
+    if use_json(state):
+        rendering.emit_json(data, trim=state.trim)
+    else:
+        rendering.render_schema(data)
 
 
 def _emit_setup(result: SetupResult) -> None:

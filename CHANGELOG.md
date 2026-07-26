@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-26
+
+A `qa` schema profile, schema introspection commands, and the documentation an agent needs
+to extend a schema without reading docir's source.
+
+### Added
+
+- **`qa` schema profile** (`test_plan`, `test_case`) and a **`release_note` type** in the
+  `software` profile (ADR-0010). Both are additive — existing documents are unaffected.
+- **`docir schema show` / `docir schema validate`.** Print the fully merged schema (core +
+  profiles + inline overrides — what validation actually enforces, unlike the raw file), and
+  check `docs-schema.yaml` before an edit reaches a write. Both run in-process, bypassing the
+  daemon, so a schema too broken to start the store can still be diagnosed.
+- **A worked, commented-out `types:` / `relation_types:` example in the generated
+  `docs-schema.yaml`**, plus a required/optional key reference in the agent skill. The three
+  required keys (`prefix`, `statuses` as a *mapping*, `default_status`), global prefix
+  uniqueness, and the `allowed_relations` whitelist trap were previously undocumented, so an
+  agent asked to extend the schema had to guess.
+- `render_schema_yaml(profiles)` and `describe_schema(schema)` on `documents.api`.
+
+### Fixed
+
+- **`docir init --profiles` could silently write the wrong profiles.** The schema body was
+  built by string-replacing the literal `profiles: [software]` in `DEFAULT_SCHEMA_YAML`; if
+  that line ever changed the replace would no-op, writing the default profiles while
+  reporting the requested ones. The body is now assembled structurally around a generated
+  `profiles:` line, so the file and the reported result cannot diverge.
+- **`docir version` reported the wrong version.** `__version__` was a hand-maintained
+  literal that the 0.1.1 release did not bump, so the CLI (and the `<!-- docir:vX -->` stamp
+  on generated agent instructions) reported 0.1.0 while 0.1.1 shipped. It is now read from
+  installed package metadata, making `pyproject.toml` the single source of truth.
+
 ## [0.1.1] - 2026-07-25
 
 Packaging and README fixes so the PyPI project page renders correctly. No code changes.
@@ -60,6 +92,7 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/l0kifs/docir/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/l0kifs/docir/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/l0kifs/docir/releases/tag/v0.1.0

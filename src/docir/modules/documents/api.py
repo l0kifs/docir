@@ -23,9 +23,12 @@ from docir.modules.documents.application.services.maintenance_service import (
     MaintenanceService,
     ReindexResult,
 )
-from docir.modules.documents.infra.default_schema import DEFAULT_SCHEMA_YAML
+from docir.modules.documents.infra.default_schema import (
+    DEFAULT_SCHEMA_YAML,
+    render_schema_yaml,
+)
 from docir.modules.documents.infra.profiles import PROFILE_NAMES
-from docir.modules.documents.infra.schema_loader import load_schema
+from docir.modules.documents.infra.schema_loader import describe_schema, load_schema
 
 __all__ = [
     "DEFAULT_SCHEMA_YAML",
@@ -41,5 +44,7 @@ __all__ = [
     "RelatedView",
     "SearchRequest",
     "UpdateDocumentRequest",
+    "describe_schema",
     "load_schema",
+    "render_schema_yaml",
 ]

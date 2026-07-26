@@ -18,11 +18,11 @@ from sqlalchemy import Engine
 from docir.config.settings import Settings
 from docir.entry_points.dispatch import Dispatcher
 from docir.modules.documents.api import (
-    DEFAULT_SCHEMA_YAML,
     PROFILE_NAMES,
     DocumentService,
     MaintenanceService,
     load_schema,
+    render_schema_yaml,
 )
 from docir.modules.indexing.api import EmbeddingScheduler, build_scheduler
 from docir.modules.tags.api import TagService
@@ -184,7 +184,7 @@ def initialize_store(
     schema_path = settings.schema_path
     schema_written = force or not schema_path.exists()
     if schema_written:
-        schema_path.write_text(_schema_yaml(profiles), encoding="utf-8")
+        schema_path.write_text(render_schema_yaml(profiles), encoding="utf-8")
 
     gitignore_path = settings.home / ".gitignore"
     gitignore_written = force or not gitignore_path.exists()
@@ -199,10 +199,3 @@ def initialize_store(
         schema_written=schema_written,
         gitignore_written=gitignore_written,
     )
-
-
-def _schema_yaml(profiles: tuple[str, ...]) -> str:
-    """The ``docs-schema.yaml`` body: the default, or with a swapped profiles line."""
-    if not profiles:
-        return DEFAULT_SCHEMA_YAML
-    return DEFAULT_SCHEMA_YAML.replace("profiles: [software]", f"profiles: [{', '.join(profiles)}]")

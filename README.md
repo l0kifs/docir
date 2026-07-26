@@ -128,6 +128,7 @@ init · add · update · archive · unarchive · delete
 get · query · search · context
 tag {add, list, rename, rm}
 agent {install, update}
+schema {show, validate}
 check · lint · reindex · embed · version
 daemon serve
 ```
@@ -154,9 +155,18 @@ everything else (file, metadata, FTS, relations) is synchronous. Force a flush w
 
 Documents are constrained by a per-type schema (required fields, status grammar, allowed
 relations). docir ships a frozen, domain-agnostic **core** plus swappable **profiles** —
-`software` (default: `decision` / `issue` / `architecture`), `research`, `ops`, `legal`.
-A `docs-schema.yaml` merges `core → profiles → inline`, so you extend it without mutating
-the base.
+`software` (default: `decision` / `issue` / `architecture` / `release_note`), `research`,
+`ops`, `qa`, `legal`. A `docs-schema.yaml` merges `core → profiles → inline`, so you extend
+it without mutating the base.
+
+```bash
+docir init --profiles software,qa   # pick profiles up front
+docir schema show                   # the merged result — what validation enforces
+docir schema validate               # check an edit before it reaches a write
+```
+
+The generated `docs-schema.yaml` carries a commented-out worked example of the inline
+`types:` / `relation_types:` syntax, so the grammar is discoverable at the point of use.
 
 ## Architecture
 

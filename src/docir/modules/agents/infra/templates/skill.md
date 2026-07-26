@@ -39,7 +39,7 @@ finds `.git`):
 
 ```
 docir init                       # create ./.docir (default profiles: software)
-docir init --profiles research   # choose a schema profile that fits the docs
+docir init --profiles research   # software | research | ops | qa | legal (CSV)
 ```
 
 Commit `.docir/docs/` and `.docir/docs-schema.yaml`; the derived index is
@@ -108,9 +108,10 @@ To restructure a repo's existing markdown (design notes, ADRs, RFCs) into docir,
 work in this order — the constraints below make any other order fail:
 
 1. **Init first** and pick a fitting profile (see *Set up in a project*). Default
-   types are `decision`/`issue`/`architecture`; enable `research`/`ops`/`legal`
-   in `docs-schema.yaml`, or add inline `types:`, for docs that don't fit — a doc
-   whose `type` isn't in the schema is a Tier 0 error.
+   types are `decision`/`issue`/`architecture`/`release_note`; enable
+   `research`/`ops`/`qa`/`legal` in `docs-schema.yaml`, or add inline `types:`
+   (see *Editing the schema*), for docs that don't fit — a doc whose `type` isn't
+   in the schema is a Tier 0 error. Confirm with `docir schema show`.
 2. **Register tags** you'll apply: `docir tag add <key> --description "..."`
    (every `--tags` key must exist first).
 3. **Add each source doc one at a time** (there is no bulk import). Map it to a
@@ -171,12 +172,65 @@ docir tag rm auth [--force]         # --force strips it from docs; else blocked
 | decision | proposed → accepted / rejected; accepted → superseded / rejected | rejected, superseded |
 | issue | open → resolved | resolved |
 | architecture | draft → active → deprecated | deprecated |
+| release_note | draft → published | — |
 
 The default schema is the frozen **core** (`decision`) plus the **software**
-profile (`issue`, `architecture`). Other bundled profiles add domain types —
-`research` (hypothesis/experiment/finding), `ops` (runbook/incident/postmortem),
-`legal` (policy/contract/obligation) — enabled per install with
-`profiles: [..]` in `~/.docir/docs-schema.yaml`.
+profile (`issue`, `architecture`, `release_note`). Other bundled profiles add
+domain types — `research` (hypothesis/experiment/finding), `ops`
+(runbook/incident/postmortem), `qa` (test_plan/test_case), `legal`
+(policy/contract/obligation) — enabled per install with `profiles: [..]` in
+`docs-schema.yaml`.
+
+**Never guess the active schema — read it:**
+
+```
+docir schema show        # the merged result (core + profiles + inline)
+docir schema validate    # check docs-schema.yaml before it reaches a write
+```
+
+## Editing the schema
+
+`docs-schema.yaml` is the one file you edit by hand (no CLI write path). Prefer
+adding a **profile** over inline types; add inline `types:` only for something
+no profile covers. Run `docir schema validate` after every edit.
+
+Three keys are **required** on every type — omitting any is a `SchemaError`:
+
+| key | type | notes |
+|---|---|---|
+| `prefix` | str | mints ids (`tp` → `tp-0001`). **Unique across the whole merged schema**, so check `docir schema show` first. |
+| `statuses` | **mapping** | `status: [targets it may transition to]`, *not* a list. Terminal status → `[]`. |
+| `default_status` | str | must be a key in `statuses`. |
+
+Optional: `required` (extra frontmatter fields), `inactive_statuses` (hidden from
+default reads), `level` (int; a higher-level doc depending on a lower-level one
+is a Tier 1 warning), `review_days` (staleness cadence; 0 = never stale),
+`id_style` (`sequential` | `random`), `allowed_relations`.
+
+```yaml
+relation_types: [governs, blocks]   # extra kinds on top of the core six
+types:
+  test_plan:
+    prefix: tp
+    default_status: draft
+    statuses:
+      draft: [active]
+      active: [deprecated]
+      deprecated: []
+    inactive_statuses: [deprecated]
+    level: 3
+    review_days: 180
+```
+
+`allowed_relations` is a **whitelist trap**: absent/empty means permissive (any
+kind, any target), but listing one kind restricts the type to *only* the listed
+kinds — re-list every kind you still want, including `relates_to`.
+
+```yaml
+    allowed_relations:
+      relates_to: []                  # [] = any target type
+      depends_on: [runbook, decision] # only these target types
+```
 
 ## Checks & maintenance (non-blocking)
 

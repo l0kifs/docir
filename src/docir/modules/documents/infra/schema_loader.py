@@ -37,6 +37,38 @@ def load_schema(path: Path) -> Schema:
     return parse_schema(raw)
 
 
+def describe_schema(schema: Schema) -> dict[str, object]:
+    """Render a :class:`Schema` as plain data for ``docir schema show``.
+
+    Reports the *merged* result (core + profiles + inline overrides), which is
+    what validation actually enforces — the raw file only shows the ingredients.
+    """
+    return {
+        "relation_types": sorted(schema.relation_types),
+        "types": [
+            {
+                "name": type_schema.name,
+                "prefix": type_schema.prefix,
+                "default_status": type_schema.default_status,
+                "statuses": list(type_schema.statuses),
+                "transitions": {
+                    status: sorted(targets) for status, targets in type_schema.transitions.items()
+                },
+                "inactive_statuses": list(type_schema.inactive_statuses),
+                "required": list(type_schema.required_fields),
+                "level": type_schema.level,
+                "review_days": type_schema.review_days,
+                "id_style": type_schema.id_style,
+                "allowed_relations": {
+                    kind: list(targets)
+                    for kind, targets in sorted(type_schema.allowed_relations.items())
+                },
+            }
+            for _, type_schema in sorted(schema.types.items())
+        ],
+    }
+
+
 def parse_schema(raw: object) -> Schema:
     """Turn a parsed YAML mapping into a validated :class:`Schema`."""
     if not isinstance(raw, dict):

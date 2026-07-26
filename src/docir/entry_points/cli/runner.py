@@ -8,7 +8,7 @@ mapping a domain error's exit code onto the process exit code.
 from __future__ import annotations
 
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 import typer
@@ -43,6 +43,24 @@ def use_json(state: CliState) -> bool:
     if state.pretty:
         return False
     if state.json_output:
+        return True
+    isatty = getattr(sys.stdout, "isatty", None)
+    return not (callable(isatty) and isatty())
+
+
+def help_wants_json(argv: Sequence[str] | None = None) -> bool:
+    """Whether ``--help`` should render as JSON, decided without :class:`CliState`.
+
+    ``--help`` is an *eager* Click parameter: it renders and exits during
+    argument parsing, before the app callback runs, so the parsed state does not
+    exist yet. The flags are therefore read straight from ``argv`` — same
+    precedence as :func:`use_json` (``--pretty`` wins, then ``--json``, then the
+    TTY check), so help obeys the contract every other command obeys.
+    """
+    args = list(sys.argv[1:] if argv is None else argv)
+    if "--pretty" in args:
+        return False
+    if "--json" in args:
         return True
     isatty = getattr(sys.stdout, "isatty", None)
     return not (callable(isatty) and isatty())

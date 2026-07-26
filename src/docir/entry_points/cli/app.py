@@ -7,10 +7,12 @@ agents). The CLI is a thin client: all business logic lives in the use cases.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
+from typer.main import get_command
 
 from docir import __version__
 from docir.config.settings import PROJECT_STORE_DIRNAME, Settings
@@ -20,6 +22,7 @@ from docir.entry_points.cli.runner import (
     CliState,
     execute,
     get_state,
+    help_wants_json,
     run_local,
     set_state,
     use_json,
@@ -135,7 +138,12 @@ def schema_validate() -> None:
     """Check docs-schema.yaml parses and merges cleanly; exit nonzero if not."""
     settings = get_state().settings
     schema = run_local(lambda: load_schema(settings.schema_path))
-    rendering.render_schema_valid(str(settings.schema_path), len(schema.types))
+    data = {"valid": True, "path": str(settings.schema_path), "types": len(schema.types)}
+    state = get_state()
+    if use_json(state):
+        rendering.emit_json(data, trim=state.trim)
+    else:
+        rendering.render_schema_valid(str(settings.schema_path), len(schema.types))
 
 
 # -- write path -------------------------------------------------------------
@@ -544,9 +552,39 @@ def _emit_setup(result: SetupResult) -> None:
         rendering.render_setup(files)
 
 
+def _install_json_help(command: Any, seen: set[int] | None = None) -> None:
+    """Make ``--help`` obey the JSON/table contract at every command level.
+
+    ``--help`` is eager: Click renders it during parsing, before the app
+    callback sets :class:`CliState`, so the normal ``use_json`` path cannot
+    reach it. Each command's ``get_help`` is wrapped instead, deciding per call
+    (via :func:`help_wants_json`) whether to return the Rich panel a human wants
+    or the compact JSON an agent captures.
+    """
+    seen = seen if seen is not None else set()
+    if id(command) in seen:
+        return
+    seen.add(id(command))
+
+    original = command.get_help
+
+    def get_help(ctx: Any) -> str:
+        if help_wants_json():
+            return json.dumps(
+                rendering.describe_help(ctx), separators=(",", ":"), ensure_ascii=False
+            )
+        return original(ctx)
+
+    command.get_help = get_help
+    for sub in getattr(command, "commands", {}).values():
+        _install_json_help(sub, seen)
+
+
 def main() -> None:
     """Console-script entry point."""
-    app()
+    command = get_command(app)
+    _install_json_help(command)
+    command()
 
 
 if __name__ == "__main__":

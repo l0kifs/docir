@@ -137,6 +137,8 @@ Store precedence (highest first): `--home` → `DOCIR_HOME` → a project-local 
 found by walking up from the CWD → the global `~/.docir` default. `--no-daemon` runs any
 command in-process instead of over the daemon socket. Output is a Rich table at a TTY and
 compact JSON when piped; `--json` / `--pretty` force either, and `--no-trim` keeps every field.
+That applies to `--help` too — `docir --help | cat` returns the command vocabulary as JSON,
+so an agent can discover the CLI without parsing box-drawing characters.
 
 ## How state is stored
 

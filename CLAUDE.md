@@ -223,7 +223,7 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   `entry_points/cli/runner.py` maps that onto the process exit code. Raise a typed subclass, not a
   bare `DocirError`, so the CLI reports the right code.
 - **`fastembed` is the default embedder and a hard dependency; the hashing one is the
-  fallback.** It was optional, which meant the shipped default scored *shared vocabulary*
+  fallback (ADR-0011).** It was optional, which meant the shipped default scored *shared vocabulary*
   rather than meaning — `DeterministicEmbedder` is signed feature hashing, the same signal
   FTS5 already provides, and two paraphrases with no words in common score 0.0. Measured
   (`benchmarks/`): `docir context` beat plain `search` by +0.03 recall@5 / −0.03 MRR under the
@@ -235,7 +235,8 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   (the adapter held its model as bare `object`; it now depends on a `_TextEmbedding` Protocol).
   Tests that load the real model are marked `slow` (~4 s cold, ~2 ms warm); CI caches
   `~/.cache/fastembed`. Run `uv run python benchmarks/run.py` before and after touching ranking.
-- **Vectors record which model produced them, and mismatches are recomputed, not compared.**
+- **Vectors record which model produced them, and mismatches are recomputed, not compared
+  (ADR-0011).**
   `set_vector` writes `embeddings.model_id`; `active_vectors(model_id)` returns only matching
   rows and `dirty_ids(model_id)` treats a foreign or NULL `model_id` as dirty. Without this,
   changing embedder made `docir context` raise `dimension mismatch: 256 != 384` in every

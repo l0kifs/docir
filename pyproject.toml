@@ -26,11 +26,17 @@ dependencies = [
     "sqlalchemy>=2.0",
     "alembic>=1.14",
     "pydantic-settings>=2.7",
+    # Real ONNX semantic embeddings, on by default. Was optional, which meant the
+    # shipped default scored similarity by shared vocabulary rather than meaning
+    # -- `docir context` measured no better than plain full-text search (see
+    # benchmarks/). Set DOCIR_EMBEDDER=deterministic for the dependency-free
+    # hashing embedder; the test suite does.
+    "fastembed>=0.5",
 ]
 
 [project.optional-dependencies]
-# Real ONNX semantic embeddings. Kept optional so the default install and the
-# test suite stay light and hermetic and fall back to the deterministic embedder.
+# Retained so `pip install docir[embeddings]` keeps working; fastembed is now a
+# hard dependency, so this extra adds nothing.
 embeddings = ["fastembed>=0.5"]
 
 [project.scripts]

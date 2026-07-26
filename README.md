@@ -39,13 +39,43 @@ index (metadata + FTS5 full-text + a typed relation graph + semantic embeddings)
 | | plain `.md` files | RAG over your docs | **docir** |
 |---|:---:|:---:|:---:|
 | Consistent frontmatter / schema | ❌ | ❌ | ✅ enforced |
-| Retrieval by meaning | ❌ | ✅ | ✅ (lexical + semantic) |
+| Retrieval by meaning | ❌ | ✅ | ✅ lexical + semantic † |
 | Typed relation graph | ❌ | ❌ | ✅ |
 | Knows what's stale | ❌ | ❌ | ✅ |
-| Works offline, nothing to run | ✅ | ⚠️ | ✅ |
+| Works offline, nothing to run | ✅ | ⚠️ | ✅ after the model downloads once † |
 | Token-cheap for agents | ❌ | ⚠️ | ✅ skeletons |
 
-*Rough orientation, not a benchmark — the right tool depends on your setup.*
+*Orientation, not a shoot-out — the right tool depends on your setup.*
+
+### † What semantic retrieval costs you
+
+Semantic search runs on a real embedding model, installed by default. It is quantized,
+CPU-only, and runs locally — nothing is sent anywhere — but it is not free:
+
+| | |
+|---|---|
+| Model | `BAAI/bge-small-en-v1.5`, 384-dim, quantized ONNX |
+| Download | **~64 MB**, once, on first use — the only step that needs network |
+| Install | **~240 MB** of dependencies (`onnxruntime`, `numpy`, `tokenizers`, …) |
+| Runtime | CPU only, no GPU, no API key; the daemon keeps the model warm |
+
+If that is too heavy — a CI image, a container you keep small, an air-gapped box — opt out
+and docir falls back to a dependency-free hashing embedder:
+
+```bash
+export DOCIR_EMBEDDER=deterministic
+```
+
+That embedder scores similarity by *shared vocabulary* rather than meaning, which is the
+same signal the full-text index already provides. The cost is measured, not asserted:
+`docir context` scores **recall@5 0.96** with the model against **0.88** without it, and on
+questions phrased in words the documents never use, **0.92 vs 0.83** (plain full-text
+search gets 0.75). Corpus, tasks, judgments and caveats are in
+[benchmarks/](benchmarks/); `uv run python benchmarks/run.py` reproduces it.
+
+Switching embedders re-embeds rather than mixing vector spaces: docir records which model
+produced each vector, ignores the others, and recomputes them on the next write or
+`docir embed --flush`.
 
 ## Quickstart
 
@@ -91,7 +121,8 @@ $ docir context "implement a new auth endpoint" | cat
 ```
 
 *An absent field means its default (no owner, not stale); the relevance `score` is a
-reciprocal-rank fusion of full-text + semantic matches, so ordering is the point. `--json`
+reciprocal-rank fusion of the full-text and vector rankings, so ordering is the point and
+the absolute value means little. `--json`
 forces JSON anywhere, `--pretty` forces the table, `--no-trim` keeps every field.*
 
 ## The model
@@ -115,7 +146,7 @@ forces JSON anywhere, `--pretty` forces the table, `--no-trim` keeps every field
 | `docir init` | Scope docs to a project-local `./.docir` store (like `git init`) |
 | `docir add` | Create a document — the single write path |
 | `docir update` | Edit content, metadata, or relations of an existing document |
-| `docir context <query>` | Hybrid lexical + semantic ranked relevant set (skeletons) |
+| `docir context <query>` | Ranked relevant set (skeletons) — full-text + vector, fused |
 | `docir search` / `query` | Full-text search / structured filter (skeletons) |
 | `docir get <id>` | Full document with body |
 | `docir check` | Structural findings — duplicate ids, dangling edges, staleness (`--strict` gates CI on errors, `--fix` repairs them) |
@@ -196,6 +227,7 @@ as an ADR.
 
 ```bash
 uv sync                                              # dev environment
+uv run python benchmarks/run.py                      # retrieval quality + token cost
 uv run pytest --cov=docir --cov-fail-under=90        # tests + coverage gate
 uv run ruff check . && uv run ty check && uv run tach check
 ```

@@ -1,0 +1,216 @@
+# Benchmark corpus — a plausible payments/checkout service.
+#
+# Written to exercise retrieval, not to be exemplary documentation. Bodies are
+# short but real: enough vocabulary for full-text search to bite, and enough
+# meaning for a semantic model to have something to do.
+#
+# `key` is a stable handle used by tasks.yaml; the actual docir id is allocated
+# at load time and mapped back, so the judgments survive any id-style change.
+
+- key: adr-idempotency
+  type: decision
+  title: Idempotency keys for payment capture
+  description: Every capture request carries a client-generated key so retries cannot charge twice.
+  body: |
+    The capture endpoint accepts an `Idempotency-Key` header. The first request
+    for a key performs the capture and stores the response; any later request
+    with the same key replays that stored response without contacting the
+    gateway. Keys are scoped per merchant and expire after 24 hours.
+  related: []
+
+- key: adr-card-tokens
+  type: decision
+  title: Store card tokens with the provider, never locally
+  description: Card data never touches our infrastructure; we persist only opaque provider tokens.
+  body: |
+    The browser exchanges card details for a token directly with the payment
+    provider. Our servers see only that token, which keeps the whole platform
+    out of PCI-DSS cardholder-data scope. No database column, log line, or
+    error report may ever contain a pan or a cvv.
+  related: []
+
+- key: adr-settlement-batch
+  type: decision
+  title: Reconcile settlement asynchronously in a nightly batch
+  description: Settlement files from the provider are reconciled overnight rather than in real time.
+  body: |
+    The provider publishes a settlement file once a day. A nightly job matches
+    each settled line against our captured payments and writes a reconciliation
+    record. Real-time reconciliation was rejected: the provider's own figures
+    are not final until the file lands.
+  related: []
+
+- key: adr-optimistic-locking
+  type: decision
+  title: Optimistic locking on the orders table
+  description: Concurrent writers to one order are resolved by a version column, not by row locks.
+  body: |
+    Every order row carries a `version` integer. A write asserts the version it
+    read and increments it; a mismatch means someone else got there first and
+    the caller retries against fresh state. Pessimistic row locks were rejected
+    because checkout holds an order open across several user-facing steps.
+  related: []
+
+- key: adr-refunds-partial
+  type: decision
+  title: Refunds are partial-first
+  description: Every refund is modelled as a partial refund; a full refund is the degenerate case.
+  body: |
+    There is one refund path and it takes an amount. A full refund is simply a
+    refund for the remaining refundable balance. Modelling full and partial
+    refunds separately produced two code paths that disagreed about fees.
+  related: []
+
+- key: adr-gateway-retries
+  type: decision
+  title: Retry gateway timeouts with exponential backoff
+  description: A timed-out gateway call is retried three times with backoff before failing the payment.
+  body: |
+    Gateway calls that time out are retried at 1s, 4s and 16s. After the third
+    failure the payment is marked `pending_review` rather than failed, because a
+    timeout is ambiguous: the gateway may have processed it. Retries always
+    carry the same idempotency key.
+  related: [adr-idempotency]
+
+- key: adr-currency-rounding
+  type: decision
+  title: Round half-even at two decimal places, store minor units
+  description: All monetary amounts are integers in minor units; division rounds half-even.
+  body: |
+    Amounts are stored as integer minor units (cents), never as floats. Where a
+    division is unavoidable — splitting a discount across line items — we round
+    half to even so repeated splits do not drift upward. The remainder is
+    assigned to the largest line item.
+  related: []
+
+- key: adr-webhook-hmac
+  type: decision
+  title: Verify webhook signatures with HMAC-SHA256
+  description: Inbound provider webhooks are authenticated by an HMAC signature over the raw body.
+  body: |
+    Each webhook carries a signature header computed over the raw request body
+    with a shared secret. We verify before parsing, compare in constant time,
+    and reject anything older than five minutes to bound replay.
+  related: []
+
+- key: adr-dlq-manual
+  type: decision
+  title: Dead-letter replay is manual and audited
+  description: Messages in the dead-letter queue are never replayed automatically.
+  body: |
+    A message reaching the dead-letter queue has already failed its retries, so
+    replaying it automatically tends to reproduce the failure at volume. Replay
+    is an explicit operator action, recorded with who did it and why.
+  related: []
+
+- key: adr-order-state-machine
+  type: decision
+  title: Orders move through an explicit state machine
+  description: Order status transitions are declared up front; illegal transitions are rejected.
+  body: |
+    An order is one of pending, authorized, captured, settled, refunded or
+    cancelled, with the legal transitions declared in one table. Anything else
+    is rejected at write time rather than discovered later in a report.
+  related: []
+
+- key: issue-duplicate-charges
+  type: issue
+  title: Duplicate charges when the customer double-clicks pay
+  description: Impatient customers clicking pay twice produce two captures on one order.
+  body: |
+    Support has seen customers charged twice after clicking the pay button
+    repeatedly on a slow connection. Both requests reach the capture endpoint
+    before the first response returns, and both succeed.
+  related: [adr-idempotency]
+
+- key: issue-settlement-drift
+  type: issue
+  title: Settlement report totals drift by a few cents
+  description: Our reconciled total and the provider's settlement file disagree by small amounts.
+  body: |
+    The nightly reconciliation reports a total a few cents below the provider's
+    figure on days with many discounted multi-item orders. The difference grows
+    with the number of split discounts.
+  related: [adr-currency-rounding]
+
+- key: issue-refund-archived
+  type: issue
+  title: Refund fails when the order has been archived
+  description: Refunding an archived order returns a not-found error instead of refunding.
+  body: |
+    Orders archived by the housekeeping job are excluded from the default order
+    lookup, so the refund endpoint cannot find them and returns 404 even though
+    the payment is perfectly refundable.
+  related: [adr-refunds-partial]
+
+- key: issue-webhook-flood
+  type: issue
+  title: Webhook replay floods the queue after a provider outage
+  description: When the provider recovers it resends hours of webhooks at once and the queue backs up.
+  body: |
+    After the provider's four-hour outage they redelivered every missed webhook
+    within a few minutes. Our consumers fell behind, processing latency reached
+    twenty minutes, and several messages hit the dead-letter queue.
+  related: [adr-webhook-hmac, adr-dlq-manual]
+
+- key: issue-checkout-timeout
+  type: issue
+  title: Checkout times out under peak load
+  description: Checkout latency exceeds the gateway timeout during peak traffic events.
+  body: |
+    During the last sale, checkout p99 latency rose above the ten-second
+    gateway timeout. Payments that did in fact succeed were reported to the
+    customer as failures.
+  related: [adr-gateway-retries]
+
+- key: issue-stale-order-status
+  type: issue
+  title: Customer sees a stale order status after paying
+  description: The confirmation page shows the pre-payment status for several seconds.
+  body: |
+    Two requests update the same order around the same moment — the capture
+    callback and the customer's page refresh — and the later write sometimes
+    overwrites the newer status with an older one.
+  related: [adr-optimistic-locking]
+
+- key: issue-reconciliation-oom
+  type: issue
+  title: Reconciliation job runs out of memory on large batches
+  description: The nightly job loads the whole settlement file into memory and dies on big days.
+  body: |
+    The job reads the entire settlement file into a list before matching. On
+    high-volume days the file exceeds available memory and the job is killed,
+    leaving that day unreconciled.
+  related: [adr-settlement-batch]
+
+- key: arch-payment-boundaries
+  type: architecture
+  title: Payment service boundaries and data ownership
+  description: Which service owns orders, payments and settlement records, and who may read what.
+  body: |
+    The order service owns order state. The payment service owns authorizations,
+    captures and refunds, and is the only writer of payment records. Settlement
+    records are owned by the reconciliation service. No service reads another's
+    tables directly.
+  related: []
+
+- key: arch-payment-events
+  type: architecture
+  title: Payment event flow from placement to settlement
+  description: The end-to-end sequence of events an order emits, and who consumes each.
+  body: |
+    OrderPlaced leads to PaymentAuthorized, then PaymentCaptured, then
+    PaymentSettled once reconciliation matches the provider file. Each event is
+    published once and consumed by the notification and analytics services.
+  related: [arch-payment-boundaries, adr-order-state-machine]
+
+- key: arch-queue-topology
+  type: architecture
+  title: Queue topology and dead-letter handling
+  description: How work queues, retries and dead-letter queues are wired across the payment services.
+  body: |
+    Each consumer has a primary queue and a dead-letter queue. A message is
+    retried in place three times, then moved to the dead-letter queue with its
+    failure reason attached. Dead-letter queues are monitored but never drained
+    automatically.
+  related: [adr-dlq-manual]

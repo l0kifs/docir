@@ -62,7 +62,7 @@ operates on the discovered store).
 
 | Command | Use |
 |---|---|
-| `docir context "<task>" [--limit N] [--expand N]` | Best first step: hybrid (lexical+semantic) ranking + 1-hop related docs. Graph-pulled items marked `via_graph`. |
+| `docir context "<task>" [--limit N] [--expand N]` | Best first step: full-text and vector rankings fused, plus 1-hop related docs. Graph-pulled items marked `via_graph`. |
 | `docir get <id>` | Full doc (body included); works for any status. |
 | `docir search "<text>"` | Full-text only. |
 | `docir query --type decision --status accepted --tag auth` | Structured filter; repeatable `--type/--status/--tag`. |
@@ -266,5 +266,6 @@ of `docs-schema.yaml` for the whole schema, or per type to override it.
 ## Notes
 
 - Errors print `error: <message>` to **stderr** with a nonzero exit code (2=validation, 4=not-found, 5=conflict, 6=stale), so a captured stdout stays clean JSON.
-- Semantic vectors are computed async; add `--wait-embeddings` to a write (or `docir embed --flush`) if you must `context`-search immediately after.
+- Vectors are computed async; add `--wait-embeddings` to a write (or `docir embed --flush`) if you must `context`-search immediately after.
+- `docir context` matches on meaning, not just wording, so describe the task in your own words rather than guessing the documents' vocabulary. (If the store runs `DOCIR_EMBEDDER=deterministic` — a light, model-free fallback — matching is vocabulary-based instead; when a query under-retrieves there, retry with the terms the codebase actually uses.)
 - All state lives under `~/.docir` (override `DOCIR_HOME`); the index is disposable and rebuildable from files.

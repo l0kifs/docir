@@ -66,7 +66,7 @@ class TestSchedulers:
         assert count == 1
         with uow_factory() as uow:
             assert uow.embeddings.get_vector("adr-0001") is not None
-            assert uow.embeddings.dirty_ids() == []
+            assert uow.embeddings.dirty_ids(DeterministicEmbedder().model_id) == []
 
     def test_inline_scheduler_flush(self, uow_factory: Factory) -> None:
         _seed_dirty_doc(uow_factory)
@@ -80,7 +80,7 @@ class TestSchedulers:
         scheduler = InlineEmbeddingScheduler(uow_factory, DeterministicEmbedder())
         scheduler.schedule("adr-0001")
         with uow_factory() as uow:
-            assert uow.embeddings.dirty_ids() == []
+            assert uow.embeddings.dirty_ids(DeterministicEmbedder().model_id) == []
 
     def test_threaded_scheduler_flush_and_lifecycle(self, uow_factory: Factory) -> None:
         _seed_dirty_doc(uow_factory)

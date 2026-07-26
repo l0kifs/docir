@@ -245,7 +245,7 @@ class MaintenanceService:
         """Tier 2 advisory checks (``docs lint --deep``)."""
         with self._uow_factory() as uow:
             self._scheduler.flush()
-            vectors = uow.embeddings.active_vectors()
+            vectors = uow.embeddings.active_vectors(self._embedder.model_id)
             documents = [d for d in uow.documents.all() if not d.archived]
         findings = self._linter.find_duplicates(vectors)
         findings.extend(self._linter.find_scope_creep(documents))

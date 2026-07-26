@@ -297,17 +297,24 @@ class SqlAlchemyEmbeddingRepository(EmbeddingRepository):
             row.dirty = False
             self._session.flush()
 
-    def dirty_ids(self) -> list[str]:
+    def dirty_ids(self, model_id: str) -> list[str]:
+        # A vector from another model counts as dirty: it is not comparable with
+        # the current one, so it has to be recomputed rather than reused.
         stmt = (
             select(EmbeddingRow.doc_id)
-            .where(EmbeddingRow.dirty.is_(True))
+            .where(
+                EmbeddingRow.dirty.is_(True)
+                | EmbeddingRow.model_id.is_(None)
+                | (EmbeddingRow.model_id != model_id)
+            )
             .order_by(EmbeddingRow.doc_id)
         )
         return list(self._session.scalars(stmt).all())
 
-    def set_vector(self, doc_id: str, embedding: Embedding) -> None:
+    def set_vector(self, doc_id: str, embedding: Embedding, model_id: str) -> None:
         row = self._get_or_create(doc_id)
         row.vector = embedding.to_bytes()
+        row.model_id = model_id
         row.dirty = False
         self._session.flush()
 
@@ -323,12 +330,13 @@ class SqlAlchemyEmbeddingRepository(EmbeddingRepository):
             self._session.delete(row)
             self._session.flush()
 
-    def active_vectors(self) -> list[tuple[str, Embedding]]:
+    def active_vectors(self, model_id: str) -> list[tuple[str, Embedding]]:
         stmt = (
             select(EmbeddingRow.doc_id, EmbeddingRow.vector)
             .join(DocumentRow, DocumentRow.id == EmbeddingRow.doc_id)
             .where(DocumentRow.archived.is_(False))
             .where(EmbeddingRow.vector.is_not(None))
+            .where(EmbeddingRow.model_id == model_id)
             .order_by(EmbeddingRow.doc_id)
         )
         result: list[tuple[str, Embedding]] = []

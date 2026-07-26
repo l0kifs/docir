@@ -163,6 +163,9 @@ class TestSearchIndex:
             assert uow.search.search("authentication", limit=5) == []
 
 
+_MODEL = "test-model-v1"
+
+
 class TestEmbeddingRepository:
     def test_dirty_and_vector_lifecycle(self, uow_factory: Factory) -> None:
         with uow_factory() as uow:
@@ -170,11 +173,11 @@ class TestEmbeddingRepository:
             uow.embeddings.mark_dirty("adr-0001")
             uow.commit()
         with uow_factory() as uow:
-            assert uow.embeddings.dirty_ids() == ["adr-0001"]
-            uow.embeddings.set_vector("adr-0001", Embedding((1.0, 0.0)))
+            assert uow.embeddings.dirty_ids(_MODEL) == ["adr-0001"]
+            uow.embeddings.set_vector("adr-0001", Embedding((1.0, 0.0)), _MODEL)
             uow.commit()
         with uow_factory() as uow:
-            assert uow.embeddings.dirty_ids() == []
+            assert uow.embeddings.dirty_ids(_MODEL) == []
             assert uow.embeddings.get_vector("adr-0001") is not None
             uow.embeddings.clear_dirty("adr-0001")
             uow.embeddings.remove("adr-0001")
@@ -186,12 +189,29 @@ class TestEmbeddingRepository:
         with uow_factory() as uow:
             uow.documents.save(_doc("adr-0001"))
             uow.documents.save(_doc("adr-0002", archived=True))
-            uow.embeddings.set_vector("adr-0001", Embedding((1.0, 0.0)))
-            uow.embeddings.set_vector("adr-0002", Embedding((0.0, 1.0)))
+            uow.embeddings.set_vector("adr-0001", Embedding((1.0, 0.0)), _MODEL)
+            uow.embeddings.set_vector("adr-0002", Embedding((0.0, 1.0)), _MODEL)
             uow.commit()
         with uow_factory() as uow:
-            ids = [doc_id for doc_id, _vec in uow.embeddings.active_vectors()]
+            ids = [doc_id for doc_id, _vec in uow.embeddings.active_vectors(_MODEL)]
             assert ids == ["adr-0001"]
+
+    def test_vectors_from_another_model_are_recomputed_not_compared(
+        self, uow_factory: Factory
+    ) -> None:
+        # Changing embedder changes the vector space, and often its width, so a
+        # stale vector cannot be reused. It must fall out of ranking and come
+        # back as dirty. Without this, flipping the default embedder made
+        # `docir context` raise "dimension mismatch" in every existing store.
+        with uow_factory() as uow:
+            uow.documents.save(_doc("adr-0001"))
+            uow.embeddings.set_vector("adr-0001", Embedding((1.0, 0.0)), "old-model")
+            uow.commit()
+        with uow_factory() as uow:
+            assert uow.embeddings.active_vectors("new-model") == []
+            assert uow.embeddings.dirty_ids("new-model") == ["adr-0001"]
+            # ...and the old model still sees its own vector.
+            assert [i for i, _ in uow.embeddings.active_vectors("old-model")] == ["adr-0001"]
 
     def test_rollback_on_error(self, uow_factory: Factory) -> None:
         try:

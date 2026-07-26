@@ -31,14 +31,15 @@ def drain_dirty(uow_factory: UnitOfWorkFactory, embedder: Embedder) -> int:
     has vanished is dropped so it cannot wedge the queue forever.
     """
     count = 0
+    model_id = embedder.model_id
     with uow_factory() as uow:
-        for doc_id in uow.embeddings.dirty_ids():
+        for doc_id in uow.embeddings.dirty_ids(model_id):
             document = uow.documents.get(doc_id)
             if document is None:
                 uow.embeddings.remove(doc_id)
                 continue
             vector = embedder.embed(document.embedding_text())
-            uow.embeddings.set_vector(doc_id, vector)
+            uow.embeddings.set_vector(doc_id, vector, model_id)
             count += 1
         uow.commit()
     return count

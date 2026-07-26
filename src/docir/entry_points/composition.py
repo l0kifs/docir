@@ -8,7 +8,9 @@ constructs infrastructure adapters directly.
 
 from __future__ import annotations
 
+import importlib.util
 import os
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -42,7 +44,8 @@ from docir.platform.persistence.sqlalchemy_uow import SqlAlchemyUnitOfWork
 from docir.platform.persistence.unit_of_work import UnitOfWork
 from docir.platform.transport.messages import Request, RequestExecutor, Response
 
-#: Environment variable selecting the embedder implementation.
+#: Environment variable selecting the embedder implementation. Unset means the
+#: real model; ``deterministic`` selects the dependency-free hashing embedder.
 EMBEDDER_ENV = "DOCIR_EMBEDDER"
 
 #: The id style ``docir init`` writes when the caller does not choose one.
@@ -89,13 +92,33 @@ class InProcessExecutor(RequestExecutor):
 
 
 def _build_embedder() -> Embedder:
-    if os.environ.get(EMBEDDER_ENV, "").lower() == "fastembed":
-        from docir.platform.embedding.fastembed import (
-            FastEmbedEmbedder,
-        )
+    """Pick the embedder: the real model unless asked for, or unable to, do otherwise.
 
-        return FastEmbedEmbedder()
-    return DeterministicEmbedder()
+    ``fastembed`` is a hard dependency and the default, because the hashing
+    embedder scores shared vocabulary rather than meaning — with it, ``docir
+    context`` is barely distinguishable from plain full-text search (see
+    ``benchmarks/``). ``DOCIR_EMBEDDER=deterministic`` opts out, which is what
+    the test suite does to stay hermetic and model-free.
+
+    If the dependency is somehow absent, fall back rather than refuse to run: a
+    weaker index beats no CLI at all. Vectors record which model produced them,
+    so switching back and forth re-embeds instead of comparing across spaces.
+    """
+    choice = os.environ.get(EMBEDDER_ENV, "").lower()
+    if choice in ("deterministic", "hash"):
+        return DeterministicEmbedder()
+    if importlib.util.find_spec("fastembed") is None:
+        warnings.warn(
+            "fastembed is not installed, falling back to the hashing embedder: "
+            "`docir context` will match on shared words rather than meaning. "
+            "Reinstall docir, or set DOCIR_EMBEDDER=deterministic to silence this.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return DeterministicEmbedder()
+    from docir.platform.embedding.fastembed import FastEmbedEmbedder
+
+    return FastEmbedEmbedder()
 
 
 def build_container(

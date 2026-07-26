@@ -1,0 +1,75 @@
+# Retrieval tasks with relevance judgments.
+#
+# `relevant` lists the corpus keys a reader would need to see before starting the
+# task. Judgments are deliberately tight: a document is relevant if not reading it
+# would change what you write, not merely if it shares a topic.
+#
+# `lexical: true`  — the task wording overlaps the corpus vocabulary. Full-text
+#                    search should do well; this is the easy half.
+# `lexical: false` — the task is phrased the way a person actually asks, using
+#                    none of the corpus's terms. Only a model that captures
+#                    meaning can retrieve these; a lexical matcher must miss them.
+#
+# LIMITATION: single-annotator ground truth, authored alongside the corpus.
+# It measures whether retrieval finds what its author considers relevant, which
+# is weaker evidence than judgments from someone who did not write the corpus.
+
+- id: T01
+  lexical: true
+  task: implement idempotency keys on the payment capture endpoint
+  relevant: [adr-idempotency, issue-duplicate-charges]
+
+- id: T02
+  lexical: true
+  task: add HMAC signature verification for inbound webhooks
+  relevant: [adr-webhook-hmac, issue-webhook-flood]
+
+- id: T03
+  lexical: true
+  task: fix the settlement reconciliation totals drift
+  relevant: [issue-settlement-drift, adr-currency-rounding, adr-settlement-batch]
+
+- id: T04
+  lexical: true
+  task: retry gateway timeouts with exponential backoff
+  relevant: [adr-gateway-retries, issue-checkout-timeout]
+
+- id: T05
+  lexical: true
+  task: work on partial refunds for archived orders
+  relevant: [adr-refunds-partial, issue-refund-archived]
+
+- id: T06
+  lexical: true
+  task: dead letter queue replay and topology
+  relevant: [adr-dlq-manual, arch-queue-topology, issue-webhook-flood]
+
+- id: T07
+  lexical: false
+  task: stop shoppers getting billed twice when they mash the button
+  relevant: [adr-idempotency, issue-duplicate-charges]
+
+- id: T08
+  lexical: false
+  task: we must never keep credit card numbers on our own machines
+  relevant: [adr-card-tokens]
+
+- id: T09
+  lexical: false
+  task: the money is off by a fraction somewhere in the maths
+  relevant: [adr-currency-rounding, issue-settlement-drift]
+
+- id: T10
+  lexical: false
+  task: two people changing the same basket at once clobber each other
+  relevant: [adr-optimistic-locking, issue-stale-order-status]
+
+- id: T11
+  lexical: false
+  task: which team is allowed to write to the payments tables
+  relevant: [arch-payment-boundaries]
+
+- id: T12
+  lexical: false
+  task: what happens between someone paying and the cash actually arriving
+  relevant: [arch-payment-events, adr-settlement-batch]

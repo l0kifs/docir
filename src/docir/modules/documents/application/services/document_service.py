@@ -262,7 +262,9 @@ class DocumentService:
 
         with self._uow_factory() as uow:
             hits = uow.search.search(request.task, limit=_CONTEXT_CANDIDATES)
-            semantic = self._scorer.semantic_ranking(query_vector, uow.embeddings.active_vectors())
+            semantic = self._scorer.semantic_ranking(
+                query_vector, uow.embeddings.active_vectors(self._embedder.model_id)
+            )
             fused = self._scorer.fuse(hits, semantic)
 
             # Rank order, visible only, capped at what could ever be returned.

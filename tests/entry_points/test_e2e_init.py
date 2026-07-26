@@ -23,7 +23,9 @@ def _clean_env(monkeypatch) -> None:
     # Hermetic: in-process, no ambient home; init commands pass explicit dirs.
     monkeypatch.setenv("DOCIR_NO_DAEMON", "1")
     monkeypatch.delenv("DOCIR_HOME", raising=False)
-    monkeypatch.delenv("DOCIR_EMBEDDER", raising=False)
+    # Pin the hashing embedder: the real default downloads a model, which would
+    # make the suite slow and network-dependent.
+    monkeypatch.setenv("DOCIR_EMBEDDER", "deterministic")
 
 
 class TestInit:

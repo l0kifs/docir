@@ -222,10 +222,23 @@ means per-module storage plus an event bus, which is a rewrite the project delib
 - **All exceptions live in `platform/errors`.** `DocirError` is the base and carries an `exit_code`;
   `entry_points/cli/runner.py` maps that onto the process exit code. Raise a typed subclass, not a
   bare `DocirError`, so the CLI reports the right code.
-- **`fastembed` is optional and quarantined.** `platform/embedding/fastembed.py` imports a
-  not-necessarily-installed dependency, so it is excluded from `ty` and omitted from coverage
-  (`pyproject.toml`), and imported lazily only when `DOCIR_EMBEDDER=fastembed`. The deterministic
-  embedder is the default everywhere else.
+- **`fastembed` is the default embedder and a hard dependency; the hashing one is the
+  fallback.** It was optional, which meant the shipped default scored *shared vocabulary*
+  rather than meaning — `DeterministicEmbedder` is signed feature hashing, the same signal
+  FTS5 already provides, and two paraphrases with no words in common score 0.0. Measured
+  (`benchmarks/`): `docir context` beat plain `search` by +0.03 recall@5 / −0.03 MRR under the
+  hashing embedder (noise) and by +0.11 / +0.13 under the model. `DOCIR_EMBEDDER=deterministic`
+  selects the fallback — **the whole test suite does this**, so the suite stays hermetic and
+  never downloads a model. `platform/embedding/fastembed.py` stays excluded from `ty`/coverage
+  and imported lazily, because exercising it needs the ~64 MB model. Run
+  `uv run python benchmarks/run.py` before and after touching ranking.
+- **Vectors record which model produced them, and mismatches are recomputed, not compared.**
+  `set_vector` writes `embeddings.model_id`; `active_vectors(model_id)` returns only matching
+  rows and `dirty_ids(model_id)` treats a foreign or NULL `model_id` as dirty. Without this,
+  changing embedder made `docir context` raise `dimension mismatch: 256 != 384` in every
+  existing store — different models have different widths, and `Embedding.cosine_similarity`
+  refuses rather than silently truncating. The recompute happens on the next write or
+  `docir embed --flush`, so the first read after a switch has no semantic signal.
 
 ## Testing
 

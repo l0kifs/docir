@@ -124,12 +124,18 @@ class EmbeddingRepository(ABC):
         """Clear the dirty flag once a vector has been recomputed."""
 
     @abstractmethod
-    def dirty_ids(self) -> list[str]:
-        """Ids currently flagged for embedding recompute."""
+    def dirty_ids(self, model_id: str) -> list[str]:
+        """Ids needing a recompute: flagged dirty, or embedded by another model.
+
+        Switching embedders (the default moved from the hashing embedder to a
+        real model) leaves vectors from the old one in the index. They are a
+        different width, so comparing them raises rather than degrading — the
+        index has to notice and recompute rather than trust them.
+        """
 
     @abstractmethod
-    def set_vector(self, doc_id: str, embedding: Embedding) -> None:
-        """Persist a computed vector and clear the dirty flag."""
+    def set_vector(self, doc_id: str, embedding: Embedding, model_id: str) -> None:
+        """Persist a computed vector, record which model made it, clear the flag."""
 
     @abstractmethod
     def get_vector(self, doc_id: str) -> Embedding | None:
@@ -140,5 +146,9 @@ class EmbeddingRepository(ABC):
         """Remove a document's vector and dirty flag entirely."""
 
     @abstractmethod
-    def active_vectors(self) -> list[tuple[str, Embedding]]:
-        """Return ``(doc_id, vector)`` for all active documents with a vector."""
+    def active_vectors(self, model_id: str) -> list[tuple[str, Embedding]]:
+        """``(doc_id, vector)`` for active documents embedded by ``model_id``.
+
+        Vectors from another model are omitted rather than compared: they live in
+        a different space, and a different width would raise outright.
+        """

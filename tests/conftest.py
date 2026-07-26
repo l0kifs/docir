@@ -43,7 +43,9 @@ def settings(tmp_path, monkeypatch) -> Settings:
     home = tmp_path / "docir"
     monkeypatch.setenv("DOCIR_HOME", str(home))
     monkeypatch.setenv("DOCIR_NO_DAEMON", "1")
-    monkeypatch.delenv("DOCIR_EMBEDDER", raising=False)
+    # Pin the hashing embedder: the real default downloads a model, which would
+    # make the suite slow and network-dependent.
+    monkeypatch.setenv("DOCIR_EMBEDDER", "deterministic")
     return Settings.resolve()
 
 

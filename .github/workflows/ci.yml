@@ -28,6 +28,15 @@ jobs:
         with:
           enable-cache: true
 
+      - name: Cache the embedding model
+        # fastembed is a hard dependency and the default embedder, so the test
+        # suite exercises the real model. The weights are ~64 MB and never
+        # change for a pinned model name — download them once, not every run.
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fastembed
+          key: fastembed-${{ runner.os }}-bge-small-en-v1.5
+
       - name: Install dependencies
         run: uv sync
 

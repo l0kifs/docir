@@ -228,10 +228,13 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   FTS5 already provides, and two paraphrases with no words in common score 0.0. Measured
   (`benchmarks/`): `docir context` beat plain `search` by +0.03 recall@5 / −0.03 MRR under the
   hashing embedder (noise) and by +0.11 / +0.13 under the model. `DOCIR_EMBEDDER=deterministic`
-  selects the fallback — **the whole test suite does this**, so the suite stays hermetic and
-  never downloads a model. `platform/embedding/fastembed.py` stays excluded from `ty`/coverage
-  and imported lazily, because exercising it needs the ~64 MB model. Run
-  `uv run python benchmarks/run.py` before and after touching ranking.
+  selects the fallback — **the test fixtures set this**, so the suite stays hermetic and most
+  of it never touches a model. `platform/embedding/fastembed.py` is **no longer excluded from
+  `ty` or omitted from coverage**: it is what every default install runs, so a break there
+  reaches every user, and lifting the `ty` exclusion immediately surfaced a real diagnostic
+  (the adapter held its model as bare `object`; it now depends on a `_TextEmbedding` Protocol).
+  Tests that load the real model are marked `slow` (~4 s cold, ~2 ms warm); CI caches
+  `~/.cache/fastembed`. Run `uv run python benchmarks/run.py` before and after touching ranking.
 - **Vectors record which model produced them, and mismatches are recomputed, not compared.**
   `set_vector` writes `embeddings.model_id`; `active_vectors(model_id)` returns only matching
   rows and `dirty_ids(model_id)` treats a foreign or NULL `model_id` as dirty. Without this,

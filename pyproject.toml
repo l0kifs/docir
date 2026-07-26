@@ -86,9 +86,6 @@ root = ["./src"]
 
 [tool.ty.src]
 include = ["src"]
-# The fastembed adapter imports an optional, not-installed dependency and is
-# exercised only when the `embeddings` extra is present.
-exclude = ["src/docir/platform/embedding/fastembed.py"]
 
 [tool.ty.terminal]
 output-format = "concise"
@@ -114,14 +111,13 @@ ignore_decorators = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
-markers = ["slow: end-to-end tests that spawn a real daemon subprocess"]
+markers = ["slow: spawns a real subprocess or loads the real embedding model"]
 
 [tool.coverage.run]
 source = ["docir"]
 branch = true
 omit = [
     "*/alembic/*",
-    "*/platform/embedding/fastembed.py",
 ]
 
 [tool.coverage.report]

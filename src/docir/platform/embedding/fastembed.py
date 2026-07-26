@@ -1,38 +1,59 @@
 """The real ``fastembed`` (ONNX, quantized, CPU-only) embedder adapter.
 
-Opt-in via the ``embeddings`` extra. The heavy model is loaded lazily on first
-use and kept warm — which is exactly why the architecture runs embedding inside
-the long-lived daemon rather than paying the cold-start cost per command.
+This is the default embedder: ``DOCIR_EMBEDDER=deterministic`` selects the
+model-free hashing fallback instead. The model is loaded lazily on first use and
+kept warm — which is exactly why embedding runs inside the long-lived daemon
+rather than paying the ~4s cold start per command.
 
-Excluded from coverage: exercising it requires a multi-megabyte model download,
-so the test suite runs against the deterministic embedder instead.
+Not omitted from the gates, despite needing a model download: it is what every
+default install runs, so a type error or a broken call here reaches every user.
+The tests that exercise it are marked ``slow``.
 """
 
 from __future__ import annotations
+
+from collections.abc import Iterable, Sequence
+from typing import Protocol, cast
 
 from docir.platform.embedding.port import Embedder
 from docir.platform.embedding.vector import Embedding
 
 _DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
 
+#: Output width of the default model. Only a starting value — :meth:`embed`
+#: replaces it with what the model actually returned.
+_DEFAULT_DIMENSION = 384
 
-class FastEmbedEmbedder(Embedder):  # pragma: no cover
+
+class _TextEmbedding(Protocol):
+    """The slice of ``fastembed.TextEmbedding`` this adapter depends on.
+
+    Declared here so the adapter type-checks against a contract rather than
+    against ``object`` — the untyped ``object`` it used to hold is what made this
+    file need a type-checker exclusion.
+    """
+
+    def embed(self, documents: Iterable[str]) -> Iterable[Sequence[float]]: ...
+
+
+class FastEmbedEmbedder(Embedder):
     """Wraps ``fastembed.TextEmbedding`` behind the :class:`Embedder` port."""
 
     def __init__(self, model_name: str = _DEFAULT_MODEL) -> None:
         self._model_name = model_name
-        self._model: object | None = None
-        self._dimension = 384  # bge-small-en-v1.5 output size
+        self._model: _TextEmbedding | None = None
+        self._dimension = _DEFAULT_DIMENSION
 
-    def _ensure_model(self) -> object:
+    def _ensure_model(self) -> _TextEmbedding:
         if self._model is None:
             try:
                 from fastembed import TextEmbedding
-            except ImportError as exc:
+            except ImportError as exc:  # pragma: no cover - dependency is required
                 raise RuntimeError(
-                    "fastembed is not installed; install the 'embeddings' extra"
+                    "fastembed is not installed; reinstall docir, or set "
+                    "DOCIR_EMBEDDER=deterministic to use the model-free embedder"
                 ) from exc
-            self._model = TextEmbedding(model_name=self._model_name)
+            self._model = cast(_TextEmbedding, TextEmbedding(model_name=self._model_name))
         return self._model
 
     @property
@@ -44,8 +65,7 @@ class FastEmbedEmbedder(Embedder):  # pragma: no cover
         return f"fastembed:{self._model_name}"
 
     def embed(self, text: str) -> Embedding:
-        model = self._ensure_model()
-        vectors = list(model.embed([text]))  # type: ignore[attr-defined]
+        vectors = list(self._ensure_model().embed([text]))
         values = tuple(float(component) for component in vectors[0])
         self._dimension = len(values)
         return Embedding(values)

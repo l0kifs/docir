@@ -18,6 +18,7 @@ from sqlalchemy import Engine
 from docir.config.settings import Settings
 from docir.entry_points.dispatch import Dispatcher
 from docir.modules.documents.api import (
+    ID_STYLES,
     PROFILE_NAMES,
     DocumentService,
     MaintenanceService,
@@ -43,6 +44,12 @@ from docir.platform.transport.messages import Request, RequestExecutor, Response
 
 #: Environment variable selecting the embedder implementation.
 EMBEDDER_ENV = "DOCIR_EMBEDDER"
+
+#: The id style ``docir init`` writes when the caller does not choose one.
+#: ``random`` rather than the schema-level fallback: ``init`` scopes docs to a
+#: *repository*, which is exactly where two branches can each mint ``adr-0007``
+#: and only collide at merge. Readable numbers stay one flag away.
+DEFAULT_INIT_ID_STYLE = "random"
 
 
 @dataclass
@@ -162,10 +169,15 @@ class InitResult:
     profiles: tuple[str, ...]
     schema_written: bool
     gitignore_written: bool
+    id_style: str = DEFAULT_INIT_ID_STYLE
 
 
 def initialize_store(
-    settings: Settings, *, profiles: tuple[str, ...] = (), force: bool = False
+    settings: Settings,
+    *,
+    profiles: tuple[str, ...] = (),
+    force: bool = False,
+    id_style: str = DEFAULT_INIT_ID_STYLE,
 ) -> InitResult:
     """Create/validate a docir store at ``settings.home`` (the ``docir init`` core).
 
@@ -178,13 +190,15 @@ def initialize_store(
     if unknown:
         available = ", ".join(PROFILE_NAMES)
         raise SchemaError(f"unknown profile(s): {', '.join(unknown)}; available: {available}")
+    if id_style not in ID_STYLES:
+        raise SchemaError(f"unknown id_style {id_style!r}; available: {', '.join(ID_STYLES)}")
 
     settings.ensure_directories()
 
     schema_path = settings.schema_path
     schema_written = force or not schema_path.exists()
     if schema_written:
-        schema_path.write_text(render_schema_yaml(profiles), encoding="utf-8")
+        schema_path.write_text(render_schema_yaml(profiles, id_style), encoding="utf-8")
 
     gitignore_path = settings.home / ".gitignore"
     gitignore_written = force or not gitignore_path.exists()
@@ -198,4 +212,5 @@ def initialize_store(
         profiles=profiles or ("software",),
         schema_written=schema_written,
         gitignore_written=gitignore_written,
+        id_style=id_style,
     )

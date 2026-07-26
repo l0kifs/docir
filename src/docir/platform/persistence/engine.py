@@ -19,14 +19,23 @@ from sqlalchemy.orm import Session, sessionmaker
 _ALEMBIC_DIR = Path(__file__).resolve().parent / "alembic"
 
 
+#: How long a connection waits for a write lock before giving up. Concurrent
+#: ``--no-daemon`` writers serialize on this lock (the daemon serializes them a
+#: level up); without a generous timeout the loser raises "database is locked"
+#: instead of simply waiting its turn. Matches pysqlite's own default, set
+#: explicitly so it is a decision rather than an inherited accident.
+_BUSY_TIMEOUT_MS = 5000
+
+
 def create_index_engine(database_url: str) -> Engine:
     """Create an engine with SQLite foreign-key enforcement enabled."""
     engine = create_engine(database_url, future=True)
 
     @event.listens_for(engine, "connect")
-    def _enable_foreign_keys(dbapi_connection: Any, _record: Any) -> None:
+    def _configure_connection(dbapi_connection: Any, _record: Any) -> None:
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
         cursor.close()
 
     return engine

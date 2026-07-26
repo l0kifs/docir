@@ -15,6 +15,11 @@ from docir.platform.persistence.ports import DocumentRepository
 # colliding, so this is never realistically exhausted.
 _MAX_RANDOM_ATTEMPTS = 1000
 
+# Retry budget for sequential allocation. Each attempt burns one counter value,
+# so this only runs when the counter lags behind the indexed ids; a healthy
+# store returns on the first attempt.
+_MAX_SEQUENTIAL_ATTEMPTS = 1000
+
 
 class IdGenerator:
     """Generates fresh :class:`DocId` values for a document type."""
@@ -36,5 +41,12 @@ class IdGenerator:
                 if not self._documents.exists(candidate.value):
                     return candidate
             raise RuntimeError(f"could not allocate a unique random id for {doc_type!r}")
-        number = self._documents.next_number(type_schema.prefix)
-        return DocId.build(type_schema.prefix, number)
+        # The counter alone is not proof that an id is free: it lives in the
+        # derived index, so a store rebuilt by an older docir (or seeded by hand)
+        # can still point at a live id. Skip past anything already indexed.
+        prefix = type_schema.prefix
+        for _ in range(_MAX_SEQUENTIAL_ATTEMPTS):
+            candidate = DocId.build(prefix, self._documents.next_number(prefix))
+            if not self._documents.exists(candidate.value):
+                return candidate
+        raise RuntimeError(f"could not allocate a free sequential id for prefix {prefix!r}")

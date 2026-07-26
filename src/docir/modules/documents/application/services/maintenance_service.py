@@ -11,12 +11,14 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from docir.modules.documents.domain.schema import Schema
+from docir.modules.documents.domain.schema import SEQUENTIAL_ID_STYLE, Schema
 from docir.modules.documents.domain.services.graph_checks import CheckIssue, GraphChecker
 from docir.modules.documents.domain.services.similarity_lint import LintFinding, SimilarityLinter
+from docir.modules.documents.domain.value_objects.identifiers import DocId
 from docir.modules.indexing.api import EmbeddingScheduler
 from docir.platform.clock import Clock
 from docir.platform.embedding import Embedder
+from docir.platform.errors import ValidationError
 from docir.platform.filesystem.ports import DocumentFileStore, TagFileStore
 from docir.platform.persistence.unit_of_work import UnitOfWork
 
@@ -145,6 +147,45 @@ class MaintenanceService:
                 uow.tags.delete(existing.key)
         return len(file_tags)
 
+    def _restore_id_sequences(self, uow: UnitOfWork, doc_ids: set[str]) -> None:
+        """Rebuild the id counter from the ids the files already use.
+
+        The counter lives in the derived index but was the one table ``reindex``
+        did not reconstruct, so a rebuilt store (a fresh clone — the index is
+        gitignored) re-minted a live id on the next ``add``: two files claimed
+        it and the older document fell out of every read path.
+
+        Only types that actually draw from a counter are considered. Deciding
+        that by the id's shape alone is not enough — hex digits include the
+        decimal digits, so about one random token in 281 is all-digits and would
+        otherwise be read as a hundred-billion-th sequential id and shove the
+        counter up with it.
+        """
+        counted_prefixes = {
+            type_schema.prefix
+            for type_schema in self._schema.types.values()
+            if type_schema.id_style == SEQUENTIAL_ID_STYLE
+        }
+        if not counted_prefixes:
+            return
+
+        highest: dict[str, int] = {}
+        for doc_id in doc_ids:
+            try:
+                parsed = DocId(doc_id)
+            except ValidationError:
+                continue  # foreign id, not something this store mints
+            if parsed.prefix not in counted_prefixes or parsed.looks_random:
+                continue  # random-style type, or a token left behind by one
+            try:
+                number = parsed.number
+            except ValidationError:
+                continue
+            if number > highest.get(parsed.prefix, 0):
+                highest[parsed.prefix] = number
+        for prefix, number in highest.items():
+            uow.documents.raise_next_number(prefix, number + 1)
+
     def _reindex_documents(self, uow: UnitOfWork, *, changed_only: bool) -> tuple[int, int]:
         seen: set[str] = set()
         indexed = 0
@@ -162,6 +203,10 @@ class MaintenanceService:
                 uow.search.index(document)
                 uow.embeddings.mark_dirty(document.id)
             indexed += 1
+
+        # Restore the counter from the ids on disk, including the ones ``--changed``
+        # skipped re-saving: an unchanged file still owns its id.
+        self._restore_id_sequences(uow, seen)
 
         removed = 0
         if not changed_only:

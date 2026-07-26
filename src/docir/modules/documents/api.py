@@ -9,6 +9,7 @@ services and DTOs re-exported here, never on the module's internals.
 from __future__ import annotations
 
 from docir.modules.documents.application.dto import (
+    DEFAULT_CONTEXT_EXPAND,
     AddDocumentRequest,
     ContextRequest,
     DocumentSummary,
@@ -24,14 +25,19 @@ from docir.modules.documents.application.services.maintenance_service import (
     ReindexResult,
 )
 from docir.modules.documents.infra.default_schema import (
+    DEFAULT_ID_STYLE,
     DEFAULT_SCHEMA_YAML,
+    ID_STYLES,
     render_schema_yaml,
 )
 from docir.modules.documents.infra.profiles import PROFILE_NAMES
 from docir.modules.documents.infra.schema_loader import describe_schema, load_schema
 
 __all__ = [
+    "DEFAULT_CONTEXT_EXPAND",
+    "DEFAULT_ID_STYLE",
     "DEFAULT_SCHEMA_YAML",
+    "ID_STYLES",
     "PROFILE_NAMES",
     "AddDocumentRequest",
     "ContextRequest",

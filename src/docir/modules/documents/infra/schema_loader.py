@@ -13,7 +13,12 @@ from pathlib import Path
 
 import yaml
 
-from docir.modules.documents.domain.schema import Schema, TypeSchema
+from docir.modules.documents.domain.schema import (
+    DEFAULT_ID_STYLE,
+    ID_STYLES,
+    Schema,
+    TypeSchema,
+)
 from docir.modules.documents.infra.default_schema import DEFAULT_SCHEMA_YAML
 from docir.modules.documents.infra.profiles import (
     CORE_SCHEMA_YAML,
@@ -80,7 +85,7 @@ def parse_schema(raw: object) -> Schema:
     if not isinstance(types_raw, dict) or not types_raw:
         raise SchemaError("schema must define a non-empty 'types' mapping (or 'profiles')")
     return Schema(
-        types=_parse_types_mapping(types_raw),
+        types=_parse_types_mapping(types_raw, _parse_id_style(raw.get("id_style"))),
         relation_types=frozenset(_parse_relation_types(raw.get("relation_types"))),
     )
 
@@ -102,6 +107,14 @@ def _merge_profiled(raw: object) -> Schema:
         fragments.append(yaml.safe_load(PROFILE_YAMLS[key]))
     fragments.append({k: v for k, v in raw.items() if k != "profiles"})
 
+    # Resolve the schema-wide ``id_style`` first, so it applies to the types the
+    # core and the profiles contribute too -- not just to inline ones. Later
+    # fragments win, which puts the file's own setting on top.
+    default_id_style = DEFAULT_ID_STYLE
+    for fragment in fragments:
+        if isinstance(fragment, dict) and fragment.get("id_style") is not None:
+            default_id_style = _parse_id_style(fragment.get("id_style"))
+
     merged_types: dict[str, TypeSchema] = {}
     merged_kinds: set[str] = set()
     for fragment in fragments:
@@ -110,7 +123,7 @@ def _merge_profiled(raw: object) -> Schema:
         merged_kinds.update(_parse_relation_types(fragment.get("relation_types")))
         types_raw = fragment.get("types")
         if isinstance(types_raw, dict):
-            merged_types.update(_parse_types_mapping(types_raw))
+            merged_types.update(_parse_types_mapping(types_raw, default_id_style))
 
     if not merged_types:
         raise SchemaError("resolved schema has no types after merging profiles")
@@ -125,13 +138,27 @@ def _parse_relation_types(value: object) -> set[str]:
     return {str(item) for item in value}
 
 
-def _parse_types_mapping(types_raw: object) -> dict[str, TypeSchema]:
+def _parse_id_style(value: object, *, where: str = "schema") -> str:
+    """Validate an ``id_style`` value, defaulting when it is absent."""
+    if value is None:
+        return DEFAULT_ID_STYLE
+    style = str(value)
+    if style not in ID_STYLES:
+        allowed = ", ".join(ID_STYLES)
+        raise SchemaError(f"{where} 'id_style' must be one of: {allowed} (got {style!r})")
+    return style
+
+
+def _parse_types_mapping(types_raw: object, default_id_style: str) -> dict[str, TypeSchema]:
     if not isinstance(types_raw, dict):
         return {}
-    return {str(name): _parse_type(str(name), spec) for name, spec in types_raw.items()}
+    return {
+        str(name): _parse_type(str(name), spec, default_id_style)
+        for name, spec in types_raw.items()
+    }
 
 
-def _parse_type(name: str, spec: object) -> TypeSchema:
+def _parse_type(name: str, spec: object, default_id_style: str) -> TypeSchema:
     if not isinstance(spec, dict):
         raise SchemaError(f"type {name!r} must be a mapping")
 
@@ -173,9 +200,12 @@ def _parse_type(name: str, spec: object) -> TypeSchema:
     if not isinstance(review_days, int) or isinstance(review_days, bool):
         raise SchemaError(f"type {name!r} 'review_days' must be an integer")
 
-    id_style = str(spec.get("id_style", "sequential"))
-    if id_style not in ("sequential", "random"):
-        raise SchemaError(f"type {name!r} 'id_style' must be 'sequential' or 'random'")
+    # A type without its own ``id_style`` inherits the schema-wide default.
+    id_style = (
+        default_id_style
+        if spec.get("id_style") is None
+        else _parse_id_style(spec.get("id_style"), where=f"type {name!r}")
+    )
 
     return TypeSchema(
         name=name,

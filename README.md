@@ -163,9 +163,15 @@ it without mutating the base.
 
 ```bash
 docir init --profiles software,qa   # pick profiles up front
+docir init --id-style sequential    # readable adr-0007 instead of the default random
 docir schema show                   # the merged result — what validation enforces
 docir schema validate               # check an edit before it reaches a write
 ```
+
+`docir init` writes `id_style: random` by default — ids like `adr-3f9a2b1c7d4e`, which two
+branches can never mint identically. Pass `--id-style sequential` for human-friendly
+`adr-0007` numbering; it is collision-free within one store, but a merge can bring two
+branches that each allocated the same number (`docir check` reports it as `duplicate-id`).
 
 The generated `docs-schema.yaml` carries a commented-out worked example of the inline
 `types:` / `relation_types:` syntax, so the grammar is discoverable at the point of use.

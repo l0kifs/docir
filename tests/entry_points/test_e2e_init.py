@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -34,6 +35,66 @@ class TestInit:
 
     def test_unknown_profile_exits_3(self, tmp_path: Path) -> None:
         assert run("init", str(tmp_path), "--profiles", "bogus").exit_code == 3
+
+    def test_defaults_to_random_ids(self, tmp_path: Path) -> None:
+        # A repo store is shared, and two branches minting `sequential` ids each
+        # produce adr-0007 without noticing until the merge. init opts out of
+        # that class of collision by default.
+        assert run("init", str(tmp_path)).exit_code == 0
+        schema = (tmp_path / ".docir" / "docs-schema.yaml").read_text(encoding="utf-8")
+        assert "id_style: random" in schema
+
+        added = run(
+            "--home",
+            str(tmp_path / ".docir"),
+            "add",
+            "--type",
+            "decision",
+            "--title",
+            "T",
+            "--description",
+            "d",
+        )
+        assert re.fullmatch(r"adr-[0-9a-f]{12}", json.loads(added.stdout)["id"])
+
+    def test_id_style_sequential_opts_back_in(self, tmp_path: Path) -> None:
+        assert run("init", str(tmp_path), "--id-style", "sequential").exit_code == 0
+        assert "id_style: sequential" in (tmp_path / ".docir" / "docs-schema.yaml").read_text(
+            encoding="utf-8"
+        )
+
+        added = run(
+            "--home",
+            str(tmp_path / ".docir"),
+            "add",
+            "--type",
+            "decision",
+            "--title",
+            "T",
+            "--description",
+            "d",
+        )
+        assert json.loads(added.stdout)["id"] == "adr-0001"
+
+    def test_unknown_id_style_exits_3(self, tmp_path: Path) -> None:
+        assert run("init", str(tmp_path), "--id-style", "uuid").exit_code == 3
+
+    def test_id_style_applies_to_profile_types_too(self, tmp_path: Path) -> None:
+        # The schema-wide setting must reach the types the core and the profiles
+        # contribute, not just inline ones — `issue` comes from the software profile.
+        assert run("init", str(tmp_path), "--id-style", "random").exit_code == 0
+        added = run(
+            "--home",
+            str(tmp_path / ".docir"),
+            "add",
+            "--type",
+            "issue",
+            "--title",
+            "T",
+            "--description",
+            "d",
+        )
+        assert re.fullmatch(r"issue-[0-9a-f]{12}", json.loads(added.stdout)["id"])
 
     def test_json_output(self, tmp_path: Path) -> None:
         result = run("--json", "init", str(tmp_path))
@@ -74,5 +135,8 @@ class TestDiscoveryThroughCli:
             "x",
         )
         assert added.exit_code == 0
-        assert "adr-0001" in added.stdout
-        assert list((proj / ".docir" / "docs" / "decisions").glob("adr-0001-*.md"))
+        # What matters here is *where* the document landed, not what it is called:
+        # `init` picks the id style, so assert on the returned id rather than a
+        # literal (this pinned "adr-0001" until init started defaulting to random).
+        doc_id = json.loads(added.stdout)["id"]
+        assert list((proj / ".docir" / "docs" / "decisions").glob(f"{doc_id}-*.md"))

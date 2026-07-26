@@ -236,12 +236,89 @@ class TestQuerySearchContext:
 
     def test_context_ranks_and_augments_with_graph(self, seeded: Dispatcher) -> None:
         results = seeded.dispatch(
-            "context", {"task": "implement auth refresh endpoint", "limit": 1}
+            "context", {"task": "implement auth refresh endpoint", "limit": 2}
         )
         ids = {d["id"] for d in results}
-        # limit=1 primary result, plus its one-hop related neighbour.
         assert "adr-0001" in ids or "issue-0001" in ids
         assert any(d.get("via_graph") for d in results) or len(ids) >= 1
+
+
+class TestContextBudget:
+    """``--limit`` is a hard ceiling on the response (guards GAP-005).
+
+    Graph expansion used to run *after* the limit and was itself uncapped, so a
+    densely linked corpus blew straight through it: three seeds with out-degree
+    two returned nine documents from ``--limit 3``. That contradicts the entire
+    point of the limit for a token-budgeted agent.
+    """
+
+    @staticmethod
+    def _linked_corpus(dispatcher: Dispatcher, decisions: int, per_decision: int) -> None:
+        """N decisions, each pointing at ``per_decision`` issues of its own."""
+        for d in range(decisions):
+            related = []
+            for i in range(per_decision):
+                issue = dispatcher.dispatch(
+                    "add",
+                    {
+                        "type": "issue",
+                        "title": f"cache issue {d}-{i}",
+                        "description": "cache invalidation problem",
+                    },
+                )
+                related.append(issue["id"])
+            dispatcher.dispatch(
+                "add",
+                {
+                    "type": "decision",
+                    "title": f"cache policy {d}",
+                    "description": "cache invalidation policy",
+                    "related": related,
+                },
+            )
+
+    def test_limit_is_never_exceeded(self, dispatcher: Dispatcher) -> None:
+        # The exact shape that returned 9 for --limit 3 before the fix.
+        self._linked_corpus(dispatcher, decisions=3, per_decision=2)
+        results = dispatcher.dispatch("context", {"task": "cache invalidation policy", "limit": 3})
+        assert len(results) == 3
+
+    def test_expand_zero_disables_graph_neighbours(self, dispatcher: Dispatcher) -> None:
+        self._linked_corpus(dispatcher, decisions=3, per_decision=2)
+        results = dispatcher.dispatch(
+            "context", {"task": "cache invalidation policy", "limit": 4, "expand": 0}
+        )
+        assert len(results) == 4
+        assert not any(d.get("via_graph") for d in results)
+
+    def test_expand_reserves_slots_for_neighbours(self, dispatcher: Dispatcher) -> None:
+        self._linked_corpus(dispatcher, decisions=3, per_decision=2)
+        results = dispatcher.dispatch(
+            "context", {"task": "cache invalidation policy", "limit": 4, "expand": 2}
+        )
+        assert len(results) == 4
+        assert sum(1 for d in results if d.get("via_graph")) <= 2
+
+    def test_unused_neighbour_slots_are_backfilled(self, dispatcher: Dispatcher) -> None:
+        # No relations at all, so expansion contributes nothing; the response
+        # must still be full rather than short by the reserved slots.
+        for i in range(6):
+            dispatcher.dispatch(
+                "add",
+                {"type": "decision", "title": f"policy {i}", "description": "cache policy"},
+            )
+        results = dispatcher.dispatch("context", {"task": "cache policy", "limit": 5, "expand": 2})
+        assert len(results) == 5
+        assert not any(d.get("via_graph") for d in results)
+
+    def test_limit_one_still_returns_a_ranked_hit(self, dispatcher: Dispatcher) -> None:
+        # expand must never crowd out the seed it is expanding from.
+        self._linked_corpus(dispatcher, decisions=2, per_decision=2)
+        results = dispatcher.dispatch(
+            "context", {"task": "cache invalidation policy", "limit": 1, "expand": 5}
+        )
+        assert len(results) == 1
+        assert not results[0].get("via_graph")
 
 
 class TestArchiveDelete:

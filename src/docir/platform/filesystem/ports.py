@@ -18,11 +18,14 @@ class DocumentFileStore(ABC):
     """Reads and writes the canonical ``docs/<type>s/<id>-<slug>.md`` files."""
 
     @abstractmethod
-    def write(self, document: Document) -> str:
+    def write(self, document: Document, *, create: bool = False) -> str:
         """Write the document to disk, returning its path relative to the root.
 
         The path is ``<type>s/<id>-<slug>.md``. Overwrites in place when the
-        document already exists.
+        document already exists. Pass ``create=True`` for a first write, which
+        refuses to overwrite a file that is already there — a freshly allocated
+        id whose file exists means the id is not actually free, and silently
+        clobbering it would drop the existing document from every read path.
         """
 
     @abstractmethod

@@ -200,10 +200,23 @@ class SearchRequest:
     include_inactive: bool = False
 
 
+#: How many of a context result's slots are reserved for graph-reached
+#: neighbours by default. Expansion used to run *after* the limit was applied
+#: and was itself uncapped, so ``--limit 3`` could return nine documents — the
+#: opposite of the token budget the limit exists to enforce.
+DEFAULT_CONTEXT_EXPAND = 2
+
+
 @dataclass(frozen=True, slots=True)
 class ContextRequest:
-    """Input for ``docs context`` (hybrid ranking + one-hop graph traversal)."""
+    """Input for ``docs context`` (hybrid ranking + one-hop graph traversal).
+
+    ``limit`` is the hard ceiling on documents returned. ``expand`` is how many
+    of those slots may go to graph-reached neighbours; the rest go to ranked
+    hits, and unused neighbour slots are backfilled with more ranked hits.
+    """
 
     task: str
     limit: int = 5
     include_inactive: bool = False
+    expand: int = DEFAULT_CONTEXT_EXPAND

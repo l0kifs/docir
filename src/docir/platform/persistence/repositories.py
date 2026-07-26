@@ -25,7 +25,6 @@ from docir.platform.persistence.models import (
     DocumentTagRow,
     EmbeddingRow,
     RelationRow,
-    SequenceRow,
     TagRow,
 )
 from docir.platform.persistence.ports import (
@@ -46,14 +45,32 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
         self._session = session
 
     def next_number(self, prefix: str) -> int:
-        row = self._session.get(SequenceRow, prefix)
-        if row is None:
-            row = SequenceRow(prefix=prefix, next_value=1)
-            self._session.add(row)
-        value = row.next_value
-        row.next_value = value + 1
-        self._session.flush()
-        return value
+        """Atomically claim the next number for ``prefix``.
+
+        One statement, deliberately: read-modify-write in Python let two
+        concurrent processes read the same value and both return it, so N
+        parallel ``docir --no-daemon add`` calls all minted the same id. Inside a
+        single upsert the increment happens under SQLite's write lock, so a
+        second transaction blocks and then reads the *committed* value.
+        """
+        value = self._session.execute(
+            sql_text(
+                "INSERT INTO id_sequences (prefix, next_value) VALUES (:prefix, 2) "
+                "ON CONFLICT(prefix) DO UPDATE SET next_value = next_value + 1 "
+                "RETURNING next_value - 1"
+            ),
+            {"prefix": prefix},
+        ).scalar_one()
+        return int(value)
+
+    def raise_next_number(self, prefix: str, minimum: int) -> None:
+        self._session.execute(
+            sql_text(
+                "INSERT INTO id_sequences (prefix, next_value) VALUES (:prefix, :minimum) "
+                "ON CONFLICT(prefix) DO UPDATE SET next_value = MAX(next_value, :minimum)"
+            ),
+            {"prefix": prefix, "minimum": minimum},
+        )
 
     def save(self, document: Document) -> None:
         row = self._session.get(DocumentRow, document.id)

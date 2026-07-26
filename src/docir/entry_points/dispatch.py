@@ -12,6 +12,7 @@ from collections.abc import Callable
 from dataclasses import asdict
 
 from docir.modules.documents.api import (
+    DEFAULT_CONTEXT_EXPAND,
     AddDocumentRequest,
     ContextRequest,
     DocumentService,
@@ -131,6 +132,7 @@ class Dispatcher:
             task=_str(payload, "task"),
             limit=_int(payload, "limit", default=5),
             include_inactive=_bool(payload, "include_inactive"),
+            expand=_int(payload, "expand", default=DEFAULT_CONTEXT_EXPAND),
         )
         return [asdict(view) for view in self._documents.context(request)]
 

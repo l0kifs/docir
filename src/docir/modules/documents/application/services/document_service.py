@@ -29,7 +29,7 @@ from docir.modules.documents.domain.services.markdown_sections import (
 from docir.modules.documents.domain.services.validation import Tier0Validator
 from docir.modules.documents.domain.value_objects.queries import DocumentFilter
 from docir.modules.documents.domain.value_objects.relations import RelatedRef
-from docir.modules.indexing.api import EmbeddingScheduler, HybridScorer
+from docir.modules.indexing.api import EmbeddingScheduler, FusedScore, HybridScorer
 from docir.platform.clock import Clock
 from docir.platform.embedding import Embedder
 from docir.platform.errors import (
@@ -115,7 +115,7 @@ class DocumentService:
                 owner=request.owner or "",
             )
             self._validator.validate_required_fields(document)
-            path = self._file_store.write(document)
+            path = self._file_store.write(document, create=True)
             document = document.with_updates(path=path)
             uow.documents.save(document)
             uow.search.index(document)
@@ -247,30 +247,63 @@ class DocumentService:
         return views
 
     def context(self, request: ContextRequest) -> list[DocumentSummary]:
-        """Ranked, minimal relevant document set (``docs context``) — skeletons."""
+        """Ranked, minimal relevant document set (``docs context``) — skeletons.
+
+        ``limit`` is a hard ceiling on the response. Graph expansion runs inside
+        it, not on top of it: ``expand`` slots are held back for neighbours, and
+        any the graph does not fill are given back to the ranked hits, so the
+        result is always ``min(limit, what exists)``.
+        """
         _require_positive_limit(request.limit)
+        # Always leave room for at least one ranked hit — a result made purely of
+        # neighbours would have nothing to be a neighbour of.
+        expand = min(max(request.expand, 0), request.limit - 1)
         query_vector = self._embedder.embed(request.task)
-        inactive = self._schema.inactive_statuses()
 
         with self._uow_factory() as uow:
             hits = uow.search.search(request.task, limit=_CONTEXT_CANDIDATES)
             semantic = self._scorer.semantic_ranking(query_vector, uow.embeddings.active_vectors())
             fused = self._scorer.fuse(hits, semantic)
 
-            selected: dict[str, DocumentSummary] = {}
-            for fscore in fused:
+            # Rank order, visible only, capped at what could ever be returned.
+            ranked = self._visible_ranked(uow, fused, request, limit=request.limit)
+
+            seed_budget = request.limit - expand
+            selected: dict[str, DocumentSummary] = {
+                document.id: self._summary(document, score=score)
+                for document, score in ranked[:seed_budget]
+            }
+            if expand:
+                self._augment_with_related(uow, selected, budget=expand)
+            # Give back neighbour slots the graph did not use.
+            for document, score in ranked[seed_budget:]:
                 if len(selected) >= request.limit:
                     break
-                document = uow.documents.get(fscore.doc_id)
-                if document is None or document.archived:
-                    continue
-                if not request.include_inactive and document.status in inactive:
-                    continue
-                selected[document.id] = self._summary(document, score=fscore.score)
-
-            self._augment_with_related(uow, selected)
+                selected.setdefault(document.id, self._summary(document, score=score))
 
         return list(selected.values())
+
+    def _visible_ranked(
+        self,
+        uow: UnitOfWork,
+        fused: list[FusedScore],
+        request: ContextRequest,
+        *,
+        limit: int,
+    ) -> list[tuple[Document, float]]:
+        """Resolve fused scores to visible documents, best first, at most ``limit``."""
+        inactive = self._schema.inactive_statuses()
+        resolved: list[tuple[Document, float]] = []
+        for fscore in fused:
+            if len(resolved) >= limit:
+                break
+            document = uow.documents.get(fscore.doc_id)
+            if document is None or document.archived:
+                continue
+            if not request.include_inactive and document.status in inactive:
+                continue
+            resolved.append((document, fscore.score))
+        return resolved
 
     # -- helpers ------------------------------------------------------------
 
@@ -294,17 +327,31 @@ class DocumentService:
             return False
         return (self._clock.today() - document.stale_reference_date()).days > cadence
 
-    def _augment_with_related(self, uow: UnitOfWork, selected: dict[str, DocumentSummary]) -> None:
-        """Pull each selected document's ``related`` neighbours one hop out."""
-        seeds = list(selected)
-        for seed in seeds:
-            for neighbour_id in uow.documents.outgoing(seed):
+    def _augment_with_related(
+        self, uow: UnitOfWork, selected: dict[str, DocumentSummary], *, budget: int
+    ) -> None:
+        """Pull up to ``budget`` of the selected documents' neighbours one hop out.
+
+        Breadth-first across the seeds rather than depth-first through one seed's
+        edge list, so a densely linked top hit cannot spend the whole budget
+        before the other seeds contribute anything.
+        """
+        edges = {seed: uow.documents.outgoing(seed) for seed in selected}
+        added = 0
+        for depth in range(max((len(targets) for targets in edges.values()), default=0)):
+            for targets in edges.values():
+                if added >= budget:
+                    return
+                if depth >= len(targets):
+                    continue
+                neighbour_id = targets[depth]
                 if neighbour_id in selected:
                     continue
                 neighbour = uow.documents.get(neighbour_id)
                 if neighbour is None or neighbour.archived:
                     continue
                 selected[neighbour_id] = self._summary(neighbour, via_graph=True)
+                added += 1
 
     def _apply_metadata(
         self,

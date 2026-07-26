@@ -26,6 +26,16 @@ class DocumentRepository(ABC):
         """Return the next free integer for ``<prefix>-NNNN`` id allocation."""
 
     @abstractmethod
+    def raise_next_number(self, prefix: str, minimum: int) -> None:
+        """Raise the ``prefix`` counter to at least ``minimum`` (never lower it).
+
+        The id counter lives in the derived index, so a rebuild from the files
+        must restore it — otherwise the next allocation re-mints an id the files
+        already use. Monotonic on purpose: deleting the highest-numbered
+        document must not make its id available again.
+        """
+
+    @abstractmethod
     def save(self, document: Document) -> None:
         """Insert or update a document's metadata rows and relation edges."""
 

@@ -62,7 +62,7 @@ operates on the discovered store).
 
 | Command | Use |
 |---|---|
-| `docir context "<task>" [--limit N]` | Best first step: hybrid (lexical+semantic) ranking + 1-hop related docs. Graph-pulled items marked `via_graph`. |
+| `docir context "<task>" [--limit N] [--expand N]` | Best first step: hybrid (lexical+semantic) ranking + 1-hop related docs. Graph-pulled items marked `via_graph`. |
 | `docir get <id>` | Full doc (body included); works for any status. |
 | `docir search "<text>"` | Full-text only. |
 | `docir query --type decision --status accepted --tag auth` | Structured filter; repeatable `--type/--status/--tag`. |
@@ -75,6 +75,12 @@ never dump every body.
 
 Default read path **hides** resolved/archived docs. Add `--include-resolved`
 (query/search/context) or use `docir get` to see them.
+
+**`--limit` is a hard ceiling** on what `context` returns — it is your token
+budget, not a suggestion. Related docs are pulled *inside* it: `--expand N`
+(default 2) reserves at most N of those slots for `via_graph` items, and slots
+the graph does not use go back to ranked hits. `--expand 0` gives you ranked
+hits only.
 
 ## Write
 
@@ -125,8 +131,9 @@ work in this order — the constraints below make any other order fail:
 4. **Wire relationships in a second pass**, after every doc exists and has an id:
    `docir update <id> --set-related <other-id>:supersedes`. Links can't be set in
    step 3 because every `--related` target must already exist.
-5. **Validate**: `docir check --strict` — it flags dangling links, duplicate ids,
-   unknown types, and stale docs. Fix, then remove or keep the originals.
+5. **Validate**: `docir check` — it flags dangling links, duplicate ids, unknown
+   types, and stale docs. Fix those. `orphan` findings just mean a doc has no
+   relations yet, which is normal; don't force links to silence them.
 
 ## Typed edges (`related`)
 
@@ -235,18 +242,25 @@ kinds — re-list every kind you still want, including `relates_to`.
 ## Checks & maintenance (non-blocking)
 
 - `docir check` — Tier 1 warnings: cycles, orphans, layering, **dangling** `related` links, **duplicate ids**, **stale** docs (past their review cadence), **unknown type** (a doc whose `type` isn't in the active schema — e.g. its profile was disabled). Run before finishing.
-- `docir check --strict` — exits nonzero on any issue; use as a **CI / pre-merge gate** to catch duplicate ids or dangling refs a branch merge introduced before they reach `main`.
+- `docir check --strict` — exits nonzero on **any** issue, including advisory ones like `orphan` and `stale`. Useful as a CI / pre-merge gate to catch duplicate ids and dangling refs, but expect it to fail on a healthy corpus too: there is no per-kind severity yet, so a doc with no relations is enough to fail the build.
 - `docir lint --deep` — Tier 2 advisories (duplicate content, oversized docs).
 - `docir reindex [--changed]` — after a doc file was hand-edited, merged, or freshly cloned.
 
 ## Working across git branches
 
 Only `docs/*.md` + `tags.yaml` are committed; the index is derived and gitignored.
-After any merge/pull: `docir reindex --all` then `docir check --strict`. If several
-people author docs on concurrent branches, set `id_style: random` per type in
-`docs-schema.yaml` — it mints collision-resistant ids (`adr-3f9a2b1c7d4e`) so two
-branches never allocate the same id. The default `sequential` style (`adr-0007`)
-is only collision-free within one shared index.
+After any merge/pull, and on a fresh clone: `docir reindex` then `docir check`.
+The reindex is what rebuilds the index *and* resyncs the id counter from the
+files — skip it on a fresh clone and the next `docir add` will refuse to write,
+telling you to run it.
+
+`docir init` writes `id_style: random` by default, which mints collision-resistant
+ids (`adr-3f9a2b1c7d4e`) so two branches never allocate the same id. A store
+created with `--id-style sequential` (or an older schema with no `id_style:` key)
+mints readable numbers (`adr-0007`) that are collision-free *within one store* —
+but two branches each have their own index and can mint the same number, which
+`docir check` reports as `duplicate-id` after the merge. Set `id_style` at the top
+of `docs-schema.yaml` for the whole schema, or per type to override it.
 
 ## Notes
 

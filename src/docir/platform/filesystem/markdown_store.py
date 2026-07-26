@@ -21,7 +21,11 @@ from docir.modules.documents.domain.value_objects.relations import (
     DEFAULT_RELATION_KIND,
     RelatedRef,
 )
-from docir.platform.errors import DocumentNotFoundError, ValidationError
+from docir.platform.errors import (
+    DocumentNotFoundError,
+    DuplicateDocumentIdError,
+    ValidationError,
+)
 from docir.platform.filesystem.ports import DocumentFileStore
 
 
@@ -31,9 +35,20 @@ class MarkdownDocumentFileStore(DocumentFileStore):
     def __init__(self, docs_root: Path) -> None:
         self._root = docs_root
 
-    def write(self, document: Document) -> str:
+    def write(self, document: Document, *, create: bool = False) -> str:
         rel_path = document.path or self._path_for(document)
         full_path = self._root / rel_path
+        if create:
+            # Key on the *id*, not the path: the filename carries the title slug,
+            # so a colliding id under a different title lands on a different path
+            # and would slip past an exists() check on ``full_path``.
+            existing = self._existing_path_for_id(document)
+            if existing is not None:
+                raise DuplicateDocumentIdError(
+                    f"cannot create {document.id!r}: {existing} already uses that id. "
+                    f"The index's id counter is behind the files — run `docir reindex` "
+                    f"to resync it, then retry."
+                )
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_text(self._render(document), encoding="utf-8")
         return rel_path
@@ -83,6 +98,16 @@ class MarkdownDocumentFileStore(DocumentFileStore):
         except yaml.YAMLError as exc:
             raise ValidationError(f"malformed frontmatter in {rel}: {exc}") from exc
         return self._to_document(post.metadata, post.content, rel)
+
+    def _existing_path_for_id(self, document: Document) -> str | None:
+        """The relative path of a file already claiming this id, if any.
+
+        A narrow glob over the type's own directory, not a scan of the whole
+        docs root — cheap enough to sit on the create path.
+        """
+        for match in sorted(self._root.glob(f"{document.type}s/{document.id}-*.md")):
+            return str(match.relative_to(self._root))
+        return None
 
     def _path_for(self, document: Document) -> str:
         slug = slugify(document.title)

@@ -98,6 +98,16 @@ class DanglingReferenceError(DocirError):
     exit_code = 5
 
 
+class DuplicateDocumentIdError(DocirError):
+    """A freshly allocated id already has a file on disk; the create was refused.
+
+    Means the index's id counter is behind the canonical files — the state a
+    rebuild used to leave behind before ``reindex`` restored the counter.
+    """
+
+    exit_code = 5
+
+
 class StaleWriteError(DocirError):
     """The document changed on disk since it was last read; write refused."""
 

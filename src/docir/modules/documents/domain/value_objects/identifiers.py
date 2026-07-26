@@ -24,6 +24,9 @@ _ID_RE = re.compile(r"^(?P<prefix>[a-z][a-z0-9]*)-(?P<suffix>[0-9a-f]{4,})$")
 # negligible collision probability at this scale (thousands of documents).
 _RANDOM_ENTROPY_BYTES = 6
 
+#: Length of a random id's suffix, in hex characters.
+RANDOM_SUFFIX_LENGTH = _RANDOM_ENTROPY_BYTES * 2
+
 
 @dataclass(frozen=True, slots=True)
 class DocId:
@@ -60,6 +63,17 @@ class DocId:
         match = _ID_RE.match(self.value)
         assert match is not None  # guaranteed by __post_init__
         return match.group("suffix")
+
+    @property
+    def looks_random(self) -> bool:
+        """Whether this id has the shape of a random token rather than a counter.
+
+        Hex digits include the decimal digits, so roughly one random token in 281
+        is all-digits and parses as a perfectly good :attr:`number`. Length
+        disambiguates: a counter would have to reach a hundred billion documents
+        to produce a suffix this long.
+        """
+        return len(self.suffix) >= RANDOM_SUFFIX_LENGTH
 
     @property
     def number(self) -> int:

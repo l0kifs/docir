@@ -30,6 +30,19 @@ CORE_REQUIRED_FIELDS: tuple[str, ...] = (
     "updated",
 )
 
+#: How a type's ids are minted. ``sequential`` reads a per-prefix counter in the
+#: index (``adr-0007``): human-friendly, and unique only within one store, so two
+#: git branches can each mint the same number. ``random`` mints a hex token
+#: (``adr-3f9a2b1c7d4e``): unique across independent clones with no shared state.
+SEQUENTIAL_ID_STYLE = "sequential"
+RANDOM_ID_STYLE = "random"
+ID_STYLES: tuple[str, ...] = (SEQUENTIAL_ID_STYLE, RANDOM_ID_STYLE)
+
+#: The style a type falls back to when neither it nor the schema says otherwise.
+#: Stays ``sequential`` so an existing ``docs-schema.yaml`` keeps minting the ids
+#: it always did; ``docir init`` writes an explicit style for new stores.
+DEFAULT_ID_STYLE = SEQUENTIAL_ID_STYLE
+
 
 @dataclass(frozen=True, slots=True)
 class TypeSchema:
@@ -50,8 +63,8 @@ class TypeSchema:
     inactive_statuses: tuple[str, ...] = ()
     # How ids are allocated: ``sequential`` (human-friendly ``adr-0007``, safe
     # only within one shared index) or ``random`` (collision-resistant across
-    # independent clones/branches). See DocId.
-    id_style: str = "sequential"
+    # independent clones/branches). See DocId and ID_STYLES.
+    id_style: str = DEFAULT_ID_STYLE
     # Per-type relation whitelist: ``kind -> allowed target types`` (an empty
     # target list means "any type"). An *empty* mapping means the type is
     # unconstrained (any registered kind, any target) — the permissive default.

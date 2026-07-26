@@ -17,6 +17,14 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from docir.modules.documents.domain.schema import DEFAULT_ID_STYLE, ID_STYLES
+from docir.platform.errors import SchemaError
+
+# Re-exported so the module's public ``api`` can surface them without reaching
+# into ``domain`` itself (the layering rule this module's infra is allowed to
+# cross, and its api is not).
+__all__ = ["DEFAULT_ID_STYLE", "DEFAULT_SCHEMA_YAML", "ID_STYLES", "render_schema_yaml"]
+
 #: Profiles used when the caller does not name any.
 _FALLBACK_PROFILES: tuple[str, ...] = ("software",)
 
@@ -123,16 +131,46 @@ _SCHEMA_FOOTER = """
 """
 
 
-def render_schema_yaml(profiles: Sequence[str] = ()) -> str:
-    """Build a ``docs-schema.yaml`` body selecting ``profiles``.
+_ID_STYLE_NOTE = {
+    "random": (
+        "# Ids are collision-resistant hex tokens (adr-3f9a2b1c7d4e), so people\n"
+        "# authoring docs on concurrent branches never mint the same id. Switch to\n"
+        "# `sequential` for human-friendly numbers (adr-0007) if this repo has a\n"
+        "# single doc author. Per-type `id_style:` overrides this.\n"
+    ),
+    "sequential": (
+        "# Ids are human-friendly numbers (adr-0007) drawn from the index counter.\n"
+        "# They are unique within this store, but two git branches can each mint the\n"
+        "# same number -- `docir check` reports that as `duplicate-id` after a merge.\n"
+        "# Use `random` if several people author docs on concurrent branches.\n"
+        "# Per-type `id_style:` overrides this.\n"
+    ),
+}
 
-    Falls back to the default ``software`` profile when none are named. The
-    ``profiles:`` line is generated, not substituted into a template, so the
-    written file always matches the requested profile set.
+
+def render_schema_yaml(profiles: Sequence[str] = (), id_style: str = DEFAULT_ID_STYLE) -> str:
+    """Build a ``docs-schema.yaml`` body selecting ``profiles`` and ``id_style``.
+
+    Falls back to the default ``software`` profile when none are named. Both
+    generated lines are assembled here rather than substituted into a template,
+    so ``docir init`` cannot write a different profile set or id style than it
+    reports.
     """
+    if id_style not in ID_STYLES:
+        raise SchemaError(f"unknown id_style {id_style!r}; available: {', '.join(ID_STYLES)}")
     names = tuple(profiles) or _FALLBACK_PROFILES
-    return f"{_SCHEMA_HEADER}profiles: [{', '.join(names)}]\n{_SCHEMA_FOOTER}"
+    return (
+        f"{_SCHEMA_HEADER}"
+        f"profiles: [{', '.join(names)}]\n\n"
+        f"{_ID_STYLE_NOTE[id_style]}"
+        f"id_style: {id_style}\n"
+        f"{_SCHEMA_FOOTER}"
+    )
 
 
-#: The bundled default schema body (the ``software`` profile over the core).
+#: The bundled default schema body, written when a store has no schema file of
+#: its own. Deliberately ``sequential``: this is the implicit fallback an
+#: existing or un-``init``-ed store lands on, and changing what it mints would
+#: alter the ids of a store that never asked for it. ``docir init`` defaults to
+#: ``random`` instead -- see its ``--id-style`` flag.
 DEFAULT_SCHEMA_YAML = render_schema_yaml()

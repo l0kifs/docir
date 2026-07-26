@@ -27,7 +27,11 @@ from docir.entry_points.cli.runner import (
     set_state,
     use_json,
 )
-from docir.entry_points.composition import InitResult, initialize_store
+from docir.entry_points.composition import (
+    DEFAULT_INIT_ID_STYLE,
+    InitResult,
+    initialize_store,
+)
 from docir.entry_points.daemon.cmds import daemon_app
 from docir.modules.agents.api import (
     AGENT_NAMES,
@@ -37,7 +41,13 @@ from docir.modules.agents.api import (
     UpdateRequest,
     build_agent_service,
 )
-from docir.modules.documents.api import PROFILE_NAMES, describe_schema, load_schema
+from docir.modules.documents.api import (
+    DEFAULT_CONTEXT_EXPAND,
+    ID_STYLES,
+    PROFILE_NAMES,
+    describe_schema,
+    load_schema,
+)
 
 app = typer.Typer(
     help="Doc-Index CLI — git-backed markdown documents with a semantic index.",
@@ -94,6 +104,17 @@ def init(
             "--profiles", help=f"Comma-separated schema profiles ({', '.join(PROFILE_NAMES)})."
         ),
     ] = None,
+    id_style: Annotated[
+        str,
+        typer.Option(
+            "--id-style",
+            help=(
+                f"How ids are minted ({', '.join(ID_STYLES)}). "
+                "random (default) is collision-free across branches; "
+                "sequential mints readable numbers like adr-0007."
+            ),
+        ),
+    ] = DEFAULT_INIT_ID_STYLE,
     force: Annotated[
         bool,
         typer.Option("--force", help="Overwrite an existing docs-schema.yaml / .gitignore."),
@@ -105,11 +126,17 @@ def init(
     commands run anywhere inside the tree find the store by walking up for
     .docir (the git model). Commit .docir/docs/ and .docir/docs-schema.yaml; the
     derived index is gitignored for you.
+
+    Ids default to the collision-resistant `random` style, because a repo store
+    is shared: two branches using `sequential` can each mint adr-0007 and only
+    find out at merge. Pass --id-style sequential for readable numbers.
     """
     home = directory.resolve() / PROJECT_STORE_DIRNAME
     settings = Settings.resolve(home=home, use_daemon=False)
     result = run_local(
-        lambda: initialize_store(settings, profiles=_split_csv(profiles), force=force)
+        lambda: initialize_store(
+            settings, profiles=_split_csv(profiles), force=force, id_style=id_style
+        )
     )
     _emit_init(result)
 
@@ -299,13 +326,26 @@ def search(
 @app.command()
 def context(
     task: Annotated[str, typer.Argument(help="Agent task description.")],
-    limit: Annotated[int, typer.Option("--limit")] = 5,
+    limit: Annotated[int, typer.Option("--limit", help="Hard ceiling on documents returned.")] = 5,
+    expand: Annotated[
+        int,
+        typer.Option(
+            "--expand",
+            help="How many of those slots may go to related documents (0 disables).",
+        ),
+    ] = DEFAULT_CONTEXT_EXPAND,
     include_resolved: Annotated[bool, typer.Option("--include-resolved")] = False,
 ) -> None:
-    """Ranked, minimal relevant document set (hybrid + graph traversal)."""
+    """Ranked, minimal relevant document set (hybrid + graph traversal).
+
+    ``--limit`` bounds the whole response. Graph expansion runs inside that
+    budget: ``--expand`` slots are held for related documents, and any the graph
+    does not use are given back to the ranked hits.
+    """
     payload: dict[str, object] = {
         "task": task,
         "limit": limit,
+        "expand": expand,
         "include_inactive": include_resolved,
     }
     _emit_document_list(execute("context", payload))
@@ -515,6 +555,7 @@ def _emit_init(result: InitResult) -> None:
     data = {
         "home": str(result.home),
         "profiles": list(result.profiles),
+        "id_style": result.id_style,
         "schema_written": result.schema_written,
         "gitignore_written": result.gitignore_written,
     }

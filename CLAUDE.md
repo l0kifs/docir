@@ -125,8 +125,21 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   behaviour is deterministic) and `ThreadedEmbeddingScheduler` (daemon, debounced background thread).
   Anything that needs the vector *now* must flush: `--wait-embeddings` on a write, `docir embed
   --flush`, or `docir reindex --embeddings`. Do not move embedding onto the synchronous write path.
-- **Ids are allocated from the DB counter (`SequenceRow`), never by scanning files** — that is what
-  keeps parallel agents from minting the same id. Conversely, `docir check`'s duplicate-id detection
+- **Ids are allocated from the DB counter (`id_sequences`), never by scanning files** — that is what
+  keeps parallel agents from minting the same id. The claim only holds because the counter is
+  bumped by **one atomic upsert** (`INSERT … ON CONFLICT DO UPDATE … RETURNING`, raw SQL in
+  `repositories.next_number`): a read-modify-write in Python let concurrent `--no-daemon` processes
+  all read the same value and return it, so N parallel adds minted one id N times. The daemon hid
+  this by serializing requests, so it only ever reproduced in the mode tests and CI use. Keep the
+  allocation a single statement. The counter is
+  **derived state and `reindex` must restore it**: `_restore_id_sequences` raises each prefix to
+  `max(numeric suffix on disk) + 1`, monotonically. Without that, a fresh clone (the index is
+  gitignored) re-minted a live id on the next `add`, and the older document — still on disk — fell
+  out of every read path. Two backstops guard the same invariant: `IdGenerator` skips a candidate
+  already indexed, and a create refuses to write when a file already claims the id
+  (`DuplicateDocumentIdError`, keyed on the id rather than the path, since the filename carries the
+  title slug). `tests/modules/documents/test_merge_safety.py` pins all three. Conversely, `docir
+  check`'s duplicate-id detection
   scans the *files* directly (`MaintenanceService._find_duplicate_ids`), because two files sharing an
   id are invisible in the index (it dedupes by primary key). That scan is the merge-into-`main`
   guard; `docir check --strict` exits 1 for CI.

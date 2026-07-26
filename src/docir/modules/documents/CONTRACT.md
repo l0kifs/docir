@@ -11,7 +11,10 @@ files and the derived index never disagree.
 - `DocumentService.get(id) -> DocumentView` — one document in full (with body)
 - `DocumentService.query(QueryRequest) -> [DocumentSummary]` — structured filtering (skeleton, no body)
 - `DocumentService.search(SearchRequest) -> [DocumentSummary]` — full-text search (skeleton, no body)
-- `DocumentService.context(ContextRequest) -> [DocumentSummary]` — ranked relevant set (skeleton, no body)
+- `DocumentService.context(ContextRequest) -> [DocumentSummary]` — ranked relevant set (skeleton, no body).
+  `ContextRequest.limit` is a hard ceiling on the response; `ContextRequest.expand`
+  (default `DEFAULT_CONTEXT_EXPAND`) is how many of those slots may go to graph-reached
+  neighbours, with unused neighbour slots backfilled by ranked hits.
 - `DocumentService.archive(id)/unarchive(id) -> DocumentView` — toggle active search
 - `DocumentService.delete(id, force) -> None` — remove file and index rows
 - `MaintenanceService.reindex(changed_only) -> ReindexResult` — rebuild index from files
@@ -20,7 +23,10 @@ files and the derived index never disagree.
 - `MaintenanceService.reindex_embeddings()/flush_embeddings() -> int`
 - `load_schema(path) -> Schema` — load the per-type document schema
 - `describe_schema(Schema) -> dict` — the merged schema as plain data (`docir schema show`)
-- `render_schema_yaml(profiles) -> str` — a `docs-schema.yaml` body selecting `profiles`
+- `render_schema_yaml(profiles, id_style) -> str` — a `docs-schema.yaml` body selecting
+  `profiles` and a schema-wide `id_style` (`ID_STYLES`: `sequential` | `random`). A type
+  without its own `id_style` inherits the schema-wide one; absent both, `DEFAULT_ID_STYLE`
+  (`sequential`) applies, so an existing schema keeps minting the ids it always did.
   (defaults to `software`), written by `docir init [--profiles ...]`
 
 ## Public constants

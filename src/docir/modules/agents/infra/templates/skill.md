@@ -242,7 +242,7 @@ kinds — re-list every kind you still want, including `relates_to`.
 ## Checks & maintenance (non-blocking)
 
 - `docir check` — Tier 1 warnings: cycles, orphans, layering, **dangling** `related` links, **duplicate ids**, **stale** docs (past their review cadence), **unknown type** (a doc whose `type` isn't in the active schema — e.g. its profile was disabled). Run before finishing.
-- `docir check --strict` — exits nonzero on **any** issue, including advisory ones like `orphan` and `stale`. Useful as a CI / pre-merge gate to catch duplicate ids and dangling refs, but expect it to fail on a healthy corpus too: there is no per-kind severity yet, so a doc with no relations is enough to fail the build.
+- `docir check --strict` — exits nonzero on **error**-severity findings only (`duplicate-id`, `dangling`, `malformed` — the corpus is broken). Use as a **CI / pre-merge gate**. Warnings (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`) are reported but never fail the build; `--strict-all` makes them fatal too.
 - `docir lint --deep` — Tier 2 advisories (duplicate content, oversized docs).
 - `docir reindex [--changed]` — after a doc file was hand-edited, merged, or freshly cloned.
 

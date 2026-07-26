@@ -460,14 +460,25 @@ def reindex(
 def check(
     strict: Annotated[
         bool,
-        typer.Option("--strict", help="Exit nonzero if any issue is found (for CI)."),
+        typer.Option("--strict", help="Exit nonzero on error-severity findings (for CI)."),
+    ] = False,
+    strict_all: Annotated[
+        bool,
+        typer.Option("--strict-all", help="Exit nonzero on ANY finding, warnings included."),
     ] = False,
 ) -> None:
     """Tier 1 structural checks (cycles, orphans, layering, dangling, dup ids).
 
-    Pass --strict to gate a pre-merge / CI job: it exits 1 when any issue is
-    found, which catches duplicate ids or dangling references a branch merge
-    introduced before they reach main.
+    Findings carry a severity. `error` means the corpus is broken — a duplicate
+    id hiding a document, an edge pointing at nothing, a file that will not
+    parse. `warning` describes shape or age: orphans, cycles, layering, staleness,
+    unknown types.
+
+    Pass --strict to gate a pre-merge / CI job: it exits 1 on errors only, which
+    is what catches the duplicate ids and dangling references a branch merge
+    introduces. Warnings do not fail the build — `orphan` fires for every
+    document with no relations, so gating on them fails a healthy corpus.
+    Use --strict-all if you really do want every finding to be fatal.
     """
     data = execute("check", {})
     state = get_state()
@@ -476,7 +487,8 @@ def check(
         rendering.emit_json(data, trim=state.trim)
     else:
         rendering.render_findings(issues, empty="no structural issues")
-    if strict and issues:
+    fatal = issues if strict_all else [i for i in issues if i.get("severity") == "error"]
+    if (strict or strict_all) and fatal:
         raise typer.Exit(code=1)
 
 

@@ -180,10 +180,39 @@ class TestMaintenanceCommands:
     def test_check_strict_gates_ci(self) -> None:
         # Clean repo: --strict passes.
         assert run("check", "--strict").exit_code == 0
-        # An orphan doc is a Tier 1 issue: --strict now fails (blocks a merge).
+
+        # A document with no relations is an `orphan` — the default state of a
+        # newly created one. It must NOT fail the build: gating on it made the
+        # advertised CI gate red on a healthy corpus (this test previously
+        # asserted the opposite, which is the behaviour GAP-006 reported).
         run("add", "--type", "decision", "--title", "Orphan", "--description", "d")
         assert run("check").exit_code == 0
+        assert run("check", "--strict").exit_code == 0
+        # ...but --strict-all still treats every finding as fatal.
+        assert run("check", "--strict-all").exit_code == 1
+
+    def test_check_strict_fails_on_a_broken_graph(self) -> None:
+        # `dangling` is real damage — an edge resolving to nothing — so it is
+        # exactly what the merge gate exists to catch.
+        run("add", "--type", "decision", "--title", "Target", "--description", "d")
+        run(
+            "add",
+            "--type",
+            "decision",
+            "--title",
+            "Source",
+            "--description",
+            "d",
+            "--related",
+            "adr-0001",
+        )
+        assert run("delete", "adr-0001", "--force").exit_code == 0
         assert run("check", "--strict").exit_code == 1
+
+    def test_findings_carry_a_severity(self) -> None:
+        run("add", "--type", "decision", "--title", "Orphan", "--description", "d")
+        findings = json.loads(run("check").stdout)
+        assert {f["kind"]: f["severity"] for f in findings} == {"orphan": "warning"}
 
 
 class TestOutputModes:

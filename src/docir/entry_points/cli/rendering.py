@@ -179,7 +179,12 @@ def render_findings(findings: Sequence[Mapping[str, object]], *, empty: str) -> 
         return
     for finding in findings:
         ids = _join(finding.get("doc_ids"))
-        console.print(f"[yellow]{finding.get('kind')}[/]: {finding.get('message')} [dim]({ids})[/]")
+        # Colour by severity so the findings that fail a build are visually
+        # separable from the ones that never will (`docir check --strict`).
+        colour = "red" if finding.get("severity") == "error" else "yellow"
+        console.print(
+            f"[{colour}]{finding.get('kind')}[/]: {finding.get('message')} [dim]({ids})[/]"
+        )
 
 
 def _join(value: object) -> str:

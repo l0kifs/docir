@@ -143,6 +143,14 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   scans the *files* directly (`MaintenanceService._find_duplicate_ids`), because two files sharing an
   id are invisible in the index (it dedupes by primary key). That scan is the merge-into-`main`
   guard; `docir check --strict` exits 1 for CI.
+- **Tier 1 findings carry a severity, and `--strict` gates on `error` only.** `ERROR_KINDS`
+  (`graph_checks.py`) is `duplicate-id`/`dangling`/`malformed` — the corpus is *broken*.
+  Everything else (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`) is a `warning` about
+  shape or age. This is load-bearing: `orphan` fires for every document with no relations — the
+  default state of a new one — so a fail-on-any-finding gate went red on a healthy corpus, and the
+  only way to keep CI green was to drop the gate, which also dropped duplicate-id detection.
+  `CheckIssue` derives `severity` from `kind` in `__post_init__`, so a new check classifies itself
+  by being added to `ERROR_KINDS` or not. `--strict-all` restores fail-on-anything.
 - **Validation is three tiers and mixing them is the documented overengineering trap.** Tier 0 is a
   hard, synchronous compiler-style gate (missing field, bad status/transition, unknown tag/related,
   unknown/disallowed relation kind); Tier 1 (`docir check`) is non-blocking structural graph warnings

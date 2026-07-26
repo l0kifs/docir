@@ -26,13 +26,40 @@ _WHITE, _GREY, _BLACK = 0, 1, 2
 _NON_DEPENDENCY_KINDS = frozenset({"supersedes", "contradicts"})
 
 
+#: Findings that mean the corpus is *broken* — a document is unreachable, or an
+#: edge resolves to nothing. These are what a merge gate must stop.
+ERROR_KINDS: frozenset[str] = frozenset({"duplicate-id", "dangling", "malformed"})
+
+#: Everything else (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`)
+#: describes shape or age, not damage. `orphan` in particular fires for any
+#: document with no relations — the default state of a new one — so treating
+#: these as build failures made the gate unusable on a healthy corpus.
+ERROR = "error"
+WARNING = "warning"
+
+
+def severity_for(kind: str) -> str:
+    """Whether a finding kind blocks a merge (`error`) or informs (`warning`)."""
+    return ERROR if kind in ERROR_KINDS else WARNING
+
+
 @dataclass(frozen=True, slots=True)
 class CheckIssue:
-    """One structural finding: a kind, a message, and the ids involved."""
+    """One structural finding: a kind, a message, the ids involved, a severity.
+
+    ``severity`` is derived from ``kind`` unless given explicitly, so a new check
+    cannot forget to classify itself — it just has to be added to
+    :data:`ERROR_KINDS` if it means damage.
+    """
 
     kind: str
     message: str
     doc_ids: tuple[str, ...]
+    severity: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.severity:
+            object.__setattr__(self, "severity", severity_for(self.kind))
 
 
 class GraphChecker:

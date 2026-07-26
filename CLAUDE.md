@@ -151,6 +151,14 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   only way to keep CI green was to drop the gate, which also dropped duplicate-id detection.
   `CheckIssue` derives `severity` from `kind` in `__post_init__`, so a new check classifies itself
   by being added to `ERROR_KINDS` or not. `--strict-all` restores fail-on-anything.
+- **`docir check --fix` (`MaintenanceService.repair`) is the only sanctioned recovery path.**
+  Detection without repair forced the user into hand-editing markdown — the one thing thesis #2
+  forbids. It repairs exactly what needs no guess: duplicate ids (re-issued; the *oldest* file
+  keeps the id, because existing edges were written against it and an edge cannot say which
+  document it meant) and dangling edges (dropped). `malformed`/`unknown-type` are deliberately
+  left to a human and returned in `RepairResult.remaining`. It reindexes first — id allocation
+  consults the index for a free number — and does **not** advance `updated`, since a mechanical
+  repair is not a human re-verification (that would launder the staleness clock).
 - **Validation is three tiers and mixing them is the documented overengineering trap.** Tier 0 is a
   hard, synchronous compiler-style gate (missing field, bad status/transition, unknown tag/related,
   unknown/disallowed relation kind); Tier 1 (`docir check`) is non-blocking structural graph warnings

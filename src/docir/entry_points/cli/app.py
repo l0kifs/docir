@@ -466,6 +466,10 @@ def check(
         bool,
         typer.Option("--strict-all", help="Exit nonzero on ANY finding, warnings included."),
     ] = False,
+    fix: Annotated[
+        bool,
+        typer.Option("--fix", help="Repair what can be repaired (duplicate ids, dead edges)."),
+    ] = False,
 ) -> None:
     """Tier 1 structural checks (cycles, orphans, layering, dangling, dup ids).
 
@@ -480,13 +484,23 @@ def check(
     document with no relations, so gating on them fails a healthy corpus.
     Use --strict-all if you really do want every finding to be fatal.
     """
-    data = execute("check", {})
     state = get_state()
-    issues = _as_list(data)
-    if use_json(state):
-        rendering.emit_json(data, trim=state.trim)
+    if fix:
+        result = execute("repair", {})
+        payload = result if isinstance(result, dict) else {}
+        issues = _as_list(payload.get("remaining"))
+        if use_json(state):
+            rendering.emit_json(result, trim=state.trim)
+        else:
+            rendering.render_repair(_as_list(payload.get("actions")), issues)
     else:
-        rendering.render_findings(issues, empty="no structural issues")
+        data = execute("check", {})
+        issues = _as_list(data)
+        if use_json(state):
+            rendering.emit_json(data, trim=state.trim)
+        else:
+            rendering.render_findings(issues, empty="no structural issues")
+
     fatal = issues if strict_all else [i for i in issues if i.get("severity") == "error"]
     if (strict or strict_all) and fatal:
         raise typer.Exit(code=1)
@@ -530,7 +544,11 @@ def _split_csv(value: str | None) -> tuple[str, ...]:
 
 
 def _as_list(data: object) -> list[dict[str, object]]:
-    if not isinstance(data, list):
+    # Tuples too, not just lists: ``dataclasses.asdict`` preserves the field's
+    # container type, so a DTO with ``tuple`` fields arrives as a tuple in-process
+    # and as a JSON array over the daemon. Accepting only ``list`` made the table
+    # renderer silently show nothing while ``--json`` printed the full payload.
+    if not isinstance(data, list | tuple):
         return []
     result: list[dict[str, object]] = []
     for item in data:

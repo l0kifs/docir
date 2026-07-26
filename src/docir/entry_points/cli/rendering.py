@@ -187,6 +187,22 @@ def render_findings(findings: Sequence[Mapping[str, object]], *, empty: str) -> 
         )
 
 
+def render_repair(
+    actions: Sequence[Mapping[str, object]],
+    remaining: Sequence[Mapping[str, object]],
+) -> None:
+    """Report what ``check --fix`` changed, then what a human still has to judge."""
+    if not actions:
+        console.print("[green]nothing to repair[/]")
+    for action in actions:
+        console.print(f"[green]fixed[/] [cyan]{action.get('kind')}[/]: {action.get('message')}")
+    if remaining:
+        console.print("\n[dim]still open (not mechanically fixable):[/]")
+        render_findings(remaining, empty="")
+    elif actions:
+        console.print("\n[green]no findings remain[/]")
+
+
 def _join(value: object) -> str:
     """Comma-join an unknown-typed sequence value for display."""
     if isinstance(value, list | tuple):

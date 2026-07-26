@@ -209,6 +209,60 @@ class TestMaintenanceCommands:
         assert run("delete", "adr-0001", "--force").exit_code == 0
         assert run("check", "--strict").exit_code == 1
 
+    def test_check_fix_repairs_and_reports_in_both_output_modes(self) -> None:
+        run("add", "--type", "decision", "--title", "Target", "--description", "d")
+        run(
+            "add",
+            "--type",
+            "decision",
+            "--title",
+            "Source",
+            "--description",
+            "d",
+            "--related",
+            "adr-0001",
+        )
+        run("delete", "adr-0001", "--force")
+
+        # The table path is asserted alongside the JSON one on purpose: `asdict`
+        # keeps a dataclass's tuple fields as tuples, and a renderer that accepts
+        # only `list` showed "nothing to repair" while --json printed the fix.
+        pretty = run("--pretty", "check", "--fix")
+        assert pretty.exit_code == 0
+        assert "dangling" in pretty.stdout and "fixed" in pretty.stdout
+
+        run(
+            "add",
+            "--type",
+            "decision",
+            "--title",
+            "Second",
+            "--description",
+            "d",
+            "--related",
+            "adr-0002",
+        )
+        run("delete", "adr-0002", "--force")
+        payload = json.loads(run("--json", "check", "--fix").stdout)
+        assert [a["kind"] for a in payload["actions"]] == ["dangling"]
+
+    def test_check_fix_then_strict_passes(self) -> None:
+        run("add", "--type", "decision", "--title", "Target", "--description", "d")
+        run(
+            "add",
+            "--type",
+            "decision",
+            "--title",
+            "Source",
+            "--description",
+            "d",
+            "--related",
+            "adr-0001",
+        )
+        run("delete", "adr-0001", "--force")
+        assert run("check", "--strict").exit_code == 1
+        assert run("check", "--fix", "--strict").exit_code == 0
+
     def test_findings_carry_a_severity(self) -> None:
         run("add", "--type", "decision", "--title", "Orphan", "--description", "d")
         findings = json.loads(run("check").stdout)

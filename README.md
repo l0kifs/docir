@@ -118,7 +118,7 @@ forces JSON anywhere, `--pretty` forces the table, `--no-trim` keeps every field
 | `docir context <query>` | Hybrid lexical + semantic ranked relevant set (skeletons) |
 | `docir search` / `query` | Full-text search / structured filter (skeletons) |
 | `docir get <id>` | Full document with body |
-| `docir check` | Structural findings — duplicate ids, dangling edges, staleness (`--strict` gates CI on errors) |
+| `docir check` | Structural findings — duplicate ids, dangling edges, staleness (`--strict` gates CI on errors, `--fix` repairs them) |
 | `docir agent install` | Teach this repo's AI agent to drive docir |
 
 ### Full command reference
@@ -129,7 +129,7 @@ get · query · search · context
 tag {add, list, rename, rm}
 agent {install, update}
 schema {show, validate}
-check · lint · reindex · embed · version
+check [--fix] · lint · reindex · embed · version
 daemon serve
 ```
 

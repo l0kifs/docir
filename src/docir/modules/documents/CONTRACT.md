@@ -23,6 +23,10 @@ files and the derived index never disagree.
 - `MaintenanceService.reindex_embeddings()/flush_embeddings() -> int`
 - `load_schema(path) -> Schema` — load the per-type document schema
 - `describe_schema(Schema) -> dict` — the merged schema as plain data (`docir schema show`)
+- `MaintenanceService.repair() -> RepairResult` — fix the mechanically-fixable Tier 1 damage:
+  re-issue duplicate ids (oldest file keeps the id) and drop dead `related` edges. `malformed`
+  and `unknown-type` need a human and come back in `RepairResult.remaining`. Does not advance
+  `updated` — a repair is not a re-verification.
 - `render_schema_yaml(profiles, id_style) -> str` — a `docs-schema.yaml` body selecting
   `profiles` and a schema-wide `id_style` (`ID_STYLES`: `sequential` | `random`). A type
   without its own `id_style` inherits the schema-wide one; absent both, `DEFAULT_ID_STYLE`

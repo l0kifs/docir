@@ -173,3 +173,113 @@ def test_recent_verification_clears_staleness(dispatcher: Dispatcher, settings: 
     dispatcher.dispatch("reindex", {})
     issues = dispatcher.dispatch("check", {})
     assert not any(i["kind"] == "stale" for i in issues)
+
+
+# -- repair (`docir check --fix`) -------------------------------------------
+#
+# Guards GAP-012: `check` reported four kinds of corrupt state and nothing could
+# fix any of them, while the product's own rule says agents never edit markdown
+# directly — so recovery required the one action the design forbids.
+
+_BRANCH_DUPLICATE = (
+    "---\ncreated: '2026-07-01'\ndescription: authored on another branch\n"
+    "id: adr-0001\nrelated: []\nstatus: proposed\ntags: []\ntitle: From branch\n"
+    "type: decision\nupdated: '2026-07-01'\n---\n\nbranch body\n"
+)
+
+
+def test_repair_reissues_a_duplicate_id_and_keeps_both_documents(
+    dispatcher: Dispatcher, settings: Settings
+) -> None:
+    dispatcher.dispatch("add", {"type": "decision", "title": "Original", "description": "d"})
+    # A merge brings a second file claiming the same id; the index dedupes by
+    # primary key, so one document is invisible to every read path.
+    (settings.docs_root / "decisions" / "adr-0001-from-branch.md").write_text(
+        _BRANCH_DUPLICATE, encoding="utf-8"
+    )
+
+    result = dispatcher.dispatch("repair", {})
+
+    assert [a["kind"] for a in result["actions"]] == ["duplicate-id"]
+    assert not [i for i in result["remaining"] if i["kind"] == "duplicate-id"]
+    # Both documents survive and are reachable, under distinct ids.
+    titles = {d["title"] for d in dispatcher.dispatch("query", {})}
+    assert titles == {"Original", "From branch"}
+
+
+def test_repair_lets_the_oldest_file_keep_the_id(
+    dispatcher: Dispatcher, settings: Settings
+) -> None:
+    # Existing `related` edges were written against whichever document held the
+    # id first, and an edge cannot say which of the two it meant — so the older
+    # one keeps it. The branch file below is backdated to 2026-07-01.
+    dispatcher.dispatch("add", {"type": "decision", "title": "Original", "description": "d"})
+    (settings.docs_root / "decisions" / "adr-0001-from-branch.md").write_text(
+        _BRANCH_DUPLICATE, encoding="utf-8"
+    )
+
+    dispatcher.dispatch("repair", {})
+
+    assert dispatcher.dispatch("get", {"doc_id": "adr-0001"})["title"] == "From branch"
+
+
+def test_repair_drops_dead_edges(dispatcher: Dispatcher, settings: Settings) -> None:
+    dispatcher.dispatch("add", {"type": "decision", "title": "Target", "description": "d"})
+    dispatcher.dispatch(
+        "add",
+        {"type": "decision", "title": "Source", "description": "d", "related": ["adr-0001"]},
+    )
+    dispatcher.dispatch("delete", {"doc_id": "adr-0001", "force": True})
+    assert any(i["kind"] == "dangling" for i in dispatcher.dispatch("check", {}))
+
+    result = dispatcher.dispatch("repair", {})
+
+    assert [a["kind"] for a in result["actions"]] == ["dangling"]
+    assert not [i for i in result["remaining"] if i["kind"] == "dangling"]
+    # Repaired in the canonical file, not just the index.
+    source = settings.docs_root / "decisions" / "adr-0002-source.md"
+    assert "adr-0001" not in source.read_text(encoding="utf-8")
+
+
+def test_repair_does_not_reset_the_staleness_clock(
+    dispatcher: Dispatcher, settings: Settings
+) -> None:
+    # Dropping a dead link is maintenance, not a human re-reading the document.
+    # Bumping `updated` would make an overdue doc look freshly reviewed.
+    dispatcher.dispatch("add", {"type": "decision", "title": "Target", "description": "d"})
+    dispatcher.dispatch(
+        "add",
+        {"type": "decision", "title": "Source", "description": "d", "related": ["adr-0001"]},
+    )
+    before = dispatcher.dispatch("get", {"doc_id": "adr-0002"})["updated"]
+    dispatcher.dispatch("delete", {"doc_id": "adr-0001", "force": True})
+
+    dispatcher.dispatch("repair", {})
+
+    assert dispatcher.dispatch("get", {"doc_id": "adr-0002"})["updated"] == before
+
+
+def test_repair_leaves_malformed_files_to_a_human(
+    dispatcher: Dispatcher, settings: Settings
+) -> None:
+    # A file that will not parse needs someone to say what it was meant to be.
+    (settings.docs_root / "decisions").mkdir(parents=True, exist_ok=True)
+    (settings.docs_root / "decisions" / "adr-9999-broken.md").write_text(
+        _MALFORMED_FILE, encoding="utf-8"
+    )
+
+    result = dispatcher.dispatch("repair", {})
+
+    assert not result["actions"]
+    assert any(i["kind"] == "malformed" for i in result["remaining"])
+
+
+def test_repair_on_a_healthy_corpus_changes_nothing(dispatcher: Dispatcher) -> None:
+    dispatcher.dispatch("add", {"type": "decision", "title": "Target", "description": "d"})
+    dispatcher.dispatch(
+        "add",
+        {"type": "decision", "title": "Source", "description": "d", "related": ["adr-0001"]},
+    )
+    result = dispatcher.dispatch("repair", {})
+    assert not result["actions"]
+    assert not [i for i in result["remaining"] if i["severity"] == "error"]

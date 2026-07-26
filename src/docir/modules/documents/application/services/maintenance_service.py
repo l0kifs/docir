@@ -11,6 +11,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from docir.modules.documents.application.services.id_generator import IdGenerator
+from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.schema import SEQUENTIAL_ID_STYLE, Schema
 from docir.modules.documents.domain.services.graph_checks import CheckIssue, GraphChecker
 from docir.modules.documents.domain.services.similarity_lint import LintFinding, SimilarityLinter
@@ -32,6 +34,27 @@ class ReindexResult:
     documents_indexed: int
     documents_removed: int
     tags_indexed: int
+
+
+@dataclass(frozen=True, slots=True)
+class RepairAction:
+    """One repair that was applied, in the caller's terms."""
+
+    kind: str  # the finding kind repaired: duplicate-id | dangling
+    message: str
+    doc_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RepairResult:
+    """What ``docir check --fix`` changed, and what a human still has to decide.
+
+    ``remaining`` is the check output *after* repairing, so an empty
+    error-severity remainder means the corpus is mechanically sound again.
+    """
+
+    actions: tuple[RepairAction, ...]
+    remaining: tuple[CheckIssue, ...]
 
 
 class MaintenanceService:
@@ -124,6 +147,99 @@ class MaintenanceService:
                     )
                 )
         return issues
+
+    def repair(self) -> RepairResult:
+        """Fix the mechanically-fixable Tier 1 damage (``docir check --fix``).
+
+        Two kinds are repairable without guessing at intent:
+
+        * ``duplicate-id`` — two files claim one id, so one of them is invisible
+          to every read path. The oldest keeps the id (it is the one existing
+          links were written against); the rest are re-issued and their files
+          renamed.
+        * ``dangling`` — an edge resolves to nothing, so it is dropped.
+
+        ``malformed`` and ``unknown-type`` are deliberately *not* touched: the
+        first needs a human to say what the file was meant to be, the second
+        needs a schema decision. They come back in ``remaining``.
+        """
+        # Repair reads the files as the source of truth, so bring the index in
+        # line first: id allocation consults it to find a free number.
+        self.reindex()
+        actions = self._repair_duplicate_ids()
+        if actions:
+            self.reindex()
+        actions.extend(self._repair_dangling())
+        return RepairResult(actions=tuple(actions), remaining=tuple(self.check()))
+
+    def _repair_duplicate_ids(self) -> list[RepairAction]:
+        """Re-issue every file after the first that claims a given id."""
+        by_id: dict[str, list[Document]] = {}
+        for document in self._file_store.scan():
+            by_id.setdefault(document.id, []).append(document)
+
+        actions: list[RepairAction] = []
+        with self._uow_factory() as uow:
+            generator = IdGenerator(self._schema, uow.documents)
+            for doc_id, documents in sorted(by_id.items()):
+                if len(documents) < 2:
+                    continue
+                # The oldest file keeps the id: any existing `related` edge naming
+                # it was written against that document, and an edge cannot say
+                # which of the two it meant.
+                documents.sort(key=lambda doc: (doc.created, doc.path or ""))
+                for duplicate in documents[1:]:
+                    new_id = str(generator.next_id(duplicate.type))
+                    old_path = duplicate.path
+                    reissued = duplicate.with_updates(id=new_id, path=None)
+                    new_path = self._file_store.write(reissued, create=True)
+                    if old_path:
+                        self._file_store.delete(old_path)
+                    actions.append(
+                        RepairAction(
+                            kind="duplicate-id",
+                            message=(
+                                f"re-issued {doc_id!r} as {new_id!r} "
+                                f"({old_path} -> {new_path}); {documents[0].path} keeps the id"
+                            ),
+                            doc_ids=(doc_id, new_id),
+                        )
+                    )
+            uow.commit()  # persist the counter advances the re-issue consumed
+        return actions
+
+    def _repair_dangling(self) -> list[RepairAction]:
+        """Drop `related` edges whose target does not exist."""
+        actions: list[RepairAction] = []
+        with self._uow_factory() as uow:
+            documents = uow.documents.all()
+            existing = {document.id for document in documents}
+            for document in documents:
+                kept = tuple(ref for ref in document.related if ref.target in existing)
+                if len(kept) == len(document.related):
+                    continue
+                dropped = tuple(
+                    ref.target for ref in document.related if ref.target not in existing
+                )
+                # `updated` is deliberately left alone: staleness measures when a
+                # human last vouched for the content, and dropping a broken link
+                # is not that. Bumping it here would launder the review clock.
+                repaired = document.with_updates(related=kept)
+                self._file_store.write(repaired)
+                uow.documents.save(repaired)
+                uow.search.index(repaired)
+                actions.append(
+                    RepairAction(
+                        kind="dangling",
+                        message=(
+                            f"dropped {len(dropped)} dead edge(s) from {document.id!r}: "
+                            f"{', '.join(dropped)}"
+                        ),
+                        doc_ids=(document.id, *dropped),
+                    )
+                )
+            uow.commit()
+        return actions
 
     def lint_deep(self) -> list[LintFinding]:
         """Tier 2 advisory checks (``docs lint --deep``)."""

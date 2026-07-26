@@ -57,6 +57,7 @@ class Dispatcher:
             "tag_remove": self._tag_remove,
             "reindex": self._reindex,
             "check": self._check,
+            "repair": self._repair,
             "lint": self._lint,
             "embed_flush": self._embed_flush,
         }
@@ -170,6 +171,9 @@ class Dispatcher:
 
     def _check(self, _payload: Payload) -> object:
         return [asdict(issue) for issue in self._maintenance.check()]
+
+    def _repair(self, _payload: Payload) -> object:
+        return asdict(self._maintenance.repair())
 
     def _lint(self, _payload: Payload) -> object:
         return [asdict(finding) for finding in self._maintenance.lint_deep()]

@@ -62,6 +62,41 @@ types:
       draft: [active]
       active: [deprecated]
       deprecated: []
+
+  release_note:
+    prefix: rel
+    level: 0
+    required: []
+    default_status: draft
+    statuses:
+      draft: [published]
+      published: []
+""",
+    "qa": """\
+types:
+  test_plan:
+    prefix: tp
+    level: 3
+    required: []
+    default_status: draft
+    inactive_statuses: [deprecated]
+    review_days: 180
+    statuses:
+      draft: [active]
+      active: [deprecated]
+      deprecated: []
+
+  test_case:
+    prefix: tc
+    level: 1
+    required: []
+    default_status: draft
+    inactive_statuses: [obsolete]
+    review_days: 180
+    statuses:
+      draft: [active]
+      active: [obsolete]
+      obsolete: []
 """,
     "research": """\
 types:

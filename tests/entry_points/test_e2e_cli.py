@@ -12,6 +12,7 @@ import json
 import pytest
 from typer.testing import CliRunner
 
+from docir import __version__
 from docir.config.settings import Settings
 from docir.entry_points.cli.app import app
 
@@ -33,9 +34,12 @@ def _seed_tag() -> None:
 
 class TestBasicWorkflow:
     def test_version(self) -> None:
+        # Assert against the package's own version, not a literal: a hardcoded
+        # one silently passed while __version__ drifted from pyproject (0.1.1
+        # shipped reporting 0.1.0).
         result = run("version")
         assert result.exit_code == 0
-        assert "0.1.0" in result.stdout
+        assert __version__ in result.stdout
 
     def test_add_get_query(self) -> None:
         _seed_tag()

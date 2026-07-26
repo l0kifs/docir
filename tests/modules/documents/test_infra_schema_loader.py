@@ -3,8 +3,15 @@
 from __future__ import annotations
 
 import pytest
+import yaml
 
+from docir.modules.documents.infra.default_schema import (
+    DEFAULT_SCHEMA_YAML,
+    render_schema_yaml,
+)
+from docir.modules.documents.infra.profiles import PROFILE_NAMES
 from docir.modules.documents.infra.schema_loader import (
+    describe_schema,
     ensure_schema_file,
     load_schema,
     parse_schema,
@@ -16,7 +23,7 @@ def test_default_schema_written_and_loaded(tmp_path) -> None:
     path = tmp_path / "docs-schema.yaml"
     schema = load_schema(path)
     assert path.exists()
-    assert set(schema.types) == {"decision", "issue", "architecture"}
+    assert set(schema.types) == {"decision", "issue", "architecture", "release_note"}
     assert schema.prefix_for("decision") == "adr"
     assert "resolved" in schema.inactive_statuses()
 
@@ -137,6 +144,88 @@ class TestProfilesAndCore:
     def test_profiles_must_be_a_list(self) -> None:
         with pytest.raises(SchemaError):
             parse_schema({"profiles": "software"})
+
+
+class TestBundledProfileIntegrity:
+    """Guards the one global namespace every bundled profile shares (ADR-0010)."""
+
+    def test_every_profile_combination_has_unique_prefixes(self) -> None:
+        # Prefix uniqueness is enforced across the *merged* schema, so a new
+        # bundled type can collide with a profile it is never used beside.
+        # Enabling all of them at once is the strictest check available.
+        schema = parse_schema({"profiles": list(PROFILE_NAMES)})
+        prefixes = [type_schema.prefix for type_schema in schema.types.values()]
+        assert len(prefixes) == len(set(prefixes)), "bundled profiles share an id prefix"
+
+    def test_qa_profile_layers_over_core(self) -> None:
+        schema = parse_schema({"profiles": ["qa"]})
+        assert {"decision", "test_plan", "test_case"} <= set(schema.types)
+        assert schema.prefix_for("test_plan") == "tp"
+        assert schema.review_days_for("test_case") == 180
+
+    def test_software_profile_carries_release_note(self) -> None:
+        schema = parse_schema({"profiles": ["software"]})
+        release_note = schema.get("release_note")
+        assert release_note.prefix == "rel"
+        assert release_note.default_status == "draft"
+        # A published release note is a historical fact — it never goes stale.
+        assert release_note.review_days == 0
+
+
+class TestDescribeSchema:
+    def test_reports_the_merged_result(self) -> None:
+        described = describe_schema(parse_schema({"profiles": ["qa"]}))
+        assert "supersedes" in described["relation_types"]  # from the frozen core
+        names = [entry["name"] for entry in described["types"]]
+        assert names == sorted(names), "types must render in a stable order"
+        assert {"decision", "test_plan", "test_case"} <= set(names)
+
+    def test_exposes_the_fields_an_author_needs(self) -> None:
+        described = describe_schema(parse_schema({"profiles": ["software"]}))
+        entry = next(e for e in described["types"] if e["name"] == "architecture")
+        assert entry["prefix"] == "arch"
+        assert entry["default_status"] == "draft"
+        assert entry["transitions"]["draft"] == ["active"]
+        assert entry["inactive_statuses"] == ["deprecated"]
+        assert entry["review_days"] == 365
+        assert entry["id_style"] == "sequential"
+
+
+class TestRenderSchemaYaml:
+    def test_default_selects_the_software_profile(self) -> None:
+        assert "profiles: [software]" in render_schema_yaml()
+        assert render_schema_yaml() == DEFAULT_SCHEMA_YAML
+
+    def test_named_profiles_are_generated_not_substituted(self) -> None:
+        # Regression guard (ADR-0010): the body used to be built by replacing the
+        # literal "profiles: [software]" in DEFAULT_SCHEMA_YAML. If that sentinel
+        # ever drifted the replace silently no-opped, so `init --profiles X`
+        # wrote the *default* profiles while reporting X. Generating the line
+        # makes that divergence unrepresentable.
+        body = render_schema_yaml(("research", "ops"))
+        assert "profiles: [research, ops]" in body
+        assert "profiles: [software]" not in body
+
+    def test_rendered_body_round_trips_through_the_loader(self) -> None:
+        for profiles in ((), ("qa",), ("research", "ops", "legal")):
+            schema = parse_schema(yaml.safe_load(render_schema_yaml(profiles)))
+            assert schema.types, f"rendered body for {profiles} resolved to no types"
+
+    def test_carries_the_commented_authoring_example(self) -> None:
+        # The worked example is the only place an agent can learn the inline
+        # grammar from the file itself, so its presence is part of the contract.
+        body = render_schema_yaml()
+        assert "# types:" in body
+        assert "#     prefix: tp" in body
+        assert "allowed_relations" in body
+        # It must stay inert: commenting it out is what keeps the default schema
+        # exactly the software profile.
+        assert set(parse_schema(yaml.safe_load(body)).types) == {
+            "decision",
+            "issue",
+            "architecture",
+            "release_note",
+        }
 
 
 class TestRelationAndStalenessFields:

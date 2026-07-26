@@ -164,6 +164,48 @@ def _format_related(value: object) -> str:
     return ", ".join(parts)
 
 
+def render_schema(data: Mapping[str, object]) -> None:
+    """Render the merged schema: the relation registry plus a per-type table."""
+    kinds = _join(data.get("relation_types")) or "unconstrained (any kind accepted)"
+    console.print(f"[dim]relation kinds:[/] {kinds}")
+
+    table = Table(show_header=True, header_style="bold")
+    for column in ("type", "prefix", "default", "transitions", "inactive", "level", "review"):
+        table.add_column(column)
+    types = data.get("types")
+    for entry in types if isinstance(types, list | tuple) else ():
+        if not isinstance(entry, Mapping):
+            continue
+        review = entry.get("review_days") or 0
+        table.add_row(
+            str(entry.get("name", "")),
+            str(entry.get("prefix", "")),
+            str(entry.get("default_status", "")),
+            _format_transitions(entry.get("transitions")),
+            _join(entry.get("inactive_statuses")),
+            str(entry.get("level", 0)),
+            f"{review}d" if review else "[dim]never[/]",
+        )
+    console.print(table)
+
+
+def _format_transitions(value: object) -> str:
+    """Format a status machine as ``draft→active; active→deprecated``."""
+    if not isinstance(value, Mapping):
+        return ""
+    parts = [
+        f"{status}→{_join(targets)}"
+        for status, targets in value.items()
+        if isinstance(targets, list | tuple) and targets
+    ]
+    return "; ".join(parts) or "[dim]terminal[/]"
+
+
+def render_schema_valid(path: str, type_count: int) -> None:
+    """Confirm a schema file parsed and merged cleanly."""
+    console.print(f"[green]schema valid[/] [dim]({type_count} types)[/] {path}")
+
+
 def render_init(result: Mapping[str, object]) -> None:
     """Render the outcome of ``docir init``."""
     console.print(f"[green]initialized[/] docir store at [bold]{result.get('home')}[/]")

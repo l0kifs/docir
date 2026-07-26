@@ -267,12 +267,16 @@ absent, for schemas predating typed edges).
 **Core + profiles.** The schema is composed, not monolithic: a frozen
 domain-agnostic **core** (the `decision` type, the relation registry, cadences)
 plus named **profiles** that layer domain types — `software`
-(issue/architecture), `research`, `ops`, `legal`. A `docs-schema.yaml` selects
-them with `profiles: [..]`; the loader merges `core → profiles → the file's
-inline overrides`. The default is `profiles: [software]`. This keeps
-generalizing docir to a new domain a matter of picking a profile rather than
-mutating the base schema. See ADR-0005/0006/0007 for typed edges, staleness, and
-profiles respectively.
+(issue/architecture/release_note), `research`, `ops`, `qa` (test_plan/test_case),
+`legal`. A `docs-schema.yaml` selects them with `profiles: [..]`; the loader
+merges `core → profiles → the file's inline overrides`. The default is
+`profiles: [software]`. This keeps generalizing docir to a new domain a matter of
+picking a profile rather than mutating the base schema. Because the merged result
+— not the file — is what validation enforces, `docir schema show` prints it and
+`docir schema validate` checks an edit; both run in-process, since a schema too
+broken to build the container is exactly when they are needed. See
+ADR-0005/0006/0007/0010 for typed edges, staleness, profiles, and schema
+introspection respectively.
 
 ## Read path
 

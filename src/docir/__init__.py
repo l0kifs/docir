@@ -22,4 +22,13 @@
 #   * presentation    — the Typer/Rich CLI and the composition root that
 #                       wires infrastructure adapters into the use cases.
 
-__version__ = "0.1.0"
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _package_version
+
+try:
+    #: Single source of truth: the version declared in ``pyproject.toml``.
+    #: Read from installed metadata so this can never drift from the package
+    #: (it did once — 0.1.1 shipped while this constant still read 0.1.0).
+    __version__ = _package_version("docir")
+except PackageNotFoundError:  # pragma: no cover - source tree without an install
+    __version__ = "0.0.0.dev0"

@@ -19,12 +19,15 @@ files and the derived index never disagree.
 - `MaintenanceService.lint_deep() -> [LintFinding]` — Tier 2 advisory findings
 - `MaintenanceService.reindex_embeddings()/flush_embeddings() -> int`
 - `load_schema(path) -> Schema` — load the per-type document schema
+- `describe_schema(Schema) -> dict` — the merged schema as plain data (`docir schema show`)
+- `render_schema_yaml(profiles) -> str` — a `docs-schema.yaml` body selecting `profiles`
+  (defaults to `software`), written by `docir init [--profiles ...]`
 
 ## Public constants
 - `DEFAULT_SCHEMA_YAML: str` — the bundled default `docs-schema.yaml` body
-  (`profiles: [software]` over the frozen core), written by `docir init`.
+  (`profiles: [software]` over the frozen core); equals `render_schema_yaml()`.
 - `PROFILE_NAMES: tuple[str, ...]` — the bundled schema profile names
-  (`software`/`research`/`ops`/`legal`), for validating `docir init --profiles`.
+  (`software`/`research`/`ops`/`qa`/`legal`), for validating `docir init --profiles`.
 
 The read paths return `DocumentSummary` (frontmatter, tags, typed `related`,
 `owner`/`verified`/`stale` — but **no body**); fetch bodies by id with `get`,

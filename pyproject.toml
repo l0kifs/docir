@@ -1,6 +1,6 @@
 [project]
 name = "docir"
-version = "0.2.1"
+version = "0.3.0"
 description = "Doc-Index CLI — git-backed markdown documents with a derived SQLite/FTS5/semantic index, served by a warm local daemon."
 readme = "README.md"
 requires-python = ">=3.12"

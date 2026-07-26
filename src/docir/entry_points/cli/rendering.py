@@ -57,6 +57,46 @@ def _trim(value: object) -> object:
     return value
 
 
+def describe_help(ctx: object) -> dict[str, object]:
+    """Serialize a Click command's help as plain data for the agent path.
+
+    Mirrors what the Rich help panel shows — usage, description, options and
+    sub-commands — but parseable and without the box-drawing characters that
+    make up roughly a tenth of the rendered payload.
+    """
+    command = getattr(ctx, "command", None)
+    path = str(getattr(ctx, "command_path", "") or "")
+
+    pieces = command.collect_usage_pieces(ctx) if command is not None else []
+    options = [
+        {
+            "flags": list(param.opts),
+            "help": (getattr(param, "help", None) or "").strip(),
+            "required": bool(getattr(param, "required", False)),
+        }
+        for param in getattr(command, "params", ())
+        if getattr(param, "opts", None) and getattr(param, "name", None) != "help"
+    ]
+    commands = [
+        {"name": name, "help": _first_line(sub.help or sub.short_help or "")}
+        for name, sub in sorted(getattr(command, "commands", {}).items())
+        if not getattr(sub, "hidden", False)
+    ]
+    return {
+        "command": path,
+        "usage": " ".join([path, *pieces]).strip(),
+        "help": _first_line(getattr(command, "help", "") or "", full=True),
+        "options": options,
+        "commands": commands,
+    }
+
+
+def _first_line(text: str, *, full: bool = False) -> str:
+    """The summary line of a help string (or the whole body when ``full``)."""
+    stripped = " ".join(text.split()) if not full else text.strip()
+    return stripped.split("\n")[0].strip() if not full else stripped
+
+
 def render_error(error: Mapping[str, object]) -> None:
     """Print a domain error to stderr."""
     message = error.get("message", "unknown error")
@@ -202,8 +242,12 @@ def _format_transitions(value: object) -> str:
 
 
 def render_schema_valid(path: str, type_count: int) -> None:
-    """Confirm a schema file parsed and merged cleanly."""
-    console.print(f"[green]schema valid[/] [dim]({type_count} types)[/] {path}")
+    """Confirm a schema file parsed and merged cleanly.
+
+    ``soft_wrap`` keeps a long store path on one line — Rich's default hard wrap
+    breaks it mid-token, which makes the path unusable when copied.
+    """
+    console.print(f"[green]schema valid[/] [dim]({type_count} types)[/] {path}", soft_wrap=True)
 
 
 def render_init(result: Mapping[str, object]) -> None:

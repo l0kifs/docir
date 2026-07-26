@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-07-26
+
+Two commands did not honour the "piped stdout means compact JSON" contract that the rest of
+the CLI follows. Both mattered most to the agent path, which is the one that captures output.
+
+### Fixed
+
+- **`--help` ignored the JSON output contract.** Every other command emits compact JSON when
+  stdout is captured, but `--help` is an *eager* Click parameter: it renders and exits during
+  parsing, before the app callback resolves the output mode. An agent capturing `docir --help`
+  therefore got a Rich panel in which ~10% of the payload was box-drawing characters. Help is
+  now serialized as JSON (command, usage, help, options, sub-commands) at every command level
+  when piped, and still renders the Rich panel at a TTY. `--json` / `--pretty` override it as
+  they do everywhere else.
+- **`docir schema validate` never emitted JSON.** It always rendered human text, and Rich's
+  80-column hard wrap broke the store path mid-token, so a captured path was unusable. It now
+  respects the JSON/table split like its siblings, and the human path no longer wraps the path.
+
 ## [0.2.0] - 2026-07-26
 
 A `qa` schema profile, schema introspection commands, and the documentation an agent needs
@@ -92,7 +110,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/l0kifs/docir/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/l0kifs/docir/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/l0kifs/docir/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/l0kifs/docir/releases/tag/v0.1.0

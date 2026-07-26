@@ -61,9 +61,27 @@ class TestSchemaShow:
 
 class TestSchemaValidate:
     def test_accepts_a_good_schema(self, tmp_path: Path) -> None:
-        result = run("--home", _home(tmp_path, "profiles: [software, qa]\n"), "schema", "validate")
+        result = run(
+            "--json", "--home", _home(tmp_path, "profiles: [software, qa]\n"), "schema", "validate"
+        )
         assert result.exit_code == 0
-        assert "valid" in result.stdout
+        payload = json.loads(result.stdout)
+        assert payload["valid"] is True
+        assert payload["types"] == 6
+
+    def test_json_path_keeps_the_store_path_intact(self, tmp_path: Path) -> None:
+        # Regression: this rendered Rich text on the agent path, and Rich hard-wraps
+        # at 80 columns — which broke the store path mid-token, so a captured path
+        # was unusable.
+        home = _home(tmp_path, "profiles: [software]\n")
+        result = run("--json", "--home", home, "schema", "validate")
+        assert result.exit_code == 0
+        assert json.loads(result.stdout)["path"] == str(Path(home) / "docs-schema.yaml")
+
+    def test_pretty_still_renders_for_humans(self, tmp_path: Path) -> None:
+        result = run("--pretty", "--home", _home(tmp_path), "schema", "validate")
+        assert result.exit_code == 0
+        assert "schema valid" in result.stdout
 
     @pytest.mark.parametrize(
         ("body", "reason"),

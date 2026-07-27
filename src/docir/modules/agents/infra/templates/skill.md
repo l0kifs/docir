@@ -120,14 +120,29 @@ work in this order — the constraints below make any other order fail:
    in the schema is a Tier 0 error. Confirm with `docir schema show`.
 2. **Register tags** you'll apply: `docir tag add <key> --description "..."`
    (every `--tags` key must exist first).
-3. **Add each source doc one at a time** (there is no bulk import). Map it to a
-   type and write a real `--description` (it drives search); strip any existing
-   YAML frontmatter from the body first:
+3. **Read each source file, then add it — one at a time.** There is deliberately
+   no bulk import: adoption is a *judgement* task, not a conversion task, and a
+   command that turned N files into N documents would look finished while being
+   wrong. Read the file first and decide:
+   - **Is it one document, or several?** A `decisions.md` holding six decisions
+     is six `docir add` calls, not one. This is the most common shape in an old
+     corpus and the easiest to miss.
+   - **Is it still true?** Drafts, superseded decisions and abandoned proposals
+     should be added with the right `--status` (or not added at all). A file's
+     text may say "superseded by #7" while nothing in its structure does.
+   - **What is the real description?** It drives retrieval. The opening
+     paragraph is usually context, not a summary — write a better one.
+   - **What type is it?** One `docir import`-style bulk pass would force one
+     type; a real corpus mixes decisions, issues and architecture notes.
+
+   Then add it, stripping any existing YAML frontmatter from the body:
    ```
-   docir add --type decision --title "..." --description "..." --stdin < old/adr-001.md
+   docir add --type decision --title "..." --description "..." \
+     --status accepted --stdin < old/adr-001.md
    ```
-   **Never invent ids** — docir assigns them (`adr-0001`, …). Record the returned
-   id for each source file so you can link them next.
+   **Never invent ids** — docir assigns them. The old numbering (`ADR-007`) will
+   *not* carry over; if other documents cite it, keep a mapping as you go and fix
+   the references in step 4. Record the returned id for each source file.
 4. **Wire relationships in a second pass**, after every doc exists and has an id:
    `docir update <id> --set-related <other-id>:supersedes`. Links can't be set in
    step 3 because every `--related` target must already exist.

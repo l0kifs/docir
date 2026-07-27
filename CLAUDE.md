@@ -188,9 +188,10 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   (`_SUCCESSOR_KINDS`), successors first in each seed's edge list: a `supersedes` edge points from
   the new document to the old one, so before this the replacement sat one hop away *backwards* and
   the graph could not answer "is this decision still current?" — the question it exists for.
-  `_SUCCESSOR_KINDS` is intentionally a separate constant from `graph_checks._NON_DEPENDENCY_KINDS`;
-  they hold the same two kinds today for unrelated reasons. `DocumentRepository.incoming` takes an
-  optional `kinds` filter for this; unfiltered it is still the delete integrity check.
+  `_SUCCESSOR_KINDS` is intentionally a separate constant from the layering check's
+  `graph_checks._DEPENDENCY_KINDS` — they briefly held the same two kinds for unrelated reasons
+  and have since diverged entirely. `DocumentRepository.incoming` takes an optional `kinds` filter
+  for this; unfiltered it is still the delete integrity check.
 - **The schema is core + profiles (ADR-0007).** `infra/profiles.py` holds a frozen domain-agnostic
   core (the `decision` type + relation registry + cadences) and bundled profiles (software/research/
   ops/legal). A `docs-schema.yaml` with a `profiles:` key merges `core -> profiles -> inline`; a file

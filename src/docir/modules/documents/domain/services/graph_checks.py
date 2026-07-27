@@ -21,9 +21,25 @@ from docir.modules.documents.domain.schema import Schema
 # DFS coloring states for cycle detection.
 _WHITE, _GREY, _BLACK = 0, 1, 2
 
-# Relation kinds that are lateral (replacement / conflict), not dependencies —
-# a supersedes/contradicts edge pointing "downward" is not a layering smell.
-_NON_DEPENDENCY_KINDS = frozenset({"supersedes", "contradicts"})
+#: Relation kinds that assert a *dependency*, and so are the only ones a layering
+#: violation can be read from. Everything else — `relates_to`, `supersedes`,
+#: `contradicts`, `implements`, and any kind a custom schema adds — is lateral or
+#: merely associative, and says nothing about which document relies on which.
+#:
+#: This was written the other way round, as an exemption list holding
+#: `supersedes`/`contradicts`, which made *every other* kind a dependency claim.
+#: The default kind for a bare id in `related:` is `relates_to`, so the most
+#: natural thing a user can model — a decision linking the issue that motivated
+#: it, the pairing in the README's own quickstart — produced a permanent
+#: violation that no edit could silence. A warning that fires on correct usage
+#: teaches people to ignore the whole of `docs check`, which is where the
+#: duplicate-id detection lives.
+#:
+#: Consequence of the allowlist, accepted deliberately: a relation kind added by
+#: a custom schema is not layering-checked until it is named here. Silence on an
+#: unknown kind is the right default for a heuristic warning; noise on a correct
+#: one is not.
+_DEPENDENCY_KINDS = frozenset({"depends_on", "refines"})
 
 
 #: Findings that mean the corpus is *broken* — a document is unreachable, or an
@@ -229,7 +245,7 @@ class GraphChecker:
                 type_by_id[doc.id] = doc.type
         issues: list[CheckIssue] = []
         for rel in relations:
-            if rel.kind in _NON_DEPENDENCY_KINDS:
+            if rel.kind not in _DEPENDENCY_KINDS:
                 continue
             src_level = level_by_id.get(rel.source)
             tgt_level = level_by_id.get(rel.target)

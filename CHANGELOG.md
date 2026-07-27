@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   — while `docir search` and `docir query` correctly hid it. Ranked and graph-reached
   documents now share one visibility predicate. Pass `--include-resolved` to get closed
   work on either path.
+- **`docir check` no longer reports a layering violation for an ordinary link.** The check
+  read a dependency from every relation kind except `supersedes`/`contradicts` — including
+  `relates_to`, which is what every bare id in `related:` becomes. Linking a decision to the
+  issue that motivated it, the pairing in this project's own quickstart, was therefore a
+  permanent warning with no way to silence it. Layering is now read only from `depends_on`
+  and `refines`. Retype an edge as `<id>:depends_on` to get the check back.
 - **`docir context` now reaches the document that supersedes a hit.** Graph expansion
   followed outgoing edges only, and a `supersedes` edge points from the *new* document to
   the old one — so an agent retrieving a superseded decision got no signal that a

@@ -563,7 +563,26 @@
     "everything except supersedes/contradicts". `relates_to` is the default kind applied to
     every bare id and carries no dependency claim at all.
   question: Q-006
-  status: open
+  status: resolved
+  resolution: >
+    FIXED 2026-07-27, as proposed, under Q-006's recorded assumption (the maintainer directed
+    the work without answering the question separately). `_NON_DEPENDENCY_KINDS` is inverted
+    into `_DEPENDENCY_KINDS = {depends_on, refines}`: a layering violation is now read only
+    from an edge that actually asserts a dependency. `relates_to`, `supersedes`, `contradicts`
+    and `implements` no longer produce one.
+    Verified against the real CLI, replaying PROBE-8: `adr-0001 related: [issue-0001]` — the
+    README quickstart pairing — now reports `[]` where it reported a permanent violation, and
+    the same edge retyped `issue-0001:depends_on` still flags (severity `warning`,
+    `--strict` exit 0).
+    `implements` is excluded on purpose: it points implementation -> spec by its nature, so
+    its direction carries no claim about which document may rely on which.
+    Accepted consequence: a relation kind added by a custom schema is not layering-checked
+    until it is named in `_DEPENDENCY_KINDS`. Silence on an unknown kind is the right default
+    for a heuristic warning; noise on a correct one is not — that was the whole defect.
+    NOTE, the same trap as GAP-006: `test_layering_violation` asserted the old behaviour as
+    intent (it built a default-kind edge and required a violation), so the test suite could
+    never have caught this. It now uses `depends_on`, and
+    `test_relates_to_never_reports_layering` pins the actual rule.
 
 - id: GAP-010
   class: misleading
@@ -933,7 +952,8 @@
     replaces this?" outranks an ordinary link — it is the one neighbour that can invalidate
     the document the agent is about to act on.
     `_SUCCESSOR_KINDS` is deliberately a separate constant from
-    `graph_checks._NON_DEPENDENCY_KINDS`; they hold the same two kinds today for unrelated
+    the layering check's kind set (then `_NON_DEPENDENCY_KINDS`, since inverted to
+    `_DEPENDENCY_KINDS` by GAP-008); they held the same two kinds that day for unrelated
     reasons and must be free to diverge.
     Pinned by test_superseding_decision_is_reached_backwards (`--limit 2 --expand 1`, so the
     successor can only occupy the graph slot). Attribution verified: reverting only the

@@ -327,6 +327,28 @@ baseline was built to support; the fix is to re-derive the argument, not to keep
 that flattered it.
 
 ```
+FIX  GAP-008  layering check reads a dependency allowlist (`depends_on`, `refines`)
+              instead of exempting supersedes/contradicts. `relates_to` — every bare
+              id — no longer violates. PROBE-8 replayed: `[]` where it reported a
+              permanent violation; `:depends_on` on the same edge still flags. → resolved
+              Q-006 implemented on its recorded assumption, not on an answer.
+```
+
+Third instance of the same trap, now worth naming: `test_layering_violation` built a
+default-kind edge and asserted a violation, so the suite encoded the defect as intent and
+could never have caught it. GAP-006 had it (`test_check_strict_gates_ci` asserted the
+unusable gate), GAP-045 had it in a different form (an exclusion whose premise had
+expired). In all three the defect was found by running the tool and reading the output as a
+user would, never by reading or running the tests. A test written from the implementation
+tests that the implementation is itself; only a test written from the intended behaviour can
+disagree with the code.
+
+`_SUCCESSOR_KINDS` and the layering set have now diverged, as the GAP-019 comment predicted
+they should be free to: `{supersedes, contradicts}` and `{depends_on, refines}` share
+nothing. Keeping them separate cost one duplicated frozenset and avoided coupling two
+unrelated rules through a shared constant.
+
+```
 NEW      05-gaps.yaml GAP-001 carried a duplicate `resolution:` key, and five entries in
          06-questions.yaml (Q-002/003/004/007/012) carried duplicate `answered`/`authority`/
          `answer` keys with the trailing copy set to null. YAML keeps the last key, so the

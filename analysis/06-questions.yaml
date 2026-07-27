@@ -192,12 +192,21 @@
     Compounds Q-004: it guarantees a finding on the most natural modelling, which trains
     users to ignore `check` output entirely.
   asked: 2026-07-26
-  answered: null
-  authority: null
-  answer: null
+  answered: 2026-07-27
+  authority: >
+    repo maintainer (directed the work; the question itself was never answered separately, so
+    this was implemented on the recorded assumption below and is open to reversal)
+  answer: >
+    Implemented as proposed: the layering check now reads a dependency allowlist
+    (`depends_on`, `refines`) instead of exempting supersedes/contradicts. `relates_to` — the
+    kind every bare id becomes — no longer produces a violation, so the README quickstart
+    pairing is clean. `implements` was also excluded, which the question did not ask about:
+    it points implementation -> spec by nature and its direction carries no dependency claim.
+    See GAP-008 resolution.
   assumption_if_unanswered: >
-    Proceeding on: the exempt-kind list is inverted and should be a dependency-kind allowlist.
-    Review before changing profiles or graph checks.
+    WAS: the exempt-kind list is inverted and should be a dependency-kind allowlist. Acted on
+    rather than answered — if the intent was in fact discouragement, this is the change to
+    revert.
 
 - id: Q-007
   gap: GAP-012
@@ -253,12 +262,21 @@
     constants (25 FTS candidates, 0.9 similarity, 8000 chars, RRF k=60) cannot be tuned on
     evidence, and why the token cost of Q-003 cannot be quantified.
   asked: 2026-07-26
-  answered: null
-  authority: null
-  answer: null
-  assumption_if_unanswered: >
-    Proceeding without measurement; all impact statements in 05-gaps.yaml remain
-    reasoned rather than measured. Review before any retrieval-quality work.
+  answered: 2026-07-26
+  authority: repo maintainer (directed the build; proposed answer adopted as-is)
+  answer: >
+    ANSWERED 2026-07-26 by implementation, exactly as proposed: an offline benchmark, no
+    telemetry — fixture corpus, task descriptions, human-judged relevant documents,
+    recall/precision/MRR and payload size per strategy. It settled the embedder default
+    (GAP-043) and is now the gate on retrieval changes.
+    Re-based 2026-07-27 to 23 documents / 14 tasks after GAP-046 showed it could not observe
+    the graph at all. The answer to "is measurement in scope before further retrieval tuning"
+    proved to be yes twice over: the first build changed the default embedder, the re-base
+    changed which figures support that decision.
+    Impact statements in 05-gaps.yaml are still `frequency: unknown` — the benchmark measures
+    retrieval quality, not how often a gap is hit in real use. That needs evidence ranks 1
+    and 5, which remain unavailable.
+  assumption_if_unanswered: null
 
 # =============================================================================
 # NON-BLOCKING — recorded assumptions; ask in a later round

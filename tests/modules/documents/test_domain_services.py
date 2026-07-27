@@ -157,10 +157,39 @@ class TestGraphChecker:
 
     def test_layering_violation(self) -> None:
         docs = [_doc("arch-0001", "decision"), _doc("issue-0001", "issue")]
-        # decision(level 3) -> issue(level 1) is a downward dependency.
-        rels = [Relation("arch-0001", "issue-0001")]
+        # decision(level 3) depends_on issue(level 1) is a downward dependency.
+        rels = [Relation("arch-0001", "issue-0001", "depends_on")]
         issues = GraphChecker(_schema()).check(docs, rels)
         assert any(i.kind == "layering" for i in issues)
+
+    def test_refines_edge_is_also_a_dependency(self) -> None:
+        docs = [_doc("arch-0001", "decision"), _doc("issue-0001", "issue")]
+        rels = [Relation("arch-0001", "issue-0001", "refines")]
+        issues = GraphChecker(_schema()).check(docs, rels)
+        assert any(i.kind == "layering" for i in issues)
+
+    def test_relates_to_never_reports_layering(self) -> None:
+        """Guards GAP-008: the default kind is not a dependency claim.
+
+        `relates_to` is what every bare id in `related:` becomes, so when the
+        check exempted only supersedes/contradicts, a decision linking the issue
+        that motivated it — the pairing in the README's own quickstart — was a
+        permanent violation with no way to silence it. Users who cannot make a
+        warning stop learn to ignore `docs check`, and duplicate-id detection
+        lives there too.
+        """
+        docs = [_doc("arch-0001", "decision"), _doc("issue-0001", "issue")]
+        rels = [Relation("arch-0001", "issue-0001")]  # default kind
+        issues = GraphChecker(_schema()).check(docs, rels)
+        assert not any(i.kind == "layering" for i in issues)
+
+    def test_implements_edge_is_not_a_dependency(self) -> None:
+        # `implements` points impl -> spec by its nature; the direction carries
+        # no claim about which document is allowed to rely on which.
+        docs = [_doc("arch-0001", "decision"), _doc("issue-0001", "issue")]
+        rels = [Relation("arch-0001", "issue-0001", "implements")]
+        issues = GraphChecker(_schema()).check(docs, rels)
+        assert not any(i.kind == "layering" for i in issues)
 
     def test_no_issues_when_healthy(self) -> None:
         docs = [_doc("adr-0001"), _doc("issue-0001", "issue", status="open")]
@@ -181,7 +210,7 @@ class TestGraphChecker:
         issues = GraphChecker(_schema()).check(docs, [])
         assert any(i.kind == "unknown-type" and "hyp-0001" in i.doc_ids for i in issues)
 
-    def test_supersedes_edge_exempt_from_layering(self) -> None:
+    def test_supersedes_edge_is_not_a_dependency(self) -> None:
         # A supersedes edge is lateral (replacement), not a downward dependency.
         docs = [_doc("arch-0001", "decision"), _doc("issue-0001", "issue")]
         rels = [Relation("arch-0001", "issue-0001", "supersedes")]

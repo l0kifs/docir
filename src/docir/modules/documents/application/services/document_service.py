@@ -48,9 +48,10 @@ _CONTEXT_CANDIDATES = 25
 
 #: Relation kinds whose *incoming* direction answers "is this still current?".
 #: Followed backwards during ``context`` expansion so a document reached by the
-#: ranker carries its own replacement with it. Deliberately not the layering
-#: check's exemption set (`graph_checks._NON_DEPENDENCY_KINDS`), which happens to
-#: hold the same kinds today for an unrelated reason.
+#: ranker carries its own replacement with it. Kept deliberately separate from
+#: the layering check's kind set (`graph_checks._DEPENDENCY_KINDS`), which held
+#: these same two kinds for an unrelated reason until it was inverted into a
+#: dependency allowlist — they have since diverged completely.
 _SUCCESSOR_KINDS = frozenset({"supersedes", "contradicts"})
 
 

@@ -7,6 +7,7 @@ the unit of work) and translates between ORM rows and domain entities.
 from __future__ import annotations
 
 import re
+from collections.abc import Collection
 from datetime import date
 
 from sqlalchemy import delete, func, select
@@ -147,8 +148,10 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
     def outgoing(self, doc_id: str) -> list[str]:
         return self._outgoing_for(doc_id)
 
-    def incoming(self, doc_id: str) -> list[str]:
+    def incoming(self, doc_id: str, kinds: Collection[str] | None = None) -> list[str]:
         stmt = select(RelationRow.source).where(RelationRow.target == doc_id)
+        if kinds is not None:
+            stmt = stmt.where(RelationRow.kind.in_(tuple(kinds)))
         return sorted(self._session.scalars(stmt).all())
 
     def relations(self) -> list[Relation]:

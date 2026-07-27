@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`docir context` no longer returns closed documents through the graph.** The
+  inactive-status filter was applied to ranked hits but not to one-hop neighbours, so a
+  `resolved` issue linked from a matching decision came back without `--include-resolved`
+  — while `docir search` and `docir query` correctly hid it. Ranked and graph-reached
+  documents now share one visibility predicate. Pass `--include-resolved` to get closed
+  work on either path.
+- **`docir context` now reaches the document that supersedes a hit.** Graph expansion
+  followed outgoing edges only, and a `supersedes` edge points from the *new* document to
+  the old one — so an agent retrieving a superseded decision got no signal that a
+  replacement existed, with the edge sitting one hop away backwards. Expansion now also
+  follows incoming `supersedes`/`contradicts` edges, and places them first, so a tight
+  `--expand` budget is spent on the neighbour that can invalidate the seed.
+
+### Changed
+
+- **`benchmarks/run.py` reports the embedder it actually used.** It printed
+  `deterministic (default)` from a hardcoded fallback string; the default became `fastembed`
+  in 0.3.0 and the label did not follow, so every run since reported a configuration it had
+  not measured. `Container` now exposes the resolved embedder and the harness prints its
+  model id.
+- **The benchmark corpus is re-based to 23 documents and 14 tasks.** It previously contained
+  no `supersedes` edge and no document in an inactive status, so the two graph behaviours
+  `docir context` depends on most were unmeasurable — both fixes above moved no number at
+  all against the old corpus. It now carries a superseded decision pair and a resolved issue,
+  and the loader understands typed `related` edges and a `status_path`. **Figures printed
+  before 2026-07-27 are not comparable**; the previous baseline is recorded alongside the new
+  one in [`benchmarks/README.md`](benchmarks/README.md). The re-base also moved the evidence
+  for making `fastembed` the default: quote `--expand 0` (fallback 0.80 vs `search` 0.83,
+  model 0.87), not full `context`, since graph expansion lifts both embedders.
+
 ## [0.3.0] - 2026-07-27
 
 Semantic retrieval now works out of the box, and three separate paths that could silently

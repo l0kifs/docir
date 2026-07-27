@@ -9,6 +9,7 @@ full-text, embeddings) independently substitutable.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Collection
 
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.entities.relation import Relation
@@ -64,8 +65,13 @@ class DocumentRepository(ABC):
         """Ids this document links to via ``related``."""
 
     @abstractmethod
-    def incoming(self, doc_id: str) -> list[str]:
-        """Ids that link *to* this document (for delete integrity checks)."""
+    def incoming(self, doc_id: str, kinds: Collection[str] | None = None) -> list[str]:
+        """Ids that link *to* this document, optionally only via ``kinds``.
+
+        Unfiltered for delete integrity checks; filtered to the successor kinds
+        by ``context`` expansion, which needs "what supersedes this?" — the one
+        direction the graph answers and forward traversal cannot reach.
+        """
 
     @abstractmethod
     def relations(self) -> list[Relation]:

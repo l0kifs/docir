@@ -234,7 +234,6 @@
     behaviour as intent (the mistake that let GAP-006 survive).
     The retrieval constants can now be tuned on evidence, and GAP-042 (what random ids cost
     in tokens) is now answerable.
-  resolution: null
 
 - id: GAP-012
   class: missing
@@ -412,6 +411,63 @@
   question: null
   status: resolved
 
+- id: GAP-046
+  class: missing
+  flow: FLOW-002
+  step: "measuring a retrieval change"
+  finding: >
+    The benchmark corpus contains no `supersedes` edge and no document in an inactive status,
+    so the two graph behaviours `docir context` most depends on are structurally invisible to
+    the only measurement the project has.
+  actual_today: >
+    OBSERVED 2026-07-27. The GAP-004 + GAP-019 fixes changed retrieval semantics on both the
+    visibility and the traversal path, and every benchmark number was byte-identical either
+    side of them (recall@5 0.96 fastembed / 0.88 deterministic). All 20 documents use bare
+    `related:` ids, which resolve to `relates_to`, and all statuses are type defaults.
+  actors_affected: [repository maintainer]
+  evidence:
+    - benchmarks/corpus.yaml
+    - analysis/99-log.md   # the before/after runs
+  confidence: observed
+  severity: material
+  impact: >
+    A harness that cannot move is read as "no regression" when it means "not measured". The
+    same blindness applies to any future change to expansion, visibility or relation kinds —
+    the parts of `context` that distinguish it from `search`, and therefore the parts most
+    worth a regression signal. GAP-001 was closed by building this harness; this is the
+    boundary of what it closed.
+  frequency: "every retrieval change touching the graph"
+  proposed_default: >
+    Add a superseded/superseding decision pair and one closed issue to `corpus.yaml`, with
+    tasks that discriminate them (e.g. "is the Redis session decision still current?"). Note
+    that this re-bases every recorded number, so publish the new baseline in the same commit
+    and mark the old figures as pre-rebase rather than editing them away.
+  question: null
+  status: resolved
+  resolution: >
+    FIXED 2026-07-27, as proposed, at the maintainer's direction. `corpus.yaml` gains
+    `adr-sessions-redis` / `adr-sessions-postgres` (linked by a `supersedes` edge) and the
+    resolved `issue-session-loss`; `tasks.yaml` gains T13/T14, which judge the successor
+    relevant alongside the document it replaces. The loader learned two things it needed for
+    that: typed `related` entries (`key:kind`) and `status_path`, a list of legal transitions
+    walked in order — a path rather than a value because `decision` starts at `proposed`, and
+    walked rather than forced with `--override` so the corpus stays one the CLI would accept.
+    `adr-sessions-redis` is deliberately left `accepted`: a correctly-superseded document is
+    filtered from `context` by status, so it can demonstrate nothing about traversal, and the
+    document nobody went back to close is the realistic case anyway.
+    The harness now moves. Measured by reverting each fix against the new corpus:
+    `context` recall@5 0.93 -> 0.96 (prec 0.37 -> 0.39) under fastembed and 0.89 -> 0.93
+    (0.36 -> 0.37) under the fallback. Recall and precision move together, as expected: the
+    successor arrives and the resolved issue stops taking a slot.
+    Baseline re-based: 23 documents / 14 tasks, published in benchmarks/README.md with the
+    old 20/12 figures marked pre-rebase rather than deleted.
+    SIDE EFFECT, recorded because it cuts against a previous conclusion: the re-based corpus
+    weakens the *headline* argument for ADR-0011 (full `context` 0.96 vs 0.93, where it was
+    0.96 vs 0.88) because graph expansion lifts both embedders. The argument is stronger at
+    `--expand 0`, which isolates the ranking: the fallback scores 0.80, *below* the 0.83 plain
+    `search` manages alone, while the model scores 0.87. README and CLAUDE.md now quote that
+    pair instead. The conclusion did not change; the evidence for it did.
+
 - id: GAP-004
   class: incorrect
   flow: FLOW-002
@@ -436,7 +492,20 @@
   proposed_default: "Apply the same visibility predicate in `_augment_with_related` as in the
                      fusion loop; extract it to one function so they cannot diverge again."
   question: Q-005
-  status: open
+  status: resolved
+  resolution: >
+    FIXED 2026-07-27, as proposed. `DocumentService._is_visible` is now the single predicate
+    (archived + inactive status) and both the fusion loop and graph expansion call it;
+    `_augment_with_related` takes `include_inactive` so the caller's flag reaches the graph
+    path. The maintainer chose *hidden* over *returned-but-flagged*: a graph-reached closed
+    document is now indistinguishable in policy from a ranked one, which is what the other
+    three read paths already promised.
+    Pinned by test_resolved_neighbour_does_not_leak_through_the_graph (a `resolved` issue
+    reachable only via its decision's edge) and test_resolved_neighbour_returns_when_
+    explicitly_asked_for (the same issue under `--include-resolved`). Attribution verified:
+    reverting only the predicate call fails the first test and leaves the other two passing.
+    Consequence accepted: "the issue this decision resolved" no longer rides along for free.
+    `--include-resolved` is the way to ask for it.
 
 - id: GAP-007
   class: missing
@@ -855,7 +924,24 @@
   proposed_default: "Follow incoming `supersedes`/`contradicts` edges as well, or always
                      include the superseding document when one exists."
   question: Q-017
-  status: open
+  status: resolved
+  resolution: >
+    FIXED 2026-07-27, as proposed. Expansion now walks incoming `supersedes`/`contradicts`
+    edges as well as outgoing ones, via a `kinds` filter added to
+    `DocumentRepository.incoming` (the method existed and was used only by delete). Successors
+    are placed *first* in each seed's edge list, so under a tight `--expand` budget "what
+    replaces this?" outranks an ordinary link — it is the one neighbour that can invalidate
+    the document the agent is about to act on.
+    `_SUCCESSOR_KINDS` is deliberately a separate constant from
+    `graph_checks._NON_DEPENDENCY_KINDS`; they hold the same two kinds today for unrelated
+    reasons and must be free to diverge.
+    Pinned by test_superseding_decision_is_reached_backwards (`--limit 2 --expand 1`, so the
+    successor can only occupy the graph slot). Attribution verified: reverting only the
+    incoming lookup fails that test and leaves the other two passing.
+    NOT measurable in `benchmarks/`: the corpus contains no `supersedes` edge and no
+    inactive document, so both fixes are invisible to it (0.96/0.88 recall@5 unchanged either
+    side of the change). Recorded as GAP-046 rather than papered over by editing the corpus,
+    which would break comparability with every number recorded before today.
 
 - id: GAP-026
   class: unstated

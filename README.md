@@ -68,9 +68,11 @@ export DOCIR_EMBEDDER=deterministic
 
 That embedder scores similarity by *shared vocabulary* rather than meaning, which is the
 same signal the full-text index already provides. The cost is measured, not asserted:
-`docir context` scores **recall@5 0.96** with the model against **0.88** without it, and on
-questions phrased in words the documents never use, **0.92 vs 0.83** (plain full-text
-search gets 0.75). Corpus, tasks, judgments and caveats are in
+`docir context` scores **recall@5 0.96** with the model against **0.93** without it, and puts
+the right document first far more often (**MRR 0.95 vs 0.80**). Isolate the embedding signal
+by turning graph expansion off, and on questions phrased in words the documents never use the
+model gets **0.86** where the fallback gets **0.79** — below the 0.79 that plain full-text
+search manages on its own. Corpus, tasks, judgments and caveats are in
 [benchmarks/](benchmarks/); `uv run python benchmarks/run.py` reproduces it.
 
 Switching embedders re-embeds rather than mixing vector spaces: docir records which model

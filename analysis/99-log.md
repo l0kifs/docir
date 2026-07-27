@@ -274,6 +274,69 @@ FIX  import now reports skipped files. Found by pointing it at `analysis/`: 12 f
 ```
 
 ```
+FIX  GAP-004  one `_is_visible` predicate now serves both `context` paths; the ranked
+     GAP-019  loop and graph expansion can no longer filter differently. Expansion also
+              follows incoming supersedes/contradicts, successors first.       → resolved
+              Maintainer answered Q-005 "hidden" (not "returned but flagged") and Q-017
+              "yes, follow it backwards".
+```
+
+Attribution tested, not assumed: each half was reverted in isolation and only its own test
+failed (`_is_visible` → the resolved-neighbour leak; the incoming lookup → the backwards
+successor). The third test, the `--include-resolved` escape hatch, passed under both reverts,
+which is what makes it an independent check rather than a restatement of the first.
+
+### Findings produced BY these changes
+
+```
+GAP-046  the benchmark cannot see either fix. Both change retrieval semantics; every
+         number was byte-identical either side (recall@5 0.96 fastembed / 0.88
+         deterministic). corpus.yaml has no supersedes edge and no inactive document,
+         so the two behaviours `context` most depends on are unmeasurable. The corpus
+         was deliberately NOT edited: re-basing it would break comparability with every
+         figure recorded before today, and that is the maintainer's call.
+NEW      benchmarks/run.py printed `embedder: deterministic (default)` from
+         os.environ.get(..., "deterministic (default)") — a label, not the resolved
+         object. The default flipped to fastembed in ADR-0011 and this line did not,
+         so every run since has reported a configuration it did not measure. It was
+         reporting "deterministic" while scoring 0.96, the recorded fastembed figure.
+         `Container` now carries the built embedder and the harness prints its model_id.
+```
+
+The shape is GAP-045's again, one layer up: a default changed and the thing describing it
+did not. There it was a test exclusion; here it was the measurement's own header — inside
+the harness built to settle GAP-043, which was itself a docs-honesty gap.
+
+```
+FIX  GAP-046  corpus re-based to 23 docs / 14 tasks: a supersedes-linked decision pair
+              plus a resolved issue. Loader learned typed edges and `status_path`.
+              The harness now moves under these fixes.                     → resolved
+              Measured by reverting each fix against the new corpus:
+              context recall@5 0.93 -> 0.96 (fastembed), 0.89 -> 0.93 (deterministic).
+```
+
+**A conclusion this re-base weakened, recorded rather than buried.** ADR-0011's headline
+number — `context` 0.96 with the model vs 0.88 without — becomes 0.96 vs 0.93 on the new
+corpus, because the two new tasks depend on the relation graph and graph expansion helps
+both embedders equally. The ADR's decision still holds, but the evidence for it had to move:
+at `--expand 0`, which isolates the ranking from the graph, the hashing embedder scores
+0.80 against plain `search`'s 0.83 — it ranks *below* the lexical index it is meant to be
+complementing — while the model scores 0.87. README, CLAUDE.md and benchmarks/README.md now
+quote that pair and say why. Re-basing a benchmark can invalidate the argument the previous
+baseline was built to support; the fix is to re-derive the argument, not to keep the corpus
+that flattered it.
+
+```
+NEW      05-gaps.yaml GAP-001 carried a duplicate `resolution:` key, and five entries in
+         06-questions.yaml (Q-002/003/004/007/012) carried duplicate `answered`/`authority`/
+         `answer` keys with the trailing copy set to null. YAML keeps the last key, so the
+         primary deliverable parsed with four answered BLOCKING questions reading as
+         unanswered and GAP-001's resolution reading as absent. Only the prose was ever
+         read; nothing parsed these files. Duplicates removed, `answered_note` folded into
+         `answer`; both files now round-trip through yaml.safe_load with the intended values.
+```
+
+```
 REVERT GAP-036  `docir import` built, then removed the same day, before committing.
        Two reasons: random-ids-by-default removes its only unique capability, and it
        reported `imported 2, failed 0` over a file holding three decisions (one

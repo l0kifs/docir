@@ -63,6 +63,10 @@ class Container:
     dispatcher: Dispatcher
     scheduler: EmbeddingScheduler
     engine: Engine
+    #: The embedder actually built, not the one requested. `_build_embedder`
+    #: falls back when fastembed is missing, so anything reporting the
+    #: configuration (benchmarks) must read the resolved object, not the env var.
+    embedder: Embedder
 
     def close(self) -> None:
         """Stop the scheduler and dispose of the database engine."""
@@ -155,7 +159,13 @@ def build_container(
         uow_factory, file_store, tag_file_store, scheduler, embedder, schema, clock
     )
     dispatcher = Dispatcher(document_service, tag_service, maintenance_service)
-    return Container(settings=settings, dispatcher=dispatcher, scheduler=scheduler, engine=engine)
+    return Container(
+        settings=settings,
+        dispatcher=dispatcher,
+        scheduler=scheduler,
+        engine=engine,
+        embedder=embedder,
+    )
 
 
 def build_in_process_executor(

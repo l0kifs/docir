@@ -46,6 +46,13 @@ UnitOfWorkFactory = Callable[[], UnitOfWork]
 # How many FTS candidates to pull before hybrid fusion in ``docs context``.
 _CONTEXT_CANDIDATES = 25
 
+#: Relation kinds whose *incoming* direction answers "is this still current?".
+#: Followed backwards during ``context`` expansion so a document reached by the
+#: ranker carries its own replacement with it. Deliberately not the layering
+#: check's exemption set (`graph_checks._NON_DEPENDENCY_KINDS`), which happens to
+#: hold the same kinds today for an unrelated reason.
+_SUCCESSOR_KINDS = frozenset({"supersedes", "contradicts"})
+
 
 def _parse_refs(tokens: tuple[str, ...]) -> tuple[RelatedRef, ...]:
     """Parse ``<id>`` / ``<id>:<kind>`` CLI tokens into typed edges."""
@@ -276,7 +283,9 @@ class DocumentService:
                 for document, score in ranked[:seed_budget]
             }
             if expand:
-                self._augment_with_related(uow, selected, budget=expand)
+                self._augment_with_related(
+                    uow, selected, budget=expand, include_inactive=request.include_inactive
+                )
             # Give back neighbour slots the graph did not use.
             for document, score in ranked[seed_budget:]:
                 if len(selected) >= request.limit:
@@ -294,15 +303,14 @@ class DocumentService:
         limit: int,
     ) -> list[tuple[Document, float]]:
         """Resolve fused scores to visible documents, best first, at most ``limit``."""
-        inactive = self._schema.inactive_statuses()
         resolved: list[tuple[Document, float]] = []
         for fscore in fused:
             if len(resolved) >= limit:
                 break
             document = uow.documents.get(fscore.doc_id)
-            if document is None or document.archived:
+            if document is None:
                 continue
-            if not request.include_inactive and document.status in inactive:
+            if not self._is_visible(document, include_inactive=request.include_inactive):
                 continue
             resolved.append((document, fscore.score))
         return resolved
@@ -330,15 +338,24 @@ class DocumentService:
         return (self._clock.today() - document.stale_reference_date()).days > cadence
 
     def _augment_with_related(
-        self, uow: UnitOfWork, selected: dict[str, DocumentSummary], *, budget: int
+        self,
+        uow: UnitOfWork,
+        selected: dict[str, DocumentSummary],
+        *,
+        budget: int,
+        include_inactive: bool,
     ) -> None:
         """Pull up to ``budget`` of the selected documents' neighbours one hop out.
 
         Breadth-first across the seeds rather than depth-first through one seed's
         edge list, so a densely linked top hit cannot spend the whole budget
         before the other seeds contribute anything.
+
+        Successors come first in each seed's edge list: "what supersedes this?"
+        outranks an ordinary link when the budget is tight, because it is the
+        one neighbour that can invalidate the seed the agent is about to act on.
         """
-        edges = {seed: uow.documents.outgoing(seed) for seed in selected}
+        edges = {seed: self._neighbours_of(uow, seed) for seed in selected}
         added = 0
         for depth in range(max((len(targets) for targets in edges.values()), default=0)):
             for targets in edges.values():
@@ -350,10 +367,39 @@ class DocumentService:
                 if neighbour_id in selected:
                     continue
                 neighbour = uow.documents.get(neighbour_id)
-                if neighbour is None or neighbour.archived:
+                if neighbour is None:
+                    continue
+                if not self._is_visible(neighbour, include_inactive=include_inactive):
                     continue
                 selected[neighbour_id] = self._summary(neighbour, via_graph=True)
                 added += 1
+
+    @staticmethod
+    def _neighbours_of(uow: UnitOfWork, seed: str) -> list[str]:
+        """One-hop neighbours of ``seed``: successors first, then outgoing links.
+
+        Expansion used to follow outgoing edges only, which left the graph unable
+        to answer the question it exists for — *is this decision still current?*
+        A ``supersedes`` edge points from the new document to the old one, so the
+        replacement sits one hop away *backwards* and was never reachable from
+        the document it replaces.
+        """
+        successors = uow.documents.incoming(seed, kinds=_SUCCESSOR_KINDS)
+        outgoing = uow.documents.outgoing(seed)
+        return [*successors, *(t for t in outgoing if t not in set(successors))]
+
+    def _is_visible(self, document: Document, *, include_inactive: bool) -> bool:
+        """The single visibility predicate every ``context`` path must apply.
+
+        Ranked hits and graph-reached neighbours used to filter differently: the
+        fusion loop checked archived *and* inactive status, expansion checked
+        only archived. A ``resolved`` issue the caller had excluded therefore
+        came back through a neighbour edge, and nothing in the response said
+        which results had honoured the filter. One predicate, both callers.
+        """
+        if document.archived:
+            return False
+        return include_inactive or document.status not in self._schema.inactive_statuses()
 
     def _apply_metadata(
         self,

@@ -179,6 +179,18 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   `DocumentSummary` (frontmatter + typed edges + staleness, **no body**); only `get` returns the full
   `DocumentView` with the body. Do not add the body back to the list paths — the skeleton is the
   context-saving contract.
+- **`context` has exactly one visibility predicate, and expansion runs both ways.**
+  `DocumentService._is_visible` (archived + inactive status) is called by the ranked fusion loop
+  *and* by `_augment_with_related`; do not inline the check into either. They used to differ —
+  expansion tested only `archived` — so a `resolved` issue the caller had excluded came back
+  through a neighbour edge, and the filter that held on `query`/`search`/ranked `context` leaked
+  on the fourth path. Expansion follows outgoing edges **and** incoming `supersedes`/`contradicts`
+  (`_SUCCESSOR_KINDS`), successors first in each seed's edge list: a `supersedes` edge points from
+  the new document to the old one, so before this the replacement sat one hop away *backwards* and
+  the graph could not answer "is this decision still current?" — the question it exists for.
+  `_SUCCESSOR_KINDS` is intentionally a separate constant from `graph_checks._NON_DEPENDENCY_KINDS`;
+  they hold the same two kinds today for unrelated reasons. `DocumentRepository.incoming` takes an
+  optional `kinds` filter for this; unfiltered it is still the delete integrity check.
 - **The schema is core + profiles (ADR-0007).** `infra/profiles.py` holds a frozen domain-agnostic
   core (the `decision` type + relation registry + cadences) and bundled profiles (software/research/
   ops/legal). A `docs-schema.yaml` with a `profiles:` key merges `core -> profiles -> inline`; a file
@@ -226,8 +238,12 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   fallback (ADR-0011).** It was optional, which meant the shipped default scored *shared vocabulary*
   rather than meaning — `DeterministicEmbedder` is signed feature hashing, the same signal
   FTS5 already provides, and two paraphrases with no words in common score 0.0. Measured
-  (`benchmarks/`): `docir context` beat plain `search` by +0.03 recall@5 / −0.03 MRR under the
-  hashing embedder (noise) and by +0.11 / +0.13 under the model. `DOCIR_EMBEDDER=deterministic`
+  (`benchmarks/`, 2026-07-27 re-based corpus — compare only against figures from that run):
+  isolate the embedding signal with `--expand 0` and the hashing embedder scores recall@5
+  **0.80, below the 0.83 plain `search` manages on its own**, while the model scores 0.87.
+  Full `context` is 0.96/MRR 0.95 with the model against 0.93/MRR 0.80 without.
+  Quote the `--expand 0` pair when arguing about embedders: full `context` numbers include
+  graph expansion, which lifts both and hides the difference. `DOCIR_EMBEDDER=deterministic`
   selects the fallback — **the test fixtures set this**, so the suite stays hermetic and most
   of it never touches a model. `platform/embedding/fastembed.py` is **no longer excluded from
   `ty` or omitted from coverage**: it is what every default install runs, so a break there

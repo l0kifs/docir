@@ -6,6 +6,11 @@
 #
 # `key` is a stable handle used by tasks.yaml; the actual docir id is allocated
 # at load time and mapped back, so the judgments survive any id-style change.
+#
+# `related` entries are `key` or `key:kind` (a typed edge, ADR-0005).
+# `status_path` walks legal transitions in order — decisions start `proposed`, so
+# reaching `superseded` means `[accepted, superseded]`. Applied after the edges,
+# because a closed document cannot be edited.
 
 - key: adr-idempotency
   type: decision
@@ -182,6 +187,51 @@
     high-volume days the file exceeds available memory and the job is killed,
     leaving that day unreconciled.
   related: [adr-settlement-batch]
+
+# -- The superseded pair and the closed issue ---------------------------------
+#
+# Added 2026-07-27. The corpus previously had no `supersedes` edge and no
+# document in an inactive status, so the two graph behaviours `context` depends
+# on most were invisible to this harness: a change to either moved no number.
+#
+# Note that `adr-sessions-redis` is left `accepted`, not `superseded`. That is
+# the realistic case and the one that actually hurts: someone wrote the new
+# decision and linked it, and nobody went back to close the old one. A properly
+# superseded document is filtered out of `context` by status anyway, so it
+# cannot demonstrate anything about traversal.
+
+- key: adr-sessions-redis
+  type: decision
+  title: Keep checkout sessions in Redis
+  description: An in-progress checkout is held in Redis, keyed by session id, for thirty minutes.
+  body: |
+    A shopper's in-progress checkout — selected items, address, chosen payment
+    method — lives in Redis under the session id with a thirty minute TTL.
+    Restarting the web tier therefore costs nobody their basket, and no
+    checkout state touches the primary database on the hot path.
+  related: [issue-session-loss]
+
+- key: adr-sessions-postgres
+  type: decision
+  title: Durable user state moves to Postgres
+  description: Long-lived shopper state is written to Postgres rather than an expiring cache.
+  body: |
+    Anything a shopper expects to survive — the basket they left yesterday, a
+    saved delivery address, an abandoned order we intend to email about — is
+    written to durable rows. Volatile keyspaces with a TTL are the wrong home
+    for state a person believes they saved.
+  related: [adr-sessions-redis:supersedes]
+
+- key: issue-session-loss
+  type: issue
+  title: Baskets vanish when the cache is flushed
+  description: Flushing the cache during a deploy empties every in-progress basket.
+  body: |
+    A cache flush in the middle of a deploy dropped every in-progress checkout,
+    and shoppers mid-payment saw an empty basket. Fixed by draining before the
+    flush; the underlying storage choice was not revisited at the time.
+  related: []
+  status_path: [resolved]
 
 - key: arch-payment-boundaries
   type: architecture

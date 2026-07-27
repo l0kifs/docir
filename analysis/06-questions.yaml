@@ -72,10 +72,7 @@
     "Parallel agents" is the exact scenario the invariant claims to protect, and `--no-daemon`
     is the mode most likely to appear in scripts and CI.
   asked: 2026-07-26
-  answered: null
-  authority: null
-  answer: null
-  answered_note: >
+  answer: >
     ANSWERED 2026-07-26 by implementation: allocation is now atomic in both modes via a single
     upsert statement. `--no-daemon` is safe for parallel writers. CLAUDE.md updated to state
     why the invariant holds. See GAP-009 resolution.
@@ -105,10 +102,7 @@
     with a default limit of 5. The overrun scales with exactly the well-linked corpus the
     product encourages, so it worsens as adoption succeeds.
   asked: 2026-07-26
-  answered: null
-  authority: null
-  answer: null
-  answered_note: >
+  answer: >
     ANSWERED 2026-07-26: bound the response, with --expand N for neighbour control.
     Implemented as reserved-then-backfilled slots. See GAP-005 resolution.
   assumption_if_unanswered: null
@@ -137,10 +131,7 @@
     which also removes the duplicate-id detection that is the gate's stated purpose and the
     only automated defence against Q-001 and Q-002.
   asked: 2026-07-26
-  answered: null
-  authority: null
-  answer: null
-  answered_note: >
+  answer: >
     ANSWERED 2026-07-26 by implementation: errors = duplicate-id/dangling/malformed,
     warnings = orphan/cycle/layering/stale/unknown-type, --strict gates on errors,
     --strict-all preserves the old behaviour. See GAP-006 resolution.
@@ -168,12 +159,16 @@
     resolved is worth seeing even though it is closed" — but nothing states it, and the
     inconsistency across the four read paths suggests oversight rather than intent.
   asked: 2026-07-26
-  answered: null
-  authority: null
-  answer: null
-  assumption_if_unanswered: >
-    Proceeding on: it is an oversight and the filter should apply. Review before changing
-    context expansion.
+  answered: 2026-07-27
+  authority: repo maintainer (chose "hidden", explicitly, over "returned but flagged")
+  answer: >
+    An oversight — the filter applies. Asked as a two-option choice (hide the closed
+    neighbour, matching the other three read paths, vs return it marked `inactive` so the
+    "issue this decision resolved" stays visible); the maintainer chose hide. One
+    `_is_visible` predicate now serves both the ranked and the graph path. `--include-resolved`
+    remains the way to ask for closed work, and now governs both paths equally.
+    See GAP-004 resolution.
+  assumption_if_unanswered: null
 
 - id: Q-006
   gap: GAP-008
@@ -231,10 +226,7 @@
     Every confirmed failure mode in this analysis ends in a state the product detects and
     cannot exit, and the documented recovery contradicts the product's second thesis.
   asked: 2026-07-26
-  answered: null
-  authority: null
-  answer: null
-  answered_note: >
+  answer: >
     ANSWERED 2026-07-26 in part. (b) is implemented: `docir check --fix` repairs duplicate
     ids and dangling edges. (a) is NOT — `delete --force` still creates the dead edges rather
     than compensating for them; GAP-007 stays open, now recoverable rather than permanent.
@@ -349,10 +341,7 @@
                     matches `<prefix>-<suffix>`, and seeds the counter above it."
   context: "The most likely adopter is exactly a project already keeping markdown ADRs."
   asked: null
-  answered: null
-  authority: null
-  answer: null
-  answered_note: >
+  answer: >
     ANSWERED 2026-07-27, in the negative. `docir import` was built and then removed the same
     day: with random ids the command's only unique capability disappears, and what remained
     reported success over input it had mangled. The answer to "how does a repo with existing
@@ -454,8 +443,11 @@
                     superseding document when one exists."
   context: "'Is this decision still current?' is the question the relation graph most needs to
             answer, and it is the one direction not traversed."
-  asked: null
-  answered: null
-  authority: null
-  answer: null
-  assumption_if_unanswered: "Assuming outgoing-only is a simplification, not a decision."
+  asked: 2026-07-27
+  answered: 2026-07-27
+  authority: repo maintainer (directed the fix alongside Q-005)
+  answer: >
+    Yes — expansion follows incoming `supersedes`/`contradicts` as well, and puts them ahead
+    of outgoing links so a tight `--expand` budget spends itself on "what replaces this?"
+    first. Outgoing-only was a simplification, not a decision. See GAP-019 resolution.
+  assumption_if_unanswered: null

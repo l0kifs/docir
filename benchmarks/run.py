@@ -88,11 +88,23 @@ def build_store(home: Path) -> tuple[object, dict[str, str]]:
                 "update",
                 {
                     "doc_id": ids[doc["key"]],
-                    "set_related": [ids[key] for key in doc["related"]],
+                    "set_related": [_edge(ids, ref) for ref in doc["related"]],
                 },
             )
+    # Status last: an edge cannot be written to a document the schema has closed,
+    # and `status_path` walks legal transitions rather than forcing with --override,
+    # so the corpus stays a corpus the CLI would actually accept.
+    for doc in corpus:
+        for status in doc.get("status_path", []):
+            dispatcher.dispatch("update", {"doc_id": ids[doc["key"]], "status": status})
     dispatcher.dispatch("embed_flush", {})
     return container, ids
+
+
+def _edge(ids: dict[str, str], ref: str) -> str:
+    """Resolve a corpus `related` entry — `key` or `key:kind` — to a real edge."""
+    key, _, kind = ref.partition(":")
+    return f"{ids[key]}:{kind}" if kind else ids[key]
 
 
 def strategies(dispatcher: object, task: str, ids: dict[str, str]) -> dict[str, Outcome]:
@@ -135,7 +147,10 @@ def main() -> int:
         dispatcher = container.dispatcher
         tasks = yaml.safe_load((BENCH_DIR / "tasks.yaml").read_text(encoding="utf-8"))
 
-        embedder = os.environ.get("DOCIR_EMBEDDER", "deterministic (default)")
+        # The resolved embedder, not the requested one: the default flipped to
+        # fastembed (ADR-0011) and this line still announced "deterministic",
+        # so every run so far reported a configuration it had not measured.
+        embedder = container.embedder.model_id
         print(f"\ncorpus: {len(ids)} documents · tasks: {len(tasks)} · k={K}")
         print(f"embedder: {embedder}\n")
 

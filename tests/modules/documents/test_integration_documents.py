@@ -321,6 +321,110 @@ class TestContextBudget:
         assert not results[0].get("via_graph")
 
 
+class TestContextGraphVisibility:
+    """Graph-reached neighbours obey the same rules as ranked hits (GAP-004),
+    and expansion reaches successors backwards (GAP-019).
+
+    These are the two halves of one defect in ``_augment_with_related``: it
+    checked ``archived`` but not inactive status, so the closed-work filter held
+    on ``query``/``search``/ranked ``context`` and leaked on the fourth path; and
+    it followed outgoing edges only, so the document that *supersedes* a hit —
+    the single most important thing an agent can learn about it — sat one hop
+    away backwards and was unreachable.
+    """
+
+    def test_resolved_neighbour_does_not_leak_through_the_graph(
+        self, dispatcher: Dispatcher
+    ) -> None:
+        # Wording shares nothing with the task, so the issue can only arrive
+        # via the decision's edge — never as a ranked hit of its own.
+        issue = dispatcher.dispatch(
+            "add",
+            {
+                "type": "issue",
+                "title": "Thundering herd on fleet restart",
+                "description": "Stampede when every node reboots at once.",
+            },
+        )
+        dispatcher.dispatch(
+            "add",
+            {
+                "type": "decision",
+                "title": "Cache invalidation policy",
+                "description": "How cache entries expire and refresh.",
+                "related": [issue["id"]],
+            },
+        )
+        dispatcher.dispatch("update", {"doc_id": issue["id"], "status": "resolved"})
+
+        results = dispatcher.dispatch(
+            "context", {"task": "cache invalidation policy", "limit": 5, "expand": 2}
+        )
+        assert all(d["id"] != issue["id"] for d in results)
+
+    def test_resolved_neighbour_returns_when_explicitly_asked_for(
+        self, dispatcher: Dispatcher
+    ) -> None:
+        issue = dispatcher.dispatch(
+            "add",
+            {
+                "type": "issue",
+                "title": "Thundering herd on fleet restart",
+                "description": "Stampede when every node reboots at once.",
+            },
+        )
+        dispatcher.dispatch(
+            "add",
+            {
+                "type": "decision",
+                "title": "Cache invalidation policy",
+                "description": "How cache entries expire and refresh.",
+                "related": [issue["id"]],
+            },
+        )
+        dispatcher.dispatch("update", {"doc_id": issue["id"], "status": "resolved"})
+
+        results = dispatcher.dispatch(
+            "context",
+            {
+                "task": "cache invalidation policy",
+                "limit": 5,
+                "expand": 2,
+                "include_inactive": True,
+            },
+        )
+        assert any(d["id"] == issue["id"] for d in results)
+
+    def test_superseding_decision_is_reached_backwards(self, dispatcher: Dispatcher) -> None:
+        superseded = dispatcher.dispatch(
+            "add",
+            {
+                "type": "decision",
+                "title": "Redis session store",
+                "description": "Sessions live in Redis with a 30 minute TTL.",
+            },
+        )
+        successor = dispatcher.dispatch(
+            "add",
+            {
+                "type": "decision",
+                "title": "Move user state to Postgres",
+                "description": "Durable rows replace the volatile keyspace.",
+                "related": [f"{superseded['id']}:supersedes"],
+            },
+        )
+        # limit 2 / expand 1 leaves exactly one ranked slot and one graph slot,
+        # so the successor can only be here because expansion walked the
+        # supersedes edge in reverse. Before the fix it had no outgoing edges to
+        # follow and this slot was backfilled with a ranked hit instead.
+        results = dispatcher.dispatch(
+            "context", {"task": "redis session store TTL", "limit": 2, "expand": 1}
+        )
+        by_id = {d["id"]: d for d in results}
+        assert superseded["id"] in by_id
+        assert by_id[successor["id"]].get("via_graph") is True
+
+
 class TestArchiveDelete:
     def test_archive_hides_from_search(self, seeded: Dispatcher) -> None:
         seeded.dispatch("archive", {"doc_id": "adr-0001"})

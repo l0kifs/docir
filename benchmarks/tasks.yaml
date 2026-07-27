@@ -73,3 +73,23 @@
   lexical: false
   task: what happens between someone paying and the cash actually arriving
   relevant: [arch-payment-events, adr-settlement-batch]
+
+# T13/T14 exist to make the graph measurable (added 2026-07-27).
+#
+# Both judge `adr-sessions-postgres` relevant alongside `adr-sessions-redis`:
+# acting on the Redis decision without seeing the one that replaces it is the
+# failure the relation graph exists to prevent. The successor shares almost no
+# vocabulary with either task, and the `supersedes` edge points *at* the Redis
+# decision rather than away from it, so it is reachable only by traversing that
+# edge backwards. `issue-session-loss` is deliberately NOT relevant to either:
+# it is resolved, and closed work is excluded unless asked for.
+
+- id: T13
+  lexical: true
+  task: change how checkout sessions are stored in redis
+  relevant: [adr-sessions-redis, adr-sessions-postgres]
+
+- id: T14
+  lexical: false
+  task: where does a shopper's basket live between visits
+  relevant: [adr-sessions-redis, adr-sessions-postgres]

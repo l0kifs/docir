@@ -1,0 +1,284 @@
+# Run log — append-only
+
+## PHASE 0/1 — frame + evidence inventory
+
+```
+2026-07-26  FRAME       README.md, CLAUDE.md, docs/adr/*        → 00-frame.md written
+2026-07-26  INVENTORY   evidence ranking below
+```
+
+### Evidence available (ranked per extraction.md §1)
+
+| Rank | Source | Available? | Notes |
+|---|---|---|---|
+| 1 | Production behaviour / user work | **NO** | No telemetry in product; no user access this session |
+| 2 | Code, DB schema, migrations | **YES** | 105 files / 6 919 LOC; alembic 0001+0002 |
+| 3 | Tests (acceptance/E2E) | **YES** | 28 test files incl. `tests/entry_points/test_e2e_*.py` |
+| 4 | Config, flags, jobs | **YES** | `pyproject.toml`, env vars (`DOCIR_*`), daemon idle timer, embedding scheduler |
+| 5 | Tickets, logs, analytics | **NO** | GitHub issues not fetched (non-interactive); no logging of business events |
+| 6 | SME statements | **NO** | Single maintainer, not interviewed |
+| 7 | Written docs | **YES, treated as claims** | README, CLAUDE.md, 10 ADRs, 4 CONTRACT.md, CHANGELOG, `docs/AGENT_GUIDE.md` |
+
+**Consequence:** the two highest-value evidence ranks (1, 5) are missing entirely. Every
+"frequency" and "actual impact" statement in `05-gaps.yaml` is therefore `unknown` rather
+than measured. Recorded as `GAP-001`.
+
+## PHASE 2 — extraction
+
+```
+2026-07-26  P1 struct   entry_points/cli/app.py, dispatch.py      → 27 CLI commands, 18 wire commands
+2026-07-26  P1 struct   alembic/versions/0001,0002                → 7 tables + 1 FTS5 virtual table
+2026-07-26  P1 struct   documents/domain/{schema,entities,vo}     → Document aggregate, Schema, DocId, RelatedRef
+2026-07-26  P1 struct   documents/infra/{profiles,default_schema} → core + 5 profiles, 12 types
+2026-07-26  P2/P3       documents/application/services/*          → DocumentService, MaintenanceService call chains
+2026-07-26  P2/P3       tags/application, indexing/*, agents/*    → per-module behaviour + ordering
+2026-07-26  P2/P3       platform/{persistence,filesystem,transport}, entry_points/daemon
+2026-07-26  P4/P5       all of the above                          → BR-001..BR-072 drafted
+2026-07-26  READ        tests/** (28 files)                       → cross-check of P4; encoded intent
+2026-07-26  SKIPPED     tach.toml, scripts/check_contract_sync.py → out of scope per 00-frame.md
+2026-07-26  SKIPPED     assets/, docs/PUBLISHING.md, .github/     → out of scope per 00-frame.md
+2026-07-26  SKIPPED     platform/persistence/alembic/env.py       → migration machinery, no business rule
+```
+
+### Empirical probes (evidence rank 1-substitute: executed the real CLI)
+
+Store fixtures under the session scratchpad; all runs `--no-daemon`, real SQLite, real files.
+
+```
+PROBE-1  clone->reindex->add    store1  → CONFIRMED id collision (GAP-003)
+PROBE-2  get/query after PROBE-1 store1 → CONFIRMED first doc invisible to all read paths
+PROBE-3  check --strict on 2 new docs   → exit 1 from `orphan` alone (GAP-006)
+PROBE-4  context w/ resolved neighbour  → CONFIRMED inactive filter bypassed via graph (GAP-004)
+PROBE-5  context --limit 3, 3x out-deg 2 → returned 9 docs (GAP-005)
+PROBE-6  delete --force w/ incoming ref  → CONFIRMED dangling ref written to canonical file (GAP-007)
+PROBE-7  update a doc holding dangling ref → CONFIRMED accepted, ref re-persisted (GAP-007)
+PROBE-8  decision --related issue        → CONFIRMED permanent `layering` warning (GAP-008)
+PROBE-9  delete then add                 → id NOT reused (counter monotonic) — no gap
+```
+
+```
+2026-07-26  PROBE-10  6x concurrent --no-daemon add   → all returned adr-0002 (GAP-009)
+2026-07-26  PROBE-11  same race WITH the daemon        → adr-0002..0007, unique — scopes GAP-009
+2026-07-26  PROBE-12  schema validate on a typo'd transition target → {"valid":true} (GAP-010)
+2026-07-26  PROBE-13  agent install --agent <typo>     → [], exit 0, no files (GAP-024)
+2026-07-26  PROBE-14  context on unrelated query       → returns a doc, score 0.0328 (GAP-017)
+2026-07-26  PROBE-15  all five profiles merged         → 15 types, no prefix collision — NO gap
+2026-07-26  PROBE-16  delete then add                  → id not reused — NO gap
+```
+
+## PHASE 3/4 — modeling + formalizing
+
+```
+2026-07-26  MODEL   01-actors.yaml     → 8 actors (2 of them absent-but-implied: ACT-007, ACT-008)
+2026-07-26  MODEL   02-flows/          → 5 flows, 41 hotspots, 3 off-system step clusters
+2026-07-26  MODEL   04-glossary.yaml   → 13 terms, 10 with recorded conflicts
+2026-07-26  FORMAL  03-rules.yaml      → 45 rules (EARS), 3 decision tables, 5 marked `disputed`
+```
+
+## PHASE 5 — gap detection
+
+Coverage checklists from `gap-checklists.md` §2 iterated mechanically against every flow and
+the `document` / `tag` entities. Result: **39 gaps** — 6 blocking, 20 material, 13 cosmetic.
+
+Checklist items that produced findings: bulk import/export (GAP-036), merge/deduplicate
+(GAP-028), delete + compensating action (GAP-007), every-state-has-an-exit (GAP-010), concurrent
+transition by two actors (GAP-009, GAP-037), duplicate submission / idempotency (GAP-009),
+admin override + audit (GAP-014), support diagnosis tooling (GAP-012), notifications (GAP-011),
+time/timezone (GAP-038), volume limits (GAP-039), observability (GAP-001), migration of data
+created under older rules (GAP-025).
+
+Checklist items examined and found **adequately covered** (recorded so coverage is not
+overstated): create validation (BR-001..BR-005), read visibility (BR-028, BR-029), field
+mutability by state (BR-005), transfer of ownership (`--set-owner`), retention (git holds
+history), permissions (N/A per ADR-0003), rounding/currency/tax (no money in this domain).
+
+Smell scan (`gap-checklists.md` §3, automated regex over all 45 rule statements): **0 hits**.
+
+## PHASE 7 — adversarial self-review
+
+Ran against my own register, not the code. Four defects found and fixed:
+
+```
+SELF-1  GAP-013 was hedged ("advanced and committed... or not"). Re-read repositories.py:55 —
+        next_number only *flushes*, so the counter rolls back with the transaction while the
+        already-written file survives. Rewritten as a concrete third duplicate-id path.
+SELF-2  GAP-012 was severity:material but meets my own blocking rubric ("touches data loss").
+        Raised to blocking; register re-sorted.
+SELF-3  BR-034 has four conditions and no decision table — violates quality gate §9.
+        Table added (verified against runner.py:36-48).
+SELF-4  Q/BR/GAP cross-references were inconsistent after renumbering. Reconciled by script;
+        verified no dangling or undefined ids in either direction.
+```
+
+Claims I attempted to refute and could **not**: GAP-003, GAP-004, GAP-005, GAP-006, GAP-009,
+GAP-010, GAP-017, GAP-024 — each is reproducible by the probe recorded above.
+
+Claim I did refute and narrowed: an early reading that `docir context --limit` overflows in
+every case. PROBE-4 (`--limit 1` → 1 result) shows it overflows only when selected documents
+have outgoing edges to documents not already selected. GAP-005 states that actual condition.
+
+## Quality gates (SKILL.md §9)
+
+```
+[x] Every actor appears in >=1 flow                     8/8
+[x] Every flow has unwanted-behaviour rules per failure point
+                                    BR-001..003, 010..012, 018, 043, 061, 064, 070, 071
+[x] Every rule has an evidence pointer and a status     45/45 (verified by script)
+[x] Every rule with >2 conditions has a decision table  BR-003, BR-005, BR-034
+[x] Smell scan clean                                    0 hits across 45 statements
+[x] Every glossary term has exactly one definition      13 terms; 10 conflicts recorded as gaps
+[x] Every hotspot resolved into a rule/gap/assumption   41/41
+[x] Coverage log lists what was not examined            below
+[x] Adversarial pass run and findings addressed         4 found, 4 fixed
+```
+
+## Coverage report — what was NOT examined
+
+**Not examined at all** (out of scope per `00-frame.md`, or no business rule inside):
+`tach.toml`, `scripts/check_contract_sync.py`, `.github/workflows/`, `assets/`,
+`docs/PUBLISHING.md`, `pyproject.toml` packaging metadata,
+`platform/persistence/alembic/env.py`, `platform/embedding/fastembed.py` (optional dependency,
+excluded from the project's own type-check and coverage).
+
+**Examined shallowly** (read for structure, not line-by-line; rules here are lower-confidence):
+`platform/transport/{protocol,client,messages}.py`, `entry_points/daemon/socket_executor.py`,
+`entry_points/cli/{body_input,rendering}.py` beyond the trim logic,
+`modules/agents/{domain,infra}/**` beyond the service, `modules/agents/infra/templates/skill.md`.
+
+**Evidence classes entirely unavailable this run** (see `00-frame.md`): production behaviour,
+support tickets, logs, analytics, and any SME statement. Ranks 1, 5 and 6 of the evidence
+hierarchy are absent — which is why `frequency` is `unknown` on almost every gap and why every
+rule is `status: assumed` rather than `confirmed`.
+
+**Consequence for the reader:** this register is a *draft* until the maintainer confirms it.
+An agent-produced rule register is not valid elicitation until the source agrees with it
+(`questioning.md` §5).
+
+## Follow-up session — fixes and their consequences (2026-07-26)
+
+Implemented at the maintainer's direction, each verified against the real CLI before the
+gap record was closed.
+
+```
+FIX  GAP-003  reindex restores the id counter; + IdGenerator skips indexed ids;
+              + create refuses to overwrite a file already holding the id   → resolved
+FIX  GAP-013  same change; a crash mid-write can no longer be overwritten silently → resolved
+FIX  GAP-009  next_number is one atomic upsert (was read-modify-write in Python);
+              busy_timeout set explicitly                                    → resolved
+FIX  GAP-005  --limit is a hard ceiling; --expand N reserves neighbour slots,
+              unused ones backfilled; expansion breadth-first across seeds    → resolved
+NEW  --id-style on `docir init`, defaulting to `random` (BR-073, BR-074)
+DOC  packaged agent guide corrected: `docir reindex --all` does not exist     → GAP-040
+```
+
+Attribution was tested, not assumed: each fix was reverted in isolation and the new tests
+re-run, to confirm they fail against the old behaviour (`assert 9 == 3` for GAP-005;
+8 concurrent adds colliding for GAP-009).
+
+### Findings produced BY these changes
+
+```
+GAP-040  the shipped agent guide told agents to run a flag that does not exist; nothing
+         validates the template against the CLI. Typo fixed, guard still missing.
+GAP-041  the counter restore reads an all-digit random id (0.36% of them) as sequential.
+         Latent: no symptom while the type stays `random`.
+GAP-042  random ids are ~3x longer and ride in every skeleton and every edge; the token
+         cost of the new default is unmeasured (see GAP-001).
+```
+
+Rules restated rather than left stale: BR-006 (id allocation is style-dependent, not
+counter-only) and BR-007 (uniqueness) move `disputed` → `confirmed`. BR-073/BR-074 added for
+schema-wide `id_style` inheritance and the `init` default.
+
+**Blocking gaps still open: GAP-006, GAP-012, GAP-001.**
+
+```
+FIX  GAP-041  counter restore now keyed on the schema's declared id_style, with a
+              suffix-length guard for ids left behind by a style switch      → resolved
+```
+
+```
+FIX  GAP-006  CheckIssue carries a severity derived from its kind; --strict gates on
+              errors only; --strict-all preserves fail-on-anything            → resolved
+              NOTE: the existing test asserted the old behaviour as intent, so the tests
+              could never have caught this — only running the tool did.
+```
+
+```
+FIX  GAP-012  `docir check --fix` re-issues duplicate ids (oldest keeps it) and drops
+              dead edges; malformed/unknown-type returned as needing a human  → resolved
+              GAP-007 becomes recoverable but is still not prevented — stays open.
+NEW  found while testing: `_as_list` accepted only `list`, but `dataclasses.asdict`
+     preserves tuple fields, so the table renderer showed "nothing to repair" while
+     --json printed the fix. Caught only because the human path was exercised
+     separately from the JSON one. Both are now asserted in the same test.
+```
+
+**Blocking gaps still open: GAP-001 only** (nothing measures whether docir works).
+
+```
+FIX  GAP-001  benchmarks/ — 20-doc corpus, 12 judged tasks, recall/precision/MRR +
+              payload size per strategy, run against both embedders        → resolved
+NEW  GAP-043  the measurement's own headline: the DEFAULT embedder is lexical, not
+              semantic, so `context` ~= `search` unless the `embeddings` extra is on.
+              README:42 claims "retrieval by meaning" for a config most users lack.
+```
+
+Measured (2026-07-26, 20 docs / 12 tasks, recall@5):
+`context` 0.88 default vs 0.96 fastembed · `search` 0.85 both · graph expansion +0.07 under
+both · `context` 430 tokens vs 3 240 to read every body (7.5x).
+
+```
+FIX  GAP-043  docs-honesty pass: README table, command table, agent guide and CLAUDE.md
+              now say which configuration each retrieval claim describes. No code
+              change — the code was right, the copy was not.               → resolved
+              OPEN QUESTION deferred: should fastembed be the default? Left undecided;
+              it is a dependency-weight call, not a correctness one.
+```
+
+```
+FIX  GAP-043  fastembed is now a hard dependency and the default; the hashing embedder
+              becomes the DOCIR_EMBEDDER=deterministic fallback. README states the
+              measured cost (~64 MB model, ~240 MB deps) instead of a caveat. → resolved
+NEW  GAP-044  found while implementing that flip: nothing recorded which model produced
+              a vector, and mismatched widths RAISE. The switch would have broken every
+              existing store on first `docir context`. model_id is now written and
+              honoured; foreign vectors fall out of ranking and are recomputed. → resolved
+```
+
+## Follow-up — verifying the default flip outside this machine (2026-07-27)
+
+```
+CHECK  uv.lock in sync with the new required dependency, committed  → clean
+CHECK  CI workflow                                                  → passes, but see below
+NEW    GAP-045: the default embedder path was excluded from every gate (ty, coverage,
+       no tests) while CI installed 240 MB and ran none of it. The exclusions were
+       correct when the adapter was opt-in and became a hole when it became the
+       default; nothing re-checks an exclusion when its premise changes. → resolved
+       Lifting the ty exclusion surfaced a real diagnostic on the first run.
+```
+
+```
+FIX  GAP-036  `docir import` adopts existing markdown and preserves the number the
+              filename implies, so historical cross-references survive adoption.
+              Verified on docir's own ADR corpus.                          → resolved
+              Two of my own test expectations were wrong, not the code: a title of
+              "2026 is the year..." must NOT be de-numbered (only a number followed
+              by punctuation is a label), and asdict returns tuples, not lists.
+```
+
+```
+FIX  import now reports skipped files. Found by pointing it at `analysis/`: 12 files in,
+     7 imported, 5 dropped with no mention — including 05-gaps.yaml and 06-questions.yaml.
+     My own test had asserted non-markdown was *ignored*, never that it was *reported*.
+```
+
+```
+REVERT GAP-036  `docir import` built, then removed the same day, before committing.
+       Two reasons: random-ids-by-default removes its only unique capability, and it
+       reported `imported 2, failed 0` over a file holding three decisions (one
+       superseded, one rejected) plus a file whose body said "DRAFT — do not rely on
+       this". A command that makes adoption look finished is worse than no command.
+       GAP-036 returns to OPEN; the reasoning is recorded there so it is not rebuilt
+       naively. The agent guide now carries the review-then-add workflow instead.
+```

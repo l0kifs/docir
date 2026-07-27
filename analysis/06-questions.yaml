@@ -1,0 +1,461 @@
+# Question queue — PRIMARY DELIVERABLE.
+#
+# Audience is the repo maintainer for every question (single-maintainer project, GAP-002).
+# Ranked by severity x answerability. Blocking questions: 8, within the ≤7-per-bounded-context
+# budget (7 in `documents`, 1 frame-level). Everything below the line is recorded as an
+# assumption with a review trigger rather than asked this round.
+#
+# Every question states what the system does TODAY with evidence, and proposes an answer.
+# None of these can be answered from the code — they are all "which behaviour did you intend".
+
+# =============================================================================
+# BLOCKING — answer these before the next release that touches the write path
+# =============================================================================
+
+- id: Q-001
+  gap: GAP-003
+  also_resolves: [GAP-013]   # the same counter/transaction boundary
+  audience: repo maintainer
+  blocking: true
+  rank: 1
+  question: >
+    `reindex` rebuilds documents, tags, FTS and embeddings but not the id counter, so on a
+    fresh clone the next `add` re-issues a live id and the older document disappears from
+    every read path. Is the id counter meant to be part of the derived, rebuildable index
+    (in which case reindex must reconstruct it from the files), or is it authoritative state
+    that must never be lost (in which case it cannot be gitignored)?
+  today: >
+    OBSERVED: clone (index absent, it is gitignored) → `docir reindex` → `docir add` returns
+    an id that is already in use. Two files claim it; the index keeps the newer; the older
+    document is unreachable via get/query/search/context though its file is untouched.
+    Exit code 0 throughout.
+    Evidence: maintenance_service.py:148-174, repositories.py:48-56.
+  proposed_answer: >
+    Derived. `_reindex_documents` should set each sequential prefix's counter to
+    max(numeric suffix seen) + 1 as part of the rebuild, with a regression test for
+    clone→reindex→add.
+  context: >
+    Fires on the documented happy path with no concurrency, no --force and no unusual input.
+    It contradicts the project's first thesis, so the answer also decides whether that thesis
+    needs qualifying in the README.
+  asked: 2026-07-26
+  answered: 2026-07-26
+  authority: repo maintainer (instructed the fix directly)
+  answer: >
+    Derived — the proposed answer was adopted. reindex now restores the counter, with two
+    allocation-time backstops. See GAP-003 resolution.
+  assumption_if_unanswered: null
+
+- id: Q-002
+  gap: GAP-009
+  audience: repo maintainer
+  blocking: true
+  rank: 2
+  answered: 2026-07-26
+  authority: repo maintainer (instructed the fix directly)
+  question: >
+    Six concurrent `--no-daemon` adds all returned `adr-0002`. With the daemon they were
+    correctly unique. Is `--no-daemon` intended to be safe for parallel agents — or is the
+    daemon a hard requirement for concurrent writing, and the counter's role in CLAUDE.md
+    overstated?
+  today: >
+    OBSERVED: 6 simultaneous `docir --no-daemon add` → six files claiming adr-0002, all
+    exit 0, five documents invisible. Same race with the daemon → adr-0002..adr-0007.
+    CLAUDE.md attributes collision-freedom to the SequenceRow counter; the actual mechanism
+    is the daemon's single-connection server loop (transport/server.py:20-25).
+    The project's own test suite and CI force DOCIR_NO_DAEMON.
+  proposed_answer: >
+    Make allocation atomic regardless of mode (counter update inside an IMMEDIATE
+    transaction, or `UPDATE … RETURNING` under a write lock). `id_style: random` already
+    exists and is immune, but no shipped profile uses it.
+  context: >
+    "Parallel agents" is the exact scenario the invariant claims to protect, and `--no-daemon`
+    is the mode most likely to appear in scripts and CI.
+  asked: 2026-07-26
+  answered: null
+  authority: null
+  answer: null
+  answered_note: >
+    ANSWERED 2026-07-26 by implementation: allocation is now atomic in both modes via a single
+    upsert statement. `--no-daemon` is safe for parallel writers. CLAUDE.md updated to state
+    why the invariant holds. See GAP-009 resolution.
+  assumption_if_unanswered: null
+
+- id: Q-003
+  gap: GAP-005
+  audience: repo maintainer
+  blocking: true
+  rank: 3
+  answered: 2026-07-26
+  authority: repo maintainer (chose "bound the response, add --expand N")
+  question: >
+    `docir context --limit 3` returned 9 documents, because one-hop graph expansion runs
+    after the limit and is itself uncapped. Should `--limit` bound the whole response, or is
+    it deliberately a seed-set size with expansion on top — and if so, what bounds the
+    response an agent receives?
+  today: >
+    OBSERVED: 3 decisions with out-degree 2, `--limit 3` → 9 results. Worst case is
+    limit × (1 + max out-degree), growing with graph density.
+    Evidence: document_service.py:260-273 (limit enforced), :297-307 (expansion, uncapped).
+  proposed_answer: >
+    `--limit` bounds the final result. If expansion should be separately controllable, add
+    `--expand N` with a small default and document the interaction.
+  context: >
+    docir's headline claim is "token-cheap for agents" and `context` is the flagship command
+    with a default limit of 5. The overrun scales with exactly the well-linked corpus the
+    product encourages, so it worsens as adoption succeeds.
+  asked: 2026-07-26
+  answered: null
+  authority: null
+  answer: null
+  answered_note: >
+    ANSWERED 2026-07-26: bound the response, with --expand N for neighbour control.
+    Implemented as reserved-then-backfilled slots. See GAP-005 resolution.
+  assumption_if_unanswered: null
+
+- id: Q-004
+  gap: GAP-006
+  audience: repo maintainer
+  blocking: true
+  rank: 4
+  answered: 2026-07-26
+  authority: repo maintainer (directed the fix; proposed severity split adopted as-is)
+  question: >
+    `check --strict` exits 1 on any finding, and `orphan` fires for every document with no
+    relations — the default state of a new document — so the advertised CI gate fails on a
+    healthy corpus. Which findings are meant to block a merge?
+  today: >
+    OBSERVED: a fresh store with two unrelated, otherwise-healthy documents exits 1 from two
+    `orphan` findings. No severity, no `--only <kind>`, no ignore file.
+    Evidence: cli/app.py:439-440, graph_checks.py:173-192.
+  proposed_answer: >
+    Severity on the finding: error = duplicate-id, dangling, malformed; warning = orphan,
+    cycle, layering, stale, unknown-type. `--strict` fails on errors; `--strict=all` keeps
+    today's behaviour.
+  context: >
+    A team that adopts the documented gate gets a red build on day one and will remove it —
+    which also removes the duplicate-id detection that is the gate's stated purpose and the
+    only automated defence against Q-001 and Q-002.
+  asked: 2026-07-26
+  answered: null
+  authority: null
+  answer: null
+  answered_note: >
+    ANSWERED 2026-07-26 by implementation: errors = duplicate-id/dangling/malformed,
+    warnings = orphan/cycle/layering/stale/unknown-type, --strict gates on errors,
+    --strict-all preserves the old behaviour. See GAP-006 resolution.
+  assumption_if_unanswered: null
+
+- id: Q-005
+  gap: GAP-004
+  audience: repo maintainer
+  blocking: true
+  rank: 5
+  question: >
+    A `resolved` issue is returned by `docir context` without `--include-resolved`, because
+    graph expansion checks `archived` but not status — while `search` and `query` hide it
+    correctly. Should graph-reached documents obey the same visibility rules as ranked ones?
+  today: >
+    OBSERVED: issue-0001 (status resolved) referenced by adr-0001 is returned by
+    `docir context auth --limit 5` with `via_graph: true`; the same document is hidden by
+    `docir search auth` and `docir query`.
+    Evidence: document_service.py:265-268 vs :297-307.
+  proposed_answer: >
+    Yes — same predicate, extracted to one function so the two paths cannot diverge again.
+    (If closed neighbours are deliberately valuable as context, say so and mark them.)
+  context: >
+    There is a defensible argument for the current behaviour — "the issue this decision
+    resolved is worth seeing even though it is closed" — but nothing states it, and the
+    inconsistency across the four read paths suggests oversight rather than intent.
+  asked: 2026-07-26
+  answered: null
+  authority: null
+  answer: null
+  assumption_if_unanswered: >
+    Proceeding on: it is an oversight and the filter should apply. Review before changing
+    context expansion.
+
+- id: Q-006
+  gap: GAP-008
+  audience: repo maintainer
+  blocking: true
+  rank: 6
+  question: >
+    In the default `software` profile, linking a decision to the issue that motivated it
+    produces a permanent `layering` violation (decision level 3 → issue level 1). Is that
+    intended discouragement, or should the layering check apply only to dependency kinds
+    rather than to every kind except supersedes/contradicts?
+  today: >
+    OBSERVED: `adr-0001 related: [issue-0003]` → "layering violation: decision 'adr-0001'
+    depends on lower-level issue 'issue-0003'". This is the pairing shown in the README's own
+    quickstart output (README:78-81).
+    Evidence: profiles.py:26-27/44-46, graph_checks.py:194-223, :26.
+  proposed_answer: >
+    Restrict the check to `depends_on` (and `refines`). `relates_to` is the default kind
+    applied to every bare id and asserts no dependency, so it should not be a layering signal.
+  context: >
+    Compounds Q-004: it guarantees a finding on the most natural modelling, which trains
+    users to ignore `check` output entirely.
+  asked: 2026-07-26
+  answered: null
+  authority: null
+  answer: null
+  assumption_if_unanswered: >
+    Proceeding on: the exempt-kind list is inverted and should be a dependency-kind allowlist.
+    Review before changing profiles or graph checks.
+
+- id: Q-007
+  gap: GAP-012
+  also_resolves: [GAP-007]
+  answered: 2026-07-26
+  authority: repo maintainer (directed the fix; `check --fix` proposal adopted)
+  audience: repo maintainer
+  blocking: true
+  rank: 7
+  question: >
+    duplicate-id, dangling, malformed and unknown-type all describe corrupt state, and no
+    command can fix any of them. Combined with "agents never edit markdown directly", how is
+    a user meant to recover — and should `delete --force` strip the edges it breaks, the way
+    `tag rm --force` already strips tags?
+  today: >
+    `check` reports; nothing repairs. OBSERVED: after `delete issue-0001 --force`, adr-0001's
+    file still reads `related: [issue-0001]`, and `update adr-0001 --set-title X` succeeds and
+    re-persists the broken edge — Tier 0 validates only edges supplied in the current call.
+    Evidence: document_service.py:190-206, validation.py:61-66; contrast tag_service.py:97-103.
+  proposed_answer: >
+    (a) `delete --force` strips the edge from referencing documents in the same transaction —
+    the pattern already exists for tags. (b) Add `docir check --fix` for the mechanical cases:
+    re-issue one of a duplicated id pair (rewriting inbound edges), drop dangling edges,
+    resync the counter.
+  context: >
+    Every confirmed failure mode in this analysis ends in a state the product detects and
+    cannot exit, and the documented recovery contradicts the product's second thesis.
+  asked: 2026-07-26
+  answered: null
+  authority: null
+  answer: null
+  answered_note: >
+    ANSWERED 2026-07-26 in part. (b) is implemented: `docir check --fix` repairs duplicate
+    ids and dangling edges. (a) is NOT — `delete --force` still creates the dead edges rather
+    than compensating for them; GAP-007 stays open, now recoverable rather than permanent.
+  assumption_if_unanswered: null
+
+- id: Q-008
+  gap: GAP-001
+  audience: repo maintainer
+  blocking: true
+  rank: 8
+  question: >
+    Nothing in the repo measures whether docir retrieves better or cheaper than the
+    alternatives it is compared against. What would count as evidence that it works — and is
+    building that measurement in scope before further retrieval tuning?
+  today: >
+    No telemetry, no counters, no benchmark harness, no logging of business events. The
+    README's comparison table is explicitly labelled "Rough orientation, not a benchmark"
+    (README:48).
+  proposed_answer: >
+    One offline benchmark, no user telemetry needed: a fixture corpus, a set of task
+    descriptions, and human-judged relevant documents. Measure recall@k and tokens-returned.
+  context: >
+    This is why every gap in the register carries `frequency: unknown`, why the retrieval
+    constants (25 FTS candidates, 0.9 similarity, 8000 chars, RRF k=60) cannot be tuned on
+    evidence, and why the token cost of Q-003 cannot be quantified.
+  asked: 2026-07-26
+  answered: null
+  authority: null
+  answer: null
+  assumption_if_unanswered: >
+    Proceeding without measurement; all impact statements in 05-gaps.yaml remain
+    reasoned rather than measured. Review before any retrieval-quality work.
+
+# =============================================================================
+# NON-BLOCKING — recorded assumptions; ask in a later round
+# =============================================================================
+
+- id: Q-009
+  gap: GAP-017
+  audience: repo maintainer
+  blocking: false
+  rank: 9
+  question: >
+    Should `docir context` be able to return nothing? There is no similarity floor, and the
+    RRF `score` is rank-derived so it is ~identical for a perfect and a nonsense match.
+  today: >
+    OBSERVED: against a store containing only "Postgres connection pooling",
+    `context "how do I bake sourdough bread" --limit 3` returns it with score 0.0328.
+    Evidence: scoring.py:36-73, document_service.py:257.
+  proposed_answer: "Emit raw cosine alongside the fused score and support `--min-score`, so an
+                    empty result is expressible."
+  context: "Compounds Q-003 — the response is unbounded in size and unfiltered in quality."
+  asked: null
+  answered: null
+  authority: null
+  answer: null
+  assumption_if_unanswered: "Assuming always-return-something is deliberate. Review with Q-003."
+
+- id: Q-010
+  gap: GAP-010
+  audience: repo maintainer
+  blocking: false
+  rank: 10
+  question: >
+    Should `schema validate` check that transition targets and `inactive_statuses` name
+    declared statuses? Today a type can validate with no reachable exit from its default status.
+  today: >
+    OBSERVED: `statuses: {open: [closd], closed: []}`, `inactive_statuses: [done]` →
+    `{"valid":true}`. The eventual error, `invalid transition 'open' -> 'closed'`, names a
+    status that IS declared and points at the write rather than the schema.
+    Evidence: schema_loader.py:142-192, schema.py:97-117.
+  proposed_answer: "Reject unknown transition targets and inactive statuses at load time; warn
+                    when a non-inactive status has no outgoing transitions."
+  context: "The command exists to catch schema edits before they reach a write; this is the
+            most likely schema error and it passes."
+  asked: null
+  answered: null
+  authority: null
+  answer: null
+  assumption_if_unanswered: "Assuming the shallow check is an oversight. Review before schema work."
+
+- id: Q-011
+  gap: GAP-024
+  audience: repo maintainer
+  blocking: false
+  rank: 11
+  question: >
+    Should `docir agent install --agent <unknown>` fail? Today it is a silent no-op, while
+    `docir init --profiles <unknown>` correctly raises and lists valid names.
+  today: "OBSERVED: `--agent claud` → prints [], exit 0, writes nothing.
+          Evidence: agents/application/service.py:96-98 vs composition.py:177-180."
+  proposed_answer: "Raise AgentSetupError naming the valid targets, matching --profiles."
+  context: "Once-per-repo onboarding command reporting success while doing nothing."
+  asked: null
+  answered: null
+  authority: null
+  answer: null
+  assumption_if_unanswered: "Assuming it should error. Cheap fix, low risk."
+
+- id: Q-012
+  gap: GAP-036
+  answered: 2026-07-27
+  authority: repo maintainer (built, reviewed against a messy corpus, then rejected)
+  audience: repo maintainer
+  blocking: false
+  rank: 12
+  question: >
+    How is a repository that already has ADRs supposed to adopt docir? There is no import
+    path, and because ids are always system-allocated, existing ADR numbers cannot be kept.
+  today: "No import/export/migrate command exists. Every historical cross-reference breaks."
+  proposed_answer: "`docir import <glob>` that preserves an id when the filename already
+                    matches `<prefix>-<suffix>`, and seeds the counter above it."
+  context: "The most likely adopter is exactly a project already keeping markdown ADRs."
+  asked: null
+  answered: null
+  authority: null
+  answer: null
+  answered_note: >
+    ANSWERED 2026-07-27, in the negative. `docir import` was built and then removed the same
+    day: with random ids the command's only unique capability disappears, and what remained
+    reported success over input it had mangled. The answer to "how does a repo with existing
+    ADRs adopt docir?" is a documented review-then-add workflow, not a command.
+    See GAP-036, which stays open.
+  assumption_if_unanswered: null
+
+- id: Q-013
+  gap: GAP-011
+  audience: repo maintainer
+  blocking: false
+  rank: 13
+  question: >
+    `owner` is captured and only ever interpolated into a `check` message. How is a stale
+    document supposed to reach the person accountable for it?
+  today: "No notification, no `--owner` filter, no 'documents I own' view, no reminder.
+          Evidence: graph_checks.py:100-102, document.py:37."
+  proposed_answer: "`docir query --owner <name>` and `--stale` as first-class filters — the
+                    smallest change that turns the data into a workflow."
+  context: "'Knows what's stale' is one of six rows in the README comparison table. Detection
+            works; the loop that would make it matter is absent."
+  asked: null
+  answered: null
+  authority: null
+  answer: null
+  assumption_if_unanswered: "Assuming manual `docir check` is the intended delivery mechanism."
+
+- id: Q-014
+  gap: GAP-014
+  audience: repo maintainer
+  blocking: false
+  rank: 14
+  question: "Should `--override` leave a trace? Today a forced illegal status transition is
+             indistinguishable from a legal one."
+  today: "document_service.py:324-329 — status changes, nothing records that a Tier 0 rule
+          was bypassed."
+  proposed_answer: "Record it in frontmatter, or drop the flag and require an explicit
+                    two-step transition through a legal intermediate."
+  context: "Coverage checklist: 'who can override a rule, and is the override audited?'"
+  asked: null
+  answered: null
+  authority: null
+  answer: null
+  assumption_if_unanswered: "Assuming the escape hatch is deliberate and the audit gap accepted."
+
+- id: Q-015
+  gap: GAP-020
+  audience: repo maintainer
+  blocking: false
+  rank: 15
+  question: >
+    Should `tag rename` advance `updated` on every referencing document? It resets the
+    staleness clock for any document without an explicit `verified` date.
+  today: "tag_service.py:77/99 set `updated = today`; `stale_reference_date()` falls back to
+          `updated` (document.py:73-75). A classification edit makes overdue documents look
+          freshly reviewed."
+  proposed_answer: "Do not advance `updated` for edits that change no content; or measure
+                    staleness from `verified` only, treating never-verified docs as stale
+                    from `created`."
+  context: "ADR-0006 argues staleness must be honest human re-verification; a bulk
+            administrative edit silently forges it."
+  asked: null
+  answered: null
+  authority: null
+  answer: null
+  assumption_if_unanswered: "Assuming the reset is unintended. Review with Q-013."
+
+- id: Q-016
+  gap: GAP-023
+  audience: repo maintainer
+  blocking: false
+  rank: 16
+  question: >
+    Should `docir add` in an uninitialised repository succeed silently against the global
+    `~/.docir`? Today it does, and the document lands outside the repo with no signal.
+  today: "settings.py:96-104 falls back silently; schema_loader.py:26-31 writes a default
+          schema on first touch. The reported path looks repo-relative."
+  proposed_answer: "Report the resolved store in write output, or warn once on the global
+                    fallback."
+  context: "`docir init` is step 2 of the quickstart; forgetting it produces no error."
+  asked: null
+  answered: null
+  authority: null
+  answer: null
+  assumption_if_unanswered: "Assuming the silent fallback is deliberate (git-like ergonomics)
+                             and the missing signal is the defect."
+
+- id: Q-017
+  gap: GAP-019
+  audience: repo maintainer
+  blocking: false
+  rank: 17
+  question: >
+    Should graph expansion follow incoming edges too? Today it is outgoing-only, so from a
+    superseded document the document that superseded it is unreachable.
+  today: "`_augment_with_related` uses `outgoing()` only (document_service.py:301);
+          `incoming()` exists and is used solely by delete (repositories.py:133-135)."
+  proposed_answer: "Follow incoming supersedes/contradicts edges, or always attach the
+                    superseding document when one exists."
+  context: "'Is this decision still current?' is the question the relation graph most needs to
+            answer, and it is the one direction not traversed."
+  asked: null
+  answered: null
+  authority: null
+  answer: null
+  assumption_if_unanswered: "Assuming outgoing-only is a simplification, not a decision."

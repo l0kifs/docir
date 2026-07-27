@@ -1,0 +1,1288 @@
+# Gap register — PRIMARY DELIVERABLE. Sorted by severity, not discovery order.
+#
+# class:      missing | misleading | incorrect | unusual | unstated
+# severity:   blocking (wrong answer changes the design, or touches data loss)
+#             material (affects real users regularly, has a workaround)
+#             cosmetic (worth recording, not worth a question this round)
+# confidence: observed = executed against the real CLI, or read directly off code
+#
+# frequency:  "unknown" almost everywhere — the product has NO telemetry (GAP-001),
+#             so nothing here is ranked by measured impact. That is itself finding #1.
+
+# =============================================================================
+# BLOCKING
+# =============================================================================
+
+- id: GAP-003
+  class: incorrect
+  flow: FLOW-003
+  step: "reindex, then the next add"
+  finding: >
+    `reindex` does not restore the id counter (`id_sequences`), so after any rebuild the
+    next `add` re-issues an id that is already in use. Both files persist; the index keeps
+    only the newer one; the older document becomes invisible to every read path.
+  actual_today: >
+    OBSERVED end to end. Store with adr-0001 "First" and adr-0002 "Second"; delete index.db
+    (it is gitignored — this is exactly a fresh clone); `docir reindex` reports
+    documents_indexed 2; `docir add --type decision --title "Third"` returns id **adr-0001**.
+    Disk now holds adr-0001-first-decision.md AND adr-0001-third-decision.md.
+    `docir get adr-0001` returns "Third decision". `docir query` lists two documents, not
+    three. "First decision" is unreachable through get, query, search and context while its
+    file sits untouched on disk. No error, no warning, exit code 0.
+  actors_affected: [AI coding agent, repository maintainer, git / branch merge]
+  evidence:
+    - src/docir/modules/documents/application/services/maintenance_service.py:148-174
+    - src/docir/platform/persistence/repositories.py:48-56
+    - analysis/99-log.md   # PROBE-1, PROBE-2
+  confidence: observed
+  severity: blocking
+  impact: >
+    Silent loss of a decision record on the documented happy path. It requires no
+    concurrency, no --force, no unusual input — only `git clone` followed by the rebuild
+    command the README tells you to run. It contradicts the project's first thesis ("the
+    index is a derived, rebuildable projection"): the rebuild is not faithful.
+  frequency: "once per fresh clone that then adds a document — i.e. every new contributor"
+  proposed_default: >
+    `_reindex_documents` should, for each sequential-id type, set the counter to
+    max(existing numeric suffix) + 1 as part of the rebuild. Add a regression test that
+    clones→reindexes→adds and asserts the new id is unused.
+  question: Q-001
+  status: resolved
+  resolution: >
+    FIXED 2026-07-26. `MaintenanceService._restore_id_sequences` rebuilds the counter from the
+    ids on disk (monotonic, so deleting the highest-numbered doc does not free its id).
+    Two backstops added for the paths reindex does not cover: `IdGenerator` skips a candidate
+    already indexed, and `add` refuses to write when a file already claims the id
+    (`DuplicateDocumentIdError`, exit 5) instead of silently overwriting. Verified by replaying
+    PROBE-1 against the real CLI — clone→reindex→add now yields adr-0003 and all three
+    documents stay visible. Pinned by test_reindex_restores_the_id_counter,
+    test_reindex_never_rewinds_the_counter and
+    test_add_refuses_to_clobber_a_file_owning_the_allocated_id.
+
+- id: GAP-009
+  class: incorrect
+  flow: FLOW-001
+  step: "id allocation under concurrency"
+  finding: >
+    With `--no-daemon`, concurrent `add` invocations all receive the same id. The
+    read-modify-write of the counter is not serialized at the SQLite level; nothing detects
+    the collision.
+  actual_today: >
+    OBSERVED. Six simultaneous `docir --no-daemon add` calls against one store ALL returned
+    `adr-0002`, all exited 0, and produced six files claiming that id. Only one is visible
+    in the index. The same race with the daemon (the default) produced adr-0002..adr-0007
+    correctly — the daemon's single-connection loop is what actually serializes.
+  actors_affected: [AI coding agent, repository maintainer, CI job]
+  evidence:
+    - src/docir/platform/persistence/repositories.py:48-56
+    - src/docir/platform/transport/server.py:20-25
+    - src/docir/modules/documents/application/services/id_generator.py:3-5
+    - analysis/99-log.md   # PROBE-10 vs PROBE-11
+  confidence: observed
+  severity: blocking
+  impact: >
+    Contradicts a documented invariant. CLAUDE.md states the counter "is what keeps parallel
+    agents from minting the same id"; it is the daemon that does. `--no-daemon` is presented
+    as an equal alternative (README:136-139) and is what the project's own test suite and CI
+    use, so the mode where the guarantee fails is the mode most likely to be scripted.
+  frequency: "unknown; requires two agents/processes writing at once, which is the stated
+              multi-agent use case"
+  proposed_default: >
+    Take the counter update inside an IMMEDIATE transaction (or `UPDATE … RETURNING` under a
+    write lock), so allocation is atomic regardless of daemon mode. Failing that, document
+    plainly that `--no-daemon` is single-writer-only and make the bundled profiles use
+    `id_style: random`, which is already implemented and immune (as of 2026-07-26 this is
+    what `docir init` writes by default — see BR-074).
+  question: Q-002
+  status: resolved
+  resolution: >
+    FIXED 2026-07-26. `next_number` is now a single atomic upsert
+    (`INSERT … ON CONFLICT DO UPDATE SET next_value = next_value + 1 RETURNING next_value - 1`),
+    so the increment happens under SQLite's write lock instead of in Python between two
+    statements. `busy_timeout` is now set explicitly in `create_index_engine` so a blocked
+    writer waits rather than erroring. Verified by isolating the change: with the retry loop
+    and file guard temporarily removed, 16 barrier-synchronised concurrent adds x3 rounds
+    produced 16 unique ids every time, where the old code collided at 6. Pinned by
+    tests/modules/documents/test_concurrent_ids.py (marked `slow`, spawns real processes),
+    which was confirmed to FAIL against the reverted implementation.
+    Note the guarantee no longer depends on the daemon; the daemon remains the serializer for
+    everything else.
+
+- id: GAP-005
+  class: incorrect
+  flow: FLOW-002
+  step: "graph expansion after ranking"
+  finding: >
+    `--limit` bounds the ranked seed set but not the response. One-hop graph expansion runs
+    afterwards and appends neighbours with no cap.
+  actual_today: >
+    OBSERVED. Three decisions each with two outgoing edges: `docir context "cache
+    invalidation policy" --limit 3` returned **9** documents. Worst case is
+    limit × (1 + max out-degree).
+  actors_affected: [AI coding agent]
+  evidence:
+    - src/docir/modules/documents/application/services/document_service.py:260-273
+    - src/docir/modules/documents/application/services/document_service.py:297-307
+    - analysis/99-log.md   # PROBE-5
+  confidence: observed
+  severity: blocking
+  impact: >
+    Directly negates the product's headline claim. docir exists to be "token-cheap for
+    agents" (README:46); `context` is the flagship command; its default limit is 5; and the
+    caller has no way to bound what comes back. On a well-linked corpus — the corpus docir
+    is built to encourage — the overrun grows with graph density, so the tool degrades
+    exactly as it is adopted successfully.
+  frequency: "every `context` call against a corpus with relations"
+  proposed_default: >
+    Apply `limit` to the final result, or add a separate explicit budget for graph-expanded
+    neighbours (e.g. `--expand N`, default 0 or 1) and document the interaction.
+  question: Q-003
+  status: resolved
+  resolution: >
+    FIXED 2026-07-26. `--limit` is now a hard ceiling on the response and graph expansion runs
+    inside it: `--expand N` (default 2) reserves at most N slots for neighbours, expansion is
+    breadth-first across seeds so one dense hit cannot spend the whole budget, and slots the
+    graph does not use are backfilled with more ranked hits — so a result is always
+    min(limit, what exists). `expand` is clamped below `limit`, so a seed can never be crowded
+    out. Verified by replaying PROBE-5 against the real CLI: --limit 3 now returns 3 (was 9),
+    --expand 0 disables the graph, --limit 1 returns 1 ranked hit. Pinned by
+    TestContextBudget in tests/modules/documents/test_integration_documents.py, confirmed to
+    FAIL (assert 9 == 3) against the reverted implementation.
+
+- id: GAP-006
+  class: misleading
+  flow: FLOW-003
+  step: "CI gate"
+  finding: >
+    `docir check --strict` exits 1 on any finding of any kind, and `orphan` fires for every
+    document with no relations — the default state of a newly created document. There is no
+    severity, no `--only <kind>`, and no ignore mechanism.
+  actual_today: >
+    OBSERVED. A brand-new store with two unrelated, otherwise-healthy documents exits 1 from
+    two `orphan` findings alone.
+  actors_affected: [CI job, repository maintainer]
+  evidence:
+    - src/docir/entry_points/cli/app.py:419-440
+    - src/docir/modules/documents/domain/services/graph_checks.py:173-192
+    - analysis/99-log.md   # PROBE-3
+  confidence: observed
+  severity: blocking
+  impact: >
+    The one CI integration the product advertises cannot be adopted as documented. A team
+    that tries it gets a red build immediately and will remove the gate — which also removes
+    duplicate-id and dangling detection, the gate's actual purpose and the only automated
+    defence against GAP-003 and GAP-009. It also contradicts the tier model: `check` is
+    documented as producing warnings that never block, while `--strict` makes all of them
+    blocking equally.
+  frequency: "first CI run of any adopting repo"
+  proposed_default: >
+    Give findings a severity (`error`: duplicate-id, dangling, malformed; `warning`: orphan,
+    cycle, layering, stale, unknown-type) and make `--strict` fail on errors only, with
+    `--strict=all` for the current behaviour.
+  question: Q-004
+  status: resolved
+  resolution: >
+    FIXED 2026-07-26. `CheckIssue` now carries a `severity`, derived from `kind` in
+    `__post_init__` so a new check cannot forget to classify itself. `ERROR_KINDS` is
+    duplicate-id / dangling / malformed — the corpus is broken; everything else is a warning
+    about shape or age. `--strict` gates on errors only; `--strict-all` keeps the old
+    fail-on-anything behaviour. Findings render red vs yellow at a TTY and expose `severity`
+    in JSON. Verified by replaying PROBE-3 against the real CLI: two healthy unrelated
+    documents now exit 0 under `--strict` (1 under `--strict-all`), while a forced delete
+    that leaves a dangling edge exits 1. Pinned by test_check_strict_gates_ci,
+    test_check_strict_fails_on_a_broken_graph and test_findings_carry_a_severity.
+    Note: test_check_strict_gates_ci previously asserted the OPPOSITE ("an orphan doc is a
+    Tier 1 issue: --strict now fails") — the old behaviour was encoded as intent, which is
+    why the gap survived to be found by running the tool rather than by reading the tests.
+
+- id: GAP-001
+  class: missing
+  flow: null
+  step: "the whole product"
+  finding: >
+    Nothing measures whether docir achieves its purpose. No telemetry, no counters, no
+    benchmark harness, no logging of business events, no way to answer "did retrieval change
+    what the agent did?"
+  actual_today: >
+    The README's own comparison table is labelled "Rough orientation, not a benchmark"
+    (README:48). The two central claims — better retrieval than RAG, cheaper than raw files
+    — are unmeasured by the author.
+  actors_affected: [repository maintainer]
+  evidence: [README.md:39-48, analysis/99-log.md]   # exhaustive search for telemetry: none
+  confidence: observed
+  severity: blocking
+  impact: >
+    Not a defect in the code; a defect in the ability to make decisions about the code.
+    It is why every other gap in this register has `frequency: unknown`, why the retrieval
+    quality parameters (GAP-017, BR-026, BR-046 thresholds) cannot be tuned on evidence, and
+    why there is no way to know whether GAP-005's token overrun matters in practice or is
+    the dominant cost.
+  frequency: n/a
+  proposed_default: >
+    Before tuning retrieval further, build one honest offline benchmark: a fixture corpus, a
+    set of task descriptions, and the documents a human judges relevant. Measure recall@k and
+    tokens-returned. It does not need telemetry from users.
+  question: Q-008
+  status: resolved
+  resolution: >
+    FIXED 2026-07-26. `benchmarks/` now measures both claims offline — no telemetry, no
+    users: 20-document corpus, 12 tasks with relevance judgments, recall/precision/MRR and
+    payload size per retrieval strategy. Run with the default embedder and with
+    DOCIR_EMBEDDER=fastembed to get the contrast. Results and their limits are in
+    benchmarks/README.md. Deliberately not a pass/fail test: it prints numbers and exits 0,
+    because a threshold set before the numbers are understood would just encode today's
+    behaviour as intent (the mistake that let GAP-006 survive).
+    The retrieval constants can now be tuned on evidence, and GAP-042 (what random ids cost
+    in tokens) is now answerable.
+  resolution: null
+
+- id: GAP-012
+  class: missing
+  flow: FLOW-003
+  step: "after check reports a problem"
+  finding: >
+    Four of the eight finding kinds — duplicate-id, dangling, malformed, unknown-type —
+    describe corrupt state, and no command can fix any of them. No `docir repair`, no
+    `--fix`, no documented manual procedure.
+  actual_today: "The user hand-edits markdown and reruns reindex, guided by nothing."
+  actors_affected: [support / operator, repository maintainer]
+  evidence:
+    - src/docir/modules/documents/application/services/maintenance_service.py:84-124
+    - src/docir/entry_points/cli/app.py:419-440
+  confidence: observed
+  severity: blocking          # raised in the adversarial pass: meets "touches data loss"
+  impact: >
+    Every confirmed failure mode in this run (GAP-003, GAP-007, GAP-009) terminates in a
+    state the product detects and cannot exit. That is also in direct tension with thesis #2,
+    "agents never edit markdown directly" — recovery *requires* exactly that.
+  frequency: "whenever GAP-003 or GAP-009 fires"
+  proposed_default: >
+    `docir check --fix` handling the mechanical cases: re-issue one of a duplicated pair of
+    ids (rewriting inbound edges), drop dangling edges, and resync the id counter.
+  question: Q-007
+  status: resolved
+  resolution: >
+    FIXED 2026-07-26. `docir check --fix` (`MaintenanceService.repair`) repairs exactly what
+    needs no guess about intent: duplicate ids are re-issued (the OLDEST file keeps the id,
+    because existing edges were written against it and an edge cannot say which document it
+    meant) and dangling edges are dropped from the canonical files. `malformed` and
+    `unknown-type` are deliberately left alone — the first needs a human to say what the file
+    was meant to be, the second is a schema decision — and are returned in
+    `RepairResult.remaining`, so `check --fix --strict` still fails when a human is genuinely
+    required. Repair does NOT advance `updated`: a mechanical fix is not a re-verification,
+    and bumping it would launder the staleness clock (the GAP-020 failure mode).
+    Verified against a store carrying all four kinds at once; pinned by six tests in
+    tests/modules/documents/test_integration_maintenance.py plus two CLI tests.
+    GAP-007 (delete --force leaving dead edges) is now recoverable, though still not
+    prevented — it remains open as a separate concern.
+
+# =============================================================================
+# MATERIAL
+# =============================================================================
+
+- id: GAP-043
+  class: misleading
+  flow: FLOW-002
+  step: "semantic ranking in a default install"
+  finding: >
+    The default embedder does not capture meaning. `DeterministicEmbedder` is signed feature
+    hashing over tokens, so it scores similarity by shared vocabulary — the same signal FTS5
+    already provides. In a default install both halves of the "hybrid" ranking are lexical.
+  actual_today: >
+    MEASURED 2026-07-26 by benchmarks/run.py. With the default embedder `context` beats plain
+    `search` by +0.03 recall and -0.03 MRR — noise at 12 tasks. With `fastembed` it beats it
+    by +0.11 recall and +0.13 MRR. On tasks phrased without the corpus vocabulary, recall is
+    0.83 (default) vs 0.92 (fastembed) vs 0.75 (search). Direct probe: the sentences
+    "duplicate charges when the customer double-clicks pay" and "idempotency keys for payment
+    capture" score cosine 0.000 under the default embedder.
+  actors_affected: [AI coding agent, repository maintainer]
+  evidence:
+    - src/docir/platform/embedding/deterministic.py:1-8
+    - benchmarks/README.md
+    - README.md:42
+  confidence: observed
+  severity: material
+  impact: >
+    README:42 claims "Retrieval by meaning ✅ (lexical + semantic)" against RAG's ✅ and plain
+    files' ❌. That is earned only with `DOCIR_EMBEDDER=fastembed` plus the `embeddings`
+    extra, which is off by default — so the comparison table describes a configuration most
+    users will not be running. The docstring in deterministic.py is honest ("captures real
+    lexical overlap"); the README is not.
+  frequency: "every default install"
+  proposed_default: >
+    Say so in the README's table and in `docir --help`: mark semantic retrieval as requiring
+    the extra, or make `docir init` offer to enable it. The code is fine; the claim is not.
+  question: null
+  status: resolved
+  resolution: >
+    FIXED 2026-07-26 as a documentation-honesty change; no code changed, because the code was
+    never wrong — the claim was. The README comparison table now reads "lexical by default,
+    semantic with an extra" with a footnote giving the install command and the measured
+    difference (0.96 vs 0.88 recall@5; 0.92 vs 0.83 on paraphrased tasks; search 0.75), linked
+    to benchmarks/ so a reader can reproduce it. "Hybrid lexical + semantic" in the command
+    table and the agent guide became "full-text and vector rankings fused", which is true in
+    both configurations. The packaged agent guide now tells an agent to phrase `context`
+    queries in the project's own vocabulary unless fastembed is enabled, and to retry with the
+    codebase's terms when a query under-retrieves — turning the limitation into usable advice.
+    CLAUDE.md records the invariant for maintainers, with the instruction to re-run the
+    benchmark before and after touching ranking.
+    SUPERSEDED same day: the maintainer decided the model should be the default, so the
+    caveat is gone rather than documented. `fastembed` is now a hard dependency;
+    `DOCIR_EMBEDDER=deterministic` selects the model-free fallback (the test suite does this,
+    which is what keeps it hermetic). The README states the real cost measured on this
+    machine: ~64 MB model downloaded once, ~240 MB of dependencies, CPU-only, local. The
+    "works offline" row is now honest about the one-time download.
+    Prerequisite discovered while implementing, see GAP-044: the switch would have broken
+    every existing store.
+
+- id: GAP-044
+  class: unstated
+  flow: FLOW-002
+  step: "changing the embedder on an existing store"
+  finding: >
+    Nothing recorded which model produced a stored vector, so changing embedder left the index
+    full of vectors from the old one. Different models have different widths, and
+    `Embedding.cosine_similarity` raises on a mismatch rather than degrading.
+  actual_today: >
+    FOUND AND FIXED 2026-07-26 while making fastembed the default — the change would have
+    broken every existing store on upgrade. Verified before the fix:
+    `Embedding((0.1,)*256).cosine_similarity(Embedding((0.1,)*384))` raises
+    `ValueError: dimension mismatch: 256 != 384`, and `docir context` reads every active
+    vector, so the first read after upgrading would have raised. The `embeddings.model_id`
+    column existed since migration 0001 but `set_vector` never wrote it, so there was no way
+    to detect the switch either.
+  actors_affected: [AI coding agent, repository maintainer]
+  evidence:
+    - src/docir/platform/persistence/repositories.py:272-300
+    - src/docir/platform/embedding/vector.py
+    - src/docir/platform/persistence/alembic/versions/0001_initial_index.py:69-80
+  confidence: observed
+  severity: material
+  impact: >
+    A dead column that turned out to be load-bearing. Any embedder change — the new default,
+    a future model upgrade, or a user toggling DOCIR_EMBEDDER — would have made the flagship
+    read path raise until someone guessed at `docir reindex --embeddings`.
+  frequency: "every store upgrading past the default flip"
+  proposed_default: >
+    FIXED. `set_vector` writes `model_id`; `active_vectors(model_id)` returns only matching
+    rows so foreign vectors fall out of ranking instead of raising; `dirty_ids(model_id)`
+    treats a foreign or NULL model_id as dirty, so they are recomputed on the next write or
+    `docir embed --flush`. Verified end to end: a store built with the old embedder now
+    answers `docir context` without error after the switch and re-embeds transparently.
+    Pinned by test_vectors_from_another_model_are_recomputed_not_compared.
+    Residual: the first read after a switch has no semantic signal until the recompute runs.
+  question: null
+  status: resolved
+
+- id: GAP-045
+  class: unstated
+  flow: FLOW-002
+  step: "the gates, once fastembed became the default"
+  finding: >
+    The default embedder path was excluded from every quality gate. `fastembed.py` was
+    excluded from `ty`, omitted from coverage, carried `# pragma: no cover`, and no test
+    referenced it — while CI installed ~240 MB of dependencies and then exercised none of it.
+  actual_today: >
+    FOUND AND FIXED 2026-07-27, immediately after the default flip. The exclusions were
+    written when the adapter was opt-in, where they were defensible; making it the default
+    silently turned them into a hole. Their own comments had become false ("imports an
+    optional, not-installed dependency"). Lifting the `ty` exclusion surfaced a real
+    diagnostic on the first run: `unresolved-attribute: Object of type object has no attribute
+    embed` — the adapter held its model as a bare `object` behind a mypy-flavoured
+    `type: ignore`.
+  actors_affected: [repository maintainer, AI coding agent]
+  evidence:
+    - pyproject.toml
+    - .github/workflows/ci.yml
+    - src/docir/platform/embedding/fastembed.py
+  confidence: observed
+  severity: material
+  impact: >
+    A typo in `FastEmbedEmbedder.embed` would have shipped green to every default install.
+    The general shape is worth remembering: an exclusion is scoped to an assumption
+    ("optional, rarely used"), and nothing re-checks the exclusion when the assumption changes.
+  frequency: "every CI run since the default flip"
+  proposed_default: >
+    FIXED. Both exclusions dropped; the adapter now depends on a `_TextEmbedding` Protocol
+    instead of `object`, so it type-checks honestly. Three `slow` tests exercise the real model
+    (dimension, meaning-over-wording, determinism) plus fast tests for embedder selection and
+    the missing-dependency fallback. Coverage of the file went from omitted to 97%. CI caches
+    `~/.cache/fastembed` so the ~64 MB download happens once, not per run. `pytest -m "not
+    slow"` still runs model-free for local work.
+  question: null
+  status: resolved
+
+- id: GAP-004
+  class: incorrect
+  flow: FLOW-002
+  step: "graph expansion"
+  finding: >
+    The inactive-status filter is enforced on three read paths and skipped on the fourth.
+    `context`'s graph expansion checks `archived` but not status.
+  actual_today: >
+    OBSERVED. A `resolved` issue referenced by a decision is returned by `docir context`
+    without `--include-resolved`, while `docir search` and `docir query` correctly hide it.
+  actors_affected: [AI coding agent]
+  evidence:
+    - src/docir/modules/documents/application/services/document_service.py:297-307
+    - src/docir/modules/documents/application/services/document_service.py:265-268
+    - analysis/99-log.md   # PROBE-4
+  confidence: observed
+  severity: material
+  impact: >
+    An agent asking for current context receives closed work items it was promised it would
+    not see, and cannot tell which results honoured the filter.
+  frequency: "any context query whose seed documents link to a closed document"
+  proposed_default: "Apply the same visibility predicate in `_augment_with_related` as in the
+                     fusion loop; extract it to one function so they cannot diverge again."
+  question: Q-005
+  status: open
+
+- id: GAP-007
+  class: missing
+  flow: FLOW-001
+  step: "delete --force, and every later write to a referencing document"
+  finding: >
+    `delete --force` leaves referencing documents pointing at a document that no longer
+    exists, and nothing ever repairs it. Tier 0 validates only edges supplied in the current
+    call, so the broken edge is rewritten to the canonical file on every subsequent update.
+  actual_today: >
+    OBSERVED. After `docir delete issue-0001 --force`, adr-0001's file still reads
+    `related: [issue-0001]`. `docir update adr-0001 --set-title X` succeeds and re-persists
+    the broken edge. `docir check` reports it forever; no command fixes it.
+  actors_affected: [AI coding agent, repository maintainer]
+  evidence:
+    - src/docir/modules/documents/application/services/document_service.py:190-206
+    - src/docir/modules/documents/domain/services/validation.py:61-66
+    - analysis/99-log.md   # PROBE-6, PROBE-7
+  confidence: observed
+  severity: material
+  impact: "The graph — the feature that distinguishes docir from a folder of files — silently
+           accumulates unresolvable edges, in the canonical files, permanently."
+  frequency: "every forced delete"
+  proposed_default: >
+    Strip the edge from referencing documents as part of the forced delete (the same
+    transaction pattern `tag rm --force` already uses for tags — the machinery exists and is
+    applied to the lesser case).
+  question: Q-007
+  status: open
+
+- id: GAP-008
+  class: incorrect
+  flow: FLOW-003
+  step: "layering check under the default profile"
+  finding: >
+    In the shipped `software` profile, `decision` is level 3 and `issue` is level 1, so
+    linking a decision to the issue that motivated it is a permanent layering violation.
+  actual_today: >
+    OBSERVED. `adr-0001 related: [issue-0003]` yields
+    "layering violation: decision 'adr-0001' depends on lower-level issue 'issue-0003'".
+    This is the exact pairing in the README's own quickstart output (README:78-81).
+  actors_affected: [repository maintainer, CI job]
+  evidence:
+    - src/docir/modules/documents/infra/profiles.py:26-27, 44-46
+    - src/docir/modules/documents/domain/services/graph_checks.py:194-223
+    - analysis/99-log.md   # PROBE-8
+  confidence: observed
+  severity: material
+  impact: >
+    The most natural thing a user will model produces a warning they cannot silence, which
+    trains them to ignore `check` output — and compounds GAP-006.
+  frequency: "any corpus where a decision links its motivating issue"
+  proposed_default: >
+    Restrict the layering check to `depends_on` (and `refines`) rather than
+    "everything except supersedes/contradicts". `relates_to` is the default kind applied to
+    every bare id and carries no dependency claim at all.
+  question: Q-006
+  status: open
+
+- id: GAP-010
+  class: misleading
+  flow: FLOW-004
+  step: "docir schema validate"
+  finding: >
+    `schema validate` does not check that transition targets or `inactive_statuses` are
+    declared statuses, so a type can pass validation with no reachable exit from its default
+    status.
+  actual_today: >
+    OBSERVED. `statuses: {open: [closd], closed: []}` plus `inactive_statuses: [done]`
+    returns `{"valid":true}`. The failure appears later as
+    `invalid transition 'open' -> 'closed'` — naming a status that IS declared, which points
+    the reader at the write instead of at the typo in the schema.
+  actors_affected: [repository maintainer]
+  evidence:
+    - src/docir/modules/documents/infra/schema_loader.py:142-192
+    - src/docir/modules/documents/domain/schema.py:97-117
+    - analysis/99-log.md   # PROBE-12
+  confidence: observed
+  severity: material
+  impact: >
+    A command whose entire purpose is "check an edit before it reaches a write" (app.py:138)
+    passes the most likely schema error, and the eventual message misdirects. Documents can
+    be created in a state with no legal exit.
+  frequency: "any hand-edited schema with a typo — the case the command exists for"
+  proposed_default: >
+    In `_parse_type`, reject transition targets and `inactive_statuses` not present in the
+    type's declared status set; warn when a non-inactive status has no outgoing transitions.
+  question: Q-010
+  status: open
+
+- id: GAP-011
+  class: missing
+  flow: FLOW-003
+  step: "acting on staleness"
+  finding: >
+    Staleness is detected and never routed. `owner` is stored and interpolated into one
+    `check` message; there is no notification, no `--owner` filter, no "documents I own"
+    view, no scheduled reminder.
+  actual_today: "A stale document stays stale until somebody happens to run `docir check`
+                 and read past the orphan noise."
+  actors_affected: [document owner / steward, repository maintainer]
+  evidence:
+    - src/docir/modules/documents/domain/services/graph_checks.py:100-102
+    - src/docir/modules/documents/domain/entities/document.py:37
+  confidence: observed
+  severity: material
+  impact: >
+    "Knows what's stale" is one of six rows in the README's comparison table (README:44) and
+    one of four bullets in "The model". The detection is real; the loop that would make it
+    change anything is absent. ADR-0006 justifies not auto-detecting staleness — it does not
+    address delivering it to the named owner.
+  frequency: "continuous once any document passes its cadence (365d default)"
+  proposed_default: >
+    Add `docir query --owner <name>` and `--stale` as first-class filters. That is the
+    smallest thing that turns the data into a workflow, and it needs no new subsystem.
+  question: Q-013
+  status: open
+
+
+- id: GAP-036
+  class: missing
+  flow: FLOW-004
+  step: "adopting docir in a repo that already has documents"
+  finding: >
+    There is no import path. A repository with existing ADRs must create each document
+    through `docir add`, and because ids are always allocated by the system (BR-006), the
+    existing ADR numbers cannot be preserved.
+  actual_today: >
+    No `import`, `export`, `migrate` or `adopt` command exists anywhere in the CLI
+    (verified by search). Every cross-reference in the existing corpus breaks on adoption.
+  actors_affected: [repository maintainer]
+  evidence:
+    - src/docir/entry_points/cli/app.py       # full command surface; no import path
+    - src/docir/modules/documents/application/services/id_generator.py:26-40
+  confidence: observed
+  severity: material
+  impact: >
+    The most likely adopter is precisely a project that already keeps ADRs in markdown — the
+    audience the product describes. For them the on-ramp is a hand-written migration script
+    plus renumbering every historical reference. The bulk-import path is, as the coverage
+    checklist predicts, both the most important and the least documented flow.
+  frequency: "once per adopting repository, at the moment of adoption"
+  proposed_default: >
+    NOT a command. `docir import` was built on 2026-07-27 and REMOVED the same day before
+    committing; the reasoning is worth keeping so it is not rebuilt naively.
+
+    It preserved the number a filename implies, inferred title/description/status, and
+    handled a directory in one pass. It worked perfectly on docir's own ADRs. It was removed
+    for two reasons that compound:
+
+    (a) The maintainer wanted random ids by default even for numbered sources, which removes
+    the one thing import could do that `docir add` cannot. What remained was inference —
+    and every inference is a guess the agent must verify. Verifying a guess is not cheaper
+    than making the judgement; it is often dearer, because the guess must first be noticed
+    as wrong. The agent reads every source file either way, so import saved the *writing*,
+    and writing was never the bottleneck.
+
+    (b) It reported success on input it had silently mangled. DEMONSTRATED: a `decisions.md`
+    holding three decisions — one superseded, one rejected — became ONE document titled
+    "Architecture decisions" with status `proposed`; a file whose body read "DRAFT — do not
+    rely on this" imported as `proposed`, indistinguishable from a real decision. The report
+    said `imported 2, failed 0`. An agent reading that concludes the migration is done.
+
+    The honest replacement is a documented workflow, now in the packaged agent guide: read
+    each file, decide whether it is one document or several, judge whether it is still true,
+    write a real description, pick the type, then `docir add`. Adoption stays awkward — that
+    is the true state of affairs, and a command that hid it made things worse.
+
+    If it is ever revisited, the design that would address (b) is importing *archived*, so
+    documents are invisible to every read path until an agent reviews and unarchives each
+    one — review becomes structural rather than advisory.
+  question: Q-012
+  status: open
+
+- id: GAP-023
+  class: misleading
+  flow: FLOW-004
+  step: "running a command before docir init"
+  finding: >
+    Commands run in an uninitialised repository silently fall back to the global `~/.docir`
+    and succeed, writing documents outside the repo.
+  actual_today: >
+    `Settings.resolve` returns the global default with no signal (settings.py:104), and
+    `load_schema` writes a default schema on first touch (schema_loader.py:26-31). `docir add`
+    reports success and a relative path that looks repo-local.
+  actors_affected: [repository maintainer, AI coding agent]
+  evidence: [src/docir/config/settings.py:96-104,
+             src/docir/modules/documents/infra/schema_loader.py:26-31]
+  confidence: observed
+  severity: material
+  impact: "Documents intended for a repo land in the user's home directory, ungitted and
+           invisible to teammates, with no error at any point."
+  frequency: "any user who forgets `docir init` — the second step of the quickstart"
+  proposed_default: "Report the resolved store (and whether it was discovered or defaulted)
+                     in write-command output, or warn once when falling back to global."
+  question: Q-016
+  status: open
+
+- id: GAP-024
+  class: incorrect
+  flow: FLOW-004
+  step: "docir agent install --agent <name>"
+  finding: "An unrecognised agent target name is silently ignored: no error, exit 0, nothing written."
+  actual_today: >
+    OBSERVED. `docir agent install --agent claud` printed `[]`, exited 0, created no files.
+    Two files away, `docir init --profiles bogus` correctly raises and lists the valid names.
+  actors_affected: [repository maintainer]
+  evidence: [src/docir/modules/agents/application/service.py:91-105,
+             src/docir/entry_points/composition.py:177-180,
+             analysis/99-log.md]   # PROBE-13
+  confidence: observed
+  severity: material
+  impact: "A once-per-repo onboarding command that reports success while doing nothing; the
+           user proceeds believing their agent knows how to drive docir."
+  frequency: "any typo in --agent"
+  proposed_default: "Raise AgentSetupError naming the valid targets, matching --profiles."
+  question: Q-011
+  status: open
+
+- id: GAP-014
+  class: missing
+  flow: FLOW-001
+  step: "--override on an illegal status transition"
+  finding: >
+    `--override` bypasses the transition rules and leaves no trace. The resulting document is
+    indistinguishable from one that transitioned legally.
+  actual_today: "Status changes; no marker, no note, no audit field. The status grammar — a
+                 Tier 0 hard rule — has an unlogged escape hatch."
+  actors_affected: [repository maintainer, AI coding agent]
+  evidence: [src/docir/modules/documents/application/services/document_service.py:324-329]
+  confidence: observed
+  severity: material
+  impact: >
+    Coverage checklist: "Admin: who can override a rule, and is the override audited?" — the
+    override exists, the audit does not. git history records that the status changed but not
+    that a rule was bypassed to change it.
+  frequency: unknown
+  proposed_default: "Either record the override in frontmatter (e.g. an `overrides:` note), or
+                     drop the flag and require an explicit two-step transition."
+  question: Q-014
+  status: open
+
+- id: GAP-020
+  class: incorrect
+  flow: FLOW-005
+  step: "tag rename / tag rm --force"
+  finding: >
+    Renaming a tag sets `updated = today` on every referencing document, which resets the
+    staleness clock for any document without an explicit `verified` date.
+  actual_today: >
+    `stale_reference_date()` falls back to `updated` when `verified` is unset
+    (document.py:73-75), and tag_service.py:77/99 bump `updated`. A pure classification edit
+    therefore makes overdue documents report as freshly reviewed.
+  actors_affected: [document owner / steward, repository maintainer]
+  evidence: [src/docir/modules/tags/application/services/tag_service.py:74-80, 97-102,
+             src/docir/modules/documents/domain/entities/document.py:73-75]
+  confidence: observed
+  severity: material
+  impact: >
+    Launders the one trust signal the product offers. ADR-0006 argues staleness must be
+    honest human re-verification; an administrative bulk edit silently forges it.
+  frequency: "every tag rename, across every document carrying the tag"
+  proposed_default: "Do not advance `updated` for edits that change no document content;
+                     or measure staleness from `verified` only, treating never-verified
+                     documents as stale from `created`."
+  question: Q-015
+  status: open
+
+- id: GAP-021
+  class: unstated
+  flow: FLOW-003
+  step: "reindex --changed"
+  finding: >
+    `reindex --changed` skips the removal sweep entirely, so documents deleted from the
+    filesystem remain in the index and keep being returned by every read path.
+  actual_today: "maintenance_service.py:166-174 guards the sweep with `if not changed_only`.
+                 Neither `--help` nor the README mentions the difference."
+  actors_affected: [repository maintainer, AI coding agent]
+  evidence: [src/docir/modules/documents/application/services/maintenance_service.py:166-174]
+  confidence: observed
+  severity: material
+  impact: "The fast path silently has different semantics from the full path — deletions are
+           invisible to it. An agent then retrieves a document whose file is gone."
+  frequency: "any use of --changed after a file deletion"
+  proposed_default: "Document it in `--help`, or make the sweep unconditional (it is a single
+                     id-set difference and cheap)."
+  question: null
+  status: open
+
+- id: GAP-022
+  class: misleading
+  flow: FLOW-003
+  step: "reindex over a corpus containing a malformed file"
+  finding: >
+    `reindex` silently skips files that fail to parse and reports only `documents_indexed`,
+    so a partial rebuild is indistinguishable from a complete one.
+  actual_today: "`scan()` swallows ValidationError and continues (markdown_store.py:58-62).
+                 `ReindexResult` has no skipped/failed count."
+  actors_affected: [repository maintainer]
+  evidence: [src/docir/platform/filesystem/markdown_store.py:51-62,
+             src/docir/modules/documents/application/services/maintenance_service.py:26-33]
+  confidence: observed
+  severity: material
+  impact: "A user rebuilding after a hand-edit that broke frontmatter is told the rebuild
+           succeeded. The document is simply absent from retrieval."
+  frequency: "any reindex following a bad hand-edit — the scenario reindex exists for"
+  proposed_default: "Add `documents_skipped` to ReindexResult and print it; the data is
+                     already available via `find_malformed()`."
+  question: null
+  status: open
+
+- id: GAP-013
+  class: unstated
+  flow: FLOW-001
+  step: "between the file write and the index commit"
+  finding: >
+    The markdown file is written before the transaction commits, so an interruption in
+    between leaves a file on disk that the index does not know about.
+  actual_today: "document_service.py:118-123 — write, then save/index/mark, then commit.
+                 No test covers the interruption; `reindex` would repair it if anyone knew to run it."
+  actors_affected: [repository maintainer, AI coding agent]
+  evidence: [src/docir/modules/documents/application/services/document_service.py:118-123]
+  confidence: observed
+  severity: material
+  impact: >
+    A third route to a duplicate id, and the sharpest one. `next_number` only *flushes*
+    inside the transaction (repositories.py:55), so an interruption before the commit rolls
+    the counter back while the file it already wrote survives on disk. The next `add`
+    therefore issues that same id again. Since the file is canonical the document is not
+    lost — the correct trade-off — but the atomicity boundary is documented as covering
+    "file, metadata, FTS, relations" (CLAUDE.md) and in fact covers only the last three.
+  frequency: "unknown; requires a crash or kill mid-write"
+  proposed_default: "Write the file after the commit (accepting a lost file over a duplicated
+                     id), or have `check` flag files present on disk but absent from the index.
+                     Either way, state the real boundary in CLAUDE.md."
+  question: Q-001
+  status: resolved
+  resolution: >
+    MITIGATED 2026-07-26 by the same change as GAP-003: a crash between the file write and the
+    commit still leaves an unindexed file, but the next `add` no longer silently overwrites it —
+    the create is refused with DuplicateDocumentIdError pointing at `docir reindex`. The
+    underlying ordering (file written before commit) is unchanged and still undocumented.
+
+- id: GAP-016
+  class: unstated
+  flow: FLOW-001
+  step: "hand-editing a markdown file"
+  finding: >
+    The rule "agents never edit markdown directly" is stated for agents but the boundary for
+    humans is never stated, while the whole design invites hand-editing (git-backed files,
+    `reindex` explicitly exists "after a hand-edit").
+  actual_today: >
+    Hand-editing works and is expected. A hand-edit that breaks frontmatter is silently
+    dropped from the corpus (GAP-022). A hand-edit that duplicates an id is caught only by
+    `check`. Which fields are safe to edit by hand (body: yes; id: never; related: only with
+    care) is nowhere written.
+  actors_affected: [repository maintainer]
+  evidence: [README.md:100-102,
+             src/docir/modules/documents/application/services/maintenance_service.py:1-7]
+  confidence: observed
+  severity: material
+  impact: "The single most likely user action outside the CLI has no stated contract."
+  frequency: "continuous"
+  proposed_default: "Document a short 'what you may edit by hand' contract and require
+                     `docir reindex` after; make `check` the verification step."
+  question: null
+  status: open
+
+- id: GAP-017
+  class: misleading
+  flow: FLOW-002
+  step: "interpreting context results"
+  finding: >
+    There is no relevance floor and the emitted `score` carries no absolute meaning, so
+    "nothing relevant exists" is not an expressible answer.
+  actual_today: >
+    OBSERVED. Against a store containing only "Postgres connection pooling",
+    `docir context "how do I bake sourdough bread" --limit 3` returns that decision with
+    score 0.0328 — the same magnitude a perfect match would score, because RRF depends only
+    on rank position.
+  actors_affected: [AI coding agent]
+  evidence: [src/docir/modules/indexing/domain/scoring.py:36-73,
+             README.md:90-95, analysis/99-log.md]   # PROBE-14
+  confidence: observed
+  severity: material
+  impact: >
+    An agent cannot distinguish relevant context from noise, so it either always trusts the
+    results (and is misled on unrelated tasks) or never does. Compounds GAP-005: the response
+    is both unbounded in size and unfiltered in quality.
+  frequency: "every context query with no genuinely relevant document"
+  proposed_default: >
+    Emit the raw cosine similarity alongside the fused score and apply a floor (or expose
+    `--min-score`), so an empty result set is possible.
+  question: Q-009
+  status: open
+
+- id: GAP-019
+  class: missing
+  flow: FLOW-002
+  step: "graph expansion direction"
+  finding: >
+    Expansion follows outgoing edges only, so from a superseded document the document that
+    superseded it is unreachable.
+  actual_today: "`_augment_with_related` calls `uow.documents.outgoing(seed)` only
+                 (document_service.py:301). `incoming()` exists and is used solely by delete."
+  actors_affected: [AI coding agent]
+  evidence: [src/docir/modules/documents/application/services/document_service.py:297-307,
+             src/docir/platform/persistence/repositories.py:133-135]
+  confidence: observed
+  severity: material
+  impact: >
+    "Is this decision still current?" is the question the relation graph most needs to answer,
+    and it is the one direction not traversed. An agent retrieving an old ADR gets no signal
+    that a newer one supersedes it — while the superseding edge sits one hop away, backwards.
+  frequency: "any corpus using supersedes"
+  proposed_default: "Follow incoming `supersedes`/`contradicts` edges as well, or always
+                     include the superseding document when one exists."
+  question: Q-017
+  status: open
+
+- id: GAP-026
+  class: unstated
+  flow: FLOW-004
+  step: "docir init --force"
+  finding: >
+    `--force` overwrites `docs-schema.yaml` and `.gitignore` together, with no separate
+    control, no confirmation prompt, no diff and no backup.
+  actual_today: "composition.py:184-192 — both writes are guarded by the same `force` flag.
+                 The help text reads 'Overwrite an existing docs-schema.yaml / .gitignore.'"
+  actors_affected: [repository maintainer]
+  evidence: [src/docir/entry_points/composition.py:182-192, src/docir/entry_points/cli/app.py:97-100]
+  confidence: observed
+  severity: material
+  impact: "A user re-running init to refresh the .gitignore destroys a customised schema.
+           The schema is the one file whose loss cannot be reconstructed from the documents."
+  frequency: unknown
+  proposed_default: "Separate the flags, or refuse when the existing schema differs from the
+                     generated one unless a second confirmation is given."
+  question: null
+  status: open
+
+- id: GAP-028
+  class: missing
+  flow: FLOW-005
+  step: "consolidating two tags"
+  finding: "Renaming a tag onto an existing key is rejected, so two tags cannot be merged."
+  actual_today: "tag_service.py:69-70 raises TagAlreadyExistsError. The only path is
+                 `tag rm --force` on one (losing the classification) then re-tagging by hand."
+  actors_affected: [repository maintainer]
+  evidence: [src/docir/modules/tags/application/services/tag_service.py:69-70]
+  confidence: observed
+  severity: material
+  impact: "Vocabularies drift and need consolidating; the registry can only grow. Coverage
+           checklist item 'merge/deduplicate two records' is unmet."
+  frequency: unknown
+  proposed_default: "Allow rename-onto-existing as an explicit merge (`tag rename old new
+                     --merge`), rewriting documents and deduplicating keys."
+  question: null
+  status: open
+
+- id: GAP-033
+  class: misleading
+  flow: FLOW-002
+  step: "asking for closed documents"
+  finding: >
+    The flag is `--include-resolved` but the concept is "inactive status", which is
+    `rejected`/`superseded` for decisions, `deprecated` for architecture, `retired` for
+    policy, and so on. `resolved` is a status of only two of the fifteen shipped types.
+  actual_today: "The wire field is named `include_inactive` (dispatch.py:116) and the CLI
+                 renames it to `--include-resolved` on the way out (app.py:269, 288, 303)."
+  actors_affected: [AI coding agent, repository maintainer]
+  evidence: [src/docir/entry_points/cli/app.py:269, src/docir/entry_points/dispatch.py:116,
+             src/docir/modules/documents/infra/profiles.py]
+  confidence: observed
+  severity: material
+  impact: "A user querying decisions has no reason to guess that a flag named
+           --include-resolved controls whether superseded decisions appear."
+  frequency: "any query for closed documents of a type without a `resolved` status"
+  proposed_default: "Rename to `--include-inactive` (keeping `--include-resolved` as a hidden
+                     alias), matching the internal name and the schema key."
+  question: null
+  status: open
+
+- id: GAP-037
+  class: unstated
+  flow: FLOW-001
+  step: "two concurrent updates to the same document"
+  finding: >
+    Only `--replace-body` has a stale-write guard. Two concurrent metadata patches to the
+    same document silently last-write-wins.
+  actual_today: "The content_hash comparison is computed on every update (document_service.py:136)
+                 but consulted only in the `replace_body` branch (:374)."
+  actors_affected: [AI coding agent]
+  evidence: [src/docir/modules/documents/application/services/document_service.py:136, 369-380]
+  confidence: observed
+  severity: material
+  impact: "The guard exists and is computed; applying it to one of five edit modes is a
+           decision nothing records. Coverage checklist: 'entity changed state between
+           validation and commit'."
+  frequency: "unknown; requires concurrent writers, which the daemon serializes but does not
+              make conflict-free"
+  proposed_default: "State the intent: either extend the guard to all metadata patches, or
+                     document that patches are intentionally last-write-wins because they are
+                     field-scoped and commutative."
+  question: null
+  status: open
+
+# =============================================================================
+# COSMETIC
+# =============================================================================
+
+- id: GAP-040
+  class: incorrect
+  flow: FLOW-004
+  step: "the packaged agent guide (`modules/agents/infra/templates/skill.md`)"
+  finding: >
+    The canonical agent instructions told agents to run `docir reindex --all`, a flag that does
+    not exist — at the single most important recovery step ("After any merge/pull").
+  actual_today: >
+    FOUND AND FIXED 2026-07-26 while propagating the GAP-005 change. `docir reindex --all`
+    errors with "No such option: --all". The guide is the one artifact `docir agent install`
+    ships into other repositories, so the bad instruction was being distributed to every
+    adopting project. Nothing validated the template against the CLI it documents.
+  actors_affected: [AI coding agent, repository maintainer]
+  evidence:
+    - src/docir/modules/agents/infra/templates/skill.md
+    - src/docir/entry_points/cli/app.py:409-417   # reindex takes --changed / --embeddings only
+  confidence: observed
+  severity: material
+  impact: >
+    An agent following the guide after a merge gets an error instead of a rebuilt index, and
+    the merge-safety workflow the guide exists to teach silently does not run.
+  frequency: "every agent that follows the post-merge instructions"
+  proposed_default: >
+    FIXED (now `docir reindex`). The durable fix is a test that extracts every `docir ...`
+    invocation from the template and asserts each command and flag exists in the CLI's own
+    JSON `--help` — the check that would have caught this. Not yet written.
+  question: null
+  status: open          # the typo is fixed; the missing guard is not
+  resolution: >
+    Typo corrected 2026-07-26. Left `open` because the underlying gap — nothing verifies the
+    shipped guide against the CLI — remains. A one-off manual sweep of all 24 invocations in
+    the template found no other invalid command or flag.
+
+- id: GAP-002
+  class: unstated
+  flow: null
+  step: "governance"
+  finding: "Single maintainer is the sole decision owner for every rule in this register."
+  actual_today: "No CODEOWNERS, no governance doc, no second reviewer."
+  actors_affected: [repository maintainer]
+  evidence: [LICENSE, "git log --format=%an | sort -u"]
+  confidence: observed
+  severity: cosmetic
+  impact: "Every `unstated` rule here lives in one person's head and in git history."
+  frequency: n/a
+  proposed_default: "Not actionable as a code change; recorded so the question queue's single
+                     audience is understood."
+  question: null
+  status: open
+
+- id: GAP-041
+  class: incorrect
+  flow: FLOW-003
+  step: "reindex over a store using random ids"
+  finding: >
+    `_restore_id_sequences` classifies an id as sequential by testing whether its suffix is
+    all digits, but a 12-char random hex token is all digits roughly once in 281 ids. Such an
+    id is then read as the number 12345678901 and the prefix's counter is raised above it.
+  actual_today: >
+    FOUND 2026-07-26 by reasoning about the interaction of two same-day changes (the GAP-003
+    counter restore, and `docir init` defaulting to `id_style: random`). Verified arithmetically:
+    P(all digits) = (10/16)^12 = 0.36%; `DocId("adr-012345678901").number` returns 12345678901.
+    Harmless while the type stays `random` — nothing reads the counter — so there is no
+    user-visible symptom today.
+  actors_affected: [repository maintainer]
+  evidence:
+    - src/docir/modules/documents/application/services/maintenance_service.py:136-157
+    - src/docir/modules/documents/domain/value_objects/identifiers.py:64-73
+  confidence: observed
+  severity: cosmetic
+  impact: >
+    Latent only. It surfaces if a type is later switched from `random` to `sequential`: the
+    next id is then an eleven-digit number (`adr-12345678902`) rather than `adr-0001`. No
+    data loss, no collision — the ids are still unique and still valid.
+  frequency: "0.36% of random ids; consequence requires a later switch to sequential"
+  proposed_default: >
+    Restore counters only for prefixes whose type declares `sequential`. `MaintenanceService`
+    already holds the schema, so it can build that prefix set and skip the rest — the
+    digit-shape test is the wrong signal for the question being asked.
+  question: null
+  status: resolved
+  resolution: >
+    FIXED 2026-07-26. `_restore_id_sequences` now derives the set of prefixes whose type
+    declares `sequential` from the schema and considers only those; it returns immediately
+    when a store has none. A second guard, `DocId.looks_random`, skips a suffix of
+    random-token length even under a sequential prefix, which covers the leftovers of a type
+    switched from `random` to `sequential` (length disambiguates: a counter would need a
+    hundred billion documents to reach twelve digits). Pinned by
+    test_reindex_ignores_random_ids_when_restoring_the_counter, confirmed to FAIL with
+    `assert 'adr-12345678902' == 'adr-0001'` against the unguarded version, and by
+    test_reindex_still_restores_the_counter_for_sequential_types, which holds the GAP-003
+    fix in place.
+
+- id: GAP-042
+  class: unstated
+  flow: FLOW-002
+  step: "every skeleton and every related edge, once random ids are the default"
+  finding: >
+    A random id is ~3x the length of a sequential one (`adr-3f9a2b1c7d4e` vs `adr-0007`), and
+    ids appear in every skeleton and in every `related` edge of every result. Nothing measures
+    what that costs.
+  actual_today: >
+    A deliberate, maintainer-approved trade: cross-branch collision-freedom bought with token
+    length. Recorded because it runs against the product's own headline claim ("token-cheap
+    for agents", README:46) and because GAP-001 means the size of the trade is unknown.
+  actors_affected: [AI coding agent]
+  evidence:
+    - src/docir/modules/documents/domain/value_objects/identifiers.py:23-25
+    - src/docir/entry_points/composition.py:50-56
+  confidence: observed
+  severity: cosmetic
+  impact: >
+    Small per document, paid on every read. 48 bits is not obviously the right size — it was
+    chosen for "thousands of documents" — but shortening it is not free either: 24 bits
+    collides at ~3% by a thousand docs.
+  frequency: "every context/query/search result"
+  proposed_default: >
+    Fold "tokens returned per result set" into the benchmark proposed for GAP-001, then pick
+    the entropy deliberately instead of by default.
+  question: null
+  status: open
+
+- id: GAP-015
+  class: misleading
+  flow: FLOW-001
+  step: "archive/unarchive on a document already in that state"
+  finding: "The no-op early return builds the view without computing staleness, so a stale
+            document reports `stale: false`."
+  actual_today: "document_service.py:166 and :180 call `from_document(document)` with no
+                 `stale=` argument; the dataclass default is False (dto.py:50)."
+  actors_affected: [AI coding agent]
+  evidence: [src/docir/modules/documents/application/services/document_service.py:166, 180,
+             src/docir/modules/documents/application/dto.py:50]
+  confidence: observed
+  severity: cosmetic
+  impact: "One field is wrong on one rarely-hit path."
+  frequency: "archiving an already-archived document"
+  proposed_default: "Pass `stale=self._is_stale(document)` on both early returns."
+  question: null
+  status: open
+
+- id: GAP-018
+  class: unstated
+  flow: FLOW-002
+  step: "search with many inactive documents in the head of the ranking"
+  finding: "`search` fetches `limit * 2` candidates then filters; if more than half are
+            inactive it returns fewer than `limit` with no indication why."
+  actual_today: "document_service.py:236-247."
+  actors_affected: [AI coding agent]
+  evidence: [src/docir/modules/documents/application/services/document_service.py:236-247]
+  confidence: observed
+  severity: cosmetic
+  impact: "Under-return looks like corpus scarcity rather than filtering. The 2× factor is an
+           unexplained constant."
+  frequency: "corpora with a high proportion of closed documents"
+  proposed_default: "Filter in SQL, or loop until the limit is met or candidates are exhausted."
+  question: null
+  status: open
+
+- id: GAP-025
+  class: unstated
+  flow: FLOW-004
+  step: "disabling a profile after documents of its types exist"
+  finding: "Documented as leaving `unknown-type` documents; the recovery path is not documented."
+  actual_today: "Such documents cannot be validated, are never stale, and are skipped by the
+                 layering check. No command re-keys or migrates them."
+  actors_affected: [repository maintainer]
+  evidence: [src/docir/modules/documents/domain/services/graph_checks.py:60-82, CLAUDE.md]
+  confidence: observed
+  severity: cosmetic
+  impact: "Detection is good; the exit is undocumented. Same shape as GAP-012."
+  frequency: unknown
+  proposed_default: "Document 're-enable the profile, or change the type by hand and reindex'."
+  question: null
+  status: open
+
+- id: GAP-027
+  class: missing
+  flow: FLOW-005
+  step: "tag add"
+  finding: "No format rule for tag keys — any non-empty string is accepted."
+  actual_today: "No charset, length, case or reserved-word check anywhere. Document ids are
+                 strictly regex-validated by contrast."
+  actors_affected: [AI coding agent, repository maintainer]
+  evidence: [src/docir/modules/tags/application/services/tag_service.py:43-52,
+             src/docir/modules/documents/domain/value_objects/identifiers.py:21]
+  confidence: observed
+  severity: cosmetic
+  impact: "Two agents will produce `auth`, `Auth` and `authentication` and nothing objects."
+  frequency: unknown
+  proposed_default: "Validate against `^[a-z][a-z0-9-]*$` and normalise case."
+  question: null
+  status: open
+
+- id: GAP-029
+  class: missing
+  flow: FLOW-005
+  step: "tag list"
+  finding: "No usage counts, so dead tags are invisible."
+  actual_today: "tag_service.py:54-60 returns key + description only."
+  actors_affected: [repository maintainer]
+  evidence: [src/docir/modules/tags/application/services/tag_service.py:54-60]
+  confidence: observed
+  severity: cosmetic
+  impact: "The registry can only grow."
+  frequency: n/a
+  proposed_default: "Include a document count per tag."
+  question: null
+  status: open
+
+- id: GAP-030
+  class: unstated
+  flow: FLOW-005
+  step: "tag rm --force"
+  finding: "Reports only `removed <key>`; never says how many documents it rewrote."
+  actual_today: "dispatch.py:159-161 returns `{removed: key}`."
+  actors_affected: [repository maintainer]
+  evidence: [src/docir/entry_points/dispatch.py:159-161]
+  confidence: observed
+  severity: cosmetic
+  impact: "A bulk mutation reports as a single-key operation."
+  frequency: "every forced tag removal"
+  proposed_default: "Return the affected document ids."
+  question: null
+  status: open
+
+- id: GAP-031
+  class: unstated
+  flow: FLOW-005
+  step: "search for a tag name"
+  finding: "Tags are neither in the FTS index nor in the embedded text, so `docir search auth`
+            does not find documents tagged `auth`."
+  actual_today: "FTS5 indexes title/description/body (migration 0001:88-92);
+                 `embedding_text()` is title+description+body (document.py:40-47)."
+  actors_affected: [AI coding agent]
+  evidence: [src/docir/platform/persistence/alembic/versions/0001_initial_index.py:88-92,
+             src/docir/modules/documents/domain/entities/document.py:40-47]
+  confidence: observed
+  severity: cosmetic
+  impact: "Reasonable design; undocumented, and surprising given tags appear in output."
+  frequency: n/a
+  proposed_default: "State it in the README's search description."
+  question: null
+  status: open
+
+- id: GAP-032
+  class: misleading
+  flow: null
+  step: "reading the code"
+  finding: "`stale` means three unrelated things — past review cadence, changed on disk,
+            and orphaned index row — two of them within eleven lines of one method."
+  actual_today: "See 04-glossary.yaml, term `stale`."
+  actors_affected: [repository maintainer]
+  evidence: [src/docir/modules/documents/application/services/document_service.py:136,
+             src/docir/modules/documents/application/services/document_service.py:288-295,
+             src/docir/modules/documents/application/services/maintenance_service.py:168]
+  confidence: observed
+  severity: cosmetic
+  impact: "Maintenance hazard only; no user-visible defect. Sense (1) is the product feature
+           and should keep the word."
+  frequency: n/a
+  proposed_default: "Rename sense 2 to `changed_on_disk` and sense 3 to `orphaned`."
+  question: null
+  status: open
+
+- id: GAP-034
+  class: misleading
+  flow: FLOW-001
+  step: "reading a relation in two representations"
+  finding: "An edge's target key is `to` in frontmatter and `target` in JSON output."
+  actual_today: "markdown_store.py:167 writes `{to, kind}`; dto.py:17-25 emits `{target, kind}`."
+  actors_affected: [AI coding agent]
+  evidence: [src/docir/platform/filesystem/markdown_store.py:156-168,
+             src/docir/modules/documents/application/dto.py:17-25]
+  confidence: observed
+  severity: cosmetic
+  impact: "An agent that reads output and then hand-writes frontmatter will use the wrong key."
+  frequency: n/a
+  proposed_default: "Accept both keys on parse (`to` canonical on write)."
+  question: null
+  status: open
+
+- id: GAP-035
+  class: misleading
+  flow: FLOW-004
+  step: "user-facing naming of the store"
+  finding: "'home', 'store' and 'data root' name one concept across the CLI help, the README
+            and the ADRs."
+  actual_today: "`--home` help says 'Data root'; `init` help says 'store'; ADR-0009 says 'store'."
+  actors_affected: [repository maintainer]
+  evidence: [src/docir/entry_points/cli/app.py:58-61, src/docir/entry_points/cli/app.py:102-108]
+  confidence: observed
+  severity: cosmetic
+  impact: "Minor discoverability friction."
+  frequency: n/a
+  proposed_default: "Standardise on 'store' in user-facing text; keep `home` as the flag name."
+  question: null
+  status: open
+
+- id: GAP-038
+  class: unstated
+  flow: FLOW-001
+  step: "date stamping"
+  finding: "`created`, `updated` and `verified` use the writer's local date with no timezone
+            recorded, and staleness is computed in whole local days."
+  actual_today: "SystemClock.today() returns `date.today()` — local."
+  actors_affected: [repository maintainer]
+  evidence: [src/docir/platform/clock/system.py]
+  confidence: observed
+  severity: cosmetic
+  impact: "Two teammates in different timezones can stamp different dates for the same moment;
+           staleness can differ by a day. Immaterial at a 365-day cadence."
+  frequency: n/a
+  proposed_default: "Accept as-is; record the choice so it is not rediscovered as a bug."
+  question: null
+  status: open
+
+- id: GAP-039
+  class: unstated
+  flow: FLOW-002
+  step: "scale"
+  finding: >
+    No stated corpus ceiling. `context` loads every active embedding into memory per call and
+    `lint --deep` is O(n²) over them; neither is paginated, capped or benchmarked.
+  actual_today: "repositories.py:309-320 selects all active vectors; similarity_lint.py:36-40
+                 compares every pair."
+  actors_affected: [AI coding agent, repository maintainer]
+  evidence: [src/docir/platform/persistence/repositories.py:309-320,
+             src/docir/modules/documents/domain/services/similarity_lint.py:33-53]
+  confidence: observed
+  severity: cosmetic
+  impact: "Fine at the 'thousands of documents' scale the id-entropy comment assumes
+           (identifiers.py:23-25). That assumption is stated in a comment about ids and
+           nowhere else."
+  frequency: n/a
+  proposed_default: "State the supported corpus size in the README."
+  question: null
+  status: open

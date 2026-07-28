@@ -337,10 +337,22 @@
   context: "The command exists to catch schema edits before they reach a write; this is the
             most likely schema error and it passes."
   asked: null
-  answered: null
-  authority: null
-  answer: null
-  assumption_if_unanswered: "Assuming the shallow check is an oversight. Review before schema work."
+  answered: 2026-07-28
+  authority: >
+    repo maintainer (directed the work; the question was never answered separately, so the
+    recorded assumption was acted on)
+  answer: >
+    Yes to the rejections, no to the warning. Undeclared transition targets, undeclared
+    `inactive_statuses` entries and an undeclared `default_status` are now rejected at load
+    time, with a message naming the declared statuses so it points at the schema.
+    The dead-end warning was implemented and then removed on evidence: it fires on 5 of the
+    15 shipped types, every one a correct terminal state for a document that stays live.
+    Shipping it would repeat GAP-008 — a warning that fires on the product's own defaults.
+    See GAP-010 resolution.
+  assumption_if_unanswered: >
+    WAS: the shallow check is an oversight. Confirmed for the status-name checks; the
+    dead-end check turned out not to be an oversight but a rule that cannot be stated
+    correctly with what the schema knows.
 
 - id: Q-011
   gap: GAP-024

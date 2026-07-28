@@ -168,6 +168,15 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   left to a human and returned in `RepairResult.remaining`. It reindexes first — id allocation
   consults the index for a free number — and does **not** advance `updated`, since a mechanical
   repair is not a human re-verification (that would launder the staleness clock).
+- **The schema loader rejects a status name no type declares** — a transition target, an
+  `inactive_statuses` entry, or `default_status`. Without it a typo loaded fine and failed much
+  later as `invalid transition 'open' -> 'closed'`, naming a status that *is* declared and
+  pointing at the write rather than the schema. A **dead-end check** ("a live status with no
+  outgoing transitions") was built and dropped: it fires on 5 of the 15 shipped types
+  (`release_note.published`, `postmortem.published`, `experiment.complete`,
+  `hypothesis.supported`, `obligation.breached`), all correct terminal states for documents
+  that stay live. "Terminal" and "closed" are different properties, and nothing in the schema
+  distinguishes an intended dead end from a missing transition — do not rebuild it.
 - **Validation is three tiers and mixing them is the documented overengineering trap.** Tier 0 is a
   hard, synchronous compiler-style gate (missing field, bad status/transition, unknown tag/related,
   unknown/disallowed relation kind); Tier 1 (`docir check`) is non-blocking structural graph warnings

@@ -633,7 +633,29 @@
     In `_parse_type`, reject transition targets and `inactive_statuses` not present in the
     type's declared status set; warn when a non-inactive status has no outgoing transitions.
   question: Q-010
-  status: open
+  status: resolved
+  resolution: >
+    FIXED 2026-07-28 — the rejections, not the warning. `_parse_type` now rejects any status
+    name the type does not declare: a transition target, an `inactive_statuses` entry, and
+    `default_status` (which was unchecked too, and would have failed every `add` of that
+    type). The message names the offending value and lists the declared statuses, so it
+    points at the schema instead of at the write. PROBE-12 replayed: the typo'd schema now
+    exits 3 with "type 'ticket' status 'open' transitions to undeclared status(es) 'closd';
+    declared: closed, open" where it returned `{"valid":true}`.
+    THE PROPOSED WARNING WAS BUILT AND THEN DROPPED, on evidence. "Warn when a non-inactive
+    status has no outgoing transitions" fires on **5 of the 15 shipped types** —
+    `release_note.published`, `postmortem.published`, `experiment.complete`,
+    `hypothesis.supported`, `obligation.breached` — and every one is a correct terminal
+    state for a document that stays live and relevant. Marking them inactive to silence it
+    would be worse: it would hide published postmortems from the default read path.
+    That is GAP-008 exactly, two commits after fixing it: a warning that fires on the
+    product's own defaults, which teaches users to ignore the command. The heuristic is not
+    merely noisy, it is wrong — "terminal" and "closed" are different properties. Recorded
+    here rather than shipped, and noted in the `schema validate` docstring so it is not
+    rebuilt naively.
+    The "every state has an exit" coverage-checklist item is therefore NOT met, deliberately.
+    A rule that could tell a missing transition from an intended terminal state would need to
+    know the type's intent, which nothing in the schema expresses.
 
 - id: GAP-011
   class: missing

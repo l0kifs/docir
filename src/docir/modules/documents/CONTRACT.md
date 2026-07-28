@@ -28,7 +28,8 @@ files and the derived index never disagree.
 - `MaintenanceService.check() -> [CheckIssue]` — Tier 1 structural findings (incl. staleness, unknown type)
 - `MaintenanceService.lint_deep() -> [LintFinding]` — Tier 2 advisory findings
 - `MaintenanceService.reindex_embeddings()/flush_embeddings() -> int`
-- `load_schema(path) -> Schema` — load the per-type document schema
+- `load_schema(path) -> Schema` — load the per-type document schema. Rejects a status name no
+  type declares (transition target, `default_status`, `inactive_statuses` entry).
 - `describe_schema(Schema) -> dict` — the merged schema as plain data (`docir schema show`)
 - `MaintenanceService.repair() -> RepairResult` — fix the mechanically-fixable Tier 1 damage:
   re-issue duplicate ids (oldest file keeps the id) and drop dead `related` edges. `malformed`

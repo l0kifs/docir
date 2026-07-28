@@ -162,7 +162,21 @@ def schema_show() -> None:
 
 @schema_app.command("validate")
 def schema_validate() -> None:
-    """Check docs-schema.yaml parses and merges cleanly; exit nonzero if not."""
+    """Check docs-schema.yaml parses and merges cleanly; exit nonzero if not.
+
+    Rejects a status name that no type declares — a transition target, a
+    `default_status`, or an `inactive_statuses` entry. That typo used to load
+    happily and surface later as "invalid transition 'open' -> 'closed'",
+    naming a status that IS declared and pointing at the write rather than the
+    schema.
+
+    A "dead end" warning (a live status with no outgoing transitions) was built
+    and then dropped: measured against the bundled profiles it fired on 5 of the
+    15 shipped types — `release_note.published`, `postmortem.published`,
+    `experiment.complete`, `hypothesis.supported`, `obligation.breached` — every
+    one a correct terminal state for a document that stays relevant. A warning
+    that fires on the product's own defaults is GAP-008 again.
+    """
     settings = get_state().settings
     schema = run_local(lambda: load_schema(settings.schema_path))
     data = {"valid": True, "path": str(settings.schema_path), "types": len(schema.types)}

@@ -283,3 +283,99 @@ class TestRelationAndStalenessFields:
                     "relation_types": "not-a-list",
                 }
             )
+
+
+class TestStatusNamesMustBeDeclared:
+    """A status name the type does not declare is rejected at load (GAP-010).
+
+    `statuses: {open: [closd]}` used to load happily. The typo surfaced much
+    later, on the first write, as `invalid transition 'open' -> 'closed'` — a
+    message naming a status that IS declared, which sends the reader to their
+    command instead of to the schema. `docir schema validate` exists to catch an
+    edit before it reaches a write, and it passed the most likely edit error.
+    """
+
+    def test_undeclared_transition_target_rejected(self) -> None:
+        with pytest.raises(SchemaError, match="undeclared status"):
+            parse_schema(
+                {
+                    "types": {
+                        "ticket": {
+                            "prefix": "tkt",
+                            "statuses": {"open": ["closd"], "closed": []},
+                            "default_status": "open",
+                        }
+                    }
+                }
+            )
+
+    def test_undeclared_inactive_status_rejected(self) -> None:
+        with pytest.raises(SchemaError, match="inactive_statuses"):
+            parse_schema(
+                {
+                    "types": {
+                        "ticket": {
+                            "prefix": "tkt",
+                            "statuses": {"open": ["closed"], "closed": []},
+                            "default_status": "open",
+                            "inactive_statuses": ["done"],
+                        }
+                    }
+                }
+            )
+
+    def test_undeclared_default_status_rejected(self) -> None:
+        # Every `add` of this type would have failed; the schema declared a
+        # starting state the type does not have.
+        with pytest.raises(SchemaError, match="default_status"):
+            parse_schema(
+                {
+                    "types": {
+                        "ticket": {
+                            "prefix": "tkt",
+                            "statuses": {"open": ["closed"], "closed": []},
+                            "default_status": "new",
+                        }
+                    }
+                }
+            )
+
+    def test_the_error_names_the_declared_statuses(self) -> None:
+        # The old failure misdirected; this one has to point at the schema.
+        with pytest.raises(SchemaError) as excinfo:
+            parse_schema(
+                {
+                    "types": {
+                        "ticket": {
+                            "prefix": "tkt",
+                            "statuses": {"open": ["closd"], "closed": []},
+                            "default_status": "open",
+                        }
+                    }
+                }
+            )
+        message = str(excinfo.value)
+        assert "'closd'" in message and "closed, open" in message
+
+    def test_a_healthy_schema_still_loads(self) -> None:
+        schema = parse_schema(
+            {
+                "types": {
+                    "ticket": {
+                        "prefix": "tkt",
+                        "statuses": {"open": ["closed"], "closed": []},
+                        "default_status": "open",
+                        "inactive_statuses": ["closed"],
+                    }
+                }
+            }
+        )
+        assert schema.types["ticket"].default_status == "open"
+
+
+@pytest.mark.parametrize("profile", PROFILE_NAMES)
+def test_every_bundled_profile_still_loads(profile: str) -> None:
+    # The new rejections run on the shipped profiles too, so a typo in one of
+    # them fails here rather than in an adopting repo.
+    schema = parse_schema({"profiles": [profile]})
+    assert schema.types

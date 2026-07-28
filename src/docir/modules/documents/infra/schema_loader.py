@@ -179,10 +179,32 @@ def _parse_type(name: str, spec: object, default_id_style: str) -> TypeSchema:
         transitions[str(status)] = frozenset(str(t) for t in targets)
 
     statuses = tuple(str(s) for s in statuses_raw)
+    declared = set(statuses)
+
+    # Every status name referenced anywhere must be one this type declares.
+    # Without this, `statuses: {open: [closd]}` loaded happily and the typo only
+    # surfaced much later as "invalid transition 'open' -> 'closed'" — a message
+    # naming a status that IS declared, pointing the reader at their write
+    # instead of at the schema. `schema validate` exists to catch exactly this
+    # and passed it.
+    for status, targets in transitions.items():
+        unknown = sorted(targets - declared)
+        if unknown:
+            known = ", ".join(sorted(declared))
+            raise SchemaError(
+                f"type {name!r} status {status!r} transitions to undeclared "
+                f"status(es) {', '.join(repr(u) for u in unknown)}; declared: {known}"
+            )
 
     default_status = spec.get("default_status")
     if not isinstance(default_status, str):
         raise SchemaError(f"type {name!r} must define a string 'default_status'")
+    if default_status not in declared:
+        known = ", ".join(sorted(declared))
+        raise SchemaError(
+            f"type {name!r} 'default_status' {default_status!r} is not a declared "
+            f"status; declared: {known}"
+        )
 
     required = spec.get("required", []) or []
     if not isinstance(required, list):
@@ -191,6 +213,13 @@ def _parse_type(name: str, spec: object, default_id_style: str) -> TypeSchema:
     inactive = spec.get("inactive_statuses", []) or []
     if not isinstance(inactive, list):
         raise SchemaError(f"type {name!r} 'inactive_statuses' must be a list")
+    unknown_inactive = sorted({str(s) for s in inactive} - declared)
+    if unknown_inactive:
+        known = ", ".join(sorted(declared))
+        raise SchemaError(
+            f"type {name!r} 'inactive_statuses' names undeclared status(es) "
+            f"{', '.join(repr(u) for u in unknown_inactive)}; declared: {known}"
+        )
 
     level = spec.get("level", 0)
     if not isinstance(level, int) or isinstance(level, bool):

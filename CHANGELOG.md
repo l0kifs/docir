@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`docir schema validate` now catches a typo'd status name.** A schema declaring
+  `statuses: {open: [closd], closed: []}` returned `{"valid":true}`; the typo surfaced much
+  later, on the first write, as `invalid transition 'open' -> 'closed'` — naming a status
+  that *is* declared and sending the reader to their command rather than to the schema. Any
+  status name a type does not declare is now rejected at load time: a transition target, an
+  `inactive_statuses` entry, or `default_status` (which was unchecked too, and would have
+  failed every `add` of that type). The error lists the declared statuses.
+
 ### Changed
 
 - **`--include-resolved` is now `--include-inactive`** on `query`, `search` and `context`.

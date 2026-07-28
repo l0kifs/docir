@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-28
+
+Two things the retrieval and staleness features could not previously express: that nothing
+relevant exists, and which documents a given person owes a review on.
+
 ### Added
 
 - **`docir query --owner <name>` and `--stale` turn staleness into a worklist.** The staleness
@@ -284,7 +289,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/l0kifs/docir/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/l0kifs/docir/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/l0kifs/docir/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/l0kifs/docir/compare/v0.2.0...v0.2.1

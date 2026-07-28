@@ -466,10 +466,17 @@
   context: "ADR-0006 argues staleness must be honest human re-verification; a bulk
             administrative edit silently forges it."
   asked: null
-  answered: null
-  authority: null
-  answer: null
-  assumption_if_unanswered: "Assuming the reset is unintended. Review with Q-013."
+  answered: 2026-07-28
+  authority: >
+    repo maintainer (directed the work; the question was never answered separately, so the
+    recorded assumption was acted on)
+  answer: >
+    No — it was unintended, and the reset is gone. `tag rename` and `tag rm --force` rewrite
+    the classification without advancing `updated`, matching `check --fix` and
+    `delete --force`. The alternative proposal (measure staleness from `verified` only) was
+    rejected: it would mark every never-verified document stale from `created`, turning the
+    warning on for the whole corpus on adoption — GAP-006's failure mode. See GAP-020.
+  assumption_if_unanswered: null
 
 - id: Q-016
   gap: GAP-023

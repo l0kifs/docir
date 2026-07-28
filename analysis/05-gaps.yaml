@@ -869,7 +869,21 @@
                      or measure staleness from `verified` only, treating never-verified
                      documents as stale from `created`."
   question: Q-015
-  status: open
+  status: resolved
+  resolution: >
+    FIXED 2026-07-28 with the first of the two proposed options: `tag rename` and
+    `tag rm --force` no longer advance `updated` on the documents they rewrite. The second
+    option (measure staleness from `verified` only) was not taken — it would make every
+    never-verified document stale from `created`, which turns the warning on for essentially
+    the whole corpus on adoption. That is GAP-006's failure mode.
+    This is the third place the same rule has now been applied — `check --fix` and
+    `delete --force` already left `updated` alone — so it is no longer a local judgement but
+    a stated invariant, recorded in CLAUDE.md: a mechanical rewrite is not a human
+    re-verification, and only an edit a person made to the content may move the clock.
+    CLEANUP: with the timestamp gone, `TagService` no longer used its `Clock` at all. The
+    dependency is removed rather than left dangling — it was injected solely to stamp the
+    date this gap says it should not stamp.
+    Attribution verified: re-introducing the bump fails both new tests.
 
 - id: GAP-021
   class: unstated

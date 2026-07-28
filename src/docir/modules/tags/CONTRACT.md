@@ -26,7 +26,7 @@ vocabulary consistent everywhere a tag is used.
 
 ## Depends on
 - modules: none
-- platform: persistence, filesystem, clock, errors
+- platform: persistence, filesystem, errors
 
 ## Policy
 - permissions: none (single-user local CLI; see ADR-0003)

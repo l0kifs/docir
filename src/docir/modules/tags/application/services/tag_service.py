@@ -13,7 +13,6 @@ from collections.abc import Callable
 
 from docir.modules.tags.application.dto import TagView
 from docir.modules.tags.domain.entities.tag import Tag
-from docir.platform.clock import Clock
 from docir.platform.errors import (
     TagAlreadyExistsError,
     TagInUseError,
@@ -33,12 +32,13 @@ class TagService:
         uow_factory: UnitOfWorkFactory,
         tag_file_store: TagFileStore,
         file_store: DocumentFileStore,
-        clock: Clock,
     ) -> None:
+        # No `Clock`: nothing here stamps a date. The tag operations rewrite a
+        # document's classification and deliberately leave `updated` alone, so
+        # the only reason this service ever held a clock is gone with it.
         self._uow_factory = uow_factory
         self._tag_file_store = tag_file_store
         self._file_store = file_store
-        self._clock = clock
 
     def add(self, key: str, description: str) -> TagView:
         """Register a new tag (``docs tag add``)."""
@@ -60,8 +60,15 @@ class TagService:
             ]
 
     def rename(self, old: str, new: str) -> None:
-        """Rename a tag across the registry and all documents (``docs tag rename``)."""
-        today = self._clock.today()
+        """Rename a tag across the registry and all documents (``docs tag rename``).
+
+        Referencing documents keep their `updated` date. Staleness falls back to
+        `updated` when a document has no explicit `verified`, so bumping it here
+        would make every document carrying the tag report as freshly reviewed —
+        a bulk administrative edit silently forging the one trust signal the
+        product offers. Same reasoning as `check --fix` and `delete --force`:
+        a mechanical rewrite is not a human re-verification.
+        """
         with self._uow_factory() as uow:
             tag = uow.tags.get(old)
             if tag is None:
@@ -74,7 +81,7 @@ class TagService:
             for document in uow.documents.all():
                 if old in document.tags:
                     new_tags = tuple(new if t == old else t for t in document.tags)
-                    updated = document.with_updates(tags=new_tags, updated=today)
+                    updated = document.with_updates(tags=new_tags)
                     self._file_store.write(updated)
                     uow.documents.save(updated)
                     uow.search.index(updated)
@@ -82,8 +89,11 @@ class TagService:
             uow.commit()
 
     def remove(self, key: str, *, force: bool = False) -> None:
-        """Remove a tag (``docs tag rm``); blocked while in use unless forced."""
-        today = self._clock.today()
+        """Remove a tag (``docs tag rm``); blocked while in use unless forced.
+
+        As with `rename`, stripping the tag does not advance the referencing
+        documents' `updated` — see that docstring for why.
+        """
         with self._uow_factory() as uow:
             if uow.tags.get(key) is None:
                 raise TagNotFoundError(f"no tag {key!r}")
@@ -96,7 +106,7 @@ class TagService:
                 )
             for document in referencing:
                 new_tags = tuple(t for t in document.tags if t != key)
-                updated = document.with_updates(tags=new_tags, updated=today)
+                updated = document.with_updates(tags=new_tags)
                 self._file_store.write(updated)
                 uow.documents.save(updated)
                 uow.search.index(updated)

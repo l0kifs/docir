@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`docir tag rename` and `tag rm --force` no longer reset the staleness clock.** They
+  rewrote every referencing document with `updated = today`, and staleness falls back to
+  `updated` when a document has no explicit `verified` — so a pure classification edit made
+  overdue documents report as freshly reviewed, silently forging the signal `docir check`
+  and `query --stale` depend on. They now rewrite the tags and leave the date alone, matching
+  `check --fix` and `delete --force`.
 - **`docir agent install --agent <unknown>` now fails instead of doing nothing.** A typo'd
   target was silently skipped: `--agent claud` printed `[]`, exited 0 and wrote no files, so
   a once-per-repo onboarding command reported success while leaving the repo's agent

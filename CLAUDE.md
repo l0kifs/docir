@@ -151,6 +151,14 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   only way to keep CI green was to drop the gate, which also dropped duplicate-id detection.
   `CheckIssue` derives `severity` from `kind` in `__post_init__`, so a new check classifies itself
   by being added to `ERROR_KINDS` or not. `--strict-all` restores fail-on-anything.
+- **Only a human content edit may move `updated`.** Staleness falls back to `updated` when a
+  document has no explicit `verified`, so any mechanical rewrite that bumps it launders the
+  review clock — the one trust signal the product offers (ADR-0006). Three write paths rewrite
+  documents without touching `updated`: `check --fix`, `delete --force`, and `tag rename` /
+  `tag rm --force`. `TagService` therefore has **no `Clock`** — it was injected only to stamp
+  the date it must not stamp. Adding a fourth mechanical rewrite? It does not set `updated`.
+  (The alternative — measure staleness from `verified` only — is rejected: it makes every
+  never-verified document stale from `created`, which is GAP-006's failure mode again.)
 - **A forced delete compensates for the edges it breaks.** `delete --force` strips the edge
   from every referencing document in the same transaction and returns their ids (the CLI
   prints "unlinked from ..."), so it cannot leave a dangling reference — the pattern

@@ -288,6 +288,41 @@ class TestMaintenanceCommands:
         assert {f["kind"]: f["severity"] for f in findings} == {"orphan": "warning"}
 
 
+class TestIncludeInactiveFlag:
+    """`--include-inactive` replaces `--include-resolved` (guards GAP-033).
+
+    The flag controlled the schema's `inactive_statuses` — `rejected`/
+    `superseded` for a decision, `deprecated` for architecture, `retired` for a
+    policy — but was named after `resolved`, a status only two of the fifteen
+    shipped types have. Someone querying decisions had no reason to guess that
+    a flag named --include-resolved surfaces superseded ones. The wire field was
+    already `include_inactive`; only the CLI spelling was wrong.
+    """
+
+    @staticmethod
+    def _superseded_decision() -> None:
+        run("add", "--type", "decision", "--title", "Old", "--description", "d")
+        run("update", "adr-0001", "--status", "accepted")
+        run("update", "adr-0001", "--status", "superseded")
+
+    def test_inactive_documents_are_hidden_by_default(self) -> None:
+        self._superseded_decision()
+        assert json.loads(run("query").stdout) == []
+
+    def test_include_inactive_reveals_them(self) -> None:
+        self._superseded_decision()
+        assert [d["id"] for d in json.loads(run("query", "--include-inactive").stdout)] == [
+            "adr-0001"
+        ]
+
+    def test_the_old_spelling_still_works(self) -> None:
+        # It ships in scripts and in agent instructions installed before the
+        # rename; breaking it would be a silent behaviour change for them.
+        self._superseded_decision()
+        result = run("query", "--include-resolved")
+        assert [d["id"] for d in json.loads(result.stdout)] == ["adr-0001"]
+
+
 class TestOutputModes:
     """Token-aware output: JSON when captured (non-TTY), tables under --pretty."""
 

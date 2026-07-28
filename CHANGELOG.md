@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`--include-resolved` is now `--include-inactive`** on `query`, `search` and `context`.
+  The flag controls the schema's *inactive statuses* — `superseded`/`rejected` for a
+  decision, `deprecated` for architecture, `retired` for a policy — but was named after
+  `resolved`, a status only two of the fifteen shipped types have. Someone querying decisions
+  had no reason to guess that a flag named `--include-resolved` surfaces superseded ones; the
+  wire field was already `include_inactive`. The old spelling still works (hidden,
+  undocumented) and prints a deprecation notice to stderr, so captured JSON is unaffected.
+- **Hidden options no longer appear in the JSON `--help` output.** `describe_help` filtered
+  hidden sub-commands but not hidden options, so a deprecated alias would vanish from the
+  human help panel and remain in the machine-readable copy an agent reads.
+
 ## [0.5.0] - 2026-07-28
 
 Two things the retrieval and staleness features could not previously express: that nothing

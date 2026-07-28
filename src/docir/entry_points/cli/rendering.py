@@ -79,7 +79,15 @@ def describe_help(ctx: object) -> dict[str, object]:
             "required": bool(getattr(param, "required", False)),
         }
         for param in getattr(command, "params", ())
-        if getattr(param, "opts", None) and getattr(param, "name", None) != "help"
+        if getattr(param, "opts", None)
+        and getattr(param, "name", None) != "help"
+        # Hidden options are omitted here as well as from the Rich panel. Only
+        # `commands` was filtered originally, which went unnoticed while no
+        # option was hidden: the first deprecated alias (`--include-resolved`)
+        # vanished from the human help and stayed in the JSON — the copy an
+        # agent actually reads, and the one where a duplicate flag for one
+        # concept does the most damage.
+        and not getattr(param, "hidden", False)
     ]
     commands = [
         {"name": name, "help": _first_line(sub.help or sub.short_help or "")}
@@ -105,6 +113,15 @@ def render_error(error: Mapping[str, object]) -> None:
     """Print a domain error to stderr."""
     message = error.get("message", "unknown error")
     error_console.print(f"[bold red]error:[/] {message}")
+
+
+def render_warning(message: str) -> None:
+    """Print a non-fatal notice to stderr.
+
+    Stderr specifically: stdout carries the JSON an agent parses, and a
+    deprecation notice mixed into it would corrupt the payload.
+    """
+    error_console.print(f"[yellow]warning:[/] {message}")
 
 
 def render_document(view: Mapping[str, object]) -> None:

@@ -94,3 +94,17 @@ class TestJsonHelp:
     def test_json_help_carries_no_box_drawing(self, monkeypatch) -> None:
         text = _help([], isatty=False, monkeypatch=monkeypatch)
         assert not set(text) & set("│┃╭╰┏┗━─╮╯┓┛")
+
+    def test_hidden_options_stay_out_of_the_agent_contract(self, monkeypatch) -> None:
+        """A deprecated alias must not appear in the machine-readable help.
+
+        `describe_help` filtered hidden *commands* but not hidden *options*.
+        That went unnoticed while nothing was hidden; the first deprecated alias
+        (`--include-resolved`, superseded by `--include-inactive`) then vanished
+        from the Rich panel a human reads and stayed in the JSON an agent reads —
+        leaving two flags for one concept exactly where it does the most damage.
+        """
+        payload = json.loads(_help(["query"], isatty=False, monkeypatch=monkeypatch))
+        flags = {flag for option in payload["options"] for flag in option["flags"]}
+        assert "--include-inactive" in flags
+        assert "--include-resolved" not in flags

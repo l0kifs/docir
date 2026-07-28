@@ -303,7 +303,11 @@ def query(
     status: Annotated[list[str] | None, typer.Option("--status")] = None,
     tag: Annotated[list[str] | None, typer.Option("--tag")] = None,
     include_archived: Annotated[bool, typer.Option("--include-archived")] = False,
-    include_resolved: Annotated[bool, typer.Option("--include-resolved")] = False,
+    include_inactive: Annotated[
+        bool,
+        typer.Option("--include-inactive", help="Also return documents in an inactive status."),
+    ] = False,
+    include_resolved: Annotated[bool, typer.Option("--include-resolved", hidden=True)] = False,
     owner: Annotated[
         str | None, typer.Option("--owner", help="Only documents with this steward.")
     ] = None,
@@ -328,7 +332,7 @@ def query(
         "statuses": tuple(status or ()),
         "tags": tuple(tag or ()),
         "include_archived": include_archived,
-        "include_inactive": include_resolved,
+        "include_inactive": _include_inactive(include_inactive, include_resolved),
         "owner": owner,
         "stale": stale,
         "limit": limit,
@@ -340,13 +344,17 @@ def query(
 def search(
     text: Annotated[str, typer.Argument()],
     limit: Annotated[int, typer.Option("--limit")] = 20,
-    include_resolved: Annotated[bool, typer.Option("--include-resolved")] = False,
+    include_inactive: Annotated[
+        bool,
+        typer.Option("--include-inactive", help="Also return documents in an inactive status."),
+    ] = False,
+    include_resolved: Annotated[bool, typer.Option("--include-resolved", hidden=True)] = False,
 ) -> None:
     """Full-text search."""
     payload: dict[str, object] = {
         "text": text,
         "limit": limit,
-        "include_inactive": include_resolved,
+        "include_inactive": _include_inactive(include_inactive, include_resolved),
     }
     _emit_document_list(execute("search", payload))
 
@@ -362,7 +370,11 @@ def context(
             help="How many of those slots may go to related documents (0 disables).",
         ),
     ] = DEFAULT_CONTEXT_EXPAND,
-    include_resolved: Annotated[bool, typer.Option("--include-resolved")] = False,
+    include_inactive: Annotated[
+        bool,
+        typer.Option("--include-inactive", help="Also return documents in an inactive status."),
+    ] = False,
+    include_resolved: Annotated[bool, typer.Option("--include-resolved", hidden=True)] = False,
     min_score: Annotated[
         float | None,
         typer.Option(
@@ -393,7 +405,7 @@ def context(
         "task": task,
         "limit": limit,
         "expand": expand,
-        "include_inactive": include_resolved,
+        "include_inactive": _include_inactive(include_inactive, include_resolved),
         "min_score": min_score,
     }
     _emit_document_list(execute("context", payload))
@@ -583,6 +595,28 @@ def embed(
 
 
 # -- helpers ----------------------------------------------------------------
+
+
+def _include_inactive(include_inactive: bool, include_resolved: bool) -> bool:
+    """Resolve the flag and its deprecated alias, warning on the old spelling.
+
+    The flag was `--include-resolved`, but the concept it controls is the
+    schema's `inactive_statuses` — `rejected`/`superseded` for a decision,
+    `deprecated` for architecture, `retired` for a policy. `resolved` is a
+    status of only two of the fifteen shipped types, so the name described the
+    minority case and gave a user querying decisions no reason to guess which
+    flag surfaces superseded ones. The wire field was already `include_inactive`.
+
+    The old spelling keeps working (hidden, undocumented) because it appears in
+    scripts and in agent instructions installed before this release. The notice
+    goes to stderr so a captured JSON payload on stdout is untouched.
+    """
+    if include_resolved:
+        rendering.render_warning(
+            "--include-resolved is deprecated; use --include-inactive "
+            "(it covers every inactive status, not just `resolved`)."
+        )
+    return include_inactive or include_resolved
 
 
 def _split_csv(value: str | None) -> tuple[str, ...]:

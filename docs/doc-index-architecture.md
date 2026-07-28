@@ -384,7 +384,7 @@ controlled purely at the read-path/query level:
 - `docs context` and `docs query` filter to active statuses by default
   (e.g. exclude `status: resolved`), so a fixed bug does not surface in
   normal agent queries.
-- An explicit `--include-resolved` flag (or `docs get <id>`) still returns
+- An explicit `--include-inactive` flag (or `docs get <id>`) still returns
   closed documents, e.g. when an agent needs to check whether a similar
   bug was already fixed.
 - Optional refinement: instead of a hard exclude, `docs context` can

@@ -73,8 +73,11 @@ operates on the discovered store).
 pull only the bodies you need with `docir get <id>`. This is the cheap path;
 never dump every body.
 
-Default read path **hides** resolved/archived docs. Add `--include-resolved`
-(query/search/context) or use `docir get` to see them.
+Default read path **hides** closed and archived docs. "Closed" means the type's
+*inactive* statuses — `superseded`/`rejected` for a decision, `resolved` for an
+issue, `deprecated` for architecture. Add `--include-inactive`
+(query/search/context) or use `docir get` to see them. (`--include-resolved` is
+the old spelling, still accepted; it named a status only two types have.)
 
 **`--limit` is a hard ceiling** on what `context` returns — it is your token
 budget, not a suggestion. Related docs are pulled *inside* it: `--expand N`

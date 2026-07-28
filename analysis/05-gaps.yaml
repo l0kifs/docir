@@ -1092,7 +1092,23 @@
   proposed_default: "Rename to `--include-inactive` (keeping `--include-resolved` as a hidden
                      alias), matching the internal name and the schema key."
   question: null
-  status: open
+  status: resolved
+  resolution: >
+    FIXED 2026-07-28, as proposed, on all three read commands (query/search/context).
+    `--include-inactive` is the documented flag; `--include-resolved` remains accepted but
+    hidden, because it appears in scripts and in agent instruction files installed before
+    this release — breaking it would be a silent behaviour change for them. Using it prints a
+    deprecation notice to **stderr**, never stdout, so a captured JSON payload is untouched.
+    FOUND WHILE DOING IT — `describe_help` filtered hidden *commands* but not hidden
+    *options*. The asymmetry was invisible while nothing was hidden; the first deprecated
+    alias then disappeared from the Rich panel a human reads and stayed in the JSON help an
+    agent reads. That is precisely backwards: the JSON help is the agent contract, and two
+    flags for one concept there is the confusion this gap is about. Both are now filtered,
+    pinned by test_hidden_options_stay_out_of_the_agent_contract (verified to fail against
+    the old comprehension).
+    The general shape, third time recorded: a rule applied to one of two parallel paths.
+    GAP-004 was the visibility filter on 3 of 4 read paths; GAP-037 is the stale-write guard
+    on 1 of 5 edit modes and is still open. Worth grepping for the rest.
 
 - id: GAP-037
   class: unstated

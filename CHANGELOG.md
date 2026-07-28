@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-28
+
+`docir context` and `docir check` both change what they return. Every fix here came from
+running the tool as a user would and finding it disagreed with what it promised — four of
+them were pinned in place by tests that had encoded the defect as intent.
+
 ### Added
 
 - **The packaged agent guide is now checked against the CLI.** `docir agent install` copies
@@ -247,7 +253,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/l0kifs/docir/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/l0kifs/docir/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/l0kifs/docir/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/l0kifs/docir/compare/v0.1.1...v0.2.0

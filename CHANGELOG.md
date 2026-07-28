@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`docir agent install --agent <unknown>` now fails instead of doing nothing.** A typo'd
+  target was silently skipped: `--agent claud` printed `[]`, exited 0 and wrote no files, so
+  a once-per-repo onboarding command reported success while leaving the repo's agent
+  untaught. It now raises and lists the valid targets, matching `docir init --profiles`.
+  `docir agent update` resolves through the same path and is fixed with it.
 - **`docir schema validate` now catches a typo'd status name.** A schema declaring
   `statuses: {open: [closd], closed: []}` returned `{"valid":true}`; the typo surfaced much
   later, on the first write, as `invalid transition 'open' -> 'closed'` — naming a status

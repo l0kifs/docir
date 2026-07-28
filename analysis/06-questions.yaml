@@ -367,10 +367,15 @@
   proposed_answer: "Raise AgentSetupError naming the valid targets, matching --profiles."
   context: "Once-per-repo onboarding command reporting success while doing nothing."
   asked: null
-  answered: null
-  authority: null
-  answer: null
-  assumption_if_unanswered: "Assuming it should error. Cheap fix, low risk."
+  answered: 2026-07-28
+  authority: >
+    repo maintainer (directed the work; the question was never answered separately, so the
+    recorded assumption was acted on)
+  answer: >
+    Yes, it should error. `_resolve` now raises `AgentSetupError` listing the valid targets,
+    matching `docir init --profiles`. `update` uses the same path, so a typo is rejected
+    there too. See GAP-024 resolution.
+  assumption_if_unanswered: null
 
 - id: Q-012
   gap: GAP-036

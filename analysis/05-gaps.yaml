@@ -806,7 +806,21 @@
   frequency: "any typo in --agent"
   proposed_default: "Raise AgentSetupError naming the valid targets, matching --profiles."
   question: Q-011
-  status: open
+  status: resolved
+  resolution: >
+    FIXED 2026-07-28, as proposed. `_resolve` rejects any name not in `AGENT_TARGETS` and
+    lists the valid ones, matching the `--profiles` message two files away. PROBE-13
+    replayed: `agent install --agent claud` now exits 2 with "unknown agent target(s):
+    claud; available: claude, agents" where it printed `[]` and exited 0.
+    `update` resolves through the same function, so a typo there is rejected too — it would
+    otherwise have refreshed nothing and reported success, which is the same defect in the
+    command people run more often.
+    FIFTH instance of the encoded-defect trap, and the most explicit yet: the existing test
+    was *named* `test_unknown_agent_is_ignored` and asserted the empty result. The behaviour
+    was not merely unpinned, it was documented as intended in the suite. After GAP-006,
+    GAP-008, GAP-040 and GAP-045, the pattern is reliable enough to act on: when a gap
+    describes behaviour that "silently does nothing", grep the tests for a case asserting
+    that nothing happens before assuming the tests are on your side.
 
 - id: GAP-014
   class: missing

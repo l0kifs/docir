@@ -112,9 +112,37 @@ class TestInstall:
         with pytest.raises(AgentSetupError):
             svc.install(install_req(agents=("agents",), use_global=True))
 
-    def test_unknown_agent_is_ignored(self) -> None:
+    def test_unknown_agent_is_rejected(self) -> None:
+        """Guards GAP-024 — and this test asserted the opposite.
+
+        `--agent claud` was silently skipped: `[]`, exit 0, nothing written. A
+        once-per-repo onboarding command reported success while doing nothing,
+        leaving the user believing their agent had been taught to drive docir.
+        `docir init --profiles bogus` two files away already raised and listed
+        the valid names.
+
+        The old test was named `test_unknown_agent_is_ignored` and asserted the
+        empty result, so the suite could never have caught this — the same trap
+        as GAP-006, GAP-008 and GAP-040.
+        """
         svc, _ = make()
-        assert svc.install(install_req(agents=("bogus",))).files == ()
+        with pytest.raises(AgentSetupError):
+            svc.install(install_req(agents=("bogus",)))
+
+    def test_the_error_lists_the_valid_targets(self) -> None:
+        # A typo is the likely cause, so the message has to show the choices.
+        svc, _ = make()
+        with pytest.raises(AgentSetupError) as excinfo:
+            svc.install(install_req(agents=("claud",)))
+        message = str(excinfo.value)
+        assert "claud" in message and "claude" in message and "agents" in message
+
+    def test_update_rejects_an_unknown_agent_too(self) -> None:
+        # `update` resolves through the same path; a typo there would otherwise
+        # silently refresh nothing and report success.
+        svc, _ = make()
+        with pytest.raises(AgentSetupError):
+            svc.update(update_req(agents=("bogus",)))
 
     def test_duplicate_agent_is_collapsed(self) -> None:
         svc, _ = make()

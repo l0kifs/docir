@@ -89,7 +89,20 @@ class AgentSetupService:
     # -- internals ----------------------------------------------------------
 
     def _resolve(self, names: tuple[str, ...], *, use_global: bool) -> list[AgentTarget]:
-        """Map ``--agent`` names to targets, ignoring unknowns, validating global."""
+        """Map ``--agent`` names to targets; reject unknowns, validate global.
+
+        An unknown name used to be skipped silently, so `--agent claud` printed
+        `[]`, exited 0 and wrote nothing — a once-per-repo onboarding command
+        reporting success while doing nothing, leaving the user to believe their
+        agent had been taught to drive docir. `docir init --profiles bogus`
+        already raised and listed the valid names; this matches it.
+        """
+        unknown = sorted({name for name in names if name not in AGENT_TARGETS})
+        if unknown:
+            available = ", ".join(AGENT_TARGETS)
+            raise AgentSetupError(
+                f"unknown agent target(s): {', '.join(unknown)}; available: {available}"
+            )
         resolved: list[AgentTarget] = []
         seen: set[str] = set()
         for name in names:

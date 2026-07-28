@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`docir context` can now answer "nothing relevant exists".** Every ranked hit carries a
+  `similarity` — the raw cosine against your task — and `--min-score` filters on it. The
+  emitted `score` is a reciprocal-rank fusion, so it is rank-derived: against a store holding
+  only a Postgres decision, `docir context "how do I bake sourdough bread"` returned it at
+  roughly the magnitude a perfect match scores, and an agent had no way to tell context from
+  noise. The cosine was already being computed and then discarded. With `--min-score 0.5`
+  that query now returns `[]`, while an on-topic one scores 0.90 and survives.
+  Two things `--min-score` deliberately does not filter: graph-reached neighbours (present
+  because a selected document links them, not because they scored) and hits with no current
+  vector, whose `similarity` is absent — that means *unknown*, not zero. Run
+  `docir embed --flush` if you need the floor to cover everything. Without `--min-score`,
+  behaviour is unchanged.
+
 ### Documentation
 
 - **ADR-0011 carries an evidence update.** Its cited benchmark figures predate the corpus

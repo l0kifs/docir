@@ -19,12 +19,23 @@ DEFAULT_RRF_K = 60
 
 @dataclass(frozen=True, slots=True)
 class FusedScore:
-    """A fused ranking for one document id."""
+    """A fused ranking for one document id.
+
+    ``score``/``lexical``/``semantic`` are all RRF components — rank-derived, so
+    they say where a document placed, never how good the match was. A perfect hit
+    and the only-document-in-the-store score the same ~0.0328 at rank 1.
+
+    ``similarity`` is the raw cosine that produced the semantic rank, carried
+    through precisely because the fused score cannot answer "is this actually
+    relevant?". It is ``None`` when the document had no current vector — a
+    lexical-only hit — which is *unknown*, not zero.
+    """
 
     doc_id: str
     score: float
     lexical: float
     semantic: float
+    similarity: float | None = None
 
 
 class HybridScorer:
@@ -56,8 +67,10 @@ class HybridScorer:
             lexical_component[hit.doc_id] = 1.0 / (self._k + rank + 1)
 
         semantic_component: dict[str, float] = {}
-        for rank, (doc_id, _sim) in enumerate(semantic):
+        similarity: dict[str, float] = {}
+        for rank, (doc_id, sim) in enumerate(semantic):
             semantic_component[doc_id] = 1.0 / (self._k + rank + 1)
+            similarity[doc_id] = sim
 
         all_ids = set(lexical_component) | set(semantic_component)
         fused = [
@@ -66,6 +79,7 @@ class HybridScorer:
                 score=lexical_component.get(doc_id, 0.0) + semantic_component.get(doc_id, 0.0),
                 lexical=lexical_component.get(doc_id, 0.0),
                 semantic=semantic_component.get(doc_id, 0.0),
+                similarity=similarity.get(doc_id),
             )
             for doc_id in all_ids
         ]

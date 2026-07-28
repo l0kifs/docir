@@ -345,18 +345,38 @@ def context(
         ),
     ] = DEFAULT_CONTEXT_EXPAND,
     include_resolved: Annotated[bool, typer.Option("--include-resolved")] = False,
+    min_score: Annotated[
+        float | None,
+        typer.Option(
+            "--min-score",
+            help="Drop ranked hits whose `similarity` is below this (0.0-1.0).",
+        ),
+    ] = None,
 ) -> None:
     """Ranked, minimal relevant document set (hybrid + graph traversal).
 
     ``--limit`` bounds the whole response. Graph expansion runs inside that
     budget: ``--expand`` slots are held for related documents, and any the graph
     does not use are given back to the ranked hits.
+
+    Each ranked hit carries a `similarity` — the raw cosine against your task,
+    the only number here with absolute meaning. `score` is rank-derived, so it is
+    roughly the same for a perfect match and the only document in the store, and
+    cannot tell you whether anything relevant exists. `--min-score` filters on
+    `similarity`, so an empty result is a real answer: nothing was close enough.
+
+    Two things it does not filter: documents with no current vector (a
+    lexical-only hit, whose similarity is unknown rather than zero — run `docir
+    embed --flush` if you need the floor to cover everything) and graph-reached
+    neighbours, which are included because a selected document points at them,
+    not because they scored.
     """
     payload: dict[str, object] = {
         "task": task,
         "limit": limit,
         "expand": expand,
         "include_inactive": include_resolved,
+        "min_score": min_score,
     }
     _emit_document_list(execute("context", payload))
 

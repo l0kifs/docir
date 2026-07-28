@@ -303,10 +303,21 @@
                     empty result is expressible."
   context: "Compounds Q-003 — the response is unbounded in size and unfiltered in quality."
   asked: null
-  answered: null
-  authority: null
-  answer: null
-  assumption_if_unanswered: "Assuming always-return-something is deliberate. Review with Q-003."
+  answered: 2026-07-28
+  authority: >
+    repo maintainer (directed the work; the question was never answered separately, so the
+    recorded assumption below was preserved rather than overturned)
+  answer: >
+    Both, and they do not conflict. The raw cosine is now emitted as `similarity` on every
+    ranked hit, and `context --min-score F` filters on it — so an empty result is
+    *expressible*. It is not automatic: with no `--min-score`, `context` still always returns
+    something, which keeps the recorded assumption intact for anyone relying on it.
+    The floor is on `similarity`, not on the fused `score`, because `score` is rank-derived
+    and cannot carry relevance — that was the finding. Graph neighbours and hits without a
+    current vector are exempt; see GAP-017 resolution for why each would otherwise break.
+  assumption_if_unanswered: >
+    WAS: always-return-something is deliberate. Still true by default — the fix adds an
+    opt-in floor rather than changing what `context` does when you do not ask for one.
 
 - id: Q-010
   gap: GAP-010

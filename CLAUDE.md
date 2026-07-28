@@ -184,6 +184,17 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   flag. `MaintenanceService`/`DocumentService` need a `Clock` for "today". **AST-anchored** staleness
   is intentionally *not* built — human `--verified` is the honest baseline; anchoring is a future
   additive layer.
+- **`score` is rank-derived; `similarity` is the one number with absolute meaning.** RRF
+  fuses *ranks*, so `score` says where a document placed and never how good the match was — a
+  nonsense query against a one-document store scored the same ~0.0328 a perfect match does,
+  which made "nothing relevant exists" inexpressible. `FusedScore.similarity` carries the raw
+  cosine through (`fuse` used to compute it, sort by it, and drop it), and `--min-score`
+  filters on that. Do not point `--min-score` at `score`. Two exemptions are load-bearing:
+  graph neighbours are never filtered (they are there because a selected document links them,
+  not because they scored), and a hit with **no** `similarity` is kept — absent means *no
+  current vector*, not zero, and dropping it would filter on embedding-queue staleness rather
+  than relevance. That is also why `_trim` **rounds** `similarity` instead of dropping a 0.0:
+  an absent value must keep meaning "not scored".
 - **Read paths return skeletons (two-tier retrieval).** `query`/`search`/`context` return
   `DocumentSummary` (frontmatter + typed edges + staleness, **no body**); only `get` returns the full
   `DocumentView` with the body. Do not add the body back to the list paths — the skeleton is the

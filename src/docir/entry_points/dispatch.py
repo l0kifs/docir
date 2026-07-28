@@ -134,6 +134,7 @@ class Dispatcher:
             limit=_int(payload, "limit", default=5),
             include_inactive=_bool(payload, "include_inactive"),
             expand=_int(payload, "expand", default=DEFAULT_CONTEXT_EXPAND),
+            min_score=_opt_float(payload, "min_score"),
         )
         return [asdict(view) for view in self._documents.context(request)]
 
@@ -206,6 +207,17 @@ def _int(payload: Payload, key: str, *, default: int) -> int:
     if isinstance(value, bool) or not isinstance(value, int | float | str):
         return default
     return int(value)
+
+
+def _opt_float(payload: Payload, key: str) -> float | None:
+    """A float the caller may omit — absent means "no floor", not 0.0."""
+    value = payload.get(key)
+    if value is None or isinstance(value, bool) or not isinstance(value, int | float | str):
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
 
 
 def _tuple(payload: Payload, key: str) -> tuple[str, ...]:

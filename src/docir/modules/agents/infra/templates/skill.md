@@ -13,7 +13,7 @@ Prefix all commands with `docir`. **When you capture a command's output it is
 already compact single-line JSON** — stdout isn't a TTY, so you don't need
 `--json` (it forces the same). To save tokens, fields that hold no value are
 omitted: **an absent field means its default** — no `owner`/`verified`/`related`,
-empty `tags` — and the relevance `score` is rounded. Pass `--no-trim` for the
+empty `tags` — and `score`/`similarity` are rounded. Pass `--no-trim` for the
 full, unrounded payload, or `--pretty` to force the human table view.
 
 ## When to use
@@ -81,6 +81,22 @@ budget, not a suggestion. Related docs are pulled *inside* it: `--expand N`
 (default 2) reserves at most N of those slots for `via_graph` items, and slots
 the graph does not use go back to ranked hits. `--expand 0` gives you ranked
 hits only.
+
+**Judge relevance by `similarity`, never by `score`.** `score` is a rank fusion:
+it tells you the order and nothing else, so the top hit of a query nothing
+matches scores about the same as a perfect match. `similarity` is the raw cosine
+against your task (0.0-1.0) and is the number that means something.
+
+- Roughly: **>0.7** on topic, **0.4-0.7** related, **<0.4** probably noise. Read
+  the descriptions before trusting a low one — these are guides, not thresholds.
+- `docir context "<task>" --min-score 0.5` filters for you, and **an empty result
+  is a real answer**: nothing in the corpus is close enough. Say so and proceed,
+  rather than treating the top-ranked document as relevant because it was
+  returned.
+- Two things it does not filter: `via_graph` items (they are there because a
+  selected doc links them, not because they scored) and hits whose `similarity`
+  is **absent** — that means no current vector, not zero. Run `docir embed
+  --flush` if you need the floor to cover everything.
 
 ## Write
 

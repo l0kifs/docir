@@ -23,6 +23,10 @@ error_console = Console(stderr=True)
 
 _SCORE_DECIMALS = 4
 
+#: Rounded rather than dropped, so a real 0.0 similarity survives trimming — an
+#: absent `similarity` must mean "not scored", never "scored zero".
+_SCORE_KEYS = frozenset({"score", "similarity"})
+
 
 def emit_json(data: object, *, trim: bool = True) -> None:
     """Print compact single-line JSON — the token-efficient path for agents.
@@ -44,7 +48,7 @@ def _trim(value: object) -> object:
     if isinstance(value, Mapping):
         result: dict[str, object] = {}
         for key, item in value.items():
-            if key == "score" and isinstance(item, float):
+            if key in _SCORE_KEYS and isinstance(item, float):
                 result[str(key)] = round(item, _SCORE_DECIMALS)
                 continue
             trimmed = _trim(item)
@@ -144,6 +148,9 @@ def render_document_list(views: Sequence[Mapping[str, object]]) -> None:
     has_score = any(view.get("score") is not None for view in views)
     if has_score:
         table.add_column("score", justify="right")
+    has_similarity = any(view.get("similarity") is not None for view in views)
+    if has_similarity:
+        table.add_column("sim", justify="right")
     for view in views:
         marker = " ↗" if view.get("via_graph") else ""
         marker += " ⚠" if view.get("stale") else ""
@@ -157,6 +164,9 @@ def render_document_list(views: Sequence[Mapping[str, object]]) -> None:
         if has_score:
             score = view.get("score")
             row.append(f"{score:.3f}" if isinstance(score, int | float) else "-")
+        if has_similarity:
+            similarity = view.get("similarity")
+            row.append(f"{similarity:.3f}" if isinstance(similarity, int | float) else "-")
         table.add_row(*row)
     console.print(table)
 

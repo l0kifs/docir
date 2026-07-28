@@ -105,6 +105,12 @@ class DocumentSummary:
     verified: str | None = None
     stale: bool = False
     score: float | None = None
+    #: Raw cosine similarity to the query — the only field with absolute
+    #: meaning. ``score`` is rank-derived (RRF), so it cannot distinguish a
+    #: perfect match from the only document in the store. ``None`` means the
+    #: document had no current vector, or arrived via the graph rather than
+    #: the ranking; that is *unknown*, not zero.
+    similarity: float | None = None
     via_graph: bool = False
 
     @classmethod
@@ -114,6 +120,7 @@ class DocumentSummary:
         *,
         stale: bool = False,
         score: float | None = None,
+        similarity: float | None = None,
         via_graph: bool = False,
     ) -> DocumentSummary:
         return cls(
@@ -131,6 +138,7 @@ class DocumentSummary:
             verified=None if document.verified is None else document.verified.isoformat(),
             stale=stale,
             score=score,
+            similarity=similarity,
             via_graph=via_graph,
         )
 
@@ -214,9 +222,14 @@ class ContextRequest:
     ``limit`` is the hard ceiling on documents returned. ``expand`` is how many
     of those slots may go to graph-reached neighbours; the rest go to ranked
     hits, and unused neighbour slots are backfilled with more ranked hits.
+
+    ``min_score`` is a floor on the *raw cosine similarity*, not on the fused
+    ``score``: the latter is rank-derived, so it is ~identical for a perfect
+    match and a nonsense one and cannot express "nothing relevant exists".
     """
 
     task: str
     limit: int = 5
     include_inactive: bool = False
     expand: int = DEFAULT_CONTEXT_EXPAND
+    min_score: float | None = None

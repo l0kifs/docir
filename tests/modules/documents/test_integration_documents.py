@@ -425,6 +425,99 @@ class TestContextGraphVisibility:
         assert by_id[successor["id"]].get("via_graph") is True
 
 
+class TestRelevanceFloor:
+    """`context` can answer "nothing relevant exists" (guards GAP-017).
+
+    The emitted `score` is RRF, so it is rank-derived: against a store holding
+    only "Postgres connection pooling", `context "how do I bake sourdough
+    bread"` returned that decision at the same magnitude a perfect match scores.
+    An agent had no way to tell context from noise. `--min-score` filters on the
+    raw cosine, which does carry absolute meaning.
+
+    These run under the deterministic embedder (the test fixtures set it), where
+    cosine is lexical overlap — so documents sharing no vocabulary score exactly
+    0.0, which makes the floor testable without a model.
+    """
+
+    @staticmethod
+    def _corpus(dispatcher: Dispatcher) -> None:
+        dispatcher.dispatch(
+            "add",
+            {
+                "type": "decision",
+                "title": "Postgres connection pooling",
+                "description": "Use pgbouncer in transaction mode for the API tier.",
+            },
+        )
+
+    def test_ranked_hits_carry_a_raw_similarity(self, dispatcher: Dispatcher) -> None:
+        self._corpus(dispatcher)
+        results = dispatcher.dispatch(
+            "context", {"task": "postgres connection pooling", "limit": 3}
+        )
+        assert results[0]["similarity"] is not None
+
+    def test_an_unrelated_task_can_return_nothing(self, dispatcher: Dispatcher) -> None:
+        self._corpus(dispatcher)
+        # Shares no vocabulary with the corpus, so cosine is 0.0 here.
+        results = dispatcher.dispatch(
+            "context",
+            {"task": "sourdough bread starter hydration", "limit": 3, "min_score": 0.1},
+        )
+        assert results == []
+
+    def test_a_relevant_task_survives_the_floor(self, dispatcher: Dispatcher) -> None:
+        self._corpus(dispatcher)
+        results = dispatcher.dispatch(
+            "context",
+            {"task": "postgres connection pooling", "limit": 3, "min_score": 0.1},
+        )
+        assert [d["id"] for d in results] == ["adr-0001"]
+
+    def test_no_floor_still_returns_the_noise(self, dispatcher: Dispatcher) -> None:
+        # The default is unchanged: always-return-something stays the behaviour
+        # unless the caller asks for a floor.
+        self._corpus(dispatcher)
+        results = dispatcher.dispatch(
+            "context", {"task": "sourdough bread starter hydration", "limit": 3}
+        )
+        assert len(results) == 1
+
+    def test_graph_neighbours_are_not_filtered_by_the_floor(self, dispatcher: Dispatcher) -> None:
+        # The neighbour shares no vocabulary with the task, so as a *ranked*
+        # candidate it scores 0.0 and the floor excludes it. It must still
+        # arrive through the edge: a neighbour is present because a selected
+        # document points at it, not because it scored, and filtering it on
+        # relevance to the query would gut the graph feature.
+        neighbour = dispatcher.dispatch(
+            "add",
+            {
+                "type": "issue",
+                "title": "Thundering herd on fleet restart",
+                "description": "Stampede when every node reboots at once.",
+            },
+        )
+        dispatcher.dispatch(
+            "add",
+            {
+                "type": "decision",
+                "title": "Postgres connection pooling",
+                "description": "Use pgbouncer in transaction mode for the API tier.",
+                "related": [neighbour["id"]],
+            },
+        )
+        results = dispatcher.dispatch(
+            "context",
+            {
+                "task": "postgres connection pooling",
+                "limit": 5,
+                "expand": 2,
+                "min_score": 0.1,
+            },
+        )
+        assert any(d["id"] == neighbour["id"] and d["via_graph"] for d in results)
+
+
 class TestArchiveDelete:
     def test_archive_hides_from_search(self, seeded: Dispatcher) -> None:
         seeded.dispatch("archive", {"doc_id": "adr-0001"})

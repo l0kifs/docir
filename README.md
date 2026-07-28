@@ -119,13 +119,16 @@ command emits **compact, trimmed JSON** — no borders, empty fields dropped, ~4
 
 ```console
 $ docir context "implement a new auth endpoint" | cat
-[{"id":"adr-0001","title":"Auth strategy","description":"How the service authenticates API clients.","type":"decision","status":"proposed","tags":["auth"],"archived":false,"stale":false,"score":0.0328,"via_graph":false}, ...]
+[{"id":"adr-0001","title":"Auth strategy","description":"How the service authenticates API clients.","type":"decision","status":"proposed","tags":["auth"],"archived":false,"stale":false,"score":0.0328,"similarity":0.8951,"via_graph":false}, ...]
 ```
 
-*An absent field means its default (no owner, not stale); the relevance `score` is a
-reciprocal-rank fusion of the full-text and vector rankings, so ordering is the point and
-the absolute value means little. `--json`
-forces JSON anywhere, `--pretty` forces the table, `--no-trim` keeps every field.*
+*An absent field means its default (no owner, not stale). `score` is a reciprocal-rank
+fusion of the full-text and vector rankings, so ordering is the point and the absolute
+value means little — a nonsense query against a one-document store scores about the same
+as a perfect match. `similarity` is the raw cosine against your query and does carry
+absolute meaning, which is what `--min-score` filters on: with it, an empty result is a
+real answer rather than an impossible one. `--json` forces JSON anywhere, `--pretty`
+forces the table, `--no-trim` keeps every field.*
 
 ## The model
 
@@ -148,7 +151,7 @@ forces JSON anywhere, `--pretty` forces the table, `--no-trim` keeps every field
 | `docir init` | Scope docs to a project-local `./.docir` store (like `git init`) |
 | `docir add` | Create a document — the single write path |
 | `docir update` | Edit content, metadata, or relations of an existing document |
-| `docir context <query>` | Ranked relevant set (skeletons) — full-text + vector, fused |
+| `docir context <query>` | Ranked relevant set (skeletons) — full-text + vector, fused (`--min-score` to filter noise) |
 | `docir search` / `query` | Full-text search / structured filter (skeletons) |
 | `docir get <id>` | Full document with body |
 | `docir check` | Structural findings — duplicate ids, dangling edges, staleness (`--strict` gates CI on errors, `--fix` repairs them) |

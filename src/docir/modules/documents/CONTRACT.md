@@ -12,6 +12,9 @@ files and the derived index never disagree.
 - `DocumentService.query(QueryRequest) -> [DocumentSummary]` — structured filtering (skeleton, no body)
 - `DocumentService.search(SearchRequest) -> [DocumentSummary]` — full-text search (skeleton, no body)
 - `DocumentService.context(ContextRequest) -> [DocumentSummary]` — ranked relevant set (skeleton, no body).
+  Each ranked hit carries `similarity`, the raw cosine (absolute meaning; `score` is rank-derived RRF
+  and has none). `ContextRequest.min_score` is a floor on `similarity`, so an empty result is
+  expressible; it does not filter graph-reached neighbours or hits with no current vector.
   `ContextRequest.limit` is a hard ceiling on the response; `ContextRequest.expand`
   (default `DEFAULT_CONTEXT_EXPAND`) is how many of those slots may go to graph-reached
   neighbours, with unused neighbour slots backfilled by ranked hits.

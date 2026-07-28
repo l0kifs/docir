@@ -51,6 +51,18 @@ class TestEmitJsonTrimming:
         rendering.emit_json({"score": 0.03278688524590164})
         assert json.loads(capsys.readouterr().out)["score"] == 0.0328
 
+    def test_trim_rounds_similarity_too(self, capsys: pytest.CaptureFixture[str]) -> None:
+        rendering.emit_json({"similarity": 0.40512345678})
+        assert json.loads(capsys.readouterr().out)["similarity"] == 0.4051
+
+    def test_a_zero_similarity_survives_trimming(self, capsys: pytest.CaptureFixture[str]) -> None:
+        # An absent `similarity` means "not scored" (lexical-only hit, or a
+        # graph neighbour). If trimming dropped a real 0.0, an agent reading the
+        # payload could not tell "no vector" from "scored nothing" — the exact
+        # distinction --min-score depends on.
+        rendering.emit_json({"similarity": 0.0})
+        assert json.loads(capsys.readouterr().out) == {"similarity": 0.0}
+
     def test_trim_recurses_into_nested_maps_and_lists(
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:

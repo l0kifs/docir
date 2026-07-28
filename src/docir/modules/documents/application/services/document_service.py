@@ -306,18 +306,20 @@ class DocumentService:
 
             seed_budget = request.limit - expand
             selected: dict[str, DocumentSummary] = {
-                document.id: self._summary(document, score=score)
-                for document, score in ranked[:seed_budget]
+                document.id: self._summary(document, score=score, similarity=similarity)
+                for document, score, similarity in ranked[:seed_budget]
             }
             if expand:
                 self._augment_with_related(
                     uow, selected, budget=expand, include_inactive=request.include_inactive
                 )
             # Give back neighbour slots the graph did not use.
-            for document, score in ranked[seed_budget:]:
+            for document, score, similarity in ranked[seed_budget:]:
                 if len(selected) >= request.limit:
                     break
-                selected.setdefault(document.id, self._summary(document, score=score))
+                selected.setdefault(
+                    document.id, self._summary(document, score=score, similarity=similarity)
+                )
 
         return list(selected.values())
 
@@ -328,18 +330,31 @@ class DocumentService:
         request: ContextRequest,
         *,
         limit: int,
-    ) -> list[tuple[Document, float]]:
-        """Resolve fused scores to visible documents, best first, at most ``limit``."""
-        resolved: list[tuple[Document, float]] = []
+    ) -> list[tuple[Document, float, float | None]]:
+        """Resolve fused scores to visible documents, best first, at most ``limit``.
+
+        ``min_score`` is applied here, against the raw cosine rather than the
+        fused score, and only where a cosine exists: a document with no current
+        vector was retrieved lexically, and dropping a real full-text match for
+        an *unknown* similarity would filter on staleness of the embedding
+        queue rather than on relevance. `docir embed --flush` closes that gap.
+        """
+        resolved: list[tuple[Document, float, float | None]] = []
         for fscore in fused:
             if len(resolved) >= limit:
                 break
+            if (
+                request.min_score is not None
+                and fscore.similarity is not None
+                and fscore.similarity < request.min_score
+            ):
+                continue
             document = uow.documents.get(fscore.doc_id)
             if document is None:
                 continue
             if not self._is_visible(document, include_inactive=request.include_inactive):
                 continue
-            resolved.append((document, fscore.score))
+            resolved.append((document, fscore.score, fscore.similarity))
         return resolved
 
     # -- helpers ------------------------------------------------------------
@@ -349,10 +364,15 @@ class DocumentService:
         document: Document,
         *,
         score: float | None = None,
+        similarity: float | None = None,
         via_graph: bool = False,
     ) -> DocumentSummary:
         return DocumentSummary.from_document(
-            document, stale=self._is_stale(document), score=score, via_graph=via_graph
+            document,
+            stale=self._is_stale(document),
+            score=score,
+            similarity=similarity,
+            via_graph=via_graph,
         )
 
     def _is_stale(self, document: Document) -> bool:

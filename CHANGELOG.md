@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- **ADR-0011 carries an evidence update.** Its cited benchmark figures predate the corpus
+  re-base and no longer reproduce. The decision stands, but the argument now rests on
+  `context --expand 0` — which isolates the ranking from graph expansion, and where the
+  hashing embedder scores *below* plain `search` rather than merely level with it.
+
 ## [0.4.0] - 2026-07-28
 
 `docir context` and `docir check` both change what they return. Every fix here came from

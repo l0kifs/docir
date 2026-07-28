@@ -28,7 +28,8 @@ lint threshold, `--limit 5`) had been chosen without evidence.
 A benchmark was built first, precisely so this decision would not be another
 untested guess — 20 documents, 12 tasks with relevance judgments, half of them
 deliberately phrased in words the documents never use (`benchmarks/`). It gives
-`recall@5`:
+`recall@5` (**these figures are from the 20/12 corpus and no longer reproduce —
+see *Evidence update* below**):
 
 | | hashing embedder | real model |
 |---|---|---|
@@ -95,8 +96,8 @@ Tests that load the real model are marked `slow`; CI caches `~/.cache/fastembed`
 
 ## Consequences
 - Easier: semantic retrieval works from `pip install docir` with no flags;
-  `recall@5` on the benchmark corpus goes 0.88 → 0.96. Retrieval changes can now
-  be evaluated instead of argued about.
+  `recall@5` on the benchmark corpus goes 0.88 → 0.96 (0.93 → 0.96 after the
+  re-base below). Retrieval changes can now be evaluated instead of argued about.
 - Harder: install is ~240 MB heavier and first run needs network. Constrained
   environments (CI images, containers, air-gapped hosts) must set
   `DOCIR_EMBEDDER=deterministic` — a documented, tested path, not a degraded
@@ -109,3 +110,46 @@ Tests that load the real model are marked `slow`; CI caches `~/.cache/fastembed`
   corpus is synthetic (limits are listed in `benchmarks/README.md`). Nothing yet
   measures whether retrieved context changed what an agent actually did, which is
   the outcome the product exists for.
+
+## Evidence update (2026-07-28) — the decision holds, the numbers moved
+
+The decision above stands. The measurement it rests on does not reproduce, so
+this records what changed and why the conclusion survives it.
+
+The corpus was re-based to **23 documents / 14 tasks** (v0.4.0). The original had
+no `supersedes` edge and no document in an inactive status, which meant the two
+graph behaviours `docir context` depends on most were unmeasurable — two fixes
+that changed retrieval semantics moved no number at all. Adding a superseded
+decision pair and a closed issue made them visible, and re-based every figure
+in the table above.
+
+Current `recall@5`:
+
+| | hashing embedder | real model |
+|---|---|---|
+| `context` | 0.93 (MRR 0.80) | **0.96 (MRR 0.95)** |
+| `context --expand 0` | 0.80 | **0.87** |
+| `search` (lexical only) | 0.83 (MRR 0.82) | 0.83 (MRR 0.82) |
+
+**This weakens the headline comparison and strengthens the underlying argument.**
+Full `context` now separates the embedders by 0.03 rather than 0.08, because the
+two new tasks depend on the relation graph and expansion lifts both embedders
+equally. Read alone, that reads like a case for reverting.
+
+It is not, because full `context` was always the wrong comparison for a question
+about embedders: it bundles the ranking with a graph traversal that has nothing
+to do with them. `--expand 0` isolates the ranking, and there the hashing
+embedder scores **0.80 recall / 0.80 MRR against plain `search`'s 0.83 / 0.82** —
+it ranks *below* the lexical index it is supposed to be complementing, because it
+measures the same signal with less precision. The model scores 0.87 / 0.95.
+
+So the original claim ("the hashing embedder bought noise") was if anything too
+generous: on the better instrument it is a small net negative. The `--expand 0`
+pair is what README, CLAUDE.md and `benchmarks/README.md` now quote.
+
+The general lesson, since it will recur: **re-basing a benchmark can invalidate
+the argument the previous baseline was built to support.** The fix is to
+re-derive the argument on the new instrument, not to keep the corpus that
+flattered the conclusion — and to say so where the old numbers are still
+printed, because a reader comparing across a silent re-base draws a conclusion
+about code from a change in the denominator.

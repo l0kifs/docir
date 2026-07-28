@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The packaged agent guide is now checked against the CLI.** `docir agent install` copies
+  one instruction file into adopting repositories, and nothing verified that the commands in
+  it existed — it shipped `docir reindex --all`, a flag that never existed, at the post-merge
+  recovery step. A test now resolves every `docir ...` invocation in the guide against the
+  CLI's own command tree, so a renamed command or a dropped flag fails in the same commit.
+
 ### Fixed
 
 - **`docir context` no longer returns closed documents through the graph.** The

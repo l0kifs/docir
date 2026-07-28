@@ -132,8 +132,8 @@ work in this order — the constraints below make any other order fail:
      text may say "superseded by #7" while nothing in its structure does.
    - **What is the real description?** It drives retrieval. The opening
      paragraph is usually context, not a summary — write a better one.
-   - **What type is it?** One `docir import`-style bulk pass would force one
-     type; a real corpus mixes decisions, issues and architecture notes.
+   - **What type is it?** A single bulk-import pass would force one type; a real
+     corpus mixes decisions, issues and architecture notes.
 
    Then add it, stripping any existing YAML frontmatter from the body:
    ```

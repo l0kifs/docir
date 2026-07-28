@@ -1081,11 +1081,33 @@
     invocation from the template and asserts each command and flag exists in the CLI's own
     JSON `--help` — the check that would have caught this. Not yet written.
   question: null
-  status: open          # the typo is fixed; the missing guard is not
+  status: resolved
   resolution: >
-    Typo corrected 2026-07-26. Left `open` because the underlying gap — nothing verifies the
-    shipped guide against the CLI — remains. A one-off manual sweep of all 24 invocations in
-    the template found no other invalid command or flag.
+    Typo corrected 2026-07-26; the guard written 2026-07-28, which is what closes this.
+    `tests/entry_points/test_agent_guide_matches_cli.py` extracts every `docir ...` the
+    guide presents as runnable — fenced-block lines and inline code spans — and resolves each
+    against the CLI's own command tree, introspected from the Typer app rather than shelled
+    out, so it cannot drift from the binary. 29 invocations, one parametrized case each.
+    Attribution tested by injecting three defects into the template and confirming each
+    fails: an unknown flag (`reindex --all`, the original), an unknown subcommand
+    (`schema dump`) and an unknown top-level command (`repair --fix`).
+    One prose change was needed to make the rule enforceable: the guide said "One `docir
+    import`-style bulk pass", a backticked command that deliberately does not exist. Reworded
+    to "a single bulk-import pass". That is the right outcome rather than an extractor
+    exemption — an agent will try to run a backticked command whatever the sentence around it
+    says, which is this gap's exact failure mode.
+    TWO DEFECTS IN THE GUARD ITSELF, both found by testing it against injected bugs rather
+    than by reading it:
+    (a) the inline-span regex paired backticks across the whole document, but a ``` fence
+    *is* backticks — each fenced block was swallowed into one giant "span" and every pair
+    after it shifted. It extracted a plausible 28 invocations while missing the exact line
+    the test exists to catch. Prose is now separated from fenced blocks before the regex runs.
+    (b) resolution fell back to the parent group on an unknown word, so `docir schema dump`
+    validated against `docir schema`. A word in a *group's* subcommand position must now
+    resolve; only a leaf command's trailing words are treated as arguments.
+    The first version of the guard-the-guard asserted a *count* of invocations, which both
+    defects passed. It now names specific invocations that must be found, each reachable
+    from a different part of the document. A count cannot say which line went missing.
 
 - id: GAP-002
   class: unstated

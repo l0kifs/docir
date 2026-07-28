@@ -285,6 +285,20 @@ tests/
   the `slow` subprocess tests for end-to-end. Prefer in-memory fakes over mocks for ports.
 - Keep the regression-guard style: when a test pins a subtle bug, name the bug in a comment (e.g.
   `test_merge_safety.py` guards duplicate ids a branch merge produces).
+- **Verify a new guard by injecting the bug it claims to catch.** Four defects here survived
+  because a test asserted the existing behaviour was intended (`test_check_strict_gates_ci`
+  pinned the unusable CI gate; `test_layering_violation` pinned the false positive), or because
+  the test silently checked nothing — `test_agent_guide_matches_cli.py` reported 28 valid
+  invocations while its regex, thrown off by ``` fences, was not extracting the one line it
+  exists to catch. Each was found by running the tool as a user would, never by reading the
+  suite. A test that has never failed has not been shown to work. Where a guard scans a
+  corpus, also assert *which* items it found: a count cannot distinguish "nothing is wrong"
+  from "nothing is checked".
+- **`tests/entry_points/test_agent_guide_matches_cli.py` validates the shipped agent guide**
+  against the Typer command tree, introspected from `cli.app` rather than shelled out. Any
+  `docir ...` in a fenced block or an inline code span in
+  `modules/agents/infra/templates/skill.md` must resolve to a real command with real flags —
+  so prose naming a command that does not exist must not be written in backticks.
 - The coverage gate is **90%** (`--cov-fail-under=90`); `alembic/` and `fastembed.py` are omitted.
 
 ## Known rough edges / recorded deviations

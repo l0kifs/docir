@@ -348,6 +348,39 @@ they should be free to: `{supersedes, contradicts}` and `{depends_on, refines}` 
 nothing. Keeping them separate cost one duplicated frozenset and avoided coupling two
 unrelated rules through a shared constant.
 
+## Follow-up — the shipped guide is now checked against the CLI (2026-07-28)
+
+```
+FIX  GAP-040  test_agent_guide_matches_cli.py resolves every `docir ...` in the
+              packaged guide against the Typer command tree. 29 invocations.
+              Attribution: three defects injected (unknown flag, unknown
+              subcommand, unknown top-level command), each caught.      → resolved
+REWORD        the guide said "One `docir import`-style bulk pass" — a backticked
+              command that deliberately does not exist. Prose, not an exemption:
+              an agent runs a backticked command whatever the sentence says.
+```
+
+**The guard shipped broken twice before it worked, and neither defect was visible by
+reading it.** First: the inline-span regex paired backticks across the whole document, but a
+``` fence *is* backticks — every fenced block collapsed into one giant "span" and shifted
+every pair after it. It reported a healthy-looking 28 invocations and did not contain the one
+line the test exists to catch; the injected `reindex --all` passed. Second: after fixing
+that, an unknown word fell back to the parent group, so `docir schema dump` validated
+against `docir schema`.
+
+Both were found the same way — by injecting the bug the test claims to catch and watching it
+pass. A test written against a real corpus that happens to be clean cannot distinguish
+"nothing is wrong" from "nothing is checked".
+
+The guard-the-guard has the same disease in miniature: it first asserted `len(INVOCATIONS)
+>= 20`, which both defects satisfied. A count cannot say *which* line went missing. It now
+names six invocations that must be found, each reachable from a different part of the
+document — fenced block, inline span, table cell, indented sub-list.
+
+This is the fourth appearance of the family recorded here (GAP-006, GAP-045, GAP-008, now
+GAP-040), and the sharpest: the other three were tests that asserted existing behaviour was
+intended. This one asserted nothing at all while appearing to assert a great deal.
+
 ```
 NEW      05-gaps.yaml GAP-001 carried a duplicate `resolution:` key, and five entries in
          06-questions.yaml (Q-002/003/004/007/012) carried duplicate `answered`/`authority`/

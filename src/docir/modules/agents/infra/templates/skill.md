@@ -191,6 +191,22 @@ A type's review cadence (`review_days` in the schema) drives a non-blocking
 `stale` warning in `docir check` and a `stale` flag on read views. Editing the
 body does not equal verifying it — `--verified` is the explicit signal.
 
+Pull the review queue rather than reading `check` output for it:
+
+```
+docir query --stale                          # everything overdue
+docir query --owner platform-team --stale    # one steward's queue
+```
+
+`--stale` is applied before `--limit`, so the limit counts overdue docs. Work the
+queue by reading each one (`docir get <id>`), then either fixing it or, if it is
+still correct, `docir update <id> --verified`.
+
+**Stale is not the same as wrong.** It means nobody has vouched for the doc
+within its cadence. Never mark `--verified` on a doc you have not actually read —
+that is the one signal the whole mechanism rests on, and stamping it blind makes
+the corpus look reviewed when it is not.
+
 ## Tags (must exist before use)
 
 ```

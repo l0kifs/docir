@@ -140,7 +140,9 @@ forces the table, `--no-trim` keeps every field.*
   edges + staleness — *no body*. Fetch bodies by id with `get`. An agent scans wide cheaply,
   then reads deep only where it matters.
 - **Staleness is data, not a guess.** Optional `owner` / `verified` fields plus a per-type
-  review cadence make "is this doc still true?" a first-class, checkable fact (`docir check`).
+  review cadence make "is this doc still true?" a first-class, checkable fact — and a
+  worklist: `docir query --owner platform-team --stale` is one steward's review queue,
+  cleared a document at a time with `docir update <id> --verified`.
 - **Relations are typed.** A `related` edge carries a *kind* (`supersedes`, `depends_on`,
   `implements`, …) — a real graph, not a bag of links.
 
@@ -152,7 +154,7 @@ forces the table, `--no-trim` keeps every field.*
 | `docir add` | Create a document — the single write path |
 | `docir update` | Edit content, metadata, or relations of an existing document |
 | `docir context <query>` | Ranked relevant set (skeletons) — full-text + vector, fused (`--min-score` to filter noise) |
-| `docir search` / `query` | Full-text search / structured filter (skeletons) |
+| `docir search` / `query` | Full-text search / structured filter (`query --owner X --stale` is a review queue) |
 | `docir get <id>` | Full document with body |
 | `docir check` | Structural findings — duplicate ids, dangling edges, staleness (`--strict` gates CI on errors, `--fix` repairs them) |
 | `docir agent install` | Teach this repo's AI agent to drive docir |

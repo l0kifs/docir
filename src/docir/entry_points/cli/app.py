@@ -304,15 +304,33 @@ def query(
     tag: Annotated[list[str] | None, typer.Option("--tag")] = None,
     include_archived: Annotated[bool, typer.Option("--include-archived")] = False,
     include_resolved: Annotated[bool, typer.Option("--include-resolved")] = False,
+    owner: Annotated[
+        str | None, typer.Option("--owner", help="Only documents with this steward.")
+    ] = None,
+    stale: Annotated[
+        bool, typer.Option("--stale", help="Only documents past their type's review cadence.")
+    ] = False,
     limit: Annotated[int, typer.Option("--limit")] = 50,
 ) -> None:
-    """Structured metadata filtering."""
+    """Structured metadata filtering.
+
+    `--owner` and `--stale` are the review queue: `--owner platform-team --stale`
+    is "what does this team need to re-verify". `--stale` is applied before
+    `--limit`, so the limit counts stale documents rather than truncating the
+    set they were selected from.
+
+    Staleness only says a document is past its type's review cadence — nobody
+    has vouched for it recently. It is not a claim that the content is wrong.
+    Confirm with `docir update <id> --verified` once you have re-read it.
+    """
     payload: dict[str, object] = {
         "types": tuple(type or ()),
         "statuses": tuple(status or ()),
         "tags": tuple(tag or ()),
         "include_archived": include_archived,
         "include_inactive": include_resolved,
+        "owner": owner,
+        "stale": stale,
         "limit": limit,
     }
     _emit_document_list(execute("query", payload))

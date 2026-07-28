@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`docir query --owner <name>` and `--stale` turn staleness into a worklist.** The staleness
+  data was detected and never routed: `owner` was stored and interpolated into a single
+  `docir check` message, with no way to ask "what do I own?" or "what of it is overdue?", so a
+  stale document stayed stale until someone happened to run `check` and read past the orphan
+  warnings. `docir query --owner platform-team --stale` is now one steward's review queue,
+  cleared a document at a time with `docir update <id> --verified`. `--stale` is applied
+  before `--limit`, so the limit counts overdue documents rather than truncating the set they
+  were selected from. No notifier and no scheduler: an automated nag a bot can clear is not a
+  human vouching for content.
 - **`docir context` can now answer "nothing relevant exists".** Every ranked hit carries a
   `similarity` — the raw cosine against your task — and `--min-score` filters on it. The
   emitted `score` is a reciprocal-rank fusion, so it is rank-derived: against a store holding

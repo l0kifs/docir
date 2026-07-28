@@ -661,7 +661,29 @@
     Add `docir query --owner <name>` and `--stale` as first-class filters. That is the
     smallest thing that turns the data into a workflow, and it needs no new subsystem.
   question: Q-013
-  status: open
+  status: resolved
+  resolution: >
+    FIXED 2026-07-28, as proposed and no further. `docir query --owner <name>` and
+    `--stale` are first-class filters; together they are one steward's review queue, and
+    `docir update <id> --verified` clears an entry. Verified end-to-end on the real CLI
+    through the whole loop, including that `--verified` empties the queue.
+    The two filters live in different layers on purpose. `owner` is a column, so it is a SQL
+    predicate on `DocumentFilter`. Staleness is *derived* — clock minus the document's
+    reference date against the type's `review_days` — and the index stores neither the clock
+    nor the schema, so `DocumentFilter` deliberately has no `stale` field and the service
+    filters after the query. Pushing it into SQL would mean denormalising a value that
+    changes every day without a write.
+    ORDERING IS LOAD-BEARING: the stale filter runs *before* the limit, so `--stale --limit
+    10` means ten stale documents rather than the stale ones among the first ten. The
+    fixture corpus is built so the naive order fails loudly — the newest document sorts
+    first and is not stale, so a limit applied first returns nothing at all. Pinned by
+    test_stale_is_filtered_before_the_limit and confirmed by reverting the order.
+    NO NEW SUBSYSTEM, deliberately: no notifications, no scheduler, no assignment workflow.
+    ADR-0006's argument that staleness must be honest human re-verification applies to the
+    delivery mechanism too — an automated nag that a bot can clear is not a human vouching
+    for content. The agent guide now says stale means "nobody has vouched recently", not
+    "wrong", and that `--verified` must never be stamped on a document the agent has not
+    actually read.
 
 
 - id: GAP-036

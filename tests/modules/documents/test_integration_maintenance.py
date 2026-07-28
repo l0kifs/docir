@@ -291,3 +291,89 @@ def test_repair_on_a_healthy_corpus_changes_nothing(dispatcher: Dispatcher) -> N
     result = dispatcher.dispatch("repair", {})
     assert not result["actions"]
     assert not [i for i in result["remaining"] if i["severity"] == "error"]
+
+
+# -- the staleness worklist (GAP-011) ---------------------------------------
+#
+# Staleness was detected and never routed: `owner` was stored and interpolated
+# into one `check` message, and there was no way to ask "what do I own?" or
+# "what of it is overdue?". Detection without a queue meant a stale document
+# stayed stale until someone happened to run `check` and read past the orphan
+# warnings. These pin the queue.
+
+
+def _write_decision(
+    settings: Settings, doc_id: str, *, owner: str, updated: str, title: str
+) -> None:
+    decisions = settings.docs_root / "decisions"
+    decisions.mkdir(parents=True, exist_ok=True)
+    (decisions / f"{doc_id}-{title}.md").write_text(
+        "---\n"
+        f"created: '{updated}'\n"
+        "description: a decision\n"
+        f"id: {doc_id}\n"
+        f"owner: {owner}\n"
+        "related: []\n"
+        "status: accepted\n"
+        "tags: []\n"
+        f"title: {title}\n"
+        "type: decision\n"
+        f"updated: '{updated}'\n"
+        "---\n\nbody\n",
+        encoding="utf-8",
+    )
+
+
+def _worklist_corpus(dispatcher: Dispatcher, settings: Settings) -> None:
+    # Against the fixture clock (2026-07-07) and a 365-day cadence: adr-0001 is
+    # overdue, adr-0002 is current, adr-0003 is overdue but someone else's.
+    _write_decision(settings, "adr-0001", owner="platform-team", updated="2024-01-01", title="old")
+    _write_decision(settings, "adr-0002", owner="platform-team", updated="2026-07-01", title="new")
+    _write_decision(settings, "adr-0003", owner="data-team", updated="2024-01-01", title="theirs")
+    dispatcher.dispatch("reindex", {})
+
+
+def test_query_filters_by_owner(dispatcher: Dispatcher, settings: Settings) -> None:
+    _worklist_corpus(dispatcher, settings)
+    results = dispatcher.dispatch("query", {"owner": "platform-team"})
+    assert {d["id"] for d in results} == {"adr-0001", "adr-0002"}
+
+
+def test_query_filters_by_staleness(dispatcher: Dispatcher, settings: Settings) -> None:
+    _worklist_corpus(dispatcher, settings)
+    results = dispatcher.dispatch("query", {"stale": True})
+    assert {d["id"] for d in results} == {"adr-0001", "adr-0003"}
+    assert all(d["stale"] for d in results)
+
+
+def test_owner_and_stale_compose_into_one_review_queue(
+    dispatcher: Dispatcher, settings: Settings
+) -> None:
+    _worklist_corpus(dispatcher, settings)
+    results = dispatcher.dispatch("query", {"owner": "platform-team", "stale": True})
+    assert [d["id"] for d in results] == ["adr-0001"]
+
+
+def test_stale_is_filtered_before_the_limit(dispatcher: Dispatcher, settings: Settings) -> None:
+    # `--stale --limit 1` must mean "one stale document", not "the stale ones
+    # among the first document". adr-0002 is the newest and sorts first, so a
+    # limit applied before the filter would return nothing at all.
+    _worklist_corpus(dispatcher, settings)
+    results = dispatcher.dispatch("query", {"stale": True, "limit": 1})
+    assert len(results) == 1
+    assert results[0]["stale"] is True
+
+
+def test_verifying_a_document_removes_it_from_the_queue(
+    dispatcher: Dispatcher, settings: Settings
+) -> None:
+    # The loop closes: the queue is what `--verified` is for.
+    _worklist_corpus(dispatcher, settings)
+    dispatcher.dispatch("update", {"doc_id": "adr-0001", "mark_verified": True})
+    results = dispatcher.dispatch("query", {"owner": "platform-team", "stale": True})
+    assert results == []
+
+
+def test_no_filters_still_returns_everything(dispatcher: Dispatcher, settings: Settings) -> None:
+    _worklist_corpus(dispatcher, settings)
+    assert len(dispatcher.dispatch("query", {})) == 3

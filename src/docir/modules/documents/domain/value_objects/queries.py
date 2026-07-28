@@ -22,3 +22,8 @@ class DocumentFilter:
     # unless ``include_inactive`` overrides it (used for default visibility).
     inactive_statuses: tuple[str, ...] = ()
     include_inactive: bool = False
+    #: Exact match on the steward. There is deliberately no "stale" field here:
+    #: staleness is derived from the clock and the type's review cadence, which
+    #: are application concerns the index does not store, so it is filtered
+    #: after the query rather than in SQL.
+    owner: str | None = None

@@ -134,6 +134,8 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
             stmt = stmt.where(DocumentRow.archived.is_(False))
         if spec.inactive_statuses and not spec.include_inactive:
             stmt = stmt.where(DocumentRow.status.notin_(spec.inactive_statuses))
+        if spec.owner is not None:
+            stmt = stmt.where(DocumentRow.owner == spec.owner)
         if spec.tags:
             for key in spec.tags:
                 stmt = stmt.where(

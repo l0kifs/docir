@@ -398,10 +398,21 @@
   context: "'Knows what's stale' is one of six rows in the README comparison table. Detection
             works; the loop that would make it matter is absent."
   asked: null
-  answered: null
-  authority: null
-  answer: null
-  assumption_if_unanswered: "Assuming manual `docir check` is the intended delivery mechanism."
+  answered: 2026-07-28
+  authority: >
+    repo maintainer (directed the work; the question was never answered separately, so the
+    proposed answer was implemented as-is)
+  answer: >
+    By pulling, not by pushing. `docir query --owner <name> --stale` is the review queue and
+    `docir update <id> --verified` clears an entry — the smallest change that turns the data
+    into a workflow, with no new subsystem.
+    Notification was considered and deliberately not built: ADR-0006's reasoning that
+    staleness must be honest human re-verification applies to delivery as much as detection,
+    and an automated nag a bot can clear is not a human vouching for content. See GAP-011
+    resolution.
+  assumption_if_unanswered: >
+    WAS: manual `docir check` is the intended delivery mechanism. Superseded — `query` is,
+    and `check` remains the audit rather than the worklist.
 
 - id: Q-014
   gap: GAP-014

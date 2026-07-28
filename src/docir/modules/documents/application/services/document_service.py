@@ -248,7 +248,13 @@ class DocumentService:
             return DocumentView.from_document(document, stale=self._is_stale(document))
 
     def query(self, request: QueryRequest) -> list[DocumentSummary]:
-        """Structured metadata filtering (``docs query``) — skeleton results."""
+        """Structured metadata filtering (``docs query``) — skeleton results.
+
+        ``stale_only`` is applied here rather than in SQL: staleness is derived
+        from the clock and the type's review cadence, neither of which the index
+        stores. It is also applied *before* the limit, so ``--stale --limit 10``
+        means "ten stale documents", not "the stale ones among the first ten".
+        """
         _require_positive_limit(request.limit)
         spec = DocumentFilter(
             types=request.types,
@@ -257,9 +263,12 @@ class DocumentService:
             include_archived=request.include_archived,
             inactive_statuses=tuple(sorted(self._schema.inactive_statuses())),
             include_inactive=request.include_inactive,
+            owner=request.owner,
         )
         with self._uow_factory() as uow:
             documents = uow.documents.query(spec)
+            if request.stale_only:
+                documents = [doc for doc in documents if self._is_stale(doc)]
         return [self._summary(doc) for doc in documents[: request.limit]]
 
     def search(self, request: SearchRequest) -> list[DocumentSummary]:

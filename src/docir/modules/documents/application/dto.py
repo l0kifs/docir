@@ -189,13 +189,20 @@ class UpdateDocumentRequest:
 
 @dataclass(frozen=True, slots=True)
 class QueryRequest:
-    """Input for ``docs query`` (structured filtering)."""
+    """Input for ``docs query`` (structured filtering).
+
+    ``owner`` and ``stale_only`` are what turn staleness from a finding into a
+    worklist: "what do I own?" and "what of it is overdue?". Combined they are
+    the review queue for one person.
+    """
 
     types: tuple[str, ...] = ()
     statuses: tuple[str, ...] = ()
     tags: tuple[str, ...] = ()
     include_archived: bool = False
     include_inactive: bool = False
+    owner: str | None = None
+    stale_only: bool = False
     limit: int = 50
 
 

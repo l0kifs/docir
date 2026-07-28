@@ -183,7 +183,13 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   per-type `review_days`; `docir check` emits a Tier 1 `stale` finding and read views carry a `stale`
   flag. `MaintenanceService`/`DocumentService` need a `Clock` for "today". **AST-anchored** staleness
   is intentionally *not* built — human `--verified` is the honest baseline; anchoring is a future
-  additive layer.
+  additive layer. Delivery is **pull, not push**: `query --owner X --stale` is the review queue and
+  `--verified` clears an entry; there is no notifier or scheduler, because an automated nag a bot
+  can clear is not a human vouching for content (the same argument as the detection side).
+  `--owner` is a SQL predicate on `DocumentFilter`; **`stale` deliberately is not** — it derives
+  from the clock and the type's cadence, which the index stores neither of, so the service filters
+  after the query and **before the limit** (`--stale --limit 10` means ten stale documents, not the
+  stale ones among the first ten).
 - **`score` is rank-derived; `similarity` is the one number with absolute meaning.** RRF
   fuses *ranks*, so `score` says where a document placed and never how good the match was — a
   nonsense query against a one-document store scored the same ~0.0328 a perfect match does,

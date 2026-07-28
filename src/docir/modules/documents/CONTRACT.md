@@ -9,7 +9,9 @@ files and the derived index never disagree.
 - `DocumentService.add(AddDocumentRequest) -> DocumentView` — create a document
 - `DocumentService.update(UpdateDocumentRequest) -> DocumentView` — edit metadata and/or body
 - `DocumentService.get(id) -> DocumentView` — one document in full (with body)
-- `DocumentService.query(QueryRequest) -> [DocumentSummary]` — structured filtering (skeleton, no body)
+- `DocumentService.query(QueryRequest) -> [DocumentSummary]` — structured filtering (skeleton, no body).
+  `owner` filters in SQL; `stale_only` is derived from the clock and the type's review cadence, so it
+  is applied in the service and *before* `limit` (the limit counts stale documents).
 - `DocumentService.search(SearchRequest) -> [DocumentSummary]` — full-text search (skeleton, no body)
 - `DocumentService.context(ContextRequest) -> [DocumentSummary]` — ranked relevant set (skeleton, no body).
   Each ranked hit carries `similarity`, the raw cosine (absolute meaning; `score` is rank-derived RRF

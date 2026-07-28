@@ -116,6 +116,8 @@ class Dispatcher:
             tags=_tuple(payload, "tags"),
             include_archived=_bool(payload, "include_archived"),
             include_inactive=_bool(payload, "include_inactive"),
+            owner=_opt_str(payload, "owner"),
+            stale_only=_bool(payload, "stale"),
             limit=_int(payload, "limit", default=50),
         )
         return [asdict(view) for view in self._documents.query(request)]

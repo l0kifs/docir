@@ -151,6 +151,15 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   only way to keep CI green was to drop the gate, which also dropped duplicate-id detection.
   `CheckIssue` derives `severity` from `kind` in `__post_init__`, so a new check classifies itself
   by being added to `ERROR_KINDS` or not. `--strict-all` restores fail-on-anything.
+- **A forced delete compensates for the edges it breaks.** `delete --force` strips the edge
+  from every referencing document in the same transaction and returns their ids (the CLI
+  prints "unlinked from ..."), so it cannot leave a dangling reference — the pattern
+  `tag rm --force` already used for tags. It deliberately does **not** advance those
+  documents' `updated`: it follows `check --fix`, not the tag path, because a link removed
+  from underneath you is not a human re-verification (the tag path bumping it is a known
+  open defect). Consequence for tests: `delete --force` can no longer manufacture a dangling
+  edge, so the `drop_file_of` fixture builds one the way it really arises — remove the
+  target's file as a merge would, then `reindex`.
 - **`docir check --fix` (`MaintenanceService.repair`) is the only sanctioned recovery path.**
   Detection without repair forced the user into hand-editing markdown — the one thing thesis #2
   forbids. It repairs exactly what needs no guess: duplicate ids (re-issued; the *oldest* file

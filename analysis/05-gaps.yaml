@@ -534,7 +534,27 @@
     transaction pattern `tag rm --force` already uses for tags — the machinery exists and is
     applied to the lesser case).
   question: Q-007
-  status: open
+  status: resolved
+  resolution: >
+    FIXED 2026-07-28, as proposed. `DocumentService.delete` strips the edge from every
+    referencing document in the same transaction as the delete, and returns their ids;
+    `delete` now reports "deleted X; unlinked from Y" rather than silently rewriting other
+    people's files. PROBE-6 and PROBE-7 replayed against the real CLI: the referencing file
+    reads `related: []`, `check` reports only the (correct) `orphan`, and a later `update`
+    has nothing broken to re-persist.
+    DEVIATION from the proposed pattern, deliberate: `tag rm --force` advances `updated` on
+    the documents it edits, and this does NOT. Staleness records when a human last vouched
+    for the content, and having a link removed from underneath you is not that — the same
+    reasoning `check --fix` already applies. Copying the tag path wholesale would have
+    reproduced GAP-020, which is open against that path for exactly this.
+    CONSEQUENCE for the test suite, worth noting because it changes what the tests mean: five
+    tests used `delete --force` as a convenient way to *manufacture* a dangling edge, and that
+    route is now closed. They construct it the way it actually arises instead — remove the
+    target's file as a merge from a branch that deleted it would, then reindex — via a
+    `drop_file_of` fixture. The old shortcut had quietly made a merge-safety test not
+    simulate a merge.
+    GAP-007 is now prevented rather than merely recoverable; `check --fix` remains the
+    recovery path for edges broken outside the CLI, which is the only way left to break one.
 
 - id: GAP-008
   class: incorrect

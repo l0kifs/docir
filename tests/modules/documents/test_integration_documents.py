@@ -456,6 +456,54 @@ class TestArchiveDelete:
             seeded.dispatch("get", {"doc_id": "adr-0001"})
 
 
+class TestForcedDeleteCompensates:
+    """A forced delete strips the edges it breaks (guards GAP-007).
+
+    It used to leave the referencing document pointing at nothing, in the
+    canonical file, forever: `check` reported it, no command fixed it, and
+    because Tier 0 validates only the edges supplied in the *current* call, the
+    next `update` re-persisted the dead edge. `tag rm --force` had done the
+    equivalent compensating write for tags since the beginning.
+    """
+
+    def test_referencing_document_loses_the_edge(
+        self, seeded: Dispatcher, settings: Settings
+    ) -> None:
+        # seeded: issue-0001 has related: [adr-0001].
+        seeded.dispatch("delete", {"doc_id": "adr-0001", "force": True})
+
+        assert list(seeded.dispatch("get", {"doc_id": "issue-0001"})["related"]) == []
+        # In the canonical file, not just the index — the file is the truth.
+        issue_file = settings.docs_root / "issues" / "issue-0001-token-refresh-bug.md"
+        assert "adr-0001" not in issue_file.read_text(encoding="utf-8")
+
+    def test_no_dangling_finding_is_left_behind(self, seeded: Dispatcher) -> None:
+        seeded.dispatch("delete", {"doc_id": "adr-0001", "force": True})
+        assert not [i for i in seeded.dispatch("check", {}) if i["kind"] == "dangling"]
+
+    def test_the_stripped_documents_are_reported(self, seeded: Dispatcher) -> None:
+        # A delete that silently rewrites other files would be worse than one
+        # that refuses; the caller is told which documents it touched.
+        result = seeded.dispatch("delete", {"doc_id": "adr-0001", "force": True})
+        assert result == {"deleted": "adr-0001", "unlinked": ["issue-0001"]}
+
+    def test_staleness_clock_is_not_laundered(self, seeded: Dispatcher) -> None:
+        # Matches `check --fix`, not `tag rm --force`: staleness records when a
+        # human last vouched for the content, and having a link removed from
+        # underneath you is not that. (The tag path does bump it — GAP-020.)
+        before = seeded.dispatch("get", {"doc_id": "issue-0001"})["updated"]
+        seeded.dispatch("delete", {"doc_id": "adr-0001", "force": True})
+        assert seeded.dispatch("get", {"doc_id": "issue-0001"})["updated"] == before
+
+    def test_a_later_update_cannot_resurrect_the_edge(self, seeded: Dispatcher) -> None:
+        # PROBE-7: `update` re-persisted the broken edge because Tier 0 only
+        # validates edges supplied in the current call. With nothing broken left
+        # in the file, there is nothing to re-persist.
+        seeded.dispatch("delete", {"doc_id": "adr-0001", "force": True})
+        seeded.dispatch("update", {"doc_id": "issue-0001", "set_title": "Renamed"})
+        assert list(seeded.dispatch("get", {"doc_id": "issue-0001"})["related"]) == []
+
+
 class TestLimitValidation:
     """F1: a non-positive --limit must be rejected, not silently mis-sliced.
 

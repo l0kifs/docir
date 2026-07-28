@@ -381,6 +381,35 @@ This is the fourth appearance of the family recorded here (GAP-006, GAP-045, GAP
 GAP-040), and the sharpest: the other three were tests that asserted existing behaviour was
 intended. This one asserted nothing at all while appearing to assert a great deal.
 
+## Follow-up — forced delete compensates for what it breaks (2026-07-28)
+
+```
+FIX  GAP-007  `delete --force` strips the edge from every referencing document in
+              the same transaction and reports them ("deleted X; unlinked from Y").
+              PROBE-6/PROBE-7 replayed: file reads `related: []`, no dangling
+              finding, a later `update` has nothing to re-persist.      → resolved
+              Deviates from the proposed `tag rm --force` pattern on one point:
+              `updated` is NOT advanced. Copying it wholesale would have
+              reproduced GAP-020, which is open against the tag path for exactly
+              that. Follows `check --fix` instead.
+```
+
+**The fix invalidated five tests, and that is the interesting part.** Each used `delete
+--force` as a cheap way to *manufacture* a dangling edge before asserting something about
+`check` or `check --fix`. That route is now closed, so they build the state the way it
+actually occurs: remove the target's file as a merge from a branch that deleted it would,
+then reindex.
+
+`test_check_detects_dangling_reference` in `test_merge_safety.py` is the one worth naming.
+Its comment already claimed to simulate "a cross-branch delete after a merge" — but it used
+the CLI shortcut, so the merge-safety test was not exercising a merge. The comment described
+the intent and the code did something easier; nothing flagged the divergence because the
+assertion still passed. A convenience path used as a fixture had quietly become the thing
+under test.
+
+GAP-007 moves from *recoverable* to *prevented*. `check --fix` stays as the recovery path
+for edges broken outside the CLI — which, after this, is the only way left to break one.
+
 ```
 NEW      05-gaps.yaml GAP-001 carried a duplicate `resolution:` key, and five entries in
          06-questions.yaml (Q-002/003/004/007/012) carried duplicate `answered`/`authority`/

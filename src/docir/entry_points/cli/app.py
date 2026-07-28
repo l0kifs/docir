@@ -273,9 +273,19 @@ def delete(
     doc_id: Annotated[str, typer.Argument()],
     force: Annotated[bool, typer.Option("--force")] = False,
 ) -> None:
-    """Hard-delete a document's file and index rows."""
+    """Hard-delete a document's file and index rows.
+
+    A forced delete also strips the edge from every document that referenced this
+    one, and names them — a delete that silently rewrites other people's files
+    would be worse than one that refuses.
+    """
     data = execute("delete", {"doc_id": doc_id, "force": force})
-    _emit_or_message(data, f"deleted {doc_id}")
+    raw = data.get("unlinked") if isinstance(data, dict) else None
+    unlinked = [str(item) for item in raw] if isinstance(raw, list) else []
+    message = f"deleted {doc_id}"
+    if unlinked:
+        message += f"; unlinked from {', '.join(unlinked)}"
+    _emit_or_message(data, message)
 
 
 # -- read path --------------------------------------------------------------

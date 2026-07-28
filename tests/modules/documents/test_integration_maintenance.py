@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from docir.config.settings import Settings
 from docir.entry_points.dispatch import Dispatcher
 
@@ -223,13 +225,18 @@ def test_repair_lets_the_oldest_file_keep_the_id(
     assert dispatcher.dispatch("get", {"doc_id": "adr-0001"})["title"] == "From branch"
 
 
-def test_repair_drops_dead_edges(dispatcher: Dispatcher, settings: Settings) -> None:
+def test_repair_drops_dead_edges(
+    dispatcher: Dispatcher, settings: Settings, drop_file_of: Callable[[str], None]
+) -> None:
     dispatcher.dispatch("add", {"type": "decision", "title": "Target", "description": "d"})
     dispatcher.dispatch(
         "add",
         {"type": "decision", "title": "Source", "description": "d", "related": ["adr-0001"]},
     )
-    dispatcher.dispatch("delete", {"doc_id": "adr-0001", "force": True})
+    # A merge that removed the target's file — `delete --force` no longer leaves
+    # this state behind, since it strips the edges it breaks (GAP-007).
+    drop_file_of("adr-0001")
+    dispatcher.dispatch("reindex", {})
     assert any(i["kind"] == "dangling" for i in dispatcher.dispatch("check", {}))
 
     result = dispatcher.dispatch("repair", {})
@@ -242,7 +249,7 @@ def test_repair_drops_dead_edges(dispatcher: Dispatcher, settings: Settings) -> 
 
 
 def test_repair_does_not_reset_the_staleness_clock(
-    dispatcher: Dispatcher, settings: Settings
+    dispatcher: Dispatcher, settings: Settings, drop_file_of: Callable[[str], None]
 ) -> None:
     # Dropping a dead link is maintenance, not a human re-reading the document.
     # Bumping `updated` would make an overdue doc look freshly reviewed.
@@ -252,7 +259,8 @@ def test_repair_does_not_reset_the_staleness_clock(
         {"type": "decision", "title": "Source", "description": "d", "related": ["adr-0001"]},
     )
     before = dispatcher.dispatch("get", {"doc_id": "adr-0002"})["updated"]
-    dispatcher.dispatch("delete", {"doc_id": "adr-0001", "force": True})
+    drop_file_of("adr-0001")
+    dispatcher.dispatch("reindex", {})
 
     dispatcher.dispatch("repair", {})
 

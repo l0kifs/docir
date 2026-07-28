@@ -195,8 +195,24 @@ class DocumentService:
         self._schedule_embedding(doc_id, wait=False)
         return DocumentView.from_document(updated, stale=self._is_stale(updated))
 
-    def delete(self, doc_id: str, *, force: bool = False) -> None:
-        """Hard-delete the file and all index rows (``docs delete``)."""
+    def delete(self, doc_id: str, *, force: bool = False) -> tuple[str, ...]:
+        """Hard-delete the file and all index rows (``docs delete``).
+
+        A forced delete **strips the edge from every document that referenced
+        it**, in the same transaction, and returns their ids. Without that the
+        delete left the corpus in a state it could detect and not exit: the
+        referencing file kept `related: [<deleted id>]`, `docs check` reported
+        it forever, and because Tier 0 only validates the edges supplied in the
+        *current* call, any later `update` re-persisted the dead edge to the
+        canonical file. The compensating write is the same one `tag rm --force`
+        already performs for tags.
+
+        `updated` is deliberately not advanced on the referencing documents, so
+        this matches `check --fix` rather than `tag rm --force`: staleness
+        records when a human last vouched for the content, and having a link
+        removed from underneath you is not that (the tag path bumping it is
+        GAP-020, a separate open defect — do not copy it here).
+        """
         with self._uow_factory() as uow:
             document = self._require(uow, doc_id)
             incoming = uow.documents.incoming(doc_id)
@@ -206,12 +222,22 @@ class DocumentService:
                     f"cannot delete {doc_id!r}: still referenced by {joined} "
                     f"(use --force to override)"
                 )
+            for referrer_id in incoming:
+                referrer = uow.documents.get(referrer_id)
+                if referrer is None:
+                    continue
+                kept = tuple(ref for ref in referrer.related if ref.target != doc_id)
+                stripped = referrer.with_updates(related=kept)
+                self._file_store.write(stripped)
+                uow.documents.save(stripped)
+                uow.search.index(stripped)
             if document.path:
                 self._file_store.delete(document.path)
             uow.documents.delete(doc_id)
             uow.search.remove(doc_id)
             uow.embeddings.remove(doc_id)
             uow.commit()
+        return tuple(sorted(incoming))
 
     # -- read path ----------------------------------------------------------
 

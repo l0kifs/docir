@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`docir delete --force` no longer leaves broken links behind.** It removed the document
+  and left every reference to it pointing at nothing, in the canonical files, permanently:
+  `docir check` reported it forever, and since Tier 0 validates only the edges supplied in
+  the current call, the next `update` re-persisted the dead edge. The forced delete now
+  strips the edge from each referencing document in the same transaction — as
+  `docir tag rm --force` already did for tags — and names them in its output. Their
+  `updated` is deliberately not advanced: having a link removed is not a human
+  re-verification.
 - **`docir context` no longer returns closed documents through the graph.** The
   inactive-status filter was applied to ranked hits but not to one-hop neighbours, so a
   `resolved` issue linked from a matching decision came back without `--include-resolved`

@@ -236,9 +236,14 @@
     cannot exit, and the documented recovery contradicts the product's second thesis.
   asked: 2026-07-26
   answer: >
-    ANSWERED 2026-07-26 in part. (b) is implemented: `docir check --fix` repairs duplicate
-    ids and dangling edges. (a) is NOT — `delete --force` still creates the dead edges rather
-    than compensating for them; GAP-007 stays open, now recoverable rather than permanent.
+    ANSWERED 2026-07-26 in part, completed 2026-07-28. Both halves are now implemented.
+    (b) `docir check --fix` repairs duplicate ids and dangling edges. (a) `delete --force`
+    strips the edge from each referencing document in the same transaction and names them in
+    its output, so the dead edge is no longer created. It does not advance their `updated`,
+    unlike `tag rm --force` — a link removed from underneath you is not a human
+    re-verification (GAP-020 tracks the tag path doing the opposite).
+    The recovery path remains for edges broken outside the CLI, which after this is the only
+    way to break one. See GAP-007 resolution.
   assumption_if_unanswered: null
 
 - id: Q-008

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 
 import pytest
 
@@ -194,9 +195,18 @@ def test_add_refuses_to_clobber_a_file_owning_the_allocated_id(
     assert "Original" in (settings.docs_root / "decisions" / files[0]).read_text(encoding="utf-8")
 
 
-def test_check_detects_dangling_reference(seeded: Dispatcher) -> None:
-    # issue-0001 relates to adr-0001; force-deleting adr-0001 leaves the link
-    # dangling (as a cross-branch delete would after a merge).
-    seeded.dispatch("delete", {"doc_id": "adr-0001", "force": True})
+def test_check_detects_dangling_reference(
+    seeded: Dispatcher, drop_file_of: Callable[[str], None]
+) -> None:
+    # issue-0001 relates to adr-0001. Remove adr-0001's file the way a merge
+    # from a branch that deleted it would, then reindex: issue-0001's own file
+    # still names an id no file provides.
+    #
+    # This used `delete --force` before, which no longer produces the state —
+    # that command now strips the edges it breaks (GAP-007). A dangling edge is
+    # now only reachable from outside the CLI, which is where it always came
+    # from in practice.
+    drop_file_of("adr-0001")
+    seeded.dispatch("reindex", {})
     issues = seeded.dispatch("check", {})
     assert any(i["kind"] == "dangling" for i in issues)

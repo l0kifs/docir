@@ -145,8 +145,8 @@ class Dispatcher:
 
     def _delete(self, payload: Payload) -> object:
         doc_id = _str(payload, "doc_id")
-        self._documents.delete(doc_id, force=_bool(payload, "force"))
-        return {"deleted": doc_id}
+        unlinked = self._documents.delete(doc_id, force=_bool(payload, "force"))
+        return {"deleted": doc_id, "unlinked": list(unlinked)}
 
     def _tag_add(self, payload: Payload) -> object:
         view = self._tags.add(_str(payload, "key"), _str(payload, "description"))

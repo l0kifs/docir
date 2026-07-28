@@ -25,11 +25,30 @@ def run(*args: str, **kwargs: object):
 
 @pytest.fixture(autouse=True)
 def _env(settings: Settings) -> Settings:
+    _ENV["settings"] = settings
     return settings
+
+
+#: The autouse fixture's settings, so module-level helpers can reach the store.
+_ENV: dict[str, Settings] = {}
 
 
 def _seed_tag() -> None:
     assert run("tag", "add", "auth", "--description", "Auth.").exit_code == 0
+
+
+def _break_graph(doc_id: str) -> None:
+    """Leave an edge pointing at a document no file provides, then reindex.
+
+    Simulates the merge that actually produces a dangling reference: one branch
+    deleted the document, another linked to it. These tests used `delete
+    --force` to get here, which no longer works — that command now strips the
+    edges it would break (GAP-007), so the only route to a dangling edge is from
+    outside the CLI.
+    """
+    for path in _ENV["settings"].docs_root.rglob(f"{doc_id}-*.md"):
+        path.unlink()
+    assert run("reindex").exit_code == 0
 
 
 class TestBasicWorkflow:
@@ -206,7 +225,7 @@ class TestMaintenanceCommands:
             "--related",
             "adr-0001",
         )
-        assert run("delete", "adr-0001", "--force").exit_code == 0
+        _break_graph("adr-0001")
         assert run("check", "--strict").exit_code == 1
 
     def test_check_fix_repairs_and_reports_in_both_output_modes(self) -> None:
@@ -222,7 +241,7 @@ class TestMaintenanceCommands:
             "--related",
             "adr-0001",
         )
-        run("delete", "adr-0001", "--force")
+        _break_graph("adr-0001")
 
         # The table path is asserted alongside the JSON one on purpose: `asdict`
         # keeps a dataclass's tuple fields as tuples, and a renderer that accepts
@@ -242,7 +261,7 @@ class TestMaintenanceCommands:
             "--related",
             "adr-0002",
         )
-        run("delete", "adr-0002", "--force")
+        _break_graph("adr-0002")
         payload = json.loads(run("--json", "check", "--fix").stdout)
         assert [a["kind"] for a in payload["actions"]] == ["dangling"]
 
@@ -259,7 +278,7 @@ class TestMaintenanceCommands:
             "--related",
             "adr-0001",
         )
-        run("delete", "adr-0001", "--force")
+        _break_graph("adr-0001")
         assert run("check", "--strict").exit_code == 1
         assert run("check", "--fix", "--strict").exit_code == 0
 

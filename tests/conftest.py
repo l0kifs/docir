@@ -107,3 +107,25 @@ def seeded(dispatcher: Dispatcher) -> Dispatcher:
         },
     )
     return dispatcher
+
+
+@pytest.fixture
+def drop_file_of(settings: Settings) -> Callable[[str], None]:
+    """Delete a document's markdown file behind docir's back, leaving its edges.
+
+    This is how a dangling reference actually arises: one branch deletes a
+    document, another adds a link to it, and the merge produces a file
+    referencing an id no file provides. Tests used to reach the same state with
+    `delete --force`, which was a shortcut — that command now strips the edges
+    it would break (GAP-007), so a dangling edge is only reachable from outside
+    the CLI, which is where it always came from in practice.
+
+    Callers must `reindex` afterwards, exactly as the agent guide instructs
+    after a merge.
+    """
+
+    def drop(doc_id: str) -> None:
+        for path in settings.docs_root.rglob(f"{doc_id}-*.md"):
+            path.unlink()
+
+    return drop

@@ -98,10 +98,14 @@ docir update <id> --append-section "Resolution" --body "Fixed in PR 42"
 docir update <id> --replace-section "Context" --body "..."
 docir update <id> --replace-body --force --body "..."   # full overwrite
 docir archive <id> | docir unarchive <id>
-docir delete <id> [--force]
+docir delete <id> [--force]   # --force also unlinks it from referencing docs
 ```
 
 - Prefer `--stdin` for multi-line markdown bodies (no shell-escaping).
+- `delete` is blocked while another doc links to it. `--force` deletes anyway and
+  **strips the edge from each referencing doc**, naming them in its output — so a
+  forced delete never leaves a dangling link. Prefer `archive` when the document
+  is merely no longer current: it keeps the history and the graph intact.
 - Body edits, safest→riskiest: `--append-section` (default choice) →
   `--replace-section` → `--replace-body` (needs `--force`; fails "stale write"
   if the file changed on disk — `docir get` first).

@@ -16,7 +16,9 @@ files and the derived index never disagree.
   (default `DEFAULT_CONTEXT_EXPAND`) is how many of those slots may go to graph-reached
   neighbours, with unused neighbour slots backfilled by ranked hits.
 - `DocumentService.archive(id)/unarchive(id) -> DocumentView` — toggle active search
-- `DocumentService.delete(id, force) -> None` — remove file and index rows
+- `DocumentService.delete(id, force) -> tuple[str, ...]` — remove file and index rows;
+  blocked while referenced unless `force`, which strips the edge from each referencing
+  document in the same transaction and returns their ids (without advancing their `updated`)
 - `MaintenanceService.reindex(changed_only) -> ReindexResult` — rebuild index from files
 - `MaintenanceService.check() -> [CheckIssue]` — Tier 1 structural findings (incl. staleness, unknown type)
 - `MaintenanceService.lint_deep() -> [LintFinding]` — Tier 2 advisory findings

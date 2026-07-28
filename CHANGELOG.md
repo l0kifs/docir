@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-28
+
+Three commands that reported success while doing the wrong thing, and one flag named after
+the wrong concept.
+
+### Upgrade note
+
+**A schema with a typo now fails to load.** `docir schema validate` used to accept a status
+name no type declared; that check runs on every command, so a store whose `docs-schema.yaml`
+has such a typo will refuse to start until it is corrected. The error names the offending
+value and lists the declared statuses. This is the point of the change — the typo was already
+breaking status transitions, silently — but it turns a latent fault into a loud one on
+upgrade.
+
 ### Fixed
 
 - **`docir tag rename` and `tag rm --force` no longer reset the staleness clock.** They
@@ -323,7 +337,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/l0kifs/docir/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/l0kifs/docir/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/l0kifs/docir/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/l0kifs/docir/compare/v0.2.1...v0.3.0

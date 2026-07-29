@@ -265,7 +265,11 @@ def update(
     stdin: Annotated[bool, typer.Option("--stdin")] = False,
     force: Annotated[bool, typer.Option("--force")] = False,
     override: Annotated[
-        bool, typer.Option("--override", help="Allow an illegal status transition.")
+        bool,
+        typer.Option(
+            "--override",
+            help="Force an illegal status transition (warns; last resort).",
+        ),
     ] = False,
     wait_embeddings: Annotated[bool, typer.Option("--wait-embeddings")] = False,
 ) -> None:
@@ -287,7 +291,13 @@ def update(
         "allow_transition_override": override,
         "wait_embeddings": wait_embeddings,
     }
-    _emit_document(execute("update", payload))
+    data = execute("update", payload)
+    forced = data.get("forced_transition") if isinstance(data, dict) else None
+    if forced:
+        # Loud at the moment of the bypass, but not written to the file: git
+        # records the status change, and docir has no actors to attribute it to.
+        rendering.render_warning(f"forced illegal transition {forced}")
+    _emit_document(data)
 
 
 @app.command()

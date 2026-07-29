@@ -160,6 +160,7 @@ class DocumentService:
             base = self._read_current(indexed)
             disk_diverged = indexed.content_hash() != base.content_hash()
 
+            forced = self._forced_transition(request, base)
             changes: dict[str, object] = {}
             content_changed = self._apply_metadata(request, base, changes, uow)
             content_changed |= self._apply_body(request, base, changes, disk_diverged)
@@ -181,7 +182,9 @@ class DocumentService:
 
         if content_changed:
             self._schedule_embedding(updated.id, wait=request.wait_embeddings)
-        return DocumentView.from_document(updated, stale=self._is_stale(updated))
+        return DocumentView.from_document(
+            updated, stale=self._is_stale(updated), forced_transition=forced
+        )
 
     def archive(self, doc_id: str) -> DocumentView:
         """Soft-remove a document from active search (``docs archive``)."""
@@ -399,6 +402,32 @@ class DocumentService:
             score=score,
             similarity=similarity,
             via_graph=via_graph,
+        )
+
+    def _forced_transition(self, request: UpdateDocumentRequest, base: Document) -> str | None:
+        """Describe the rule ``--override`` is about to break, if it breaks one.
+
+        ``--override`` is narrower than it sounds: it still validates that the
+        target status is one the type declares, so it only permits an illegal
+        *jump* between legal statuses. Passing it on a transition that was legal
+        anyway is not an override and must not warn.
+
+        The result is not written to the file. docir has no actors (ADR-0003),
+        so "who overrode this" has no answer worth storing, and git already
+        records the status change; what was missing was only that the operator
+        was told a rule had been bypassed, at the moment they bypassed it.
+        """
+        if not request.allow_transition_override or request.status is None:
+            return None
+        if request.status == base.status:
+            return None
+        type_schema = self._schema.types.get(base.type)
+        if type_schema is None or type_schema.can_transition(base.status, request.status):
+            return None
+        legal = ", ".join(sorted(type_schema.transitions.get(base.status, frozenset()))) or "none"
+        return (
+            f"{base.status!r} -> {request.status!r} for type {base.type!r} "
+            f"(legal from {base.status!r}: {legal})"
         )
 
     def _is_stale(self, document: Document) -> bool:

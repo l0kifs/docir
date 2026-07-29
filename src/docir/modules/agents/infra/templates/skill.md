@@ -238,7 +238,11 @@ docir tag rm auth [--force]         # --force strips it from docs; else blocked
 - Never edit `docs/*.md` directly. Always use the CLI.
 - `id` is auto-assigned `<prefix>-NNNN`; never invent one. Prefixes: decision→`adr`, issue→`issue`, architecture→`arch`.
 - Every `--tags` key must be registered first; every `--related` id must exist.
-- `--status` must be a valid transition (see below); use `--override` to force.
+- `--status` must be a valid transition (see below). `--override` forces an illegal
+  jump and **warns**, naming the rule it broke — a last resort for a document
+  stranded by a schema change, not a way around the state machine. It cannot set a
+  status the type doesn't declare. Nothing is written to the file, so prefer stepping
+  through the legal statuses when a path exists.
 
 ## Types & statuses (default schema)
 

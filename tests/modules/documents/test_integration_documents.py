@@ -15,6 +15,7 @@ from docir.entry_points.dispatch import Dispatcher
 from docir.platform.errors import (
     DanglingReferenceError,
     DocumentNotFoundError,
+    InvalidStatusError,
     InvalidStatusTransitionError,
     StaleWriteError,
     UnknownRelatedError,
@@ -91,6 +92,47 @@ class TestUpdate:
         seeded.dispatch("update", {"doc_id": "issue-0001", "status": "resolved"})
         with pytest.raises(InvalidStatusTransitionError):
             seeded.dispatch("update", {"doc_id": "issue-0001", "status": "open"})
+
+    def test_override_reports_the_rule_it_broke(self, seeded: Dispatcher) -> None:
+        """Guards GAP-014: a forced transition is no longer silent.
+
+        The escape hatch stays — a document stranded by a schema change needs
+        one — but it used to leave a document indistinguishable from one that
+        transitioned legally. The operator is now told, at the moment they
+        bypass it, which rule they bypassed and what the legal moves were.
+
+        Deliberately not written to the file: docir has no actors (ADR-0003), so
+        "who overrode this" has no answer worth storing, and git already records
+        the status change itself.
+        """
+        view = seeded.dispatch(
+            "update",
+            {"doc_id": "adr-0001", "status": "superseded", "allow_transition_override": True},
+        )
+        assert view["status"] == "superseded"
+        assert "'proposed' -> 'superseded'" in view["forced_transition"]
+        assert "accepted" in view["forced_transition"]  # names the legal moves
+
+    def test_override_on_a_legal_transition_is_not_an_override(self, seeded: Dispatcher) -> None:
+        # Passing the flag when nothing needed forcing must not cry wolf.
+        view = seeded.dispatch(
+            "update",
+            {"doc_id": "adr-0001", "status": "accepted", "allow_transition_override": True},
+        )
+        assert view["forced_transition"] is None
+
+    def test_a_normal_update_reports_no_forced_transition(self, seeded: Dispatcher) -> None:
+        view = seeded.dispatch("update", {"doc_id": "adr-0001", "set_title": "Renamed"})
+        assert view["forced_transition"] is None
+
+    def test_override_still_refuses_an_undeclared_status(self, seeded: Dispatcher) -> None:
+        # --override is narrower than it sounds: it permits an illegal *jump*
+        # between declared statuses, never a status the type does not have.
+        with pytest.raises(InvalidStatusError):
+            seeded.dispatch(
+                "update",
+                {"doc_id": "adr-0001", "status": "invented", "allow_transition_override": True},
+            )
 
     def test_transition_override_allowed(self, seeded: Dispatcher) -> None:
         seeded.dispatch("update", {"doc_id": "issue-0001", "status": "resolved"})

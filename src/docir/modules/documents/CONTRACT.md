@@ -7,7 +7,10 @@ files and the derived index never disagree.
 
 ## Public operations
 - `DocumentService.add(AddDocumentRequest) -> DocumentView` — create a document
-- `DocumentService.update(UpdateDocumentRequest) -> DocumentView` — edit metadata and/or body
+- `DocumentService.update(UpdateDocumentRequest) -> DocumentView` — edit metadata and/or body.
+  `allow_transition_override` permits an illegal *jump* between declared statuses (never an
+  undeclared one); when it actually bypasses a rule, `DocumentView.forced_transition`
+  describes it so the caller can warn. Not persisted — no actors to attribute it to.
 - `DocumentService.get(id) -> DocumentView` — one document in full (with body)
 - `DocumentService.query(QueryRequest) -> [DocumentSummary]` — structured filtering (skeleton, no body).
   `owner` filters in SQL; `stale_only` is derived from the clock and the type's review cadence, so it

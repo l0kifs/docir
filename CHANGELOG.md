@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `related`, `type` through the CLI (each is a Tier 0 rule a hand-edit bypasses); `id` never;
   `verified` never, because it asserts a human re-read the document and nothing can check
   that. It states its own limits too.
+- **`docir update --override` now says which rule it broke.** A forced illegal status
+  transition left no trace, so the result was indistinguishable from one that transitioned
+  legally. It now warns on stderr, naming the transition and the legal moves from the current
+  status, and the JSON carries `forced_transition`. Deliberately *not* written to the file:
+  docir has no actors to attribute an override to, and git already records the status change
+  — what was missing was the signal, not a record. Passing the flag on a transition that was
+  legal anyway does not warn.
 - **`docir tag rename old new --merge` consolidates two tags.** Renaming onto an existing
   key was rejected outright, so two tags could never be merged: the only path was
   `tag rm --force` on one — throwing the classification away — and re-tagging by hand.

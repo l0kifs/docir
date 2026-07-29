@@ -443,11 +443,18 @@
   proposed_answer: "Record it in frontmatter, or drop the flag and require an explicit
                     two-step transition through a legal intermediate."
   context: "Coverage checklist: 'who can override a rule, and is the override audited?'"
-  asked: null
-  answered: null
-  authority: null
-  answer: null
-  assumption_if_unanswered: "Assuming the escape hatch is deliberate and the audit gap accepted."
+  asked: 2026-07-29
+  answered: 2026-07-29
+  authority: repo maintainer (chose from three options presented with trade-offs)
+  answer: >
+    Yes to a trace, no to a record: warn loudly, store nothing. The escape hatch is
+    deliberate and stays; what was missing was telling the operator, at the moment of the
+    bypass, which rule they broke. An `overridden:` frontmatter field was rejected — no
+    actors to attribute it to (ADR-0003), git already records the status change, and it would
+    be permanent schema surface. Dropping the flag was rejected too: a document stranded by a
+    schema change would have no path out but hand-editing, which the GAP-016 contract forbids.
+    See GAP-014 resolution.
+  assumption_if_unanswered: null
 
 - id: Q-015
   gap: GAP-020

@@ -50,6 +50,11 @@ class DocumentView:
     stale: bool = False
     score: float | None = None
     via_graph: bool = False
+    #: Set only when ``--override`` actually bypassed the transition rules, so
+    #: the CLI can say which rule was broken. Deliberately not persisted to the
+    #: file: docir has no actors (ADR-0003), so "who overrode this" has no
+    #: answer worth storing, and git already records the status change itself.
+    forced_transition: str | None = None
 
     @classmethod
     def from_document(
@@ -59,6 +64,7 @@ class DocumentView:
         stale: bool = False,
         score: float | None = None,
         via_graph: bool = False,
+        forced_transition: str | None = None,
     ) -> DocumentView:
         return cls(
             id=document.id,
@@ -78,6 +84,7 @@ class DocumentView:
             stale=stale,
             score=score,
             via_graph=via_graph,
+            forced_transition=forced_transition,
         )
 
 

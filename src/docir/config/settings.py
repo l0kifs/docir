@@ -48,6 +48,26 @@ def discover_project_home(start: Path | None = None) -> Path | None:
     return None
 
 
+#: The marker `enclosing_repository` walks up for. Deliberately the same walk as
+#: :func:`discover_project_home`, one directory name over.
+_GIT_DIRNAME = ".git"
+
+
+def enclosing_repository(start: Path | None = None) -> Path | None:
+    """The git repository containing ``start``, or ``None``.
+
+    Used for one narrow purpose: telling apart "no store here, and no repo
+    either" — where the global ``~/.docir`` is exactly what the user meant —
+    from "inside a repo that was never ``docir init``-ed", where it almost
+    certainly is not. Warning on both would fire on correct usage.
+    """
+    current = (start or Path.cwd()).resolve()
+    for directory in (current, *current.parents):
+        if (directory / _GIT_DIRNAME).exists():
+            return directory
+    return None
+
+
 class Settings(BaseSettings):
     """Resolved paths and tunables for one docir installation.
 
@@ -66,6 +86,11 @@ class Settings(BaseSettings):
     home: Path = Field(default_factory=lambda: Path.home() / ".docir")
     idle_timeout: float = DEFAULT_IDLE_TIMEOUT
     use_daemon: bool = False
+    #: How ``home`` was chosen: ``flag`` | ``env`` | ``project`` | ``global``.
+    #: Carried so callers can tell a deliberate store from a fallback — a write
+    #: that lands in the global store because someone forgot ``docir init`` is
+    #: indistinguishable from one that was meant to.
+    home_origin: str = "global"
 
     @field_validator("home")
     @classmethod
@@ -94,14 +119,27 @@ class Settings(BaseSettings):
         if use_daemon is None:
             use_daemon = os.environ.get(NO_DAEMON_ENV, "") == ""
         if home is not None:
-            return cls(home=Path(home), use_daemon=use_daemon)
+            return cls(home=Path(home), use_daemon=use_daemon, home_origin="flag")
         if os.environ.get(HOME_ENV):
             # Let pydantic read DOCIR_HOME (env_prefix DOCIR_ + field ``home``).
-            return cls(use_daemon=use_daemon)
+            return cls(use_daemon=use_daemon, home_origin="env")
         discovered = discover_project_home()
         if discovered is not None:
-            return cls(home=discovered, use_daemon=use_daemon)
-        return cls(use_daemon=use_daemon)
+            return cls(home=discovered, use_daemon=use_daemon, home_origin="project")
+        return cls(use_daemon=use_daemon, home_origin="global")
+
+    def is_unintended_global_fallback(self) -> bool:
+        """Whether this store is the global default reached from inside a repo.
+
+        The global store is a real feature (personal notes), so falling back to
+        it is not an error — but doing so from inside a git repository that was
+        never ``docir init``-ed means the documents land in the user's home
+        directory, ungitted and invisible to teammates, while the reported path
+        reads as repo-relative. Setting ``DOCIR_HOME`` explicitly takes the
+        ``env`` branch, which is how someone who *does* mean the global store
+        from inside a repo says so without a new flag.
+        """
+        return self.home_origin == "global" and enclosing_repository() is not None
 
     # -- derived paths ------------------------------------------------------
 

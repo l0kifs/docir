@@ -498,12 +498,17 @@
   proposed_answer: "Report the resolved store in write output, or warn once on the global
                     fallback."
   context: "`docir init` is step 2 of the quickstart; forgetting it produces no error."
-  asked: null
-  answered: null
-  authority: null
-  answer: null
-  assumption_if_unanswered: "Assuming the silent fallback is deliberate (git-like ergonomics)
-                             and the missing signal is the defect."
+  asked: 2026-07-29
+  answered: 2026-07-29
+  authority: repo maintainer (asked for a recommendation, then adopted it)
+  answer: >
+    The assumption was right on both counts: the fallback stays, the missing signal was the
+    defect. Both halves of the proposed answer are implemented — every write reports the
+    resolved `store`, and a stderr warning fires only when the fallback happens inside a git
+    repository. Erroring was rejected (it would break the personal-notes case, and unlike git
+    docir has a legitimate global store); warning on every fallback was rejected as firing on
+    correct usage. `DOCIR_HOME` is the no-new-flag opt-out. See GAP-023 resolution.
+  assumption_if_unanswered: null
 
 - id: Q-017
   gap: GAP-019

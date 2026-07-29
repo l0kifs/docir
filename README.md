@@ -86,6 +86,7 @@ produced each vector, ignores the others, and recomputes them on the next write 
 uv tool install docir          # or: pipx install docir
 
 # 2. scope docs to this repo (creates ./.docir, like `git init`)
+#    skip it and docs go to the global ~/.docir — docir warns if you are in a repo
 docir init
 
 # 3. teach this repo's AI agent to drive docir (writes a Claude Code skill)

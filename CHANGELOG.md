@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `related`, `type` through the CLI (each is a Tier 0 rule a hand-edit bypasses); `id` never;
   `verified` never, because it asserts a human re-read the document and nothing can check
   that. It states its own limits too.
+- **Writes report which store they landed in, and warn about an accidental global one.**
+  In a repository nobody had run `docir init` in, `docir add` fell back to the global
+  `~/.docir` and succeeded — and since `path` is relative to the *store*, the output read as
+  repo-local while the file went to the user's home directory, ungitted and invisible to
+  teammates. Every write now carries `store`, and a stderr warning fires when the global
+  fallback happens **inside a git repository** — the one case where it is probably not what
+  you meant. Outside a repo, and with `DOCIR_HOME` set, nothing warns.
 - **`docir update --override` now says which rule it broke.** A forced illegal status
   transition left no trace, so the result was indistinguishable from one that transitioned
   legally. It now warns on stderr, naming the transition and the legal moves from the current

@@ -375,6 +375,26 @@ class TestBrokenSchemaIsReportedNotRaised:
         assert run("reindex").exit_code == 3
 
 
+class TestWriteOutputNamesTheStore:
+    """Every write says which store it landed in (guards GAP-023).
+
+    `path` is relative to the store, so it read as repo-relative regardless of
+    where the store actually was. Naming the store removes the ambiguity for
+    every write, warning or not.
+    """
+
+    def test_add_reports_the_store(self, settings: Settings) -> None:
+        payload = json.loads(
+            run("add", "--type", "decision", "--title", "T", "--description", "d").stdout
+        )
+        assert payload["store"] == str(settings.home)
+
+    def test_update_reports_the_store(self, settings: Settings) -> None:
+        run("add", "--type", "decision", "--title", "T", "--description", "d")
+        payload = json.loads(run("update", "adr-0001", "--set-title", "U").stdout)
+        assert payload["store"] == str(settings.home)
+
+
 class TestOutputModes:
     """Token-aware output: JSON when captured (non-TTY), tables under --pretty."""
 

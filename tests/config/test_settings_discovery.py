@@ -53,3 +53,57 @@ class TestResolvePrecedence:
         sub.mkdir()
         monkeypatch.chdir(sub)
         assert Settings.resolve().home == store.resolve()
+
+
+class TestGlobalFallbackIsDistinguishable:
+    """A write must not land in the global store unannounced (guards GAP-023).
+
+    `Settings.resolve` fell back to `~/.docir` with no signal, and the reported
+    `path` is relative to the *store* — so in a repository nobody had run
+    `docir init` in, the output read as repo-local while the file went to the
+    user's home directory, ungitted and invisible to teammates. No error at any
+    point.
+
+    The global store is a real feature, so the fallback itself is not the
+    defect; being unable to tell it apart from a deliberate choice is.
+    """
+
+    def test_origin_records_how_home_was_chosen(self, tmp_path: Path, monkeypatch) -> None:
+        monkeypatch.delenv("DOCIR_HOME", raising=False)
+        monkeypatch.chdir(tmp_path)
+        assert Settings.resolve(tmp_path / "x").home_origin == "flag"
+        monkeypatch.setenv("DOCIR_HOME", str(tmp_path / "env"))
+        assert Settings.resolve().home_origin == "env"
+        monkeypatch.delenv("DOCIR_HOME")
+        (tmp_path / ".docir").mkdir()
+        assert Settings.resolve().home_origin == "project"
+
+    def test_fallback_inside_a_repo_is_flagged(self, tmp_path: Path, monkeypatch) -> None:
+        # The surprise case: a git repo nobody ran `docir init` in.
+        (tmp_path / ".git").mkdir()
+        monkeypatch.delenv("DOCIR_HOME", raising=False)
+        monkeypatch.chdir(tmp_path)
+        settings = Settings.resolve()
+        assert settings.home_origin == "global"
+        assert settings.is_unintended_global_fallback() is True
+
+    def test_fallback_outside_a_repo_is_not_flagged(self, tmp_path: Path, monkeypatch) -> None:
+        # No repo, no ambiguity — warning here would fire on correct usage.
+        monkeypatch.delenv("DOCIR_HOME", raising=False)
+        monkeypatch.chdir(tmp_path)
+        assert Settings.resolve().is_unintended_global_fallback() is False
+
+    def test_a_project_store_is_never_flagged(self, tmp_path: Path, monkeypatch) -> None:
+        (tmp_path / ".git").mkdir()
+        (tmp_path / ".docir").mkdir()
+        monkeypatch.delenv("DOCIR_HOME", raising=False)
+        monkeypatch.chdir(tmp_path)
+        assert Settings.resolve().is_unintended_global_fallback() is False
+
+    def test_explicit_docir_home_opts_out(self, tmp_path: Path, monkeypatch) -> None:
+        # Someone who *does* mean the global store from inside a repo says so
+        # with DOCIR_HOME — no new flag needed, and it takes the `env` branch.
+        (tmp_path / ".git").mkdir()
+        monkeypatch.setenv("DOCIR_HOME", str(tmp_path / "chosen"))
+        monkeypatch.chdir(tmp_path)
+        assert Settings.resolve().is_unintended_global_fallback() is False

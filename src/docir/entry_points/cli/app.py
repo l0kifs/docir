@@ -239,6 +239,7 @@ def add(
         "body": resolve_body(body, body_file, stdin),
         "wait_embeddings": wait_embeddings,
     }
+    _warn_on_global_fallback()
     _emit_document(execute("add", payload))
 
 
@@ -291,6 +292,7 @@ def update(
         "allow_transition_override": override,
         "wait_embeddings": wait_embeddings,
     }
+    _warn_on_global_fallback()
     data = execute("update", payload)
     forced = data.get("forced_transition") if isinstance(data, dict) else None
     if forced:
@@ -718,10 +720,31 @@ def _as_list(data: object) -> list[dict[str, object]]:
 
 def _emit_document(data: object) -> None:
     state = get_state()
+    if isinstance(data, dict):
+        data = {**data, "store": str(state.settings.home)}
     if use_json(state):
         rendering.emit_json(data, trim=state.trim)
     elif isinstance(data, dict):
         rendering.render_document({str(key): value for key, value in data.items()})
+
+
+def _warn_on_global_fallback() -> None:
+    """Say so when a write is about to land in the global store from a repo.
+
+    The reported `path` is relative to the *store*, so in a repository that was
+    never `docir init`-ed it reads as repo-local while the file goes to the
+    user's home directory — ungitted and invisible to teammates, with no error
+    at any point. Only this case warns: outside a repository the global store is
+    unambiguous, and warning on correct usage is how a check gets ignored.
+    """
+    settings = get_state().settings
+    if not settings.is_unintended_global_fallback():
+        return
+    rendering.render_warning(
+        f"writing to the global store {settings.home} — this directory is inside a "
+        "git repository with no .docir/. Run `docir init` to scope docs to the repo, "
+        "or set DOCIR_HOME to silence this."
+    )
 
 
 def _emit_document_list(data: object) -> None:

@@ -50,8 +50,13 @@ schema you have customised is kept and reported (`schema_preserved`), because it
 cannot be rebuilt from the documents. Never reach for `--force-schema` unless
 you intend to throw that file away. If you skip `docir init`, docs go to the global `~/.docir`
 store — fine for personal notes, but **not** what you want for a repo whose docs
-should live with the code. Check where you are with `docir query --limit 1` (it
-operates on the discovered store).
+should live with the code.
+
+**Every write reports the `store` it landed in.** Check it: `path` is relative to
+the store, so it reads as repo-local wherever the store actually is. If `store`
+points at a home directory while you are working in a repo, the docs are going
+somewhere nobody else will see — `docir` also warns on stderr in exactly that
+case. Run `docir init` first.
 
 ## Core loop
 

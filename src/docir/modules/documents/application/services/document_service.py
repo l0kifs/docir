@@ -134,18 +134,35 @@ class DocumentService:
         return DocumentView.from_document(document, stale=self._is_stale(document))
 
     def update(self, request: UpdateDocumentRequest) -> DocumentView:
-        """Patch metadata and/or edit the body (``docs update``)."""
+        """Patch metadata and/or edit the body (``docs update``).
+
+        Every edit is applied to ``base`` — the document as it is **on disk**,
+        not as the index remembers it — because the files are the source of
+        truth. ``disk_diverged`` records that the two disagree: the file was
+        hand-edited or merged since it was last indexed. Note this is a
+        divergence check, not optimistic concurrency control; no caller supplies
+        a version token, so it cannot detect a competing writer.
+
+        **Only ``--replace-body`` is blocked when the disk has diverged, and
+        that asymmetry is deliberate.** Every other mode composes with whatever
+        is on disk: a metadata patch or a section edit builds on ``base``, so an
+        out-of-band edit survives it untouched. ``--replace-body`` is the one
+        mode that throws ``base.body`` away, so it is the one mode where a
+        divergence means data loss. Extending the guard to the others would
+        reject writes that were never going to lose anything — failing
+        ``--set-title`` because somebody fixed a typo in the file by hand.
+        """
         with self._uow_factory() as uow:
             indexed = uow.documents.get(request.doc_id)
             if indexed is None:
                 raise DocumentNotFoundError(f"no document with id {request.doc_id!r}")
 
             base = self._read_current(indexed)
-            stale = indexed.content_hash() != base.content_hash()
+            disk_diverged = indexed.content_hash() != base.content_hash()
 
             changes: dict[str, object] = {}
             content_changed = self._apply_metadata(request, base, changes, uow)
-            content_changed |= self._apply_body(request, base, changes, stale)
+            content_changed |= self._apply_body(request, base, changes, disk_diverged)
 
             if not changes:
                 return DocumentView.from_document(base, stale=self._is_stale(base))
@@ -498,9 +515,16 @@ class DocumentService:
         request: UpdateDocumentRequest,
         base: Document,
         changes: dict[str, object],
-        stale: bool,
+        disk_diverged: bool,
     ) -> bool:
-        """Stage a body edit (at most one mode); return whether the body moved."""
+        """Stage a body edit (at most one mode); return whether the body moved.
+
+        ``disk_diverged`` is consulted only by ``replace_body`` — see
+        :meth:`update` for why that is the only mode it can apply to. The
+        parameter is named for what it measures rather than "stale", which in
+        this codebase means a document past its review cadence: a different
+        concept on a different clock.
+        """
         modes = [
             request.append_section,
             request.replace_section,
@@ -522,7 +546,7 @@ class DocumentService:
                 raise ValidationError(
                     "--replace-body requires --force (it overwrites the whole body)"
                 )
-            if stale:
+            if disk_diverged:
                 raise StaleWriteError(
                     f"{base.id!r} changed on disk since it was indexed; "
                     f"refetch with `docir get {base.id}` before replacing the body"

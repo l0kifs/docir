@@ -1182,7 +1182,32 @@
                      document that patches are intentionally last-write-wins because they are
                      field-scoped and commutative."
   question: null
-  status: open
+  status: resolved
+  resolution: >
+    STATED 2026-07-29, not changed — the scoping turned out to be correct and the gap was
+    the missing rationale (which is what `class: unstated` claims). Traced and verified
+    rather than reasoned about: every edit is applied to `base`, the document *as it is on
+    disk*, so a metadata patch or a section edit composes with an out-of-band change; only
+    `--replace-body` discards `base.body`, so only it can lose data to a divergence.
+    Demonstrated on a file carrying a hand-written paragraph the index did not know about:
+    `--set-title` renamed the document and the paragraph survived; `--append-section` added
+    its section and the paragraph survived; `--replace-body --force` refused. Extending the
+    guard would reject writes that lose nothing.
+    TWO CORRECTIONS TO THIS RECORD, both from reading the code rather than the summary:
+    (a) it is a *divergence* check (index vs disk), NOT optimistic concurrency control. No
+    caller supplies a version token, so it cannot detect a competing writer at all — it
+    detects a hand-edit or a merge. The finding's framing as a concurrency guard was wrong.
+    (b) the "concurrent metadata patches silently last-write-wins" claim is weaker than
+    stated. The daemon is a single-connection-at-a-time server, so that path has no window;
+    `--no-daemon` does, but 12 trials of two parallel patches to disjoint fields lost 0,
+    because process startup (~0.5s) dwarfs the microsecond window. Contrast GAP-009, which
+    reproduced 6/6 because every process hit the same counter. It is a real but narrow race,
+    not the everyday behaviour the finding implied.
+    Recorded in `update`'s docstring, in CLAUDE.md, and — more durably — as
+    `TestDiskDivergenceScoping`, so a future tidy-up toward "consistency" fails a test rather
+    than a review. The parameter is renamed `stale` -> `disk_diverged`: `stale` already means
+    "past its review cadence" everywhere else in this codebase, and the collision is part of
+    why the guard read as an oversight.
 
 # =============================================================================
 # COSMETIC

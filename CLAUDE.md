@@ -151,6 +151,18 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   only way to keep CI green was to drop the gate, which also dropped duplicate-id detection.
   `CheckIssue` derives `severity` from `kind` in `__post_init__`, so a new check classifies itself
   by being added to `ERROR_KINDS` or not. `--strict-all` restores fail-on-anything.
+- **The stale-write guard covers `--replace-body` only, and that is the rule, not an
+  oversight.** `update` computes `disk_diverged` (index `content_hash` vs the file's) and
+  consults it in one branch. Every edit is applied to the document *as it is on disk*, so a
+  metadata patch or a section edit **composes** with an out-of-band change and cannot destroy
+  it; `--replace-body` is the only mode that discards the on-disk body, so it is the only one
+  where divergence means data loss. Extending the guard would fail writes that lose nothing —
+  `--set-title` refusing because someone fixed a typo by hand. Pinned by
+  `TestDiskDivergenceScoping`. Note it is a *divergence* check, not optimistic concurrency
+  control: no caller supplies a version token, so it cannot see a competing writer (the daemon
+  serializes requests; `--no-daemon` parallel writers have a small unguarded window).
+  The variable is `disk_diverged`, not `stale` — in this codebase `stale` means a document
+  past its review cadence, a different concept on a different clock.
 - **Only a human content edit may move `updated`.** Staleness falls back to `updated` when a
   document has no explicit `verified`, so any mechanical rewrite that bumps it launders the
   review clock — the one trust signal the product offers (ADR-0006). Three write paths rewrite

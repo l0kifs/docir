@@ -162,6 +162,52 @@ class TestUpdate:
         assert view["verified"] == FIXED_DATE.isoformat()
 
 
+class TestDiskDivergenceScoping:
+    """Only `--replace-body` is blocked when the file diverged (states GAP-037).
+
+    The guard was applied to one of five edit modes and nothing recorded why,
+    so it read as an oversight. It is not. Every edit is applied to the document
+    *as it is on disk*, so a metadata patch or a section edit composes with an
+    out-of-band change and cannot destroy it. `--replace-body` is the one mode
+    that discards the on-disk body, so it is the one mode where divergence means
+    data loss. Extending the guard would fail writes that lose nothing.
+
+    These tests state that rule so it cannot be "tidied up" into consistency.
+    """
+
+    @staticmethod
+    def _hand_edit(settings: Settings) -> None:
+        path = settings.docs_root / "decisions" / "adr-0001-auth-strategy.md"
+        path.write_text(path.read_text() + "\nHAND WRITTEN.\n", encoding="utf-8")
+
+    def test_metadata_patch_succeeds_and_keeps_the_hand_edit(
+        self, seeded: Dispatcher, settings: Settings
+    ) -> None:
+        self._hand_edit(settings)
+        view = seeded.dispatch("update", {"doc_id": "adr-0001", "set_title": "Renamed"})
+        assert view["title"] == "Renamed"
+        assert "HAND WRITTEN." in view["body"]
+
+    def test_append_section_succeeds_and_keeps_the_hand_edit(
+        self, seeded: Dispatcher, settings: Settings
+    ) -> None:
+        self._hand_edit(settings)
+        view = seeded.dispatch(
+            "update", {"doc_id": "adr-0001", "append_section": ["Resolution", "Fixed"]}
+        )
+        assert "HAND WRITTEN." in view["body"]
+        assert "## Resolution" in view["body"]
+
+    def test_replace_body_is_the_only_mode_that_refuses(
+        self, seeded: Dispatcher, settings: Settings
+    ) -> None:
+        self._hand_edit(settings)
+        with pytest.raises(StaleWriteError):
+            seeded.dispatch(
+                "update", {"doc_id": "adr-0001", "replace_body": "wiped", "force": True}
+            )
+
+
 class TestTypedEdges:
     def test_typed_edge_round_trips(self, seeded: Dispatcher) -> None:
         view = seeded.dispatch(

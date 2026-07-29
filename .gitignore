@@ -222,3 +222,8 @@ examples/.workspace/
 
 .DS_Store
 .local-data/
+
+# A docir store accidentally created in this checkout. docir's own docs are
+# plain markdown under docs/ — this repo does not dogfood a store, so any
+# .docir/ here is a stray from running the CLI with the repo as the CWD.
+.docir/

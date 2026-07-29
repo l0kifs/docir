@@ -1,7 +1,0 @@
-# docir derived index + daemon runtime — rebuildable from docs/, do not commit.
-index.db
-index.db-journal
-index.db-wal
-index.db-shm
-daemon.pid
-daemon.log

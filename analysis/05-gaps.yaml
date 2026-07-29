@@ -1001,6 +1001,23 @@
                      `docir reindex` after; make `check` the verification step."
   question: null
   status: open
+  progress: >
+    2026-07-29 — the *prerequisite* is done; the contract itself is still unwritten.
+    Measuring what `check` actually caught after a hand-edit showed the proposed default
+    could not be honoured: `malformed`, `duplicate-id`, `dangling` and `unknown-type` were
+    detected, but an unregistered tag and an undeclared status parsed cleanly and passed
+    silently — the document stayed queryable by a tag the registry had never heard of, and a
+    status outside its type's state machine stuck. Both are Tier 0 rules the CLI enforces on
+    every write, so either one proves the file was edited outside it.
+    `check` now reports them as `unknown-tag` / `unknown-status`, both **warnings**: the
+    document is still readable and every edge still resolves, so by the ERROR_KINDS rule they
+    are not damage — and promoting them would red-build every repo already carrying a
+    hand-edited tag, which is exactly how `--strict` became unusable (GAP-006). `--strict-all`
+    serves anyone who does want hand-edits to block a merge.
+    With GAP-022 (reindex reports skipped files) this makes "reindex then check" a workflow
+    that can actually be trusted, which is what the contract needs to be able to promise.
+    Still unverifiable by `check`, and so must be stated as limits in the contract: a forged
+    `verified:` date (unknowable in principle) and a hand-edited `created`/`updated`.
 
 - id: GAP-017
   class: misleading

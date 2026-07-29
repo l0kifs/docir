@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`docir check` catches the two Tier 0 rules a hand-edit can bypass.** A tag not in the
+  registry and a status the type does not declare both parsed cleanly and passed the checks
+  silently — a document stayed queryable by a tag `docir tag list` had never heard of, and a
+  status outside its type's state machine stuck with no way back out. The CLI cannot write
+  either, so both mean a file was edited outside it. They are reported as `unknown-tag` and
+  `unknown-status`, both **warnings**: the document is still readable and its edges still
+  resolve. Use `--strict-all` if you want hand-edits to block a merge.
+
 ### Fixed
 
 - **`docir reindex` reports files it could not parse.** The scan is best-effort — one bad

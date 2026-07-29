@@ -210,6 +210,37 @@ class TestGraphChecker:
         issues = GraphChecker(_schema()).check(docs, [])
         assert any(i.kind == "unknown-type" and "hyp-0001" in i.doc_ids for i in issues)
 
+    def test_unknown_status_flagged(self) -> None:
+        # Tier 0 validates every status the CLI writes, so this can only come
+        # from a hand-edit or a merge — and `check` used to be blind to it.
+        docs = [_doc("adr-0001", "decision", status="invented")]
+        issues = GraphChecker(_schema()).check(docs, [])
+        assert any(i.kind == "unknown-status" and "adr-0001" in i.doc_ids for i in issues)
+
+    def test_unknown_status_is_not_reported_for_an_unknown_type(self) -> None:
+        # Already covered by `unknown-type`; two findings for one cause is noise.
+        docs = [_doc("hyp-0001", "hypothesis", status="whatever")]
+        kinds = {i.kind for i in GraphChecker(_schema()).check(docs, [])}
+        assert "unknown-type" in kinds
+        assert "unknown-status" not in kinds
+
+    def test_unknown_tag_flagged_against_the_registry(self) -> None:
+        docs = [_doc("adr-0001", "decision", tags=("ghost",))]
+        issues = GraphChecker(_schema()).check(docs, [], known_tags=frozenset({"auth"}))
+        assert any(i.kind == "unknown-tag" and "adr-0001" in i.doc_ids for i in issues)
+
+    def test_registered_tags_are_silent(self) -> None:
+        docs = [_doc("adr-0001", "decision", tags=("auth",))]
+        issues = GraphChecker(_schema()).check(docs, [], known_tags=frozenset({"auth"}))
+        assert not any(i.kind == "unknown-tag" for i in issues)
+
+    def test_tags_are_unchecked_when_no_registry_is_supplied(self) -> None:
+        # Permissive-when-absent, like the relation-kind registry: a caller that
+        # cannot supply the registry must not get false findings.
+        docs = [_doc("adr-0001", "decision", tags=("ghost",))]
+        issues = GraphChecker(_schema()).check(docs, [])
+        assert not any(i.kind == "unknown-tag" for i in issues)
+
     def test_supersedes_edge_is_not_a_dependency(self) -> None:
         # A supersedes edge is lateral (replacement), not a downward dependency.
         docs = [_doc("arch-0001", "decision"), _doc("issue-0001", "issue")]

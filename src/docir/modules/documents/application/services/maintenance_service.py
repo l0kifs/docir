@@ -124,6 +124,11 @@ class MaintenanceService:
     def check(self) -> list[CheckIssue]:
         """Tier 1 structural checks over the graph (``docs check``).
 
+        Also catches the two Tier 0 rules a hand-edit can bypass: a status the
+        type does not declare and a tag that is not in the registry. The CLI
+        cannot write either, so both mean a file was edited outside it — the
+        case `reindex` exists for and `check` could not previously see.
+
         Combines index-based graph checks (cycles, orphans, layering, dangling
         references) with a file-scan for duplicate ids — the latter reads the
         source files directly, because two files sharing an id are invisible in
@@ -134,7 +139,10 @@ class MaintenanceService:
         with self._uow_factory() as uow:
             documents = uow.documents.all()
             relations = uow.documents.relations()
-        issues = self._graph_checker.check(documents, relations, self._clock.today())
+            known_tags = frozenset(tag.key for tag in uow.tags.all())
+        issues = self._graph_checker.check(
+            documents, relations, self._clock.today(), known_tags=known_tags
+        )
         issues.extend(self._find_duplicate_ids())
         issues.extend(self._find_malformed())
         return issues

@@ -46,10 +46,18 @@ _DEPENDENCY_KINDS = frozenset({"depends_on", "refines"})
 #: edge resolves to nothing. These are what a merge gate must stop.
 ERROR_KINDS: frozenset[str] = frozenset({"duplicate-id", "dangling", "malformed"})
 
-#: Everything else (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`)
-#: describes shape or age, not damage. `orphan` in particular fires for any
-#: document with no relations — the default state of a new one — so treating
-#: these as build failures made the gate unusable on a healthy corpus.
+#: Everything else (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`,
+#: `unknown-status`, `unknown-tag`) describes shape or classification, not
+#: damage. `orphan` in particular fires for any document with no relations — the
+#: default state of a new one — so treating these as build failures made the gate
+#: unusable on a healthy corpus.
+#:
+#: `unknown-status`/`unknown-tag` are warnings for the same reason as
+#: `unknown-type`: the document is still readable and every edge still resolves,
+#: the schema simply no longer recognises how it is classified. Promoting them
+#: would also fail CI for any repo that already carries a hand-edited tag —
+#: the exact way the `--strict` gate became unusable before. `--strict-all`
+#: covers anyone who does want hand-edits to block a merge.
 ERROR = "error"
 WARNING = "warning"
 
@@ -89,15 +97,83 @@ class GraphChecker:
         documents: list[Document],
         relations: list[Relation],
         today: date | None = None,
+        known_tags: frozenset[str] | None = None,
     ) -> list[CheckIssue]:
+        """Run every Tier 1 check over the indexed corpus.
+
+        ``known_tags`` is the tag registry; ``None`` skips the tag check, the
+        same permissive-when-absent convention the relation-kind registry uses.
+        """
         issues: list[CheckIssue] = []
         issues.extend(self._find_unknown_type(documents))
+        issues.extend(self._find_unknown_status(documents))
+        if known_tags is not None:
+            issues.extend(self._find_unknown_tag(documents, known_tags))
         issues.extend(self._find_dangling(documents, relations))
         issues.extend(self._find_cycles(relations))
         issues.extend(self._find_orphans(documents, relations))
         issues.extend(self._find_layering_violations(documents, relations))
         if today is not None:
             issues.extend(self._find_stale(documents, today))
+        return issues
+
+    def _find_unknown_status(self, documents: list[Document]) -> list[CheckIssue]:
+        """Flag documents whose ``status`` is not declared by their type.
+
+        The CLI cannot produce this — Tier 0 validates every status it writes —
+        so it means the frontmatter was edited by hand or merged from a branch
+        with a different schema. The document is still readable, but it sits
+        outside its type's state machine: no transition leads out of a status
+        the grammar does not know, so `docir update --status` can never move it
+        again without `--override`.
+        """
+        issues: list[CheckIssue] = []
+        for doc in documents:
+            type_schema = self._schema.types.get(doc.type)
+            if type_schema is None:
+                continue  # already reported as unknown-type
+            if doc.status in type_schema.statuses:
+                continue
+            known = ", ".join(type_schema.statuses)
+            issues.append(
+                CheckIssue(
+                    kind="unknown-status",
+                    message=(
+                        f"{doc.id!r} has status {doc.status!r}, which type "
+                        f"{doc.type!r} does not declare; declared: {known}"
+                    ),
+                    doc_ids=(doc.id,),
+                )
+            )
+        return issues
+
+    def _find_unknown_tag(
+        self, documents: list[Document], known_tags: frozenset[str]
+    ) -> list[CheckIssue]:
+        """Flag tags that are not in the registry.
+
+        Also unreachable through the CLI (Tier 0 rejects an unregistered tag on
+        write), so it means a hand-edit or a merge. The tag still filters
+        `query --tag`, but `tag list` does not know it and `tag rename` / `tag
+        rm` cannot touch it — the registry has stopped describing the
+        vocabulary actually in use.
+        """
+        issues: list[CheckIssue] = []
+        for doc in documents:
+            unknown = sorted(set(doc.tags) - known_tags)
+            if not unknown:
+                continue
+            issues.append(
+                CheckIssue(
+                    kind="unknown-tag",
+                    message=(
+                        f"{doc.id!r} uses unregistered tag(s) "
+                        f"{', '.join(repr(t) for t in unknown)}; "
+                        "register them with `docir tag add` or remove them"
+                    ),
+                    doc_ids=(doc.id,),
+                )
+            )
         return issues
 
     def _find_unknown_type(self, documents: list[Document]) -> list[CheckIssue]:

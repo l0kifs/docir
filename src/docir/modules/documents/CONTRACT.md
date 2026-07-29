@@ -27,7 +27,9 @@ files and the derived index never disagree.
 - `MaintenanceService.reindex(changed_only) -> ReindexResult` — rebuild index from files.
   `ReindexResult.documents_skipped` counts source files that would not parse: the scan is
   best-effort, so a partial rebuild must say so rather than look complete.
-- `MaintenanceService.check() -> [CheckIssue]` — Tier 1 structural findings (incl. staleness, unknown type)
+- `MaintenanceService.check() -> [CheckIssue]` — Tier 1 structural findings (incl. staleness,
+  and `unknown-type`/`unknown-status`/`unknown-tag`, the three Tier 0 rules a hand-edit can
+  bypass). All warnings: the document stays readable and its edges resolve.
 - `MaintenanceService.lint_deep() -> [LintFinding]` — Tier 2 advisory findings
 - `MaintenanceService.reindex_embeddings()/flush_embeddings() -> int`
 - `load_schema(path) -> Schema` — load the per-type document schema. Rejects a status name no

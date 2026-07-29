@@ -100,6 +100,60 @@ def test_reindex_skips_malformed_file(dispatcher: Dispatcher, settings: Settings
     assert dispatcher.dispatch("get", {"doc_id": "adr-0001"})["title"] == "Good"
 
 
+def test_check_catches_tier0_violations_made_by_hand(
+    dispatcher: Dispatcher, settings: Settings
+) -> None:
+    """A hand-edit that parses but breaks Tier 0 is now visible (GAP-016 groundwork).
+
+    `check` caught `malformed`, `duplicate-id`, `dangling` and `unknown-type`,
+    but a hand-edited tag or status parsed cleanly and passed silently — the
+    document stayed queryable by a tag the registry had never heard of. Both are
+    rules the CLI enforces on every write, so either one means the file was
+    edited outside it, which is the whole premise of `reindex`.
+    """
+    dispatcher.dispatch("add", {"type": "decision", "title": "Alpha", "description": "d"})
+    path = settings.docs_root / "decisions" / "adr-0001-alpha.md"
+    path.write_text(
+        path.read_text(encoding="utf-8")
+        .replace("tags: []", "tags: [ghost]")
+        .replace("status: proposed", "status: invented"),
+        encoding="utf-8",
+    )
+    dispatcher.dispatch("reindex", {})
+
+    kinds = {i["kind"] for i in dispatcher.dispatch("check", {})}
+    assert "unknown-tag" in kinds
+    assert "unknown-status" in kinds
+
+
+def test_a_healthy_corpus_reports_neither(dispatcher: Dispatcher) -> None:
+    # The GAP-006/GAP-008 guard: a new check must stay quiet on correct usage.
+    dispatcher.dispatch("tag_add", {"key": "auth", "description": "Auth."})
+    dispatcher.dispatch(
+        "add", {"type": "decision", "title": "A", "description": "d", "tags": ["auth"]}
+    )
+    kinds = {i["kind"] for i in dispatcher.dispatch("check", {})}
+    assert "unknown-tag" not in kinds
+    assert "unknown-status" not in kinds
+
+
+def test_hand_edits_do_not_fail_the_ci_gate(dispatcher: Dispatcher, settings: Settings) -> None:
+    # Warnings, not errors: they leave the document readable and every edge
+    # resolvable. Promoting them would red-build every repo already carrying a
+    # hand-edited tag, which is how --strict became unusable before.
+    dispatcher.dispatch("add", {"type": "decision", "title": "Alpha", "description": "d"})
+    path = settings.docs_root / "decisions" / "adr-0001-alpha.md"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("tags: []", "tags: [ghost]"), encoding="utf-8"
+    )
+    dispatcher.dispatch("reindex", {})
+    assert all(
+        i["severity"] == "warning"
+        for i in dispatcher.dispatch("check", {})
+        if i["kind"] in {"unknown-tag", "unknown-status"}
+    )
+
+
 class TestReindexReportsWhatItSkipped:
     """A partial rebuild must not look like a complete one (guards GAP-022).
 

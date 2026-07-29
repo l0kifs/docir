@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `related`, `type` through the CLI (each is a Tier 0 rule a hand-edit bypasses); `id` never;
   `verified` never, because it asserts a human re-read the document and nothing can check
   that. It states its own limits too.
+- **`docir context` payloads grew ~5% (428 → 448 tokens on the benchmark corpus)** because
+  every ranked hit now carries `similarity`. The cost lands only where the field is set:
+  `search` and `query` are unchanged, since their results have no similarity and trimming
+  drops it. Retrieval quality is unchanged — recall, precision and MRR are identical to the
+  0.4.0 baseline.
 - **`docir add --id <id>` adopts an existing id**, so a repository migrating a numbered ADR
   corpus keeps its numbering and its historical cross-references. This is not the bulk
   `import` that was built and rejected: nothing is inferred, you still add one document at a

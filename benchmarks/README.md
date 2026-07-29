@@ -18,9 +18,10 @@ recall, precision, MRR and the size of the payload an agent receives.
 **It is a measurement, not a test.** It prints numbers and exits 0. Do not wire a
 threshold around it until the numbers below are understood and stable.
 
-## Results, 2026-07-27
+## Results
 
-`recall@5`, 23 documents, 14 tasks.
+`recall@5`, 23 documents, 14 tasks. Quality figures last confirmed 2026-07-29 and
+unchanged since the 2026-07-27 re-base; the token figures below moved on 2026-07-29 (§3).
 
 | strategy | `deterministic` fallback | default (`fastembed`) |
 |---|---|---|
@@ -81,7 +82,7 @@ signal — which is what the README used to promise as "retrieval by meaning".
 ### 2. Graph expansion earns its place — and it is why the corpus was re-based
 
 `context` beats `context --expand 0` by **+0.09** recall under `fastembed` and **+0.13**
-under the fallback, for essentially no extra tokens (428 vs 438). The relation graph is
+under the fallback, for essentially no extra tokens (448 vs 463). The relation graph is
 doing real work, and the default `--expand 2` looks about right.
 
 Those margins were +0.07 on the old corpus, and the increase is the point. The corpus had
@@ -111,12 +112,20 @@ Mean payload an agent reads, per task (~4 chars/token):
 
 | what the agent does | ~tokens | vs `context` |
 |---|---|---|
-| `docir context` | **428** | 1× |
-| `docir query` (all skeletons) | 1 841 | 4.3× |
-| read every document body | 3 734 | 8.7× |
+| `docir context` | **448** | 1× |
+| `docir query` (all skeletons) | 1 841 | 4.1× |
+| read every document body | 3 734 | 8.3× |
 
 On a 23-document corpus. The ratio grows with corpus size, since `context` is bounded by
 `--limit` and the others are not.
+
+`context` grew from 428 to 448 tokens (+4.7%) when `similarity` was added to ranked hits —
+the field that makes `--min-score` possible and lets an agent tell a real match from the
+best of a bad set. The cost lands only where the field is set: `search` and `query` are
+unchanged at 440 and 1 841, because their results carry no similarity and trimming drops it.
+`--expand 0` grew slightly more (+25) than full `context` (+20), since a graph-reached
+neighbour has no similarity either — the more the graph contributes, the less the field
+costs.
 
 ## What this does not tell you
 
@@ -131,7 +140,7 @@ On a 23-document corpus. The ratio grows with corpus size, since `context` is bo
   duplicated decisions and inconsistent vocabulary. Expect worse numbers.
 - **Stem overlap leaks into the "paraphrased" set.** FTS5 uses a Porter tokenizer, so
   `paying`/`payment` still match. The paraphrased tasks are harder for a lexical matcher,
-  not impossible for it — which is why `search` scores 0.75 there rather than 0.
+  not impossible for it — which is why `search` scores 0.79 there rather than 0.
 - **Nothing here measures whether retrieved context changed what an agent did.** That is
   the outcome the product actually exists for, and it needs a different instrument.
 

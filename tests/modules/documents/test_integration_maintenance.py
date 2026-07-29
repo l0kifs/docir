@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+import pytest
+
 from docir.config.settings import Settings
 from docir.entry_points.dispatch import Dispatcher
+from docir.platform.errors import DocumentNotFoundError
 
 # Valid YAML, but `created`/`updated` are not ISO dates — a hand-edit/foreign file.
 _MALFORMED_FILE = (
@@ -84,6 +87,48 @@ def test_reindex_changed_only(dispatcher: Dispatcher, settings: Settings) -> Non
     result = dispatcher.dispatch("reindex", {"changed_only": True})
     # Unchanged file is skipped.
     assert result["documents_indexed"] == 0
+
+
+class TestChangedReindexStillRemovesDeletions:
+    """`--changed` sweeps deleted files too (guards GAP-021).
+
+    The sweep was skipped under `--changed`, so the fast path had quietly
+    different semantics: a document deleted from the filesystem stayed indexed
+    and kept being returned by every read path — `get` answered for a file that
+    no longer existed — and nothing in `--help` or the README said so.
+
+    Skipping it was never why `--changed` is fast. `scan()` runs in full either
+    way (and `seen` must be complete for the id-counter restore), so the sweep
+    costs one query; what `--changed` actually skips is the writes.
+    """
+
+    @staticmethod
+    def _two_docs_then_delete_one(dispatcher: Dispatcher, settings: Settings) -> None:
+        dispatcher.dispatch("add", {"type": "decision", "title": "Alpha", "description": "d"})
+        dispatcher.dispatch("add", {"type": "decision", "title": "Beta", "description": "d"})
+        (settings.docs_root / "decisions" / "adr-0001-alpha.md").unlink()
+
+    def test_deletion_is_swept(self, dispatcher: Dispatcher, settings: Settings) -> None:
+        self._two_docs_then_delete_one(dispatcher, settings)
+        result = dispatcher.dispatch("reindex", {"changed_only": True})
+        assert result["documents_removed"] == 1
+
+    def test_the_deleted_document_leaves_every_read_path(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        self._two_docs_then_delete_one(dispatcher, settings)
+        dispatcher.dispatch("reindex", {"changed_only": True})
+        assert [d["id"] for d in dispatcher.dispatch("query", {})] == ["adr-0002"]
+        with pytest.raises(DocumentNotFoundError):
+            dispatcher.dispatch("get", {"doc_id": "adr-0001"})
+
+    def test_changed_still_skips_unchanged_files(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        # The sweep must not turn --changed into a full reindex.
+        dispatcher.dispatch("add", {"type": "decision", "title": "Alpha", "description": "d"})
+        assert dispatcher.dispatch("reindex", {"changed_only": True})["documents_indexed"] == 0
+        assert dispatcher.dispatch("reindex", {})["documents_indexed"] == 1
 
 
 def test_reindex_embeddings(seeded: Dispatcher) -> None:

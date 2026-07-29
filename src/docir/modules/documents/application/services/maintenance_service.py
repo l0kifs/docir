@@ -347,12 +347,22 @@ class MaintenanceService:
         # skipped re-saving: an unchanged file still owns its id.
         self._restore_id_sequences(uow, seen)
 
+        # The removal sweep runs in BOTH modes. It used to be skipped under
+        # ``--changed``, which gave the fast path quietly different semantics: a
+        # document deleted from the filesystem stayed in the index and kept
+        # being returned by every read path — `get` answered for a file that no
+        # longer existed. Nothing in `--help` or the README said so.
+        #
+        # It is not why ``--changed`` is fast. ``scan()`` runs in full either
+        # way (that is where the parsing cost is, and ``seen`` has to be
+        # complete for ``_restore_id_sequences`` above); ``--changed`` skips the
+        # *writes* — save, FTS index, embedding recompute. The sweep adds one
+        # query and a set difference.
         removed = 0
-        if not changed_only:
-            for stale in uow.documents.all():
-                if stale.id not in seen:
-                    uow.documents.delete(stale.id)
-                    uow.search.remove(stale.id)
-                    uow.embeddings.remove(stale.id)
-                    removed += 1
+        for stale in uow.documents.all():
+            if stale.id not in seen:
+                uow.documents.delete(stale.id)
+                uow.search.remove(stale.id)
+                uow.embeddings.remove(stale.id)
+                removed += 1
         return indexed, removed

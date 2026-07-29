@@ -25,6 +25,8 @@ files and the derived index never disagree.
   blocked while referenced unless `force`, which strips the edge from each referencing
   document in the same transaction and returns their ids (without advancing their `updated`)
 - `MaintenanceService.reindex(changed_only) -> ReindexResult` — rebuild index from files.
+  `changed_only` skips re-saving unchanged files; the removal sweep runs in both modes, so
+  either way the index ends up agreeing with the filesystem.
   `ReindexResult.documents_skipped` counts source files that would not parse: the scan is
   best-effort, so a partial rebuild must say so rather than look complete.
 - `MaintenanceService.check() -> [CheckIssue]` — Tier 1 structural findings (incl. staleness,

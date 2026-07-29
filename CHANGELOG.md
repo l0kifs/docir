@@ -26,6 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`docir reindex --changed` now removes deleted files from the index.** The removal sweep
+  was skipped on the fast path, so a document deleted from the filesystem stayed indexed and
+  kept being returned by every read path — `docir get` answered for a file that no longer
+  existed — and nothing in `--help` or the README said the two modes differed. Skipping it was
+  never what made `--changed` fast: the scan runs in full either way, and what `--changed`
+  skips is the re-saving. It still does.
 - **`docir reindex` reports files it could not parse.** The scan is best-effort — one bad
   file must not abort the rebuild of the rest — but it reported only what succeeded, so a
   partial rebuild was indistinguishable from a complete one. On a fresh clone, two files on

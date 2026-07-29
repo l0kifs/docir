@@ -542,7 +542,13 @@ def agent_update(
 
 @app.command()
 def reindex(
-    changed: Annotated[bool, typer.Option("--changed")] = False,
+    changed: Annotated[
+        bool,
+        typer.Option(
+            "--changed",
+            help="Re-save only files whose content changed. Deletions are swept either way.",
+        ),
+    ] = False,
     embeddings: Annotated[bool, typer.Option("--embeddings")] = False,
 ) -> None:
     """Rebuild the index from the canonical files.

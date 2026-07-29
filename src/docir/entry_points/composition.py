@@ -203,6 +203,10 @@ class InitResult:
     schema_written: bool
     gitignore_written: bool
     id_style: str = DEFAULT_INIT_ID_STYLE
+    #: ``--force`` was given but the existing schema had been customised, so it
+    #: was kept. Not an error: the caller asked to regenerate the store's files
+    #: and got everything that is safe to regenerate.
+    schema_preserved: bool = False
 
 
 def initialize_store(
@@ -210,6 +214,7 @@ def initialize_store(
     *,
     profiles: tuple[str, ...] = (),
     force: bool = False,
+    force_schema: bool = False,
     id_style: str = DEFAULT_INIT_ID_STYLE,
 ) -> InitResult:
     """Create/validate a docir store at ``settings.home`` (the ``docir init`` core).
@@ -218,6 +223,15 @@ def initialize_store(
     and a ``.gitignore`` for the derived index, ensures the directory layout, and
     runs migrations — the same startup path every command uses, so an initialized
     store is immediately valid. Existing files are preserved unless ``force``.
+
+    The two files are **not** equally replaceable, so ``force`` no longer treats
+    them the same. The ``.gitignore`` is a constant this module generates: losing
+    it costs nothing. The schema is the one file in the store that cannot be
+    reconstructed from the documents — every type, status and cadence a person
+    decided on lives only there. So ``force`` overwrites a schema only while it
+    still matches what ``init`` would generate; once it has been customised,
+    replacing it takes ``force_schema`` as well. Re-running ``init --force`` to
+    refresh the ``.gitignore`` used to destroy that work silently.
     """
     unknown = [name for name in profiles if name not in PROFILE_NAMES]
     if unknown:
@@ -229,9 +243,12 @@ def initialize_store(
     settings.ensure_directories()
 
     schema_path = settings.schema_path
-    schema_written = force or not schema_path.exists()
+    generated = render_schema_yaml(profiles, id_style)
+    schema_written, schema_preserved = _schema_write_plan(
+        schema_path, generated, force=force, force_schema=force_schema
+    )
     if schema_written:
-        schema_path.write_text(render_schema_yaml(profiles, id_style), encoding="utf-8")
+        schema_path.write_text(generated, encoding="utf-8")
 
     gitignore_path = settings.home / ".gitignore"
     gitignore_written = force or not gitignore_path.exists()
@@ -246,4 +263,34 @@ def initialize_store(
         schema_written=schema_written,
         gitignore_written=gitignore_written,
         id_style=id_style,
+        schema_preserved=schema_preserved,
     )
+
+
+def _schema_write_plan(
+    schema_path: Path, generated: str, *, force: bool, force_schema: bool
+) -> tuple[bool, bool]:
+    """``(write_it, preserved_a_customised_one)`` for ``init``'s schema write.
+
+    The two files ``init`` writes are not equally replaceable. The ``.gitignore``
+    is a constant this module generates, so losing it costs nothing. The schema
+    is the one file in the store that cannot be reconstructed from the
+    documents — every type, status and cadence a person decided on lives only
+    there — and ``--force`` used to replace both under one flag, so re-running
+    ``init`` to refresh the gitignore destroyed that work silently.
+
+    A customised schema is therefore **skipped rather than refused**: the caller
+    asked to regenerate the store's files and gets everything safe to
+    regenerate, with ``schema_preserved`` saying what was left alone. Raising
+    instead would abort before the gitignore was written, which is the one thing
+    they could still have had.
+    """
+    if not schema_path.exists():
+        return True, False
+    if not force:
+        return False, False
+    if force_schema:
+        return True, False
+    if schema_path.read_text(encoding="utf-8") == generated:
+        return True, False  # identical bytes: rewriting loses nothing
+    return False, True

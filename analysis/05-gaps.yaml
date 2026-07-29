@@ -1100,7 +1100,27 @@
   proposed_default: "Separate the flags, or refuse when the existing schema differs from the
                      generated one unless a second confirmation is given."
   question: null
-  status: open
+  status: resolved
+  resolution: >
+    FIXED 2026-07-29, taking the second option but *skipping* rather than refusing.
+    `--force` regenerates the `.gitignore` and a schema still byte-identical to what `init`
+    would write; a schema that has been customised is kept, reported as
+    `schema_preserved: true`, and named in a stderr warning that points at `--force-schema`.
+    Verified end to end: with a customised schema and a stale `.gitignore`, `init --force`
+    exits 0, refreshes the gitignore and leaves the custom type in place.
+    THE FIRST ATTEMPT RAISED, AND WAS WRONG. `_may_write_schema` threw a `SchemaError` whose
+    message said "the .gitignore is regenerated either way" — but the raise happened before
+    the gitignore write, so the message was false and the user was left with neither. That is
+    the worst outcome: refreshing the gitignore is the whole reason they ran the command, and
+    the only way to get it became `--force-schema`, which destroys the schema. Caught by
+    running the scenario from this gap's own impact statement instead of trusting the unit
+    tests, which passed.
+    The asymmetry is the point and is now stated in code: the `.gitignore` is a constant this
+    module generates, so losing it costs nothing; the schema holds every type, status and
+    cadence a person decided on and cannot be rebuilt from the documents. One flag for two
+    files of such different value was the defect.
+    SIXTH instance of the encoded-defect trap: the existing test was named
+    `test_force_overwrites_schema`, wrote a customised schema, and asserted it was clobbered.
 
 - id: GAP-028
   class: missing

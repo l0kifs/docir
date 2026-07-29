@@ -117,7 +117,17 @@ def init(
     ] = DEFAULT_INIT_ID_STYLE,
     force: Annotated[
         bool,
-        typer.Option("--force", help="Overwrite an existing docs-schema.yaml / .gitignore."),
+        typer.Option(
+            "--force",
+            help="Regenerate the .gitignore, and an unmodified docs-schema.yaml.",
+        ),
+    ] = False,
+    force_schema: Annotated[
+        bool,
+        typer.Option(
+            "--force-schema",
+            help="Also replace a docs-schema.yaml you have customised (cannot be undone).",
+        ),
     ] = False,
 ) -> None:
     """Create a project-local docir store (./.docir) that commands auto-discover.
@@ -130,12 +140,22 @@ def init(
     Ids default to the collision-resistant `random` style, because a repo store
     is shared: two branches using `sequential` can each mint adr-0007 and only
     find out at merge. Pass --id-style sequential for readable numbers.
+
+    --force regenerates the .gitignore and an untouched docs-schema.yaml. A
+    schema you have edited is kept and reported, not replaced: it is the one file
+    in the store that cannot be rebuilt from the documents, and re-running init
+    to refresh the .gitignore used to destroy it silently. Pass --force-schema to
+    replace that too.
     """
     home = directory.resolve() / PROJECT_STORE_DIRNAME
     settings = Settings.resolve(home=home, use_daemon=False)
     result = run_local(
         lambda: initialize_store(
-            settings, profiles=_split_csv(profiles), force=force, id_style=id_style
+            settings,
+            profiles=_split_csv(profiles),
+            force=force,
+            force_schema=force_schema,
+            id_style=id_style,
         )
     )
     _emit_init(result)
@@ -684,7 +704,15 @@ def _emit_init(result: InitResult) -> None:
         "id_style": result.id_style,
         "schema_written": result.schema_written,
         "gitignore_written": result.gitignore_written,
+        "schema_preserved": result.schema_preserved,
     }
+    if result.schema_preserved:
+        # Not an error, but --force did not do everything its name implies, and
+        # silence here would read as "the schema was regenerated".
+        rendering.render_warning(
+            "kept your customised docs-schema.yaml (it cannot be rebuilt from the "
+            "documents); pass --force-schema to replace it as well."
+        )
     state = get_state()
     if use_json(state):
         rendering.emit_json(data, trim=state.trim)

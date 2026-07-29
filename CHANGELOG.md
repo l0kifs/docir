@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`docir init --force` no longer destroys a customised `docs-schema.yaml`.** One flag
+  overwrote the schema and the `.gitignore` together, so re-running `init` to refresh the
+  gitignore silently replaced every type, status and cadence you had decided on — the one
+  file in the store that cannot be rebuilt from the documents. `--force` now regenerates the
+  `.gitignore` and a schema still identical to the generated one; a schema you have edited is
+  kept, reported as `schema_preserved` in the JSON, and named in a warning on stderr. Pass
+  `--force-schema` to replace it as well.
+
 ## [0.6.0] - 2026-07-28
 
 Three commands that reported success while doing the wrong thing, and one flag named after

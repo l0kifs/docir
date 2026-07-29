@@ -272,6 +272,14 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   self-shuts-down after an idle timeout. It is spawned as a detached `python -m docir daemon serve`,
   so `src/docir/__main__.py → entry_points.cli.app:main` and the hidden `daemon serve` command must
   keep working. `daemon serve` builds a container with `background_embeddings=True`.
+- **`init --force` treats the two files it writes as unequal.** The `.gitignore` is a constant
+  `composition.py` generates, so regenerating it costs nothing; `docs-schema.yaml` holds every
+  type, status and cadence a person decided on and **cannot be rebuilt from the documents**.
+  So `--force` rewrites the schema only while it is still byte-identical to the generated one;
+  a customised schema is *kept* (not refused), reported as `schema_preserved` and warned about
+  on stderr, and replacing it needs `--force-schema`. Skipping rather than raising is
+  deliberate: an exception aborts before the `.gitignore` is written, which is the thing the
+  user ran the command for.
 - **`docir init` scopes a repo to a project-local `.docir/` store (ADR-0009).** It is a bootstrap
   operation in the composition root (`initialize_store`), run in-process by a thin CLI command (no
   daemon/dispatcher). It writes `docs-schema.yaml` + a `.gitignore` for the derived index and runs

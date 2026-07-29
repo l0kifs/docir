@@ -545,8 +545,20 @@ def reindex(
     changed: Annotated[bool, typer.Option("--changed")] = False,
     embeddings: Annotated[bool, typer.Option("--embeddings")] = False,
 ) -> None:
-    """Rebuild the index from the canonical files."""
+    """Rebuild the index from the canonical files.
+
+    Source files that do not parse are skipped and counted as
+    `documents_skipped`: a rebuild that quietly dropped a document used to look
+    exactly like one that did not. `docir check` names each such file.
+    """
     data = execute("reindex", {"changed_only": changed, "embeddings": embeddings})
+    skipped = data.get("documents_skipped") if isinstance(data, dict) else None
+    if isinstance(skipped, int) and skipped:
+        # stderr, so a captured JSON payload on stdout stays parseable.
+        rendering.render_warning(
+            f"{skipped} file(s) could not be parsed and are NOT in the index; "
+            "run `docir check` to see which, then fix the frontmatter by hand."
+        )
     _emit_or_message(data, str(data))
 
 

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`docir reindex` reports files it could not parse.** The scan is best-effort — one bad
+  file must not abort the rebuild of the rest — but it reported only what succeeded, so a
+  partial rebuild was indistinguishable from a complete one. On a fresh clone, two files on
+  disk and one indexed looked like success while the unparseable document was absent from
+  every read path. The result now carries `documents_skipped`, and a non-zero count prints a
+  warning to stderr pointing at `docir check`.
 - **An invalid `docs-schema.yaml` now reports a clean error instead of a traceback.** Every
   command builds its executor, and building it loads the schema — but that happened outside
   the error mapping, so a bad schema escaped as an unhandled `SchemaError` with a raw Python

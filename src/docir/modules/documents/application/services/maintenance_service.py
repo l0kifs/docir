@@ -29,11 +29,20 @@ UnitOfWorkFactory = Callable[[], UnitOfWork]
 
 @dataclass(frozen=True, slots=True)
 class ReindexResult:
-    """Summary of a reindex run."""
+    """Summary of a reindex run.
+
+    ``documents_skipped`` counts source files that would not parse. ``scan`` is
+    best-effort by design — one bad file must not abort the rebuild of the rest —
+    but reporting only what succeeded made a partial rebuild indistinguishable
+    from a complete one. On a fresh clone (nothing in the index to remove) two
+    files on disk and one indexed produced output that read as success, and the
+    unparseable document was simply absent from every read path.
+    """
 
     documents_indexed: int
     documents_removed: int
     tags_indexed: int
+    documents_skipped: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,7 +90,12 @@ class MaintenanceService:
         self._linter = SimilarityLinter()
 
     def reindex(self, *, changed_only: bool = False) -> ReindexResult:
-        """Rebuild the index from the canonical files (``docs reindex``)."""
+        """Rebuild the index from the canonical files (``docs reindex``).
+
+        Files that do not parse are skipped (see :class:`ReindexResult`) and
+        counted, so "rebuilt 12 documents" cannot quietly mean "of 13 on disk".
+        ``docs check`` reports each one individually as a ``malformed`` finding.
+        """
         with self._uow_factory() as uow:
             tags_indexed = self._reindex_tags(uow)
             indexed, removed = self._reindex_documents(uow, changed_only=changed_only)
@@ -91,6 +105,7 @@ class MaintenanceService:
             documents_indexed=indexed,
             documents_removed=removed,
             tags_indexed=tags_indexed,
+            documents_skipped=len(self._file_store.find_malformed()),
         )
 
     def reindex_embeddings(self) -> int:

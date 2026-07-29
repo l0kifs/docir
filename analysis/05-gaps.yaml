@@ -926,7 +926,24 @@
   proposed_default: "Add `documents_skipped` to ReindexResult and print it; the data is
                      already available via `find_malformed()`."
   question: null
-  status: open
+  status: resolved
+  resolution: >
+    FIXED 2026-07-29, as proposed. `ReindexResult.documents_skipped` counts files that would
+    not parse (from the existing `find_malformed()`), it is in the JSON, and a non-zero count
+    also prints a stderr warning naming `docir check` as the next step. The agent guide now
+    tells agents to read the field.
+    THE FINDING UNDERSTATED ONE CASE AND OVERSTATED ANOTHER — both found by running it:
+    (a) with an index already present, a broken file did produce a signal, but a *misleading*
+    one: `documents_removed: 1`, which reads as "a file was deleted" rather than "a file on
+    disk is unreadable". Not silent, but pointing the wrong way.
+    (b) on a fresh clone the count is `documents_removed: 0, documents_indexed: 1` for two
+    files on disk — genuinely no signal, and this is the worse case because it is exactly
+    where the agent guide tells agents to run `reindex`.
+    Attribution verified by removing the count: two of the three new tests fail.
+    NOTE for GAP-016: this makes "reindex then check" a workflow that can be trusted for
+    *parse* failures. It does nothing for a hand-edit that parses but violates Tier 0 — an
+    unregistered tag or an undeclared status — which `check` still does not detect. The
+    hand-editing contract cannot promise verification until that is closed.
 
 - id: GAP-013
   class: unstated

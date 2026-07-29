@@ -100,6 +100,45 @@ def test_reindex_skips_malformed_file(dispatcher: Dispatcher, settings: Settings
     assert dispatcher.dispatch("get", {"doc_id": "adr-0001"})["title"] == "Good"
 
 
+class TestReindexReportsWhatItSkipped:
+    """A partial rebuild must not look like a complete one (guards GAP-022).
+
+    `scan` is best-effort by design — one unparseable file must not abort the
+    rebuild of the rest — but `reindex` reported only what succeeded. On a fresh
+    clone, where there is nothing in the index to remove, two files on disk and
+    one indexed produced output that read as success, and the dropped document
+    was absent from every read path. That is the exact scenario `reindex` exists
+    for: rebuilding after a hand-edit or a merge.
+    """
+
+    @staticmethod
+    def _corpus_with_one_bad_file(dispatcher: Dispatcher, settings: Settings) -> None:
+        dispatcher.dispatch("add", {"type": "decision", "title": "Good", "description": "d"})
+        (settings.docs_root / "decisions" / "adr-9999-bad.md").write_text(
+            _MALFORMED_FILE, encoding="utf-8"
+        )
+
+    def test_skipped_files_are_counted(self, dispatcher: Dispatcher, settings: Settings) -> None:
+        self._corpus_with_one_bad_file(dispatcher, settings)
+        result = dispatcher.dispatch("reindex", {})
+        assert result["documents_indexed"] == 1
+        assert result["documents_skipped"] == 1
+
+    def test_a_clean_corpus_reports_zero(self, dispatcher: Dispatcher) -> None:
+        dispatcher.dispatch("add", {"type": "decision", "title": "Good", "description": "d"})
+        assert dispatcher.dispatch("reindex", {})["documents_skipped"] == 0
+
+    def test_the_count_survives_a_rebuild_from_nothing(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        # The case with no signal at all before: nothing was in the index, so
+        # `documents_removed` stayed 0 and only the (lower) indexed count moved.
+        self._corpus_with_one_bad_file(dispatcher, settings)
+        result = dispatcher.dispatch("reindex", {})
+        assert result["documents_removed"] == 0
+        assert result["documents_skipped"] == 1
+
+
 def test_check_reports_malformed_file(dispatcher: Dispatcher, settings: Settings) -> None:
     # F2: the skipped file is surfaced as a Tier 1 finding, not silently ignored.
     dispatcher.dispatch("add", {"type": "decision", "title": "Good", "description": "d"})

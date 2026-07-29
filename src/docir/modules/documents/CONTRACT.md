@@ -24,7 +24,9 @@ files and the derived index never disagree.
 - `DocumentService.delete(id, force) -> tuple[str, ...]` — remove file and index rows;
   blocked while referenced unless `force`, which strips the edge from each referencing
   document in the same transaction and returns their ids (without advancing their `updated`)
-- `MaintenanceService.reindex(changed_only) -> ReindexResult` — rebuild index from files
+- `MaintenanceService.reindex(changed_only) -> ReindexResult` — rebuild index from files.
+  `ReindexResult.documents_skipped` counts source files that would not parse: the scan is
+  best-effort, so a partial rebuild must say so rather than look complete.
 - `MaintenanceService.check() -> [CheckIssue]` — Tier 1 structural findings (incl. staleness, unknown type)
 - `MaintenanceService.lint_deep() -> [LintFinding]` — Tier 2 advisory findings
 - `MaintenanceService.reindex_embeddings()/flush_embeddings() -> int`

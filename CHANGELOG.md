@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`docir init` honours `--home`.** It computed its store from the positional directory
+  alone, so `docir --home /srv/docs init` silently created `<cwd>/.docir` instead — the flag
+  whose purpose is choosing the store location was the one command that ignored it. `--home`
+  now names the store directly; passing it *and* a project directory is refused, since they
+  disagree about where the store goes.
+- **`docir init --force-schema` works without `--force`.** The more specific flag was a
+  silent no-op on its own.
+- **Read commands warn about an accidental global store too.** The warning was wired only to
+  writes; `query`/`search`/`context`/`get` now share it, so "am I reading the corpus I think
+  I am?" is answered on stderr rather than by a field repeated on every row.
 - **`docir tag rename X X --merge` no longer corrupts the tag registry.** A self-merge
   reported success, deleted the tag, and left every document still carrying it — the exact
   `unknown-tag` state `docir check` reports. Renaming a tag to itself is now rejected.

@@ -142,3 +142,47 @@ class TestDiscoveryThroughCli:
         # literal (this pinned "adr-0001" until init started defaulting to random).
         doc_id = json.loads(added.stdout)["id"]
         assert list((proj / ".docir" / "docs" / "decisions").glob(f"{doc_id}-*.md"))
+
+
+class TestInitHonoursHome:
+    """`docir init` used to ignore `--home` (guards GAP-047).
+
+    Every other command honours it; `init` computed its store from the
+    positional directory alone, so `docir --home /srv/docs init` silently
+    created `<cwd>/.docir` — the store landed in whatever directory the shell
+    happened to be in, and in a repository that meant an unrequested `.docir/`.
+    Found when a probe did exactly that to docir's own checkout.
+    """
+
+    def test_home_names_the_store_directly(self, tmp_path: Path, monkeypatch) -> None:
+        monkeypatch.delenv("DOCIR_HOME", raising=False)
+        store = tmp_path / "srv" / "docs"
+        assert run("--home", str(store), "init").exit_code == 0
+        assert (store / "docs-schema.yaml").exists()
+
+    def test_positional_directory_still_gets_a_dot_docir(self, tmp_path: Path) -> None:
+        project = tmp_path / "project"
+        assert run("init", str(project)).exit_code == 0
+        assert (project / ".docir" / "docs-schema.yaml").exists()
+
+    def test_both_is_refused_rather_than_silently_preferred(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        # They disagree about where the store goes; picking one quietly is how
+        # the original defect behaved.
+        monkeypatch.delenv("DOCIR_HOME", raising=False)
+        result = run("--home", str(tmp_path / "store"), "init", str(tmp_path / "project"))
+        assert result.exit_code == 2  # ValidationError, not a traceback
+        assert not (tmp_path / "store").exists()
+        assert not (tmp_path / "project").exists()
+
+
+def test_force_schema_stands_alone(tmp_path: Path, settings) -> None:
+    """Guards GAP-049: `--force-schema` without `--force` was a silent no-op."""
+    assert run("init", str(tmp_path)).exit_code == 0
+    schema = tmp_path / ".docir" / "docs-schema.yaml"
+    schema.write_text(schema.read_text(encoding="utf-8") + "\n# customised\n", encoding="utf-8")
+
+    assert run("init", str(tmp_path), "--force-schema").exit_code == 0
+
+    assert "# customised" not in schema.read_text(encoding="utf-8")

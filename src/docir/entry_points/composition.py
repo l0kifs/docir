@@ -287,10 +287,13 @@ def _schema_write_plan(
     """
     if not schema_path.exists():
         return True, False
+    if force_schema:
+        # Stands alone: it names the schema specifically, so requiring --force
+        # as well meant the more precise flag silently did nothing. Someone
+        # replacing the schema should not have to regenerate the gitignore too.
+        return True, False
     if not force:
         return False, False
-    if force_schema:
-        return True, False
     if schema_path.read_text(encoding="utf-8") == generated:
         return True, False  # identical bytes: rewriting loses nothing
     return False, True

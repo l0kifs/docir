@@ -1834,7 +1834,20 @@
     win), or reject the combination naming the positional argument as the way to choose a
     location. Silently discarding it is the only option that should not stand.
   question: null
-  status: open
+  status: resolved
+  resolution: >
+    FIXED 2026-07-29. `--home` now names the store directly, as it does for every other
+    command; the positional directory still means "the project whose .docir is the store";
+    and passing both is a ValidationError naming what each would do. Silently preferring one
+    was the defect, so the conflict is refused rather than resolved by precedence.
+    The error goes through `run_local`, because the first version raised outside it and
+    surfaced as a traceback — the same escape the schema loader had (fixed while writing the
+    hand-editing contract). Any new pre-dispatch validation has to be wrapped; that is now
+    twice.
+    ROOT CAUSE worth keeping: `init` is the only command that builds its own home instead of
+    consuming the resolved `Settings`. A review that traces `Settings.resolve` therefore
+    never sees it, which is how the original pass missed it. "Every command honours --home"
+    was a claim about a resolver, and the exception was the command that does not use it.
 
 - id: GAP-048
   class: incorrect
@@ -1898,7 +1911,11 @@
     Treat `--force-schema` as implying `--force` for the schema, or say why it did nothing.
     Introduced with the GAP-026 fix.
   question: null
-  status: open
+  status: resolved
+  resolution: >
+    FIXED 2026-07-29. `--force-schema` stands alone: it names the schema specifically, so
+    requiring `--force` as well meant the more precise flag silently did nothing, and someone
+    replacing a schema had to regenerate the gitignore to do it. `--force` is unchanged.
 
 - id: GAP-050
   class: unstated
@@ -1927,4 +1944,14 @@
     token cost: `store` is one absolute path per *response* on writes, but the list emitter
     would need it once per response rather than per row.
   question: null
-  status: open
+  status: resolved
+  resolution: >
+    FIXED 2026-07-29 — but not by adding the field, which was the wrong shape for the cost.
+    `store` is one absolute path, identical for every row, and a list response has nowhere to
+    put it once; per row it would dwarf the 4.7% that one small field added to a `context`
+    payload. The question a reader actually has is "am I reading the corpus I think I am?",
+    and the global-fallback warning already answers it for nothing on stdout — it just was
+    not wired to the read paths. It is now (`query`/`search`/`context`/`get`), and its wording
+    changed from "writing to" to "using", since it is no longer write-only.
+    Recorded because the finding asked for the field and the fix is deliberately not that:
+    on a token-budgeted read path, a stderr signal beats a payload field that repeats.

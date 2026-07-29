@@ -48,6 +48,7 @@ from docir.modules.documents.api import (
     describe_schema,
     load_schema,
 )
+from docir.platform.errors import ValidationError
 
 app = typer.Typer(
     help="Doc-Index CLI — git-backed markdown documents with a semantic index.",
@@ -97,7 +98,10 @@ def version() -> None:
 
 @app.command()
 def init(
-    directory: Annotated[Path, typer.Argument(help="Project directory to initialize.")] = Path("."),
+    directory: Annotated[
+        Path | None,
+        typer.Argument(help="Project directory to initialize (default: the current one)."),
+    ] = None,
     profiles: Annotated[
         str | None,
         typer.Option(
@@ -141,13 +145,18 @@ def init(
     is shared: two branches using `sequential` can each mint adr-0007 and only
     find out at merge. Pass --id-style sequential for readable numbers.
 
+    The store goes in DIRECTORY/.docir. The global --home names a store path
+    directly, so `docir --home /srv/docs init` puts it exactly there; passing
+    both is refused, since they disagree about where the store is.
+
     --force regenerates the .gitignore and an untouched docs-schema.yaml. A
     schema you have edited is kept and reported, not replaced: it is the one file
     in the store that cannot be rebuilt from the documents, and re-running init
     to refresh the .gitignore used to destroy it silently. Pass --force-schema to
     replace that too.
     """
-    home = directory.resolve() / PROJECT_STORE_DIRNAME
+    # via run_local so the conflict is a domain error, not a traceback.
+    home = run_local(lambda: _init_home(directory))
     settings = Settings.resolve(home=home, use_daemon=False)
     result = run_local(
         lambda: initialize_store(
@@ -355,6 +364,7 @@ def delete(
 @app.command()
 def get(doc_id: Annotated[str, typer.Argument()]) -> None:
     """Return one document in full."""
+    _warn_on_global_fallback()
     _emit_document(execute("get", {"doc_id": doc_id}))
 
 
@@ -398,6 +408,7 @@ def query(
         "stale": stale,
         "limit": limit,
     }
+    _warn_on_global_fallback()
     _emit_document_list(execute("query", payload))
 
 
@@ -417,6 +428,7 @@ def search(
         "limit": limit,
         "include_inactive": _include_inactive(include_inactive, include_resolved),
     }
+    _warn_on_global_fallback()
     _emit_document_list(execute("search", payload))
 
 
@@ -469,6 +481,7 @@ def context(
         "include_inactive": _include_inactive(include_inactive, include_resolved),
         "min_score": min_score,
     }
+    _warn_on_global_fallback()
     _emit_document_list(execute("context", payload))
 
 
@@ -696,6 +709,33 @@ def embed(
 # -- helpers ----------------------------------------------------------------
 
 
+def _init_home(directory: Path | None) -> Path:
+    """Where ``docir init`` should create the store.
+
+    ``init`` used to compute this from the positional directory alone and never
+    look at ``--home``, so `docir --home /srv/docs init` silently created
+    `<cwd>/.docir` instead — the one flag whose purpose is choosing the store
+    location was the one command that ignored it, and the store landed in
+    whatever directory the shell happened to be in.
+
+    ``--home`` names a store path *directly* (as it does for every other
+    command); the positional argument names the project whose ``.docir`` is the
+    store. They cannot both be honoured, so asking for both is an error rather
+    than a silent preference.
+    """
+    state = get_state()
+    explicit_home = state.settings.home_origin == "flag"
+    if explicit_home and directory is not None:
+        raise ValidationError(
+            "--home and a project directory both name where the store goes; pass one. "
+            f"--home {state.settings.home} would create the store there; "
+            f"`init {directory}` would create {directory / PROJECT_STORE_DIRNAME}."
+        )
+    if explicit_home:
+        return state.settings.home
+    return (directory or Path()).resolve() / PROJECT_STORE_DIRNAME
+
+
 def _include_inactive(include_inactive: bool, include_resolved: bool) -> bool:
     """Resolve the flag and its deprecated alias, warning on the old spelling.
 
@@ -749,7 +789,14 @@ def _emit_document(data: object) -> None:
 
 
 def _warn_on_global_fallback() -> None:
-    """Say so when a write is about to land in the global store from a repo.
+    """Say so when a command is about to use the global store from inside a repo.
+
+    Called on reads as well as writes. The read paths deliberately do *not* carry
+    the `store` field the write paths do: it is one absolute path, identical for
+    every row, and a list response has nowhere to put it once — per-row it would
+    cost far more than the 4.7% one small field added to `context`. A stderr
+    warning answers the same question ("am I reading the corpus I think I am?")
+    for nothing on stdout.
 
     The reported `path` is relative to the *store*, so in a repository that was
     never `docir init`-ed it reads as repo-local while the file goes to the
@@ -761,7 +808,7 @@ def _warn_on_global_fallback() -> None:
     if not settings.is_unintended_global_fallback():
         return
     rendering.render_warning(
-        f"writing to the global store {settings.home} — this directory is inside a "
+        f"using the global store {settings.home} — this directory is inside a "
         "git repository with no .docir/. Run `docir init` to scope docs to the repo, "
         "or set DOCIR_HOME to silence this."
     )

@@ -222,12 +222,26 @@ def add(
     ] = None,
     status: Annotated[str | None, typer.Option("--status")] = None,
     owner: Annotated[str | None, typer.Option("--owner", help="Steward for staleness.")] = None,
+    id: Annotated[
+        str | None,
+        typer.Option(
+            "--id",
+            help="Adopt an existing id (migrating a numbered corpus) instead of allocating.",
+        ),
+    ] = None,
     body: Annotated[str | None, typer.Option("--body")] = None,
     body_file: Annotated[Path | None, typer.Option("--body-file")] = None,
     stdin: Annotated[bool, typer.Option("--stdin")] = False,
     wait_embeddings: Annotated[bool, typer.Option("--wait-embeddings")] = False,
 ) -> None:
-    """Create a new document with valid frontmatter."""
+    """Create a new document with valid frontmatter.
+
+    Ids are allocated for you. `--id` adopts one instead, for the single case it
+    exists for: migrating a repository whose ADRs are already numbered, where
+    dropping `adr-0007` breaks every historical cross-reference. It is refused if
+    the id is taken or its prefix does not match the type, and the next
+    allocation still lands past it.
+    """
     payload: dict[str, object] = {
         "type": type,
         "title": title,
@@ -236,6 +250,7 @@ def add(
         "related": _split_csv(related),
         "status": status,
         "owner": owner,
+        "id": id,
         "body": resolve_body(body, body_file, stdin),
         "wait_embeddings": wait_embeddings,
     }

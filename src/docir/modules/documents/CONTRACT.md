@@ -6,7 +6,10 @@ links between documents. Every change to a document goes through here so its
 files and the derived index never disagree.
 
 ## Public operations
-- `DocumentService.add(AddDocumentRequest) -> DocumentView` — create a document
+- `DocumentService.add(AddDocumentRequest) -> DocumentView` — create a document.
+  `AddDocumentRequest.doc_id` adopts an existing id instead of allocating (migrating a
+  numbered corpus); refused if taken or if the prefix does not match the type, and it
+  raises the sequential counter past itself.
 - `DocumentService.update(UpdateDocumentRequest) -> DocumentView` — edit metadata and/or body.
   `allow_transition_override` permits an illegal *jump* between declared statuses (never an
   undeclared one); when it actually bypasses a rule, `DocumentView.forced_transition`

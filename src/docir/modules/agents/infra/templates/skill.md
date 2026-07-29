@@ -181,9 +181,17 @@ work in this order — the constraints below make any other order fail:
    docir add --type decision --title "..." --description "..." \
      --status accepted --stdin < old/adr-001.md
    ```
-   **Never invent ids** — docir assigns them. The old numbering (`ADR-007`) will
-   *not* carry over; if other documents cite it, keep a mapping as you go and fix
-   the references in step 4. Record the returned id for each source file.
+   **Never invent an id.** You may *preserve* one: if the source file already
+   carries a number other documents cite, pass it with `--id` so the historical
+   cross-references keep resolving.
+   ```
+   docir add --type decision --id adr-0007 --title "..." --description "..." \
+     --status accepted --stdin < old/adr-007.md
+   ```
+   `--id` is refused if the id is taken or its prefix does not match the type, and
+   the next allocation lands past it. It only helps a store using
+   `--id-style sequential`; a `random`-style store has no numbering to preserve,
+   so let docir assign. Either way, record the returned id for each source file.
 4. **Wire relationships in a second pass**, after every doc exists and has an id:
    `docir update <id> --set-related <other-id>:supersedes`. Links can't be set in
    step 3 because every `--related` target must already exist.

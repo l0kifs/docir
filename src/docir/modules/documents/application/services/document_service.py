@@ -21,12 +21,13 @@ from docir.modules.documents.application.dto import (
 )
 from docir.modules.documents.application.services.id_generator import IdGenerator
 from docir.modules.documents.domain.entities.document import Document
-from docir.modules.documents.domain.schema import Schema
+from docir.modules.documents.domain.schema import SEQUENTIAL_ID_STYLE, Schema
 from docir.modules.documents.domain.services.markdown_sections import (
     append_section,
     replace_section,
 )
 from docir.modules.documents.domain.services.validation import Tier0Validator
+from docir.modules.documents.domain.value_objects.identifiers import DocId
 from docir.modules.documents.domain.value_objects.queries import DocumentFilter
 from docir.modules.documents.domain.value_objects.relations import RelatedRef
 from docir.modules.indexing.api import EmbeddingScheduler, FusedScore, HybridScorer
@@ -35,6 +36,7 @@ from docir.platform.embedding import Embedder
 from docir.platform.errors import (
     DanglingReferenceError,
     DocumentNotFoundError,
+    DuplicateDocumentIdError,
     StaleWriteError,
     ValidationError,
 )
@@ -107,7 +109,7 @@ class DocumentService:
             id_to_type = {doc.id: doc.type for doc in uow.documents.all()}
             self._validator.validate_related([ref.target for ref in refs], id_to_type)
             self._validator.validate_relation_kinds(request.type, refs, id_to_type)
-            doc_id = IdGenerator(self._schema, uow.documents).next_id(request.type)
+            doc_id = self._allocate_id(request, uow)
             document = Document(
                 id=str(doc_id),
                 title=request.title,
@@ -403,6 +405,54 @@ class DocumentService:
             similarity=similarity,
             via_graph=via_graph,
         )
+
+    def _allocate_id(self, request: AddDocumentRequest, uow: UnitOfWork) -> DocId:
+        """Mint a fresh id, or adopt the one the caller supplied.
+
+        Adoption exists for one case: a repository migrating an existing
+        numbered corpus, where dropping `adr-0007` breaks every historical
+        cross-reference. It is deliberately *not* inference — the caller reads
+        the id off the file and states it, which is why this does not reopen the
+        reasoning that killed a bulk `import` (a guess reported as a success).
+
+        The invariant it appears to bypass is collision-freedom, and that
+        survives: the id is checked against the index here, against the files by
+        the create-time guard in the file store, and `reindex` raises the
+        counter above anything on disk, so the next allocation lands past it.
+        """
+        if request.doc_id is None:
+            return IdGenerator(self._schema, uow.documents).next_id(request.type)
+        adopted = DocId(request.doc_id)
+        expected = self._schema.get(request.type).prefix
+        if adopted.prefix != expected:
+            raise ValidationError(
+                f"id {request.doc_id!r} does not match type {request.type!r}: "
+                f"expected the {expected!r} prefix"
+            )
+        if uow.documents.exists(adopted.value):
+            raise DuplicateDocumentIdError(f"cannot adopt {adopted.value!r}: it is already in use")
+        self._raise_counter_past(adopted, request.type, uow)
+        return adopted
+
+    def _raise_counter_past(self, adopted: DocId, doc_type: str, uow: UnitOfWork) -> None:
+        """Push the sequential counter above an adopted id.
+
+        Without this, adopting `adr-0007` still left the counter at 1, so the
+        next `add` minted `adr-0001` — safe (the generator skips ids already
+        indexed) but not what "adopt an existing corpus" implies, and only
+        corrected on the next `reindex`. The same guards as
+        `_restore_id_sequences`: counter-backed types only, and never from a
+        random-looking token, since hex digits include the decimal ones and
+        about one token in 281 is all-digits.
+        """
+        type_schema = self._schema.get(doc_type)
+        if type_schema.id_style != SEQUENTIAL_ID_STYLE or adopted.looks_random:
+            return
+        try:
+            number = adopted.number
+        except ValidationError:
+            return
+        uow.documents.raise_next_number(type_schema.prefix, number + 1)
 
     def _forced_transition(self, request: UpdateDocumentRequest, base: Document) -> str | None:
         """Describe the rule ``--override`` is about to break, if it breaks one.

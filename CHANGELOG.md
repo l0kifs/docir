@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `related`, `type` through the CLI (each is a Tier 0 rule a hand-edit bypasses); `id` never;
   `verified` never, because it asserts a human re-read the document and nothing can check
   that. It states its own limits too.
+- **`docir add --id <id>` adopts an existing id**, so a repository migrating a numbered ADR
+  corpus keeps its numbering and its historical cross-references. This is not the bulk
+  `import` that was built and rejected: nothing is inferred, you still add one document at a
+  time after reading it, and the id is supplied rather than guessed. Refused if the id is
+  taken or its prefix does not match the type; the next allocation lands past it. Only
+  meaningful for a store using `--id-style sequential`.
 - **Writes report which store they landed in, and warn about an accidental global one.**
   In a repository nobody had run `docir init` in, `docir add` fell back to the global
   `~/.docir` and succeeded — and since `path` is relative to the *store*, the output read as

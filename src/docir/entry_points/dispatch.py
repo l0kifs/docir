@@ -83,6 +83,7 @@ class Dispatcher:
             body=_str(payload, "body", default=""),
             status=_opt_str(payload, "status"),
             owner=_opt_str(payload, "owner"),
+            doc_id=_opt_str(payload, "id"),
             wait_embeddings=_bool(payload, "wait_embeddings"),
         )
         return asdict(self._documents.add(request))

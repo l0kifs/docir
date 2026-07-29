@@ -166,6 +166,11 @@ class AddDocumentRequest:
     body: str = ""
     status: str | None = None
     owner: str | None = None
+    #: Adopt an existing id instead of allocating one — for a repo migrating a
+    #: numbered ADR corpus, where losing `adr-0007` breaks every historical
+    #: cross-reference. It is *supplied*, never inferred, and validated against
+    #: the type's prefix and both the index and the files before use.
+    doc_id: str | None = None
     wait_embeddings: bool = False
 
 

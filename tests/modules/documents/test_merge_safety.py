@@ -14,7 +14,7 @@ import pytest
 from docir.config.settings import Settings
 from docir.entry_points.composition import build_container
 from docir.entry_points.dispatch import Dispatcher
-from docir.platform.errors import DuplicateDocumentIdError
+from docir.platform.errors import DuplicateDocumentIdError, ValidationError
 
 RANDOM_SCHEMA = """\
 types:
@@ -210,3 +210,64 @@ def test_check_detects_dangling_reference(
     seeded.dispatch("reindex", {})
     issues = seeded.dispatch("check", {})
     assert any(i["kind"] == "dangling" for i in issues)
+
+
+class TestAdoptingAnExistingId:
+    """`add --id` preserves a numbered corpus (guards GAP-036).
+
+    A repository adopting docir with ADR-007..ADR-042 lost every number, and so
+    every historical cross-reference; the documented workaround was to keep a
+    mapping by hand and rewrite the references afterwards.
+
+    This is deliberately *not* the bulk `import` that was built and rejected.
+    That command inferred type, title and status and reported success over input
+    it had mangled. An adopted id is not inferred — the caller reads it off the
+    file and states it, one document at a time, after reviewing the file.
+    """
+
+    def test_the_supplied_id_is_used(self, dispatcher: Dispatcher) -> None:
+        view = dispatcher.dispatch(
+            "add",
+            {"type": "decision", "title": "Use Postgres", "description": "d", "id": "adr-0007"},
+        )
+        assert view["id"] == "adr-0007"
+
+    def test_the_next_allocation_lands_past_it(self, dispatcher: Dispatcher) -> None:
+        # Without raising the counter this minted adr-0001 — safe, since the
+        # generator skips indexed ids, but not what adopting a corpus implies,
+        # and only corrected by the next reindex.
+        dispatcher.dispatch(
+            "add", {"type": "decision", "title": "Seven", "description": "d", "id": "adr-0007"}
+        )
+        following = dispatcher.dispatch(
+            "add", {"type": "decision", "title": "Next", "description": "d"}
+        )
+        assert following["id"] == "adr-0008"
+
+    def test_an_id_already_in_use_is_refused(self, dispatcher: Dispatcher) -> None:
+        dispatcher.dispatch(
+            "add", {"type": "decision", "title": "First", "description": "d", "id": "adr-0007"}
+        )
+        with pytest.raises(DuplicateDocumentIdError):
+            dispatcher.dispatch(
+                "add",
+                {"type": "decision", "title": "Clash", "description": "d", "id": "adr-0007"},
+            )
+
+    def test_a_prefix_that_does_not_match_the_type_is_refused(self, dispatcher: Dispatcher) -> None:
+        # The prefix encodes the type; letting them disagree would break that.
+        with pytest.raises(ValidationError):
+            dispatcher.dispatch(
+                "add",
+                {"type": "decision", "title": "Wrong", "description": "d", "id": "issue-0001"},
+            )
+
+    def test_a_malformed_id_is_refused(self, dispatcher: Dispatcher) -> None:
+        with pytest.raises(ValidationError):
+            dispatcher.dispatch(
+                "add", {"type": "decision", "title": "Bad", "description": "d", "id": "ADR 7"}
+            )
+
+    def test_allocation_is_unchanged_without_the_flag(self, dispatcher: Dispatcher) -> None:
+        view = dispatcher.dispatch("add", {"type": "decision", "title": "A", "description": "d"})
+        assert view["id"] == "adr-0001"

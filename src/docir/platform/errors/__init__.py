@@ -30,6 +30,17 @@ class SchemaError(DocirError):
     exit_code = 3
 
 
+class TagRegistryError(DocirError):
+    """``docs/tags.yaml`` will not parse.
+
+    Separate from :class:`SchemaError` only because it names a different file;
+    both are store-level files a human edits by hand, where a syntax slip used
+    to escape as a raw ``yaml.ParserError`` traceback.
+    """
+
+    exit_code = 3
+
+
 class MissingRequiredFieldError(ValidationError):
     """A required frontmatter field for the document's type is absent."""
 

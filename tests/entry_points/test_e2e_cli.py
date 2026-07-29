@@ -361,6 +361,19 @@ class TestBrokenSchemaIsReportedNotRaised:
         self._break_schema(settings)
         assert run("schema", "validate").exit_code == 3
 
+    def test_yaml_syntax_errors_are_domain_errors_too(self, settings: Settings) -> None:
+        # A bad indent raises yaml.ParserError, which is NOT a DocirError, so it
+        # slipped past the mapping that catches every semantic schema error —
+        # on the one file the docs tell you to edit by hand.
+        settings.schema_path.parent.mkdir(parents=True, exist_ok=True)
+        settings.schema_path.write_text("profiles: [software]\n  bad indent\n", encoding="utf-8")
+        assert run("query").exit_code == 3
+
+    def test_a_malformed_tag_registry_is_a_domain_error(self, settings: Settings) -> None:
+        settings.tags_path.parent.mkdir(parents=True, exist_ok=True)
+        settings.tags_path.write_text("auth: Auth.\n- not a mapping\n", encoding="utf-8")
+        assert run("reindex").exit_code == 3
+
 
 class TestOutputModes:
     """Token-aware output: JSON when captured (non-TTY), tables under --pretty."""

@@ -11,6 +11,7 @@ from pathlib import Path
 import yaml
 
 from docir.modules.tags.domain.entities.tag import Tag
+from docir.platform.errors import TagRegistryError
 from docir.platform.filesystem.ports import TagFileStore
 
 
@@ -21,9 +22,18 @@ class YamlTagFileStore(TagFileStore):
         self._path = tags_path
 
     def load(self) -> list[Tag]:
+        """Parse the registry, reporting a syntax slip as a domain error.
+
+        This file is hand-editable, so a bad indent is a routine mistake rather
+        than a bug — but the YAML parser's exception is not a ``DocirError``, so
+        it escaped the CLI's error mapping as a raw traceback.
+        """
         if not self._path.exists():
             return []
-        raw = yaml.safe_load(self._path.read_text(encoding="utf-8")) or {}
+        try:
+            raw = yaml.safe_load(self._path.read_text(encoding="utf-8")) or {}
+        except yaml.YAMLError as exc:
+            raise TagRegistryError(f"{self._path} is not valid YAML: {exc}") from exc
         if not isinstance(raw, dict):
             return []
         return [Tag(key=str(key), description=str(description)) for key, description in raw.items()]

@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A "what you may edit by hand" contract**, in the README and the packaged agent guide.
+  The rule "never edit markdown directly" was stated for agents and never for humans, while
+  the whole design invites hand-editing — git-backed files, and a `reindex` that exists for
+  exactly that. The contract is per-field: body and the two YAML files yes; `tags`, `status`,
+  `related`, `type` through the CLI (each is a Tier 0 rule a hand-edit bypasses); `id` never;
+  `verified` never, because it asserts a human re-read the document and nothing can check
+  that. It states its own limits too.
 - **`docir check` catches the two Tier 0 rules a hand-edit can bypass.** A tag not in the
   registry and a status the type does not declare both parsed cleanly and passed the checks
   silently — a document stayed queryable by a tag `docir tag list` had never heard of, and a
@@ -25,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   disk and one indexed looked like success while the unparseable document was absent from
   every read path. The result now carries `documents_skipped`, and a non-zero count prints a
   warning to stderr pointing at `docir check`.
+- **A YAML syntax error in `docs-schema.yaml` or `docs/tags.yaml` reports a clean error.**
+  A bad indent raised `yaml.ParserError`, which is not a `DocirError`, so it escaped the
+  mapping that handles every *semantic* schema error and surfaced as a raw traceback — on
+  the two files the docs tell you to edit by hand. Now `SchemaError` / `TagRegistryError`,
+  exit 3.
 - **An invalid `docs-schema.yaml` now reports a clean error instead of a traceback.** Every
   command builds its executor, and building it loads the schema — but that happened outside
   the error mapping, so a bad schema escaped as an unhandled `SchemaError` with a raw Python

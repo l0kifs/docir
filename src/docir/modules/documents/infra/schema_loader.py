@@ -36,9 +36,18 @@ def ensure_schema_file(path: Path) -> None:
 
 
 def load_schema(path: Path) -> Schema:
-    """Load and validate a schema file into a :class:`Schema` domain object."""
+    """Load and validate a schema file into a :class:`Schema` domain object.
+
+    A YAML *syntax* error is reported as a :class:`SchemaError` like every
+    semantic one. The parser's own exception is not a ``DocirError``, so it
+    escaped the CLI's error mapping as a raw traceback — on the one file the
+    docs tell you to edit by hand.
+    """
     ensure_schema_file(path)
-    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as exc:
+        raise SchemaError(f"{path} is not valid YAML: {exc}") from exc
     return parse_schema(raw)
 
 

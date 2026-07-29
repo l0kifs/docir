@@ -136,6 +136,8 @@ forces the table, `--no-trim` keeps every field.*
   `.gitignore`d, rebuildable. Nothing lives only in the database.
 - **One write path.** Agents never edit markdown directly; every write goes through the
   CLI, which guarantees frontmatter/schema consistency and collision-free id allocation.
+  You are not an agent: the files are yours, and the rule for humans is narrower — see
+  [what you may edit by hand](#what-you-may-edit-by-hand).
 - **Reads return skeletons.** `query` / `search` / `context` return frontmatter + typed
   edges + staleness — *no body*. Fetch bodies by id with `get`. An agent scans wide cheaply,
   then reads deep only where it matters.
@@ -145,6 +147,25 @@ forces the table, `--no-trim` keeps every field.*
   cleared a document at a time with `docir update <id> --verified`.
 - **Relations are typed.** A `related` edge carries a *kind* (`supersedes`, `depends_on`,
   `implements`, …) — a real graph, not a bag of links.
+
+### What you may edit by hand
+
+The files are git-backed markdown and `docir reindex` exists precisely to pick up an
+outside change — so hand-editing is supported, but not on every field:
+
+| | by hand | instead |
+|---|---|---|
+| document **body** | ✅ | — |
+| `docs-schema.yaml`, `docs/tags.yaml` | ✅ | no CLI write path for the schema |
+| `tags`, `status`, `related`, `type` | ❌ | `docir update --set-tags / --status / --set-related` |
+| `id` | ❌ never | it is the primary key; changing it orphans every inbound link |
+| `verified` | ❌ never | `docir update <id> --verified` — it asserts a human re-read the doc |
+
+**Then run `docir reindex && docir check`.** Reindex reports `documents_skipped` for files
+whose frontmatter will not parse — those are absent from every read path, not merely
+flagged — and `check` catches unregistered tags, undeclared statuses, unknown types,
+dangling links and duplicate ids. A hand-written `verified` date is the one thing nothing
+can verify, which is exactly why it should not be written by hand.
 
 ## Commands
 

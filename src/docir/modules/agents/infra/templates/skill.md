@@ -27,7 +27,8 @@ Use docir whenever this repo manages design docs with it (a `docir` command, a
 - When **searching** project knowledge.
 
 docir is the ONLY sanctioned way to read/write these docs — **never edit the
-markdown files by hand.**
+markdown files by hand.** (A human may; see *What a human may edit by hand*
+below, and re-run `docir reindex && docir check` after they do.)
 
 ## Set up in a project
 
@@ -314,6 +315,35 @@ kinds — re-list every kind you still want, including `relates_to`.
       relates_to: []                  # [] = any target type
       depends_on: [runbook, decision] # only these target types
 ```
+
+## What a human may edit by hand
+
+You must not — every write goes through the CLI. A human working in the repo
+will, though, and the rules differ per field. If you are asked to reconcile a
+hand-edited corpus, this is the contract:
+
+| file / field | by hand? | why |
+|---|---|---|
+| a document's **body** (below the `---`) | ✅ yes | Prose. `reindex` picks it up; nothing else depends on it. |
+| `docs-schema.yaml` | ✅ yes | No CLI write path exists — this is the intended way. |
+| `docs/tags.yaml` | ✅ yes | A `key: description` mapping; `reindex` loads it. `docir tag add` is easier. |
+| `title` / `description` | ⚠️ prefer CLI | Works, but they drive retrieval — `--set-description` also re-embeds. |
+| `tags` | ❌ use `docir update --set-tags` | An unregistered tag is a Tier 0 error the CLI would catch; by hand it silently isn't (`check` reports `unknown-tag`). |
+| `status` | ❌ use `docir update --status` | Bypasses the transition rules; a status the type doesn't declare leaves the doc with no legal exit (`check` reports `unknown-status`). |
+| `related` | ❌ use `docir update --set-related` | Targets must exist and kinds must be registered; by hand you get `dangling` instead. |
+| `type` | ❌ | Must be in the schema, and the id prefix already encodes it (`check` reports `unknown-type`). |
+| `id` | ❌ **never** | It is the primary key. Changing it orphans every inbound link and can duplicate a live id. |
+| `created` / `updated` | ❌ | `updated` is the staleness clock's fallback. |
+| `verified` | ❌ **never** | It means "a human re-read this and it is still true". Nothing can check that, so writing it by hand is simply a false statement. Use `docir update <id> --verified`. |
+
+**After any hand-edit: `docir reindex` then `docir check`.** Reindex reports
+`documents_skipped` for files whose frontmatter will not parse — those are
+*absent from every read path*, not merely flagged. `check` then catches
+`unknown-tag`, `unknown-status`, `unknown-type`, `dangling` and `duplicate-id`.
+
+It cannot catch everything: a plausible-but-wrong `verified` date, or edited
+`created`/`updated`, are indistinguishable from real ones. Those are the fields
+to leave alone.
 
 ## Checks & maintenance (non-blocking)
 

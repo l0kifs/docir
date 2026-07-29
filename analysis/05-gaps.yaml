@@ -1000,8 +1000,31 @@
   proposed_default: "Document a short 'what you may edit by hand' contract and require
                      `docir reindex` after; make `check` the verification step."
   question: null
-  status: open
-  progress: >
+  status: resolved
+  resolution: >
+    FIXED 2026-07-29, as proposed, after two prerequisites the proposal assumed were already
+    in place. The contract is now a per-field table in the packaged agent guide ("What a
+    human may edit by hand") and in the README, ending in the required workflow:
+    `docir reindex && docir check`.
+    What it says: body / `docs-schema.yaml` / `docs/tags.yaml` are hand-editable; `tags`,
+    `status`, `related` and `type` should go through the CLI because each is a Tier 0 rule a
+    hand-edit bypasses; `id` never, because it is the primary key; `verified` never, because
+    it asserts a human re-read the document and nothing can check that — writing it by hand
+    is simply a false statement. It also states its own limits: a plausible-but-wrong
+    `verified` or `created`/`updated` is indistinguishable from a real one.
+    THE PROPOSAL SAID "make `check` the verification step" AND `check` COULD NOT BE ONE.
+    Measured first: an unregistered tag and an undeclared status both passed silently, so
+    two of the four fields the contract steers away from had no detection at all. GAP-022
+    (reindex reports skipped files) and the new `unknown-tag`/`unknown-status` findings had
+    to land before the contract could promise anything. Writing it first would have
+    documented a guarantee the tool did not provide.
+    FOUND WHILE WRITING IT: both files the contract declares hand-editable crashed with a raw
+    `yaml.ParserError` traceback on a syntax slip. The parser's exception is not a
+    `DocirError`, so it escaped the mapping that catches every *semantic* schema error —
+    including the one added for GAP-010 days earlier. Now `SchemaError` / `TagRegistryError`,
+    exit 3, on the two files a human is told to edit. Documenting them as editable while a
+    bad indent produced a stack trace would have been the worst kind of contract.
+  superseded_progress: >
     2026-07-29 — the *prerequisite* is done; the contract itself is still unwritten.
     Measuring what `check` actually caught after a hand-edit showed the proposed default
     could not be honoured: `malformed`, `duplicate-id`, `dangling` and `unknown-type` were

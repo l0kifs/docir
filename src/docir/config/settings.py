@@ -48,6 +48,40 @@ def discover_project_home(start: Path | None = None) -> Path | None:
     return None
 
 
+def new_store_home(directory: Path | None, explicit_home: Path | None) -> Path:
+    """Where ``docir init`` should create a store — the counterpart to :meth:`Settings.resolve`.
+
+    Kept in this module deliberately. ``init`` used to compute its home in the
+    CLI layer and so drifted out of sync with every other command, silently
+    ignoring ``--home`` and creating the store in whatever directory the shell
+    happened to be in (GAP-047). A review that traced ``resolve`` never saw it,
+    because it did not use it. Both home decisions now sit here and are read
+    together.
+
+    ``init`` *creates* where ``resolve`` *discovers*, so this deliberately does
+    not walk up for an existing ``.docir``: reusing a parent store is the wrong
+    answer when the caller has asked for a new one.
+
+    ``explicit_home`` (the ``--home`` flag) names a store path directly; the
+    positional ``directory`` names the project whose ``.docir`` is the store.
+    They disagree, so asking for both raises rather than resolving by
+    precedence — silently preferring one was the original defect.
+
+    Raises :class:`ValueError`: this module is a dependency leaf and cannot
+    import the error taxonomy, so the caller translates it into a domain error.
+    """
+    if explicit_home is not None and directory is not None:
+        intended = Path(directory).resolve() / PROJECT_STORE_DIRNAME
+        raise ValueError(
+            "--home and a project directory both name where the store goes; pass one. "
+            f"--home would create it at {Path(explicit_home).expanduser().resolve()}; "
+            f"the directory argument would create it at {intended}."
+        )
+    if explicit_home is not None:
+        return Path(explicit_home).expanduser().resolve()
+    return (directory or Path()).resolve() / PROJECT_STORE_DIRNAME
+
+
 #: The marker `enclosing_repository` walks up for. Deliberately the same walk as
 #: :func:`discover_project_home`, one directory name over.
 _GIT_DIRNAME = ".git"
@@ -115,6 +149,10 @@ class Settings(BaseSettings):
         ``.docir`` discovered by walking up from the CWD → the global
         ``~/.docir`` default. The discovery step is what lets ``docir init``
         scope a repo's docs to the repo without exporting ``DOCIR_HOME``.
+
+        This resolves a store that already exists. ``docir init``, which creates
+        one, uses :func:`new_store_home` — the two rules live side by side here
+        so neither can drift out of sync with the other again.
         """
         if use_daemon is None:
             use_daemon = os.environ.get(NO_DAEMON_ENV, "") == ""

@@ -15,7 +15,7 @@ import typer
 from typer.main import get_command
 
 from docir import __version__
-from docir.config.settings import PROJECT_STORE_DIRNAME, Settings
+from docir.config.settings import Settings, new_store_home
 from docir.entry_points.cli import rendering
 from docir.entry_points.cli.body_input import resolve_body
 from docir.entry_points.cli.runner import (
@@ -710,30 +710,18 @@ def embed(
 
 
 def _init_home(directory: Path | None) -> Path:
-    """Where ``docir init`` should create the store.
+    """Resolve `init`'s store location, translating the rule's error.
 
-    ``init`` used to compute this from the positional directory alone and never
-    look at ``--home``, so `docir --home /srv/docs init` silently created
-    `<cwd>/.docir` instead — the one flag whose purpose is choosing the store
-    location was the one command that ignored it, and the store landed in
-    whatever directory the shell happened to be in.
-
-    ``--home`` names a store path *directly* (as it does for every other
-    command); the positional argument names the project whose ``.docir`` is the
-    store. They cannot both be honoured, so asking for both is an error rather
-    than a silent preference.
+    The rule itself lives in `config.settings.new_store_home`, beside
+    `Settings.resolve`; this only supplies the flag and maps `ValueError` onto
+    the error taxonomy, which `config` cannot depend on.
     """
     state = get_state()
-    explicit_home = state.settings.home_origin == "flag"
-    if explicit_home and directory is not None:
-        raise ValidationError(
-            "--home and a project directory both name where the store goes; pass one. "
-            f"--home {state.settings.home} would create the store there; "
-            f"`init {directory}` would create {directory / PROJECT_STORE_DIRNAME}."
-        )
-    if explicit_home:
-        return state.settings.home
-    return (directory or Path()).resolve() / PROJECT_STORE_DIRNAME
+    explicit = state.settings.home if state.settings.home_origin == "flag" else None
+    try:
+        return new_store_home(directory, explicit)
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from exc
 
 
 def _include_inactive(include_inactive: bool, include_resolved: bool) -> bool:

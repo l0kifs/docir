@@ -280,6 +280,12 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   on stderr, and replacing it needs `--force-schema`. Skipping rather than raising is
   deliberate: an exception aborts before the `.gitignore` is written, which is the thing the
   user ran the command for.
+- **Both home decisions live in `config/settings.py`.** `Settings.resolve` finds an *existing*
+  store (flag → env → discovered `.docir` → global); `new_store_home` picks where `init`
+  *creates* one (`--home` names the store directly, a positional directory means
+  `<dir>/.docir`, both is an error). They sit side by side and cross-reference each other
+  because `init` used to compute its own home in the CLI layer, silently ignored `--home`,
+  and so escaped every review that traced `resolve`. Do not move either out.
 - **`docir init` scopes a repo to a project-local `.docir/` store (ADR-0009).** It is a bootstrap
   operation in the composition root (`initialize_store`), run in-process by a thin CLI command (no
   daemon/dispatcher). It writes `docs-schema.yaml` + a `.gitignore` for the derived index and runs

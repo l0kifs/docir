@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from docir.config.settings import Settings, discover_project_home
+import pytest
+
+from docir.config.settings import (
+    Settings,
+    discover_project_home,
+    new_store_home,
+)
 
 
 class TestDiscoverProjectHome:
@@ -107,3 +113,37 @@ class TestGlobalFallbackIsDistinguishable:
         monkeypatch.setenv("DOCIR_HOME", str(tmp_path / "chosen"))
         monkeypatch.chdir(tmp_path)
         assert Settings.resolve().is_unintended_global_fallback() is False
+
+
+class TestNewStoreHome:
+    """The `docir init` home rule lives beside `resolve` (guards GAP-047).
+
+    `init` computed its home in the CLI layer and never consulted `--home`, so
+    the store landed in whatever directory the shell was in. The two home
+    decisions in this codebase now sit in one module: a review that reads one
+    reads the other.
+    """
+
+    def test_explicit_home_names_the_store_directly(self, tmp_path: Path) -> None:
+        store = tmp_path / "srv" / "docs"
+        assert new_store_home(None, store) == store.resolve()
+
+    def test_directory_gets_a_dot_docir(self, tmp_path: Path) -> None:
+        assert new_store_home(tmp_path / "proj", None) == (tmp_path / "proj").resolve() / ".docir"
+
+    def test_neither_uses_the_cwd(self, tmp_path: Path, monkeypatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        assert new_store_home(None, None) == tmp_path.resolve() / ".docir"
+
+    def test_both_conflict(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="pass one"):
+            new_store_home(tmp_path / "proj", tmp_path / "store")
+
+    def test_it_does_not_discover_a_parent_store(self, tmp_path: Path, monkeypatch) -> None:
+        # `resolve` walks up for an existing `.docir`; creating one must not,
+        # or `init` in a subdirectory would silently adopt the parent's store.
+        (tmp_path / ".docir").mkdir()
+        sub = tmp_path / "sub"
+        sub.mkdir()
+        monkeypatch.chdir(sub)
+        assert new_store_home(None, None) == sub.resolve() / ".docir"

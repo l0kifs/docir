@@ -1844,10 +1844,19 @@
     surfaced as a traceback — the same escape the schema loader had (fixed while writing the
     hand-editing contract). Any new pre-dispatch validation has to be wrapped; that is now
     twice.
-    ROOT CAUSE worth keeping: `init` is the only command that builds its own home instead of
-    consuming the resolved `Settings`. A review that traces `Settings.resolve` therefore
-    never sees it, which is how the original pass missed it. "Every command honours --home"
-    was a claim about a resolver, and the exception was the command that does not use it.
+    ROOT CAUSE, and addressed rather than just noted: `init` was the only command that built
+    its own home instead of consuming the resolved `Settings`, so a review tracing
+    `Settings.resolve` never saw it — which is how the original pass missed it. "Every
+    command honours --home" was a claim about a resolver, and the exception was the one
+    command that does not use it.
+    The rule now lives in `config/settings.py` as `new_store_home`, directly beside
+    `resolve`, with each docstring naming the other: the two home decisions in this codebase
+    are read together or not at all. The CLI keeps only the flag plumbing and the
+    `ValueError -> ValidationError` translation, because `config` is a dependency leaf
+    (`depends_on = []`) and cannot import the error taxonomy.
+    `new_store_home` deliberately does *not* walk up for an existing `.docir` the way
+    `resolve` does — reusing a parent store is the wrong answer when the caller is asking to
+    create one. Pinned by its own unit test.
 
 - id: GAP-048
   class: incorrect

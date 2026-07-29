@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-07-29
+
+All fixes, three of them found by a delta analysis pass over the surface 0.7.0 itself added —
+two were introduced by 0.7.0's own features.
+
+### Upgrade note
+
+**`docir init` now honours `--home`.** It previously ignored the flag and created the store
+under the current directory. If a script passed `--home` to `init`, the store moves to where
+the flag says. Passing `--home` *and* a project directory is now an error rather than a
+silent preference, since they disagree about where the store goes.
+
 ### Fixed
 
 - **`docir init` honours `--home`.** It computed its store from the positional directory
@@ -473,7 +485,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/l0kifs/docir/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/l0kifs/docir/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/l0kifs/docir/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/l0kifs/docir/compare/v0.4.0...v0.5.0

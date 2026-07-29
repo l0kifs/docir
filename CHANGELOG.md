@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `search` and `query` are unchanged, since their results have no similarity and trimming
   drops it. Retrieval quality is unchanged — recall, precision and MRR are identical to the
   0.4.0 baseline.
+- **`docir search` fills its `--limit` instead of under-returning.** Closed documents are
+  filtered after the index returns (FTS5 does not know a status), and a fixed `limit * 2`
+  over-fetch meant a corpus where most top hits are closed came back short — indistinguishable
+  from a genuinely small corpus. The candidate pool now widens until the limit is met or the
+  index is exhausted.
 - **`related` frontmatter accepts `target` as well as `to`.** The file format writes
   `{to, kind}` while JSON output emits `{target, kind}`, so anyone reading a result and then
   hand-writing frontmatter reached for the key they had just seen and got "missing a 'to'

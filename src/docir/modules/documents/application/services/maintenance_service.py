@@ -359,10 +359,13 @@ class MaintenanceService:
         # *writes* — save, FTS index, embedding recompute. The sweep adds one
         # query and a set difference.
         removed = 0
-        for stale in uow.documents.all():
-            if stale.id not in seen:
-                uow.documents.delete(stale.id)
-                uow.search.remove(stale.id)
-                uow.embeddings.remove(stale.id)
+        for orphaned in uow.documents.all():
+            # Named `orphaned`, not `stale`: in this codebase `stale` is the
+            # review-cadence feature. An index row whose file is gone is a
+            # different thing entirely (GAP-032).
+            if orphaned.id not in seen:
+                uow.documents.delete(orphaned.id)
+                uow.search.remove(orphaned.id)
+                uow.embeddings.remove(orphaned.id)
                 removed += 1
         return indexed, removed

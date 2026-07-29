@@ -48,6 +48,12 @@ UnitOfWorkFactory = Callable[[], UnitOfWork]
 # How many FTS candidates to pull before hybrid fusion in ``docs context``.
 _CONTEXT_CANDIDATES = 25
 
+#: How many extra FTS candidates to request per result wanted, before filtering
+#: out closed documents. Two is a starting point, not a bound: the pool doubles
+#: until the limit is met or the index runs out, so a corpus where most top hits
+#: are closed still fills the response.
+_SEARCH_OVERFETCH = 2
+
 #: Relation kinds whose *incoming* direction answers "is this still current?".
 #: Followed backwards during ``context`` expansion so a document reached by the
 #: ranker carries its own replacement with it. Kept deliberately separate from
@@ -297,22 +303,36 @@ class DocumentService:
         return [self._summary(doc) for doc in documents[: request.limit]]
 
     def search(self, request: SearchRequest) -> list[DocumentSummary]:
-        """Full-text search over active documents (``docs search``) — skeletons."""
+        """Full-text search over active documents (``docs search``) — skeletons.
+
+        Closed documents are filtered *after* the index returns, because FTS5
+        does not know a document's status. A fixed over-fetch of ``limit * 2``
+        therefore under-returned whenever more than half the top hits were
+        closed — and an agent cannot tell a short result caused by filtering
+        from one caused by a small corpus. The pool now widens until the limit
+        is met or the index is exhausted, so short means short.
+        """
         _require_positive_limit(request.limit)
         inactive = self._schema.inactive_statuses()
         with self._uow_factory() as uow:
-            hits = uow.search.search(request.text, limit=request.limit * 2)
-            views: list[DocumentSummary] = []
-            for hit in hits:
-                document = uow.documents.get(hit.doc_id)
-                if document is None:
-                    continue
-                if not request.include_inactive and document.status in inactive:
-                    continue
-                views.append(self._summary(document, score=-hit.bm25))
-                if len(views) >= request.limit:
-                    break
-        return views
+            candidates = request.limit * _SEARCH_OVERFETCH
+            while True:
+                hits = uow.search.search(request.text, limit=candidates)
+                views: list[DocumentSummary] = []
+                for hit in hits:
+                    document = uow.documents.get(hit.doc_id)
+                    if document is None:
+                        continue
+                    if not request.include_inactive and document.status in inactive:
+                        continue
+                    views.append(self._summary(document, score=-hit.bm25))
+                    if len(views) >= request.limit:
+                        break
+                # Enough, or the index had fewer matches than we asked for and
+                # widening again would return the same rows.
+                if len(views) >= request.limit or len(hits) < candidates:
+                    return views
+                candidates *= 2
 
     def context(self, request: ContextRequest) -> list[DocumentSummary]:
         """Ranked, minimal relevant document set (``docs context``) — skeletons.

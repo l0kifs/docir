@@ -1582,7 +1582,20 @@
   frequency: "corpora with a high proportion of closed documents"
   proposed_default: "Filter in SQL, or loop until the limit is met or candidates are exhausted."
   question: null
-  status: open
+  status: resolved
+  resolution: >
+    FIXED 2026-07-29 with the second option: the candidate pool doubles until the limit is met
+    or the index is exhausted, so a short result means the corpus is short. Filtering in SQL
+    was the alternative and was not taken — FTS5 does not know a document's status, so it
+    would mean teaching the search adapter about `documents`, for a case a retry loop covers
+    at no structural cost. The unexplained `2` is now `_SEARCH_OVERFETCH`, documented as a
+    starting point rather than a bound.
+    THE FIRST TEST DID NOT DISCRIMINATE, and only injecting the old behaviour revealed it:
+    resolving a document re-indexes it, which moves its FTS row to the *back*, so
+    equally-weighted closed documents drift behind the open ones and a fixed pool finds the
+    open ones anyway. The fixture now gives the closed documents repeated query terms so BM25
+    ranks them first — the shape the finding actually describes. Recorded because the same
+    trap will catch the next person writing a search test.
 
 - id: GAP-025
   class: unstated
@@ -1695,7 +1708,12 @@
   frequency: n/a
   proposed_default: "Rename sense 2 to `changed_on_disk` and sense 3 to `orphaned`."
   question: null
-  status: open
+  status: resolved
+  resolution: >
+    FIXED 2026-07-29, and two-thirds of it incidentally. Sense (2), "changed on disk", became
+    `disk_diverged` while stating GAP-037; sense (3), the orphaned index row, is now
+    `orphaned` in the removal sweep. Sense (1) keeps the word, as proposed — it is the product
+    feature.
 
 - id: GAP-034
   class: misleading

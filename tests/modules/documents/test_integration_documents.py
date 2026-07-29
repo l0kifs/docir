@@ -626,6 +626,66 @@ class TestRelevanceFloor:
         assert any(d["id"] == neighbour["id"] and d["via_graph"] for d in results)
 
 
+class TestSearchFillsItsLimit:
+    """`search` widens the candidate pool rather than under-returning (GAP-018).
+
+    Closed documents are filtered after the index returns, because FTS5 does not
+    know a status. With a fixed `limit * 2` over-fetch, a corpus where most top
+    hits are closed returned fewer than `limit` — and an agent cannot tell a
+    short result caused by filtering from a genuinely small corpus.
+    """
+
+    @staticmethod
+    def _mostly_closed(dispatcher: Dispatcher, closed: int, open_: int) -> None:
+        """`closed` strong matches ahead of `open_` weak ones, then close them.
+
+        The closed documents repeat the query term so BM25 ranks them first.
+        Without that the test does not discriminate: resolving a document
+        re-indexes it, which moves its FTS row to the back, so equally-weighted
+        closed documents drift *behind* the open ones and a fixed candidate pool
+        finds the open ones anyway.
+        """
+        for i in range(closed):
+            dispatcher.dispatch(
+                "add",
+                {
+                    "type": "issue",
+                    "title": f"Cache cache cache {i}",
+                    "description": "cache cache cache invalidation cache",
+                },
+            )
+        for i in range(open_):
+            dispatcher.dispatch(
+                "add",
+                {
+                    "type": "issue",
+                    "title": f"Weak {i}",
+                    "description": "a note mentioning cache once",
+                },
+            )
+        for i in range(1, closed + 1):
+            dispatcher.dispatch("update", {"doc_id": f"issue-{i:04d}", "status": "resolved"})
+
+    def test_limit_is_filled_despite_closed_hits(self, dispatcher: Dispatcher) -> None:
+        # The top 6 hits are closed, so the old limit*2 = 4 candidates were too.
+        self._mostly_closed(dispatcher, closed=6, open_=2)
+        results = dispatcher.dispatch("search", {"text": "cache", "limit": 2})
+        assert len(results) == 2
+        assert all(r["status"] == "open" for r in results)
+
+    def test_a_genuinely_short_corpus_still_returns_short(self, dispatcher: Dispatcher) -> None:
+        # The loop must terminate on an exhausted index, not spin widening.
+        self._mostly_closed(dispatcher, closed=2, open_=1)
+        assert len(dispatcher.dispatch("search", {"text": "cache", "limit": 5})) == 1
+
+    def test_include_inactive_still_returns_the_closed_ones(self, dispatcher: Dispatcher) -> None:
+        self._mostly_closed(dispatcher, closed=6, open_=2)
+        results = dispatcher.dispatch(
+            "search", {"text": "cache", "limit": 5, "include_inactive": True}
+        )
+        assert len(results) == 5
+
+
 class TestNoOpPathsStillComputeStaleness:
     """A no-op archive/unarchive reports staleness correctly (guards GAP-015).
 

@@ -112,8 +112,13 @@ class TagService:
             uow.commit()
         return tuple(rewritten)
 
-    def remove(self, key: str, *, force: bool = False) -> None:
+    def remove(self, key: str, *, force: bool = False) -> tuple[str, ...]:
         """Remove a tag (``docs tag rm``); blocked while in use unless forced.
+
+        Returns the ids of the documents it stripped the tag from. A forced
+        removal rewrites other people's files, and reporting only ``removed
+        <key>`` said nothing about that — the same reason `delete --force` and
+        `tag rename --merge` name what they touched.
 
         As with `rename`, stripping the tag does not advance the referencing
         documents' `updated` — see that docstring for why.
@@ -137,6 +142,7 @@ class TagService:
             uow.tags.delete(key)
             self._sync_file(uow)
             uow.commit()
+        return tuple(sorted(d.id for d in referencing))
 
     def _sync_file(self, uow: UnitOfWork) -> None:
         """Rewrite ``tags.yaml`` from the current registry state."""

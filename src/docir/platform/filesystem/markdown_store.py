@@ -194,15 +194,21 @@ def _render_related(related: tuple[RelatedRef, ...]) -> list[object]:
 
 
 def _as_related_tuple(value: object) -> tuple[RelatedRef, ...]:
-    """Parse the ``related`` frontmatter (bare ids and/or ``{to, kind}`` maps)."""
+    """Parse the ``related`` frontmatter (bare ids and/or ``{to, kind}`` maps).
+
+    ``target`` is accepted as a synonym for ``to``: the JSON read paths emit
+    ``{target, kind}`` while the file format writes ``{to, kind}``, so anyone —
+    or any agent — who reads output and then hand-writes frontmatter reaches for
+    the wrong key. ``to`` stays canonical on write, so files do not churn.
+    """
     if not isinstance(value, list | tuple):
         return ()
     refs: list[RelatedRef] = []
     for item in value:
         if isinstance(item, dict):
-            target = str(item.get("to", "")).strip()
+            target = str(item.get("to") or item.get("target") or "").strip()
             if not target:
-                raise ValueError(f"related entry {item!r} is missing a 'to' id")
+                raise ValueError(f"related entry {item!r} is missing a 'to' (or 'target') id")
             kind = str(item.get("kind", DEFAULT_RELATION_KIND)).strip() or DEFAULT_RELATION_KIND
             refs.append(RelatedRef(target=target, kind=kind))
         else:

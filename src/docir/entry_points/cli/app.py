@@ -527,7 +527,12 @@ def tag_rm(
 ) -> None:
     """Remove a tag (blocked while in use unless forced)."""
     data = execute("tag_remove", {"key": key, "force": force})
-    _emit_or_message(data, f"removed tag {key}")
+    stripped = data.get("documents") if isinstance(data, dict) else None
+    count = len(stripped) if isinstance(stripped, list) else 0
+    message = f"removed tag {key}"
+    if count:
+        message += f"; stripped it from {count} document(s)"
+    _emit_or_message(data, message)
 
 
 # -- agent instructions -----------------------------------------------------

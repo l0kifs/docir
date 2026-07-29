@@ -193,7 +193,10 @@ class DocumentService:
         with self._uow_factory() as uow:
             document = self._require(uow, doc_id)
             if document.archived:
-                return DocumentView.from_document(document)
+                # Staleness must be computed on the no-op path too: `get` said
+                # `stale: true` for a document this returned as `stale: false`,
+                # and the field exists to be trusted.
+                return DocumentView.from_document(document, stale=self._is_stale(document))
             updated = document.with_updates(archived=True, updated=self._clock.today())
             self._file_store.write(updated)
             uow.documents.save(updated)
@@ -207,7 +210,7 @@ class DocumentService:
         with self._uow_factory() as uow:
             document = self._require(uow, doc_id)
             if not document.archived:
-                return DocumentView.from_document(document)
+                return DocumentView.from_document(document, stale=self._is_stale(document))
             updated = document.with_updates(archived=False, updated=self._clock.today())
             self._file_store.write(updated)
             uow.documents.save(updated)

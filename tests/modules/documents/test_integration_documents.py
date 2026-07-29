@@ -270,6 +270,26 @@ class TestTypedEdges:
         )
         assert view["related"][0]["kind"] == "relates_to"
 
+    def test_frontmatter_accepts_target_as_well_as_to(
+        self, seeded: Dispatcher, settings: Settings
+    ) -> None:
+        """Guards GAP-034: the file says `to`, the JSON says `target`.
+
+        An agent that reads a result and then hand-writes frontmatter reaches
+        for the key it just saw. `to` stays canonical on write so files do not
+        churn; both are accepted on read.
+        """
+        path = settings.docs_root / "issues" / "issue-0001-token-refresh-bug.md"
+        path.write_text(
+            path.read_text(encoding="utf-8").replace(
+                "related:\n- adr-0001", "related:\n- target: adr-0001\n  kind: supersedes"
+            ),
+            encoding="utf-8",
+        )
+        seeded.dispatch("reindex", {})
+        related = seeded.dispatch("get", {"doc_id": "issue-0001"})["related"]
+        assert list(related) == [{"target": "adr-0001", "kind": "supersedes"}]
+
     def test_unknown_relation_kind_rejected(self, seeded: Dispatcher) -> None:
         with pytest.raises(UnknownRelationKindError):
             seeded.dispatch(
@@ -604,6 +624,52 @@ class TestRelevanceFloor:
             },
         )
         assert any(d["id"] == neighbour["id"] and d["via_graph"] for d in results)
+
+
+class TestNoOpPathsStillComputeStaleness:
+    """A no-op archive/unarchive reports staleness correctly (guards GAP-015).
+
+    The early return built the view without a `stale=` argument, so the
+    dataclass default of False won: `get` said `stale: true` for a document that
+    `unarchive` reported as fresh. One field, wrong, in the machine contract —
+    and `stale` exists precisely to be trusted.
+    """
+
+    @staticmethod
+    def _overdue(settings: Settings) -> None:
+        decisions = settings.docs_root / "decisions"
+        decisions.mkdir(parents=True, exist_ok=True)
+        (decisions / "adr-0001-old.md").write_text(
+            "---\ncreated: '2024-01-01'\ndescription: d\nid: adr-0001\nrelated: []\n"
+            "status: accepted\ntags: []\ntitle: Old\ntype: decision\n"
+            "updated: '2024-01-01'\n---\n\nbody\n",
+            encoding="utf-8",
+        )
+
+    def test_unarchive_noop_agrees_with_get(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        self._overdue(settings)
+        dispatcher.dispatch("reindex", {})
+        assert dispatcher.dispatch("get", {"doc_id": "adr-0001"})["stale"] is True
+        # Not archived, so this takes the early return.
+        assert dispatcher.dispatch("unarchive", {"doc_id": "adr-0001"})["stale"] is True
+
+    def test_archive_noop_agrees_with_get(self, dispatcher: Dispatcher, settings: Settings) -> None:
+        self._overdue(settings)
+        dispatcher.dispatch("reindex", {})
+        dispatcher.dispatch("archive", {"doc_id": "adr-0001"})
+        # Archiving stamps `updated`, so age the file again behind the index and
+        # reindex — otherwise the document is genuinely fresh and proves nothing.
+        self._overdue(settings)
+        (settings.docs_root / "decisions" / "adr-0001-old.md").write_text(
+            (settings.docs_root / "decisions" / "adr-0001-old.md")
+            .read_text(encoding="utf-8")
+            .replace("status: accepted", "status: accepted\narchived: true"),
+            encoding="utf-8",
+        )
+        dispatcher.dispatch("reindex", {})
+        assert dispatcher.dispatch("archive", {"doc_id": "adr-0001"})["stale"] is True
 
 
 class TestArchiveDelete:

@@ -165,8 +165,9 @@ class Dispatcher:
         return {"renamed": [old, new], "documents": list(rewritten)}
 
     def _tag_remove(self, payload: Payload) -> object:
-        self._tags.remove(_str(payload, "key"), force=_bool(payload, "force"))
-        return {"removed": _str(payload, "key")}
+        key = _str(payload, "key")
+        stripped = self._tags.remove(key, force=_bool(payload, "force"))
+        return {"removed": key, "documents": list(stripped)}
 
     def _reindex(self, payload: Payload) -> object:
         if _bool(payload, "embeddings"):

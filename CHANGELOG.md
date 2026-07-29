@@ -21,6 +21,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `search` and `query` are unchanged, since their results have no similarity and trimming
   drops it. Retrieval quality is unchanged — recall, precision and MRR are identical to the
   0.4.0 baseline.
+- **`related` frontmatter accepts `target` as well as `to`.** The file format writes
+  `{to, kind}` while JSON output emits `{target, kind}`, so anyone reading a result and then
+  hand-writing frontmatter reached for the key they had just seen and got "missing a 'to'
+  id". Both are accepted now; `to` stays canonical on write, so files do not churn.
+- **`docir tag rm --force` reports the documents it stripped the tag from**, matching
+  `docir delete --force` and `docir tag rename --merge`. A forced removal rewrites other
+  people's files and used to say only `removed <key>`.
+- **A no-op `archive`/`unarchive` no longer reports `stale: false` on a stale document.**
+  The early return built its result without computing staleness, so `docir get` and
+  `docir unarchive` disagreed about the same document.
 - **`docir add --id <id>` adopts an existing id**, so a repository migrating a numbered ADR
   corpus keeps its numbering and its historical cross-references. This is not the bulk
   `import` that was built and rejected: nothing is inferred, you still add one document at a

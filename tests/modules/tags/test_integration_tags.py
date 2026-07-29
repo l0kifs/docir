@@ -213,3 +213,17 @@ def test_merge_onto_a_new_key_behaves_like_a_plain_rename(dispatcher: Dispatcher
     dispatcher.dispatch("tag_rename", {"old": "auth", "new": "authn", "merge": True})
     assert {t["key"] for t in dispatcher.dispatch("tag_list", {})} == {"authn"}
     assert list(dispatcher.dispatch("get", {"doc_id": "adr-0001"})["tags"]) == ["authn"]
+
+
+def test_force_remove_reports_the_documents_it_stripped(seeded: Dispatcher) -> None:
+    """Guards GAP-030. A forced removal rewrites other people's files and said
+    only `removed <key>` — the same silence `delete --force` and
+    `tag rename --merge` were fixed for."""
+    result = seeded.dispatch("tag_remove", {"key": "auth", "force": True})
+    assert result["removed"] == "auth"
+    assert result["documents"] == ["adr-0001", "issue-0001"]
+
+
+def test_removing_an_unused_tag_reports_no_documents(dispatcher: Dispatcher) -> None:
+    dispatcher.dispatch("tag_add", {"key": "spare", "description": "d"})
+    assert dispatcher.dispatch("tag_remove", {"key": "spare"})["documents"] == []

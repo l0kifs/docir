@@ -1553,7 +1553,18 @@
   frequency: "archiving an already-archived document"
   proposed_default: "Pass `stale=self._is_stale(document)` on both early returns."
   question: null
-  status: open
+  status: resolved
+  resolution: >
+    FIXED 2026-07-29. Both no-op early returns now pass `stale=self._is_stale(document)`.
+    RE-CLASSIFIED on the way: filed `cosmetic` ("one field is wrong on one rarely-hit path"),
+    but it put a *wrong value in the machine contract* — `get` reported `stale: true` for a
+    document `unarchive` reported as fresh, and `stale` exists to be trusted. Cheap to fix and
+    not cosmetic; the label was fair when filed and stopped being fair once the product leaned
+    on machine-readable output.
+    NOTE, found while writing the test: `archive`/`unarchive` stamp `updated`, so archiving a
+    stale document makes it fresh. That is defensible — archiving is a human decision about
+    the document, like a status change, not a mechanical rewrite — but it means the first
+    attempt at this test proved nothing. Recorded so the next reader does not repeat it.
 
 - id: GAP-018
   class: unstated
@@ -1638,7 +1649,14 @@
   frequency: "every forced tag removal"
   proposed_default: "Return the affected document ids."
   question: null
-  status: open
+  status: resolved
+  resolution: >
+    FIXED 2026-07-29. `TagService.remove` returns the ids it stripped the tag from; the wire
+    response carries `documents` and the CLI says "stripped it from N document(s)".
+    Cheap, but the reason it mattered changed this cycle rather than the finding: `delete
+    --force` (GAP-007) and `tag rename --merge` (GAP-028) both now name what they rewrote, so
+    a forced removal staying silent was the odd one out among three commands that rewrite
+    other people's files.
 
 - id: GAP-031
   class: unstated
@@ -1694,7 +1712,16 @@
   frequency: n/a
   proposed_default: "Accept both keys on parse (`to` canonical on write)."
   question: null
-  status: open
+  status: resolved
+  resolution: >
+    FIXED 2026-07-29 exactly as proposed: `target` is accepted as a synonym for `to` on parse,
+    `to` stays canonical on write.
+    The alternative — renaming the JSON key to `to` — was rejected. It is a breaking change to
+    the agent contract for a naming nit, and emitting both keys would add bytes to every edge
+    in every skeleton, which is measurable now (adding one field to ranked hits cost 4.7% of
+    a `context` payload). Accepting both on input costs nothing and removes the actual harm:
+    an agent that reads `{target, kind}` from output and hand-writes it into frontmatter used
+    to get "missing a 'to' id". Files do not churn.
 
 - id: GAP-035
   class: misleading

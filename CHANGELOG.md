@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-29
+
+Pagination on the list paths, UTC dates, and the scope of full-text search stated where
+people will look for it.
+
+### Upgrade note
+
+**Dates are now stamped in UTC.** If you work well east or west of UTC, a document created
+near midnight will carry the UTC calendar date rather than your local one. Dates already in
+your files are untouched — they are the source of truth and are read as written.
+
 ### Added
 
 - **`--limit` / `--offset` on the list paths.** `docir query` and `docir search` take both, and
@@ -515,7 +526,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/l0kifs/docir/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/l0kifs/docir/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/l0kifs/docir/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/l0kifs/docir/compare/v0.5.0...v0.6.0

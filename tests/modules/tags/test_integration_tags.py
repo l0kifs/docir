@@ -128,3 +128,88 @@ def test_force_remove_does_not_reset_the_staleness_clock(
     assert list(view["tags"]) == []
     assert view["updated"] == "2024-01-01"
     assert view["stale"] is True
+
+
+# -- consolidating two tags (GAP-028) ---------------------------------------
+#
+# Renaming onto an existing key was rejected outright, so two tags could never
+# be merged: the only path was `tag rm --force` on one — throwing the
+# classification away — and re-tagging by hand. Vocabularies drift and need
+# consolidating; the registry could only grow.
+
+
+def _two_tags_and_three_docs(dispatcher: Dispatcher) -> None:
+    dispatcher.dispatch("tag_add", {"key": "auth", "description": "Old wording."})
+    dispatcher.dispatch("tag_add", {"key": "authn", "description": "The wording we keep."})
+    dispatcher.dispatch(
+        "add", {"type": "decision", "title": "Only old", "description": "d", "tags": ["auth"]}
+    )
+    dispatcher.dispatch(
+        "add",
+        {"type": "decision", "title": "Both", "description": "d", "tags": ["auth", "authn"]},
+    )
+    dispatcher.dispatch("add", {"type": "decision", "title": "Neither", "description": "d"})
+
+
+def test_rename_onto_existing_still_refused_without_merge(dispatcher: Dispatcher) -> None:
+    # A merge discards one description, which is not what fixing a typo means.
+    _two_tags_and_three_docs(dispatcher)
+    with pytest.raises(TagAlreadyExistsError, match="--merge"):
+        dispatcher.dispatch("tag_rename", {"old": "auth", "new": "authn"})
+
+
+def test_merge_folds_the_tag_and_reports_the_documents(dispatcher: Dispatcher) -> None:
+    _two_tags_and_three_docs(dispatcher)
+    result = dispatcher.dispatch("tag_rename", {"old": "auth", "new": "authn", "merge": True})
+    assert result["documents"] == ["adr-0001", "adr-0002"]
+    keys = {t["key"] for t in dispatcher.dispatch("tag_list", {})}
+    assert keys == {"authn"}
+
+
+def test_a_document_carrying_both_tags_ends_with_one(dispatcher: Dispatcher) -> None:
+    # The naive rewrite maps old->new in place and leaves ('authn', 'authn').
+    _two_tags_and_three_docs(dispatcher)
+    dispatcher.dispatch("tag_rename", {"old": "auth", "new": "authn", "merge": True})
+    assert list(dispatcher.dispatch("get", {"doc_id": "adr-0002"})["tags"]) == ["authn"]
+
+
+def test_the_surviving_tags_description_is_kept(dispatcher: Dispatcher) -> None:
+    # `new` is the one being kept, so its wording is the one people chose.
+    _two_tags_and_three_docs(dispatcher)
+    dispatcher.dispatch("tag_rename", {"old": "auth", "new": "authn", "merge": True})
+    tags = {t["key"]: t["description"] for t in dispatcher.dispatch("tag_list", {})}
+    assert tags["authn"] == "The wording we keep."
+
+
+def test_merge_does_not_reset_the_staleness_clock(
+    dispatcher: Dispatcher, settings: Settings
+) -> None:
+    # Same rule as rename/rm: a bulk classification edit is not a re-verification.
+    dispatcher.dispatch("tag_add", {"key": "auth", "description": "Old."})
+    dispatcher.dispatch("tag_add", {"key": "authn", "description": "New."})
+    _overdue_decision(settings, "auth")
+    dispatcher.dispatch("reindex", {})
+
+    dispatcher.dispatch("tag_rename", {"old": "auth", "new": "authn", "merge": True})
+
+    view = dispatcher.dispatch("get", {"doc_id": "adr-0001"})
+    assert list(view["tags"]) == ["authn"]
+    assert view["updated"] == "2024-01-01"
+    assert view["stale"] is True
+
+
+def test_merge_still_requires_the_source_tag_to_exist(dispatcher: Dispatcher) -> None:
+    dispatcher.dispatch("tag_add", {"key": "authn", "description": "New."})
+    with pytest.raises(TagNotFoundError):
+        dispatcher.dispatch("tag_rename", {"old": "ghost", "new": "authn", "merge": True})
+
+
+def test_merge_onto_a_new_key_behaves_like_a_plain_rename(dispatcher: Dispatcher) -> None:
+    # --merge on a target that does not exist must not become a second code path.
+    dispatcher.dispatch("tag_add", {"key": "auth", "description": "Old."})
+    dispatcher.dispatch(
+        "add", {"type": "decision", "title": "T", "description": "d", "tags": ["auth"]}
+    )
+    dispatcher.dispatch("tag_rename", {"old": "auth", "new": "authn", "merge": True})
+    assert {t["key"] for t in dispatcher.dispatch("tag_list", {})} == {"authn"}
+    assert list(dispatcher.dispatch("get", {"doc_id": "adr-0001"})["tags"]) == ["authn"]

@@ -159,8 +159,9 @@ class Dispatcher:
         return [asdict(view) for view in self._tags.list_all()]
 
     def _tag_rename(self, payload: Payload) -> object:
-        self._tags.rename(_str(payload, "old"), _str(payload, "new"))
-        return {"renamed": [_str(payload, "old"), _str(payload, "new")]}
+        old, new = _str(payload, "old"), _str(payload, "new")
+        rewritten = self._tags.rename(old, new, merge=_bool(payload, "merge"))
+        return {"renamed": [old, new], "documents": list(rewritten)}
 
     def _tag_remove(self, payload: Payload) -> object:
         self._tags.remove(_str(payload, "key"), force=_bool(payload, "force"))

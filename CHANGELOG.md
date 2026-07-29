@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `related`, `type` through the CLI (each is a Tier 0 rule a hand-edit bypasses); `id` never;
   `verified` never, because it asserts a human re-read the document and nothing can check
   that. It states its own limits too.
+- **`docir tag rename old new --merge` consolidates two tags.** Renaming onto an existing
+  key was rejected outright, so two tags could never be merged: the only path was
+  `tag rm --force` on one — throwing the classification away — and re-tagging by hand.
+  Vocabularies drift and need consolidating; the registry could only grow. A document
+  carrying both tags ends up with one, and the surviving tag's description is kept. Without
+  the flag the refusal stands, since a merge discards a description.
 - **`docir check` catches the two Tier 0 rules a hand-edit can bypass.** A tag not in the
   registry and a status the type does not declare both parsed cleanly and passed the checks
   silently — a document stayed queryable by a tag `docir tag list` had never heard of, and a

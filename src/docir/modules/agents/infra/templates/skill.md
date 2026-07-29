@@ -229,6 +229,7 @@ the corpus look reviewed when it is not.
 docir tag add auth --description "Authentication, tokens, sessions."
 docir tag list
 docir tag rename auth authn         # rewrites every referencing doc
+docir tag rename auth authn --merge # fold into an EXISTING tag (else refused)
 docir tag rm auth [--force]         # --force strips it from docs; else blocked
 ```
 

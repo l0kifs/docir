@@ -59,10 +59,20 @@ class TagService:
                 for tag in sorted(uow.tags.all(), key=lambda t: t.key)
             ]
 
-    def rename(self, old: str, new: str) -> None:
+    def rename(self, old: str, new: str, *, merge: bool = False) -> tuple[str, ...]:
         """Rename a tag across the registry and all documents (``docs tag rename``).
 
-        Referencing documents keep their `updated` date. Staleness falls back to
+        With ``merge``, ``new`` may already exist: every document carrying
+        ``old`` gets ``new`` instead, and ``old`` leaves the registry. Without
+        it, renaming onto an existing key is still refused — a merge discards
+        one of the two descriptions and is not what someone fixing a typo means.
+        Consolidating two tags previously had no path at all: `tag rm --force`
+        threw the classification away and you re-tagged by hand.
+
+        Returns the ids of the documents rewritten, so a bulk edit says what it
+        touched rather than reporting a bare success.
+
+        Those documents keep their `updated` date. Staleness falls back to
         `updated` when a document has no explicit `verified`, so bumping it here
         would make every document carrying the tag report as freshly reviewed —
         a bulk administrative edit silently forging the one trust signal the
@@ -73,20 +83,34 @@ class TagService:
             tag = uow.tags.get(old)
             if tag is None:
                 raise TagNotFoundError(f"no tag {old!r}")
-            if uow.tags.exists(new):
-                raise TagAlreadyExistsError(f"tag {new!r} already exists")
+            target = uow.tags.get(new)
+            if target is not None and not merge:
+                raise TagAlreadyExistsError(
+                    f"tag {new!r} already exists; pass --merge to fold {old!r} into it "
+                    f"(the description of {new!r} is kept)"
+                )
 
-            uow.tags.save(Tag(key=new, description=tag.description))
+            # A merge keeps the surviving tag's own description: `new` is the
+            # one being kept, so its wording is the one people chose for it.
+            if target is None:
+                uow.tags.save(Tag(key=new, description=tag.description))
             uow.tags.delete(old)
+
+            rewritten: list[str] = []
             for document in uow.documents.all():
-                if old in document.tags:
-                    new_tags = tuple(new if t == old else t for t in document.tags)
-                    updated = document.with_updates(tags=new_tags)
-                    self._file_store.write(updated)
-                    uow.documents.save(updated)
-                    uow.search.index(updated)
+                if old not in document.tags:
+                    continue
+                # dict.fromkeys dedupes while preserving order: a document
+                # carrying BOTH tags must end up with one `new`, not two.
+                new_tags = tuple(dict.fromkeys(new if t == old else t for t in document.tags))
+                updated = document.with_updates(tags=new_tags)
+                self._file_store.write(updated)
+                uow.documents.save(updated)
+                uow.search.index(updated)
+                rewritten.append(document.id)
             self._sync_file(uow)
             uow.commit()
+        return tuple(rewritten)
 
     def remove(self, key: str, *, force: bool = False) -> None:
         """Remove a tag (``docs tag rm``); blocked while in use unless forced.

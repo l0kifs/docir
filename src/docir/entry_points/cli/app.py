@@ -471,11 +471,26 @@ def tag_list() -> None:
 
 @tag_app.command("rename")
 def tag_rename(
-    old: Annotated[str, typer.Argument()], new: Annotated[str, typer.Argument()]
+    old: Annotated[str, typer.Argument()],
+    new: Annotated[str, typer.Argument()],
+    merge: Annotated[
+        bool,
+        typer.Option("--merge", help="Fold `old` into an existing `new` instead of failing."),
+    ] = False,
 ) -> None:
-    """Rename a tag across the registry and all documents."""
-    data = execute("tag_rename", {"old": old, "new": new})
-    _emit_or_message(data, f"renamed {old} -> {new}")
+    """Rename a tag across the registry and all documents.
+
+    Renaming onto a tag that already exists is refused unless you pass --merge,
+    which folds the two together: every document carrying `old` gets `new`, a
+    document carrying both keeps one, and `new`'s description survives. Without
+    the flag the refusal stands — a merge discards a description, which is not
+    what someone fixing a typo means.
+    """
+    data = execute("tag_rename", {"old": old, "new": new, "merge": merge})
+    touched = data.get("documents") if isinstance(data, dict) else None
+    count = len(touched) if isinstance(touched, list) else 0
+    verb = "merged" if merge else "renamed"
+    _emit_or_message(data, f"{verb} {old} -> {new} across {count} document(s)")
 
 
 @tag_app.command("rm")

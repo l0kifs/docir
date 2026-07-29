@@ -7,55 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-29
+
+Six commands that reported success while doing something else, and the adoption story for a
+repository that already has documents. This release closes the last of the material findings
+from the project's own gap analysis.
+
+### Upgrade notes
+
+- **`docir check` reports two new warning kinds**, `unknown-tag` and `unknown-status`, for a
+  document whose tag is not in the registry or whose status its type does not declare. Both
+  mean a file was edited outside the CLI. They are warnings, so `--strict` is unaffected;
+  a build gating on `--strict-all` may newly fail on a corpus that carries hand-edits.
+- **`docir reindex --changed` now removes documents whose files are gone.** That is the fix,
+  but if anything relied on the fast path leaving the index alone, it no longer does.
+
 ### Added
 
-- **A "what you may edit by hand" contract**, in the README and the packaged agent guide.
-  The rule "never edit markdown directly" was stated for agents and never for humans, while
-  the whole design invites hand-editing — git-backed files, and a `reindex` that exists for
-  exactly that. The contract is per-field: body and the two YAML files yes; `tags`, `status`,
-  `related`, `type` through the CLI (each is a Tier 0 rule a hand-edit bypasses); `id` never;
-  `verified` never, because it asserts a human re-read the document and nothing can check
-  that. It states its own limits too.
-- **`docir context` payloads grew ~5% (428 → 448 tokens on the benchmark corpus)** because
-  every ranked hit now carries `similarity`. The cost lands only where the field is set:
-  `search` and `query` are unchanged, since their results have no similarity and trimming
-  drops it. Retrieval quality is unchanged — recall, precision and MRR are identical to the
-  0.4.0 baseline.
-- **`docir search` fills its `--limit` instead of under-returning.** Closed documents are
-  filtered after the index returns (FTS5 does not know a status), and a fixed `limit * 2`
-  over-fetch meant a corpus where most top hits are closed came back short — indistinguishable
-  from a genuinely small corpus. The candidate pool now widens until the limit is met or the
-  index is exhausted.
-- **`related` frontmatter accepts `target` as well as `to`.** The file format writes
-  `{to, kind}` while JSON output emits `{target, kind}`, so anyone reading a result and then
-  hand-writing frontmatter reached for the key they had just seen and got "missing a 'to'
-  id". Both are accepted now; `to` stays canonical on write, so files do not churn.
-- **`docir tag rm --force` reports the documents it stripped the tag from**, matching
-  `docir delete --force` and `docir tag rename --merge`. A forced removal rewrites other
-  people's files and used to say only `removed <key>`.
-- **A no-op `archive`/`unarchive` no longer reports `stale: false` on a stale document.**
-  The early return built its result without computing staleness, so `docir get` and
-  `docir unarchive` disagreed about the same document.
 - **`docir add --id <id>` adopts an existing id**, so a repository migrating a numbered ADR
   corpus keeps its numbering and its historical cross-references. This is not the bulk
   `import` that was built and rejected: nothing is inferred, you still add one document at a
   time after reading it, and the id is supplied rather than guessed. Refused if the id is
   taken or its prefix does not match the type; the next allocation lands past it. Only
   meaningful for a store using `--id-style sequential`.
-- **Writes report which store they landed in, and warn about an accidental global one.**
-  In a repository nobody had run `docir init` in, `docir add` fell back to the global
-  `~/.docir` and succeeded — and since `path` is relative to the *store*, the output read as
-  repo-local while the file went to the user's home directory, ungitted and invisible to
-  teammates. Every write now carries `store`, and a stderr warning fires when the global
-  fallback happens **inside a git repository** — the one case where it is probably not what
-  you meant. Outside a repo, and with `DOCIR_HOME` set, nothing warns.
-- **`docir update --override` now says which rule it broke.** A forced illegal status
-  transition left no trace, so the result was indistinguishable from one that transitioned
-  legally. It now warns on stderr, naming the transition and the legal moves from the current
-  status, and the JSON carries `forced_transition`. Deliberately *not* written to the file:
-  docir has no actors to attribute an override to, and git already records the status change
-  — what was missing was the signal, not a record. Passing the flag on a transition that was
-  legal anyway does not warn.
 - **`docir tag rename old new --merge` consolidates two tags.** Renaming onto an existing
   key was rejected outright, so two tags could never be merged: the only path was
   `tag rm --force` on one — throwing the classification away — and re-tagging by hand.
@@ -69,6 +43,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   either, so both mean a file was edited outside it. They are reported as `unknown-tag` and
   `unknown-status`, both **warnings**: the document is still readable and its edges still
   resolve. Use `--strict-all` if you want hand-edits to block a merge.
+- **`docir update --override` now says which rule it broke.** A forced illegal status
+  transition left no trace, so the result was indistinguishable from one that transitioned
+  legally. It now warns on stderr, naming the transition and the legal moves from the current
+  status, and the JSON carries `forced_transition`. Deliberately *not* written to the file:
+  docir has no actors to attribute an override to, and git already records the status change
+  — what was missing was the signal, not a record. Passing the flag on a transition that was
+  legal anyway does not warn.
+- **Writes report which store they landed in, and warn about an accidental global one.**
+  In a repository nobody had run `docir init` in, `docir add` fell back to the global
+  `~/.docir` and succeeded — and since `path` is relative to the *store*, the output read as
+  repo-local while the file went to the user's home directory, ungitted and invisible to
+  teammates. Every write now carries `store`, and a stderr warning fires when the global
+  fallback happens **inside a git repository** — the one case where it is probably not what
+  you meant. Outside a repo, and with `DOCIR_HOME` set, nothing warns.
+- **`docir tag rm --force` reports the documents it stripped the tag from**, matching
+  `docir delete --force` and `docir tag rename --merge`. A forced removal rewrites other
+  people's files and used to say only `removed <key>`.
 
 ### Fixed
 
@@ -84,17 +75,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   disk and one indexed looked like success while the unparseable document was absent from
   every read path. The result now carries `documents_skipped`, and a non-zero count prints a
   warning to stderr pointing at `docir check`.
-- **A YAML syntax error in `docs-schema.yaml` or `docs/tags.yaml` reports a clean error.**
-  A bad indent raised `yaml.ParserError`, which is not a `DocirError`, so it escaped the
-  mapping that handles every *semantic* schema error and surfaced as a raw traceback — on
-  the two files the docs tell you to edit by hand. Now `SchemaError` / `TagRegistryError`,
-  exit 3.
-- **An invalid `docs-schema.yaml` now reports a clean error instead of a traceback.** Every
-  command builds its executor, and building it loads the schema — but that happened outside
-  the error mapping, so a bad schema escaped as an unhandled `SchemaError` with a raw Python
-  traceback and exit 1, while `docir schema validate` reported the same error on the same file
-  cleanly with exit 3. All commands now agree. Latent until 0.6.0 (only malformed YAML could
-  trip it); routine once a typo'd status name became a load error.
+- **`docir search` fills its `--limit` instead of under-returning.** Closed documents are
+  filtered after the index returns (FTS5 does not know a status), and a fixed `limit * 2`
+  over-fetch meant a corpus where most top hits are closed came back short — indistinguishable
+  from a genuinely small corpus. The candidate pool now widens until the limit is met or the
+  index is exhausted.
 - **`docir init --force` no longer destroys a customised `docs-schema.yaml`.** One flag
   overwrote the schema and the `.gitignore` together, so re-running `init` to refresh the
   gitignore silently replaced every type, status and cadence you had decided on — the one
@@ -102,6 +87,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.gitignore` and a schema still identical to the generated one; a schema you have edited is
   kept, reported as `schema_preserved` in the JSON, and named in a warning on stderr. Pass
   `--force-schema` to replace it as well.
+- **An invalid `docs-schema.yaml` now reports a clean error instead of a traceback.** Every
+  command builds its executor, and building it loads the schema — but that happened outside
+  the error mapping, so a bad schema escaped as an unhandled `SchemaError` with a raw Python
+  traceback and exit 1, while `docir schema validate` reported the same error on the same file
+  cleanly with exit 3. All commands now agree. Latent until 0.6.0 (only malformed YAML could
+  trip it); routine once a typo'd status name became a load error.
+- **A YAML syntax error in `docs-schema.yaml` or `docs/tags.yaml` reports a clean error.**
+  A bad indent raised `yaml.ParserError`, which is not a `DocirError`, so it escaped the
+  mapping that handles every *semantic* schema error and surfaced as a raw traceback — on
+  the two files the docs tell you to edit by hand. Now `SchemaError` / `TagRegistryError`,
+  exit 3.
+- **`related` frontmatter accepts `target` as well as `to`.** The file format writes
+  `{to, kind}` while JSON output emits `{target, kind}`, so anyone reading a result and then
+  hand-writing frontmatter reached for the key they had just seen and got "missing a 'to'
+  id". Both are accepted now; `to` stays canonical on write, so files do not churn.
+- **A no-op `archive`/`unarchive` no longer reports `stale: false` on a stale document.**
+  The early return built its result without computing staleness, so `docir get` and
+  `docir unarchive` disagreed about the same document.
+
+### Changed
+
+- **`docir context` payloads grew ~5% (428 → 448 tokens on the benchmark corpus)** because
+  every ranked hit now carries `similarity`. The cost lands only where the field is set:
+  `search` and `query` are unchanged, since their results have no similarity and trimming
+  drops it. Retrieval quality is unchanged — recall, precision and MRR are identical to the
+  0.4.0 baseline.
+
+### Documentation
+
+- **A "what you may edit by hand" contract**, in the README and the packaged agent guide.
+  The rule "never edit markdown directly" was stated for agents and never for humans, while
+  the whole design invites hand-editing — git-backed files, and a `reindex` that exists for
+  exactly that. The contract is per-field: body and the two YAML files yes; `tags`, `status`,
+  `related`, `type` through the CLI (each is a Tier 0 rule a hand-edit bypasses); `id` never;
+  `verified` never, because it asserts a human re-read the document and nothing can check
+  that. It states its own limits too.
+
 
 ## [0.6.0] - 2026-07-28
 
@@ -433,7 +455,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/l0kifs/docir/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/l0kifs/docir/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/l0kifs/docir/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/l0kifs/docir/compare/v0.3.0...v0.4.0

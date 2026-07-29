@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **An invalid `docs-schema.yaml` now reports a clean error instead of a traceback.** Every
+  command builds its executor, and building it loads the schema — but that happened outside
+  the error mapping, so a bad schema escaped as an unhandled `SchemaError` with a raw Python
+  traceback and exit 1, while `docir schema validate` reported the same error on the same file
+  cleanly with exit 3. All commands now agree. Latent until 0.6.0 (only malformed YAML could
+  trip it); routine once a typo'd status name became a load error.
 - **`docir init --force` no longer destroys a customised `docs-schema.yaml`.** One flag
   overwrote the schema and the `.gitignore` together, so re-running `init` to refresh the
   gitignore silently replaced every type, status and cadence you had decided on — the one

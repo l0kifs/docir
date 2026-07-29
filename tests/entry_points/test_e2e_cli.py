@@ -323,6 +323,45 @@ class TestIncludeInactiveFlag:
         assert [d["id"] for d in json.loads(result.stdout)] == ["adr-0001"]
 
 
+class TestBrokenSchemaIsReportedNotRaised:
+    """An invalid schema reaches the caller as a domain error, not a traceback.
+
+    `execute` built the executor outside the error mapping, and building it
+    loads the schema — so an invalid `docs-schema.yaml` escaped as an unhandled
+    SchemaError: a raw Python traceback and exit 1, while `docir schema
+    validate` reported the same error on the same file cleanly with exit 3.
+
+    Latent before status names were validated (only malformed YAML could trip
+    it); routine after, since any typo in a status name now raises here.
+    """
+
+    @staticmethod
+    def _break_schema(settings: Settings) -> None:
+        settings.schema_path.parent.mkdir(parents=True, exist_ok=True)
+        settings.schema_path.write_text(
+            "types:\n"
+            "  ticket:\n"
+            "    prefix: tkt\n"
+            "    default_status: open\n"
+            "    statuses:\n"
+            "      open: [closd]\n"
+            "      closed: []\n",
+            encoding="utf-8",
+        )
+
+    @pytest.mark.parametrize("argv", [["query"], ["check"], ["search", "x"], ["context", "x"]])
+    def test_domain_error_and_exit_code(self, settings: Settings, argv: list[str]) -> None:
+        self._break_schema(settings)
+        result = run(*argv)
+        assert result.exit_code == 3  # SchemaError.exit_code, not 1
+        assert result.exception is None or isinstance(result.exception, SystemExit)
+
+    def test_schema_validate_agrees(self, settings: Settings) -> None:
+        # The command that always reported this correctly — the others now match.
+        self._break_schema(settings)
+        assert run("schema", "validate").exit_code == 3
+
+
 class TestOutputModes:
     """Token-aware output: JSON when captured (non-TTY), tables under --pretty."""
 

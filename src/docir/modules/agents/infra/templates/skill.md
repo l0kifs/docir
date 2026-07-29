@@ -43,7 +43,11 @@ docir init --profiles research   # software | research | ops | qa | legal (CSV)
 ```
 
 Commit `.docir/docs/` and `.docir/docs-schema.yaml`; the derived index is
-gitignored for you. If you skip `docir init`, docs go to the global `~/.docir`
+gitignored for you. Re-running `docir init` is safe — it writes only what is
+missing. `--force` regenerates the `.gitignore` and an *unedited* schema; a
+schema you have customised is kept and reported (`schema_preserved`), because it
+cannot be rebuilt from the documents. Never reach for `--force-schema` unless
+you intend to throw that file away. If you skip `docir init`, docs go to the global `~/.docir`
 store — fine for personal notes, but **not** what you want for a repo whose docs
 should live with the code. Check where you are with `docir query --limit 1` (it
 operates on the discovered store).
@@ -84,6 +88,14 @@ budget, not a suggestion. Related docs are pulled *inside* it: `--expand N`
 (default 2) reserves at most N of those slots for `via_graph` items, and slots
 the graph does not use go back to ranked hits. `--expand 0` gives you ranked
 hits only.
+
+**Expansion runs both ways, and successors come first.** A `supersedes` edge
+points from the *new* doc to the old one, so the replacement sits one hop
+*backwards*. `context` follows that direction too and puts successors ahead of
+ordinary links, which means: if a hit arrives with another doc marked
+`via_graph` that supersedes it, **the newer one is the current decision** — check
+before acting on the hit. It does not mean the old doc is wrong to read, only
+that it is not the last word.
 
 **Judge relevance by `similarity`, never by `score`.** `score` is a rank fusion:
 it tells you the order and nothing else, so the top hit of a query nothing
@@ -263,10 +275,20 @@ Three keys are **required** on every type — omitting any is a `SchemaError`:
 | `statuses` | **mapping** | `status: [targets it may transition to]`, *not* a list. Terminal status → `[]`. |
 | `default_status` | str | must be a key in `statuses`. |
 
+**Every status name you write must be a key in that type's `statuses`** — a
+transition target, `default_status`, and each `inactive_statuses` entry. A typo
+(`open: [closd]`) is rejected at load with the declared names listed, so it fails
+on the next command rather than surviving until a write. That check runs on
+*every* command, not only `schema validate`: a broken schema stops the store.
+
 Optional: `required` (extra frontmatter fields), `inactive_statuses` (hidden from
-default reads), `level` (int; a higher-level doc depending on a lower-level one
-is a Tier 1 warning), `review_days` (staleness cadence; 0 = never stale),
-`id_style` (`sequential` | `random`), `allowed_relations`.
+default reads), `level` (int; see below), `review_days` (staleness cadence; 0 =
+never stale), `id_style` (`sequential` | `random`), `allowed_relations`.
+
+`level` only bites on **dependency** edges: a `depends_on` or `refines` edge from
+a higher-level type to a lower-level one is a Tier 1 `layering` warning. Ordinary
+`relates_to` links never are — linking a decision to the issue that motivated it
+is normal and silent.
 
 ```yaml
 relation_types: [governs, blocks]   # extra kinds on top of the core six

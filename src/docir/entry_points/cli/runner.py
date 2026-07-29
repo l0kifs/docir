@@ -77,9 +77,16 @@ def get_state() -> CliState:
 
 
 def execute(command: str, payload: dict[str, object]) -> object:
-    """Run one command and return its result data, or exit on a domain error."""
+    """Run one command and return its result data, or exit on a domain error.
+
+    Building the executor goes through :func:`run_local` because it is not
+    error-free: it loads the schema, so an invalid ``docs-schema.yaml`` raises
+    before any request is dispatched. Left unwrapped, that surfaced as a raw
+    Python traceback and exit 1 while ``docir schema validate`` — the same error,
+    on the same file — printed a clean message and exit 3.
+    """
     state = get_state()
-    executor, closer = _build_executor(state.settings)
+    executor, closer = run_local(lambda: _build_executor(state.settings))
     try:
         response = executor.execute(Request(command=command, payload=payload))
     finally:

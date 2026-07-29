@@ -16,9 +16,13 @@ files and the derived index never disagree.
   describes it so the caller can warn. Not persisted — no actors to attribute it to.
 - `DocumentService.get(id) -> DocumentView` — one document in full (with body)
 - `DocumentService.query(QueryRequest) -> [DocumentSummary]` — structured filtering (skeleton, no body).
-  `owner` filters in SQL; `stale_only` is derived from the clock and the type's review cadence, so it
-  is applied in the service and *before* `limit` (the limit counts stale documents).
-- `DocumentService.search(SearchRequest) -> [DocumentSummary]` — full-text search (skeleton, no body)
+  Pages with `limit`/`offset`, applied as a SQL window so the cost of a page does not grow with the
+  corpus. `owner` filters in SQL; `stale_only` is derived from the clock and the type's review
+  cadence, so it is applied in the service, which means its window is a scan over the filtered set
+  rather than a SQL `OFFSET` (the limit counts stale documents, not rows scanned).
+- `DocumentService.search(SearchRequest) -> [DocumentSummary]` — full-text search over title,
+  description and body (**not** tags); skeleton, no body. `limit`/`offset` are applied after the
+  status filter, since FTS5 cannot see a status.
 - `DocumentService.context(ContextRequest) -> [DocumentSummary]` — ranked relevant set (skeleton, no body).
   Each ranked hit carries `similarity`, the raw cosine (absolute meaning; `score` is rank-derived RRF
   and has none). `ContextRequest.min_score` is a floor on `similarity`, so an empty result is

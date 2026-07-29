@@ -27,3 +27,10 @@ class DocumentFilter:
     #: are application concerns the index does not store, so it is filtered
     #: after the query rather than in SQL.
     owner: str | None = None
+    #: Page window applied *in the query*, not after it. Fetching every match and
+    #: slicing in Python is fine at a hundred documents and is the wrong shape at
+    #: ten thousand: the cost of a page should not grow with the corpus behind it.
+    #: ``limit=None`` means "no window" — the maintenance paths genuinely need
+    #: every row.
+    limit: int | None = None
+    offset: int = 0

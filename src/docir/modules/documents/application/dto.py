@@ -216,6 +216,9 @@ class QueryRequest:
     owner: str | None = None
     stale_only: bool = False
     limit: int = 50
+    #: Rows to skip. A short page means the end — there is no total in the
+    #: response, which is a bare JSON array with nowhere to put one.
+    offset: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -225,6 +228,7 @@ class SearchRequest:
     text: str
     limit: int = 20
     include_inactive: bool = False
+    offset: int = 0
 
 
 #: How many of a context result's slots are reserved for graph-reached

@@ -48,6 +48,7 @@ from docir.modules.documents.api import (
     describe_schema,
     load_schema,
 )
+from docir.modules.tags.api import DEFAULT_TAG_PAGE
 from docir.platform.errors import ValidationError
 
 app = typer.Typer(
@@ -68,7 +69,10 @@ app.add_typer(daemon_app, name="daemon")
 def main_callback(
     home: Annotated[
         str | None,
-        typer.Option("--home", help="Data root (default: $DOCIR_HOME or ~/.docir)."),
+        typer.Option(
+            "--home",
+            help="Store to use (default: $DOCIR_HOME, a discovered .docir, or ~/.docir).",
+        ),
     ] = None,
     no_daemon: Annotated[
         bool, typer.Option("--no-daemon", help="Run in-process, bypass the daemon.")
@@ -386,6 +390,7 @@ def query(
         bool, typer.Option("--stale", help="Only documents past their type's review cadence.")
     ] = False,
     limit: Annotated[int, typer.Option("--limit")] = 50,
+    offset: Annotated[int, typer.Option("--offset", help="Rows to skip; page with --limit.")] = 0,
 ) -> None:
     """Structured metadata filtering.
 
@@ -407,6 +412,7 @@ def query(
         "owner": owner,
         "stale": stale,
         "limit": limit,
+        "offset": offset,
     }
     _warn_on_global_fallback()
     _emit_document_list(execute("query", payload))
@@ -416,6 +422,7 @@ def query(
 def search(
     text: Annotated[str, typer.Argument()],
     limit: Annotated[int, typer.Option("--limit")] = 20,
+    offset: Annotated[int, typer.Option("--offset", help="Hits to skip; page with --limit.")] = 0,
     include_inactive: Annotated[
         bool,
         typer.Option("--include-inactive", help="Also return documents in an inactive status."),
@@ -426,6 +433,7 @@ def search(
     payload: dict[str, object] = {
         "text": text,
         "limit": limit,
+        "offset": offset,
         "include_inactive": _include_inactive(include_inactive, include_resolved),
     }
     _warn_on_global_fallback()
@@ -499,9 +507,17 @@ def tag_add(
 
 
 @tag_app.command("list")
-def tag_list() -> None:
-    """List every registered tag."""
-    data = execute("tag_list", {})
+def tag_list(
+    limit: Annotated[int, typer.Option("--limit")] = DEFAULT_TAG_PAGE,
+    offset: Annotated[int, typer.Option("--offset", help="Tags to skip; page with --limit.")] = 0,
+) -> None:
+    """List registered tags, key-ordered.
+
+    Paged: a page shorter than --limit means you have reached the end. There is
+    no total in the response — it is a bare JSON array, and a wrapper to carry
+    one would break every existing caller.
+    """
+    data = execute("tag_list", {"limit": limit, "offset": offset})
     state = get_state()
     if use_json(state):
         rendering.emit_json(data, trim=state.trim)

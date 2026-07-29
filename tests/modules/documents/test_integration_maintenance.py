@@ -8,7 +8,7 @@ import pytest
 
 from docir.config.settings import Settings
 from docir.entry_points.dispatch import Dispatcher
-from docir.platform.errors import DocumentNotFoundError
+from docir.platform.errors import DocumentNotFoundError, ValidationError
 
 # Valid YAML, but `created`/`updated` are not ISO dates — a hand-edit/foreign file.
 _MALFORMED_FILE = (
@@ -515,3 +515,92 @@ def test_verifying_a_document_removes_it_from_the_queue(
 def test_no_filters_still_returns_everything(dispatcher: Dispatcher, settings: Settings) -> None:
     _worklist_corpus(dispatcher, settings)
     assert len(dispatcher.dispatch("query", {})) == 3
+
+
+class TestPagination:
+    """List paths window in the query, not after it (guards GAP-039).
+
+    `query` fetched every match and sliced in Python, `tag list` had no window
+    at all, and nothing stated a corpus ceiling. That is fine at a hundred
+    documents and the wrong shape at ten thousand: the cost of a page should not
+    grow with the corpus behind it.
+
+    A page shorter than `limit` means the end. There is no total in the
+    response — it is a bare JSON array, and a wrapper to carry one would break
+    every existing caller.
+    """
+
+    @staticmethod
+    def _decisions(dispatcher: Dispatcher, count: int) -> None:
+        for i in range(count):
+            dispatcher.dispatch(
+                "add", {"type": "decision", "title": f"D{i}", "description": f"policy {i}"}
+            )
+
+    def test_query_pages_without_gaps_or_overlap(self, dispatcher: Dispatcher) -> None:
+        self._decisions(dispatcher, 12)
+        seen: list[str] = []
+        for offset in (0, 5, 10):
+            page = dispatcher.dispatch("query", {"limit": 5, "offset": offset})
+            seen.extend(d["id"] for d in page)
+        assert len(seen) == 12
+        assert len(set(seen)) == 12
+
+    def test_a_short_page_signals_the_end(self, dispatcher: Dispatcher) -> None:
+        self._decisions(dispatcher, 12)
+        assert len(dispatcher.dispatch("query", {"limit": 5, "offset": 10})) == 2
+        assert dispatcher.dispatch("query", {"limit": 5, "offset": 12}) == []
+
+    def test_tag_list_pages(self, dispatcher: Dispatcher) -> None:
+        for i in range(7):
+            dispatcher.dispatch("tag_add", {"key": f"tag-{i}", "description": "d"})
+        first = dispatcher.dispatch("tag_list", {"limit": 3})
+        second = dispatcher.dispatch("tag_list", {"limit": 3, "offset": 3})
+        assert [t["key"] for t in first] == ["tag-0", "tag-1", "tag-2"]
+        assert [t["key"] for t in second] == ["tag-3", "tag-4", "tag-5"]
+
+    def test_search_pages(self, dispatcher: Dispatcher) -> None:
+        self._decisions(dispatcher, 8)
+        first = {d["id"] for d in dispatcher.dispatch("search", {"text": "policy", "limit": 4})}
+        second = {
+            d["id"]
+            for d in dispatcher.dispatch("search", {"text": "policy", "limit": 4, "offset": 4})
+        }
+        assert len(first) == 4
+        assert not (first & second)
+
+    def test_stale_pages_over_the_filtered_set(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        """`--stale` cannot use a SQL window, so it pages over the filter.
+
+        Overdue documents are interleaved with fresh ones here: a window applied
+        in SQL would count rows scanned rather than stale documents, which is
+        the ordering bug GAP-011 already fixed once for `--limit`.
+        """
+        decisions = settings.docs_root / "decisions"
+        decisions.mkdir(parents=True, exist_ok=True)
+        for i in range(1, 13):
+            when = "2024-01-01" if i % 2 else "2026-07-07"
+            (decisions / f"adr-{i:04d}-d{i}.md").write_text(
+                f"---\ncreated: '{when}'\ndescription: d\nid: adr-{i:04d}\nrelated: []\n"
+                f"status: accepted\ntags: []\ntitle: D{i}\ntype: decision\n"
+                f"updated: '{when}'\n---\n\nbody\n",
+                encoding="utf-8",
+            )
+        dispatcher.dispatch("reindex", {})
+
+        everything = [d["id"] for d in dispatcher.dispatch("query", {"stale": True, "limit": 99})]
+        paged: list[str] = []
+        for offset in (0, 2, 4):
+            paged.extend(
+                d["id"]
+                for d in dispatcher.dispatch("query", {"stale": True, "limit": 2, "offset": offset})
+            )
+        assert len(everything) == 6
+        assert paged == everything
+
+    def test_a_negative_offset_is_rejected(self, dispatcher: Dispatcher) -> None:
+        # SQLite ignores a negative OFFSET, so it has to be caught before it.
+        with pytest.raises(ValidationError):
+            dispatcher.dispatch("query", {"limit": 5, "offset": -1})

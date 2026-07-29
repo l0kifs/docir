@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`--limit` / `--offset` on the list paths.** `docir query` and `docir search` take both, and
+  `docir tag list` — which had no window at all — now pages too. `query`'s window is a SQL
+  `LIMIT`/`OFFSET`: it previously fetched every match and sliced in Python, so the cost of a
+  page grew with the corpus behind it. A page shorter than `--limit` means the end; there is no
+  total, because the response is a bare JSON array with nowhere to put one.
+  Two predicates cannot use a SQL window and page over the filtered set instead: `--stale`
+  (derived from the clock and the type's cadence) and `search`'s status filter (FTS5 cannot see
+  a status). A window applied in SQL there would count rows *scanned* rather than rows returned.
+
+### Changed
+
+- **Dates are UTC.** `created`, `updated` and `verified` used the writer's local date, so two
+  teammates either side of midnight stamped different dates for the same moment — in files that
+  are committed and read by other people. `docir` has no released users' data to migrate, so
+  existing dates are simply reinterpreted.
+- **User-facing prose says "store"** where it said "data root"; `--home` keeps its name.
+
+### Documentation
+
+- **Search covers title, description and body — not tags**, now stated in the README and the
+  agent guide. Tags are a controlled vocabulary for `query --tag`, deliberately out of the
+  full-text index so one tag match cannot flood out the text matches.
+- **Recovering from `unknown-type`** is documented: re-enable the profile or change the type,
+  then reindex. `check --fix` will not guess which you meant.
+- **A "Scope and limits" section** in the README, naming what is bounded and what is not —
+  `context` loads every current embedding per call, which sets the practical corpus ceiling,
+  and `lint --deep` is O(n²) over those vectors.
+
 ## [0.7.1] - 2026-07-29
 
 All fixes, three of them found by a delta analysis pass over the surface 0.7.0 itself added —

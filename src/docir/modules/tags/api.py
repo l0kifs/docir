@@ -7,6 +7,9 @@ on :class:`TagService` and :class:`TagView`, never on the module's internals.
 from __future__ import annotations
 
 from docir.modules.tags.application.dto import TagView
-from docir.modules.tags.application.services.tag_service import TagService
+from docir.modules.tags.application.services.tag_service import (
+    DEFAULT_TAG_PAGE,
+    TagService,
+)
 
-__all__ = ["TagService", "TagView"]
+__all__ = ["DEFAULT_TAG_PAGE", "TagService", "TagView"]

@@ -68,6 +68,18 @@ def _parse_refs(tokens: tuple[str, ...]) -> tuple[RelatedRef, ...]:
     return tuple(RelatedRef.parse(token) for token in tokens if token.strip())
 
 
+#: Rows per scan when `--stale` forces post-filtering. Large enough that a
+#: normal corpus resolves in one round trip, small enough that a page of a huge
+#: one does not pull it all into memory.
+_STALE_SCAN_PAGE = 500
+
+
+def _require_non_negative_offset(offset: int) -> None:
+    """Reject a negative offset before it reaches SQL, where it is ignored."""
+    if offset < 0:
+        raise ValidationError(f"offset must be zero or greater, got {offset}")
+
+
 def _require_positive_limit(limit: int) -> None:
     """Reject a non-positive result limit before it reaches a slice/SQL bound.
 
@@ -287,20 +299,58 @@ class DocumentService:
         means "ten stale documents", not "the stale ones among the first ten".
         """
         _require_positive_limit(request.limit)
-        spec = DocumentFilter(
-            types=request.types,
-            statuses=request.statuses,
-            tags=request.tags,
-            include_archived=request.include_archived,
-            inactive_statuses=tuple(sorted(self._schema.inactive_statuses())),
-            include_inactive=request.include_inactive,
-            owner=request.owner,
-        )
+        _require_non_negative_offset(request.offset)
+
+        def spec(*, limit: int | None, offset: int) -> DocumentFilter:
+            return DocumentFilter(
+                types=request.types,
+                statuses=request.statuses,
+                tags=request.tags,
+                include_archived=request.include_archived,
+                inactive_statuses=tuple(sorted(self._schema.inactive_statuses())),
+                include_inactive=request.include_inactive,
+                owner=request.owner,
+                limit=limit,
+                offset=offset,
+            )
+
         with self._uow_factory() as uow:
-            documents = uow.documents.query(spec)
-            if request.stale_only:
-                documents = [doc for doc in documents if self._is_stale(doc)]
-        return [self._summary(doc) for doc in documents[: request.limit]]
+            if not request.stale_only:
+                # The common path: the window is a LIMIT/OFFSET, so the cost of
+                # a page does not grow with the corpus behind it.
+                documents = uow.documents.query(spec(limit=request.limit, offset=request.offset))
+            else:
+                documents = self._stale_page(uow, spec, request)
+        return [self._summary(doc) for doc in documents]
+
+    def _stale_page(
+        self,
+        uow: UnitOfWork,
+        spec: Callable[..., DocumentFilter],
+        request: QueryRequest,
+    ) -> list[Document]:
+        """The `--stale` window, which SQL cannot express.
+
+        Staleness derives from the clock and the type's review cadence, neither
+        of which the index stores, so it is filtered after the query — and a SQL
+        window would then count *rows scanned* rather than stale documents,
+        which is the ordering bug GAP-011 already fixed once.
+
+        So scan in pages and stop as soon as the window is filled: bounded by
+        how far in you have to read, not by the corpus. A corpus with no stale
+        documents still walks it once, which is the honest cost of a predicate
+        the database cannot see.
+        """
+        wanted = request.offset + request.limit
+        matched: list[Document] = []
+        scanned = 0
+        while len(matched) < wanted:
+            page = uow.documents.query(spec(limit=_STALE_SCAN_PAGE, offset=scanned))
+            if not page:
+                break
+            scanned += len(page)
+            matched.extend(doc for doc in page if self._is_stale(doc))
+        return matched[request.offset : request.offset + request.limit]
 
     def search(self, request: SearchRequest) -> list[DocumentSummary]:
         """Full-text search over active documents (``docs search``) — skeletons.
@@ -313,9 +363,14 @@ class DocumentService:
         is met or the index is exhausted, so short means short.
         """
         _require_positive_limit(request.limit)
+        _require_non_negative_offset(request.offset)
         inactive = self._schema.inactive_statuses()
+        # The window is applied after filtering, for the same reason `--stale`
+        # is: FTS5 cannot see a document's status, so an index-level OFFSET
+        # would skip rows that were never going to be returned.
+        wanted = request.offset + request.limit
         with self._uow_factory() as uow:
-            candidates = request.limit * _SEARCH_OVERFETCH
+            candidates = wanted * _SEARCH_OVERFETCH
             while True:
                 hits = uow.search.search(request.text, limit=candidates)
                 views: list[DocumentSummary] = []
@@ -326,12 +381,12 @@ class DocumentService:
                     if not request.include_inactive and document.status in inactive:
                         continue
                     views.append(self._summary(document, score=-hit.bm25))
-                    if len(views) >= request.limit:
+                    if len(views) >= wanted:
                         break
                 # Enough, or the index had fewer matches than we asked for and
                 # widening again would return the same rows.
-                if len(views) >= request.limit or len(hits) < candidates:
-                    return views
+                if len(views) >= wanted or len(hits) < candidates:
+                    return views[request.offset :]
                 candidates *= 2
 
     def context(self, request: ContextRequest) -> list[DocumentSummary]:

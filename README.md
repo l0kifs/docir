@@ -131,6 +131,21 @@ absolute meaning, which is what `--min-score` filters on: with it, an empty resu
 real answer rather than an impossible one. `--json` forces JSON anywhere, `--pretty`
 forces the table, `--no-trim` keeps every field.*
 
+### Scope and limits
+
+- **Search covers title, description and body — not tags.** Tags are a controlled vocabulary
+  for `docir query --tag`, deliberately kept out of the full-text index so one tag match
+  cannot flood out the text matches. `docir search auth` will not find a document merely
+  tagged `auth`.
+- **List paths page.** `query`, `search` and `tag list` take `--limit` and `--offset`, applied
+  in the query rather than after it. A page shorter than `--limit` means the end; there is no
+  total, because the response is a bare JSON array.
+- **`context` is not paged, by design.** It returns a minimal relevance-ranked set bounded by
+  `--limit` — a token budget, not a browse path. It does load every current embedding per
+  call, which is what sets the practical corpus ceiling.
+- **Dates are UTC calendar dates.** `created`, `updated` and `verified` are written into
+  committed files and read by other people, so they do not depend on the writer's timezone.
+
 ## The model
 
 - **Git is the source of truth.** The index is a compile artifact — derived,
@@ -176,7 +191,7 @@ can verify, which is exactly why it should not be written by hand.
 | `docir add` | Create a document — the single write path |
 | `docir update` | Edit content, metadata, or relations of an existing document |
 | `docir context <query>` | Ranked relevant set (skeletons) — full-text + vector, fused (`--min-score` to filter noise) |
-| `docir search` / `query` | Full-text search / structured filter (`query --owner X --stale` is a review queue) |
+| `docir search` / `query` | Full-text search (title/description/body — **not tags**) / structured filter. Both page with `--limit`/`--offset`; `query --owner X --stale` is a review queue |
 | `docir get <id>` | Full document with body |
 | `docir check` | Structural findings — duplicate ids, dangling edges, staleness (`--strict` gates CI on errors, `--fix` repairs them) |
 | `docir agent install` | Teach this repo's AI agent to drive docir |

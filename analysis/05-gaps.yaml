@@ -1612,7 +1612,13 @@
   frequency: unknown
   proposed_default: "Document 're-enable the profile, or change the type by hand and reindex'."
   question: null
-  status: open
+  status: resolved
+  resolution: >
+    DOCUMENTED 2026-07-29, as proposed. The agent guide's maintenance section now states the
+    exit: re-enable the profile in `docs-schema.yaml`, or change the doc's `type` to one the
+    schema knows, then `docir reindex` — and says why `check --fix` will not do it (it cannot
+    tell which you meant). It also states what an unresolved one costs: the document cannot
+    be validated, is never reported stale, and is skipped by the layering check.
 
 - id: GAP-027
   class: missing
@@ -1688,7 +1694,13 @@
   frequency: n/a
   proposed_default: "State it in the README's search description."
   question: null
-  status: open
+  status: resolved
+  resolution: >
+    DOCUMENTED 2026-07-29, as proposed — the design stands. Tags are a controlled vocabulary
+    for `query --tag`; folding them into FTS would let one tag match flood out the text
+    matches the query was actually for. The README's command table, a new "Scope and limits"
+    section and the agent guide's read table all now say search covers title/description/body
+    and *not* tags, and point at `query --tag`.
 
 - id: GAP-032
   class: misleading
@@ -1756,7 +1768,12 @@
   frequency: n/a
   proposed_default: "Standardise on 'store' in user-facing text; keep `home` as the flag name."
   question: null
-  status: open
+  status: resolved
+  resolution: >
+    FIXED 2026-07-29, as proposed. User-facing prose says "store"; `--home` keeps its name as
+    the flag. The `--home` help no longer says "Data root", and the README's remaining "data
+    root" phrasing is gone. ADRs are left as written — they are dated records, not live
+    documentation.
 
 - id: GAP-038
   class: unstated
@@ -1774,7 +1791,18 @@
   frequency: n/a
   proposed_default: "Accept as-is; record the choice so it is not rediscovered as a bug."
   question: null
-  status: open
+  status: resolved
+  resolution: >
+    FIXED 2026-07-29 properly, at the maintainer's direction: `SystemClock.today()` returns
+    the UTC calendar date rather than the local one. No migration mechanism — the project has
+    no users yet, so existing dates are not worth a compatibility path.
+    The original entry proposed accepting the skew as immaterial at a 365-day cadence, which
+    was true of the *staleness* consequence and missed the other one: these dates are written
+    into committed files and read by other people, so two teammates either side of midnight
+    stamped different dates for the same moment. That is a correctness problem in shared data,
+    not a rounding problem in a heuristic.
+    Pinned by a test asserting against a UTC date computed in the test rather than against
+    `date.today()`, which is the local value the fix moved away from.
 
 - id: GAP-039
   class: unstated
@@ -1796,7 +1824,30 @@
   frequency: n/a
   proposed_default: "State the supported corpus size in the README."
   question: null
-  status: open
+  status: resolved
+  resolution: >
+    FIXED 2026-07-29 properly, at the maintainer's direction, who expects much larger corpora
+    than the "thousands of documents" the original assumption allowed for. Pagination is real,
+    not documented-away.
+    `query` and `search` take `--limit`/`--offset`, and `tag list` — which had no window at
+    all — now pages too. `query`'s window is a SQL LIMIT/OFFSET applied *in* the statement:
+    it previously fetched every match and sliced in Python, so the cost of a page grew with
+    the corpus behind it. `DocumentFilter` carries the window, and `limit=None` still means
+    "everything" for the maintenance paths, which genuinely need every row.
+    TWO PREDICATES CANNOT USE A SQL WINDOW, and both would have been silently wrong:
+    `--stale` derives from the clock and the type's cadence, and `search`'s status filter runs
+    after FTS5 (which cannot see a status). A SQL OFFSET on either would count *rows scanned*
+    rather than rows returned — the same class of ordering bug GAP-011 fixed once for
+    `--limit`. Both page over the filtered set instead, and the stale path is pinned by a
+    fixture that interleaves overdue and fresh documents, which a naive window mis-pages.
+    NO TOTAL IN THE RESPONSE: it is a bare JSON array with nowhere to put one, and a wrapper
+    would break every caller. A page shorter than `--limit` means the end; stated in the CLI
+    help, the guide and the README.
+    STILL UNBOUNDED, and stated rather than hidden: `context` loads every current embedding
+    per call, which is what sets the practical corpus ceiling — capping it would break the
+    semantic recall that ADR-0011 exists for. `lint --deep` remains O(n²) over those vectors.
+    Both are now named in the README's "Scope and limits" instead of living in a comment about
+    id entropy.
 
 # =============================================================================
 # DELTA PASS 2026-07-29 (v0.7.0). Four findings over the surface added since the

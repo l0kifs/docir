@@ -74,8 +74,8 @@ case. Run `docir init` first.
 |---|---|
 | `docir context "<task>" [--limit N] [--expand N]` | Best first step: full-text and vector rankings fused, plus 1-hop related docs. Graph-pulled items marked `via_graph`. |
 | `docir get <id>` | Full doc (body included); works for any status. |
-| `docir search "<text>"` | Full-text only. |
-| `docir query --type decision --status accepted --tag auth` | Structured filter; repeatable `--type/--status/--tag`. |
+| `docir search "<text>"` | Full-text over **title, description and body only** — *not* tags. `docir search auth` will not find a doc merely tagged `auth`; use `docir query --tag auth`. Supports `--limit`/`--offset`. |
+| `docir query --type decision --status accepted --tag auth` | Structured filter; repeatable `--type/--status/--tag`. Pages with `--limit`/`--offset` — a page shorter than `--limit` means the end. |
 
 **Two-tier read (skeleton → body).** `context` / `query` / `search` return
 *skeletons* — id, title, description, tags, typed `related`, `owner`,
@@ -367,6 +367,11 @@ to leave alone.
 
 - `docir check` — Tier 1 warnings: cycles, orphans, layering, **dangling** `related` links, **duplicate ids**, **stale** docs (past their review cadence), **unknown type/status/tag** (a `type` not in the active schema, a `status` the type doesn't declare, a tag not in the registry — all three mean a file was edited outside the CLI). Run before finishing.
 - `docir check --strict` — exits nonzero on **error**-severity findings only (`duplicate-id`, `dangling`, `malformed` — the corpus is broken). Use as a **CI / pre-merge gate**. Warnings (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`, `unknown-status`, `unknown-tag`) are reported but never fail the build; `--strict-all` makes them fatal too.
+- **Recovering from `unknown-type`** (a doc whose `type` isn't in the active schema, usually
+  because a profile was disabled): re-enable the profile in `docs-schema.yaml`, or change the
+  doc's `type` to one the schema knows — then `docir reindex`. `check --fix` deliberately will
+  not guess which you meant. Until it is resolved the doc cannot be validated, is never
+  reported stale, and is skipped by the layering check.
 - `docir check --fix` — repair what can be repaired without guessing: re-issue duplicate ids (the oldest file keeps the id, so existing links stay valid) and drop `related` edges pointing at nothing. It reports every change, then lists what it could not fix. `malformed` and `unknown-type` are left alone — those need you to decide what the file or the schema should say. **This is the supported way to recover; do not hand-edit markdown to fix these.**
 - `docir lint --deep` — Tier 2 advisories (duplicate content, oversized docs).
 - `docir reindex [--changed]` — after a doc file was hand-edited, merged, or freshly cloned.

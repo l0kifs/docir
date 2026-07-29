@@ -90,6 +90,15 @@ class TagRepository(ABC):
         """Return the tag, or ``None`` if it is not registered."""
 
     @abstractmethod
+    def page(self, *, limit: int, offset: int) -> list[Tag]:
+        """A window over the registry, key-ordered.
+
+        Separate from :meth:`all`, which the write paths need in full (a rename
+        rewrites every referencing document). Listing is the path that grows
+        with the vocabulary, so it is the one that pages.
+        """
+
+    @abstractmethod
     def exists(self, key: str) -> bool:
         """Whether a tag with this key is registered."""
 

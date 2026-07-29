@@ -7,7 +7,9 @@ vocabulary consistent everywhere a tag is used.
 
 ## Public operations
 - `TagService.add(key, description) -> TagView` — register a new tag
-- `TagService.list_all() -> [TagView]` — every registered tag
+- `TagService.list_all(limit=DEFAULT_TAG_PAGE, offset=0) -> [TagView]` — one key-ordered page of
+  the registry. Paged because listing grows with the vocabulary; the write paths still read it
+  whole, since a rename rewrites every referencing document.
 - `TagService.rename(old, new, merge=False) -> tuple[str, ...]` — rename a tag across the
   registry and every document that uses it, returning the ids rewritten. Renaming onto an
   existing key is refused unless `merge`, which folds `old` into `new`: documents carrying

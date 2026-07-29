@@ -24,6 +24,19 @@ from docir.platform.persistence.unit_of_work import UnitOfWork
 
 UnitOfWorkFactory = Callable[[], UnitOfWork]
 
+#: Tags returned by one `tag list` call when the caller does not choose.
+DEFAULT_TAG_PAGE = 100
+
+
+def _require_positive_limit(limit: int) -> None:
+    if limit <= 0:
+        raise ValidationError(f"limit must be a positive integer, got {limit}")
+
+
+def _require_non_negative_offset(offset: int) -> None:
+    if offset < 0:
+        raise ValidationError(f"offset must be zero or greater, got {offset}")
+
 
 class TagService:
     """Use cases for the tag registry."""
@@ -52,12 +65,23 @@ class TagService:
             uow.commit()
         return TagView(key=tag.key, description=tag.description)
 
-    def list_all(self) -> list[TagView]:
-        """List every registered tag (``docs tag list``)."""
+    def list_all(self, *, limit: int = DEFAULT_TAG_PAGE, offset: int = 0) -> list[TagView]:
+        """One page of the registry, key-ordered (``docs tag list``).
+
+        Paged because the registry grows with the vocabulary and this is the
+        only path that reads it for display; the write paths still take it whole,
+        because a rename has to rewrite every referencing document.
+
+        A short page means the end: there is no total in the response, since it
+        is a bare JSON array with nowhere to put one, and adding a wrapper would
+        break every existing caller.
+        """
+        _require_positive_limit(limit)
+        _require_non_negative_offset(offset)
         with self._uow_factory() as uow:
             return [
                 TagView(key=tag.key, description=tag.description)
-                for tag in sorted(uow.tags.all(), key=lambda t: t.key)
+                for tag in uow.tags.page(limit=limit, offset=offset)
             ]
 
     def rename(self, old: str, new: str, *, merge: bool = False) -> tuple[str, ...]:

@@ -143,7 +143,12 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
                         select(DocumentTagRow.doc_id).where(DocumentTagRow.tag_key == key)
                     )
                 )
+        # Ordered before the window, so a page is stable across calls.
         stmt = stmt.order_by(DocumentRow.created.desc(), DocumentRow.id)
+        if spec.offset:
+            stmt = stmt.offset(spec.offset)
+        if spec.limit is not None:
+            stmt = stmt.limit(spec.limit)
         rows = self._session.scalars(stmt).all()
         return self._hydrate(list(rows))
 
@@ -234,6 +239,11 @@ class SqlAlchemyTagRepository(TagRepository):
 
     def all(self) -> list[Tag]:
         rows = self._session.scalars(select(TagRow).order_by(TagRow.key)).all()
+        return [Tag(key=row.key, description=row.description) for row in rows]
+
+    def page(self, *, limit: int, offset: int) -> list[Tag]:
+        stmt = select(TagRow).order_by(TagRow.key).offset(offset).limit(limit)
+        rows = self._session.scalars(stmt).all()
         return [Tag(key=row.key, description=row.description) for row in rows]
 
     def delete(self, key: str) -> None:

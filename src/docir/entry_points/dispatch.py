@@ -21,7 +21,7 @@ from docir.modules.documents.api import (
     SearchRequest,
     UpdateDocumentRequest,
 )
-from docir.modules.tags.api import TagService
+from docir.modules.tags.api import DEFAULT_TAG_PAGE, TagService
 from docir.platform.errors import DocirError
 
 Payload = dict[str, object]
@@ -120,6 +120,7 @@ class Dispatcher:
             owner=_opt_str(payload, "owner"),
             stale_only=_bool(payload, "stale"),
             limit=_int(payload, "limit", default=50),
+            offset=_int(payload, "offset", default=0),
         )
         return [asdict(view) for view in self._documents.query(request)]
 
@@ -128,6 +129,7 @@ class Dispatcher:
             text=_str(payload, "text"),
             limit=_int(payload, "limit", default=20),
             include_inactive=_bool(payload, "include_inactive"),
+            offset=_int(payload, "offset", default=0),
         )
         return [asdict(view) for view in self._documents.search(request)]
 
@@ -156,8 +158,12 @@ class Dispatcher:
         view = self._tags.add(_str(payload, "key"), _str(payload, "description"))
         return asdict(view)
 
-    def _tag_list(self, _payload: Payload) -> object:
-        return [asdict(view) for view in self._tags.list_all()]
+    def _tag_list(self, payload: Payload) -> object:
+        views = self._tags.list_all(
+            limit=_int(payload, "limit", default=DEFAULT_TAG_PAGE),
+            offset=_int(payload, "offset", default=0),
+        )
+        return [asdict(view) for view in views]
 
     def _tag_rename(self, payload: Payload) -> object:
         old, new = _str(payload, "old"), _str(payload, "new")

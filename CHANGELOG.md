@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`docir tag rename X X --merge` no longer corrupts the tag registry.** A self-merge
+  reported success, deleted the tag, and left every document still carrying it — the exact
+  `unknown-tag` state `docir check` reports. Renaming a tag to itself is now rejected.
+  Introduced in 0.7.0 by the `--merge` feature, whose tests covered merging two *different*
+  tags.
+
 ## [0.7.0] - 2026-07-29
 
 Six commands that reported success while doing something else, and the adoption story for a

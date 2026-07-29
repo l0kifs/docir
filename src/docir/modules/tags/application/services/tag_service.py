@@ -17,6 +17,7 @@ from docir.platform.errors import (
     TagAlreadyExistsError,
     TagInUseError,
     TagNotFoundError,
+    ValidationError,
 )
 from docir.platform.filesystem.ports import DocumentFileStore, TagFileStore
 from docir.platform.persistence.unit_of_work import UnitOfWork
@@ -79,6 +80,13 @@ class TagService:
         product offers. Same reasoning as `check --fix` and `delete --force`:
         a mechanical rewrite is not a human re-verification.
         """
+        if old == new:
+            # A self-merge used to delete the tag and leave every document still
+            # carrying it — manufacturing the `unknown-tag` state `check`
+            # reports, and reporting success while doing it. `delete(old)` runs
+            # unconditionally, and rewriting `old -> new` is a no-op when they
+            # are the same string, so nothing put the registry entry back.
+            raise ValidationError(f"cannot rename tag {old!r} to itself")
         with self._uow_factory() as uow:
             tag = uow.tags.get(old)
             if tag is None:

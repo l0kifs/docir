@@ -1797,3 +1797,134 @@
   proposed_default: "State the supported corpus size in the README."
   question: null
   status: open
+
+# =============================================================================
+# DELTA PASS 2026-07-29 (v0.7.0). Four findings over the surface added since the
+# original run at 560aea5 (v0.2.1). Probes recorded in 99-log.md.
+# =============================================================================
+
+- id: GAP-047
+  class: incorrect
+  flow: FLOW-004
+  step: "docir --home <path> init"
+  finding: >
+    `docir init` ignores the global `--home` flag. The store is created under the CWD
+    regardless, and the reported `home` is the CWD path, so the output describes what
+    happened but the flag was silently discarded.
+  actual_today: >
+    OBSERVED. From an unrelated directory, `docir --home /tmp/x/target init` created
+    `<cwd>/.docir` and reported that path as `home`; `/tmp/x/target` was not created. Every
+    other command honours `--home`. `init` computes its own home from the `directory`
+    argument (`app.py`: `directory.resolve() / PROJECT_STORE_DIRNAME`) and never consults
+    the resolved settings.
+  actors_affected: [repository maintainer, AI coding agent]
+  evidence:
+    - src/docir/entry_points/cli/app.py   # init builds home from `directory`, not settings
+    - analysis/99-log.md                  # DELTA-PROBE-1
+  confidence: observed
+  severity: material
+  impact: >
+    A store is created somewhere the user did not ask for, and if the CWD happens to be a
+    repository they now have an unrequested `.docir/` in it — which is exactly what happened
+    to the analyst while probing. The one flag whose entire purpose is "put the store here"
+    is the one flag this command ignores. Predates the original run; missed by it.
+  frequency: "any `--home` used with `init`"
+  proposed_default: >
+    Either honour `--home` (it is more specific than the positional directory, so it should
+    win), or reject the combination naming the positional argument as the way to choose a
+    location. Silently discarding it is the only option that should not stand.
+  question: null
+  status: open
+
+- id: GAP-048
+  class: incorrect
+  flow: FLOW-005
+  step: "docir tag rename X X --merge"
+  finding: >
+    A self-merge deleted the tag from the registry and left every document still carrying
+    it, while reporting success.
+  actual_today: >
+    OBSERVED and FIXED the same day. `tag rename auth auth --merge` returned
+    `{"renamed":["auth","auth"],"documents":["adr-0001"]}`, `tag list` was empty, and the
+    document still read `tags: [auth]` — the corpus was left in exactly the `unknown-tag`
+    state `check` reports. `uow.tags.delete(old)` runs unconditionally, and the document
+    rewrite maps `old -> new`, a no-op when they are the same string, so nothing restored
+    the entry.
+  actors_affected: [repository maintainer, AI coding agent]
+  evidence:
+    - src/docir/modules/tags/application/services/tag_service.py
+    - analysis/99-log.md   # DELTA-PROBE-6
+  confidence: observed
+  severity: material
+  impact: >
+    Data corruption reachable from a plausible command, shipped in 0.7.0. Self-inflicted:
+    introduced by the GAP-028 merge four commits earlier, whose tests covered merging two
+    *different* tags and never the degenerate case.
+  frequency: "any self-merge; also `tag rename X X` without --merge, same path"
+  proposed_default: "Reject `old == new` before opening the unit of work."
+  question: null
+  status: resolved
+  resolution: >
+    FIXED 2026-07-29. `rename` rejects `old == new` with a ValidationError before the unit of
+    work opens, for both the plain and the `--merge` form. Pinned by two tests that assert
+    the registry and the document survive and that `check` reports no `unknown-tag`.
+    The general lesson, and the reason the delta pass earns its keep: a feature added to
+    close a gap is itself new surface, and its own degenerate cases are unexamined. The
+    GAP-028 tests asked "does merging two tags work?" and never "what if they are the same
+    tag?".
+
+- id: GAP-049
+  class: unstated
+  flow: FLOW-004
+  step: "docir init --force-schema without --force"
+  finding: >
+    `--force-schema` alone is a silent no-op; it only takes effect together with `--force`.
+  actual_today: >
+    OBSERVED. On a store with a customised schema, `docir init --force-schema` reported
+    `schema_written: false` and left the file untouched, with no message. The coupling is
+    not stated in either flag's help.
+  actors_affected: [repository maintainer]
+  evidence:
+    - src/docir/entry_points/composition.py   # _schema_write_plan returns early when not force
+    - analysis/99-log.md                      # DELTA-PROBE-2
+  confidence: observed
+  severity: cosmetic
+  impact: >
+    A user who reaches for the more specific-sounding flag gets nothing and no explanation.
+    Low harm — the failure is inaction, not damage — but it is the flag whose whole purpose
+    is to overwrite, silently declining to.
+  frequency: "any use of --force-schema without --force"
+  proposed_default: >
+    Treat `--force-schema` as implying `--force` for the schema, or say why it did nothing.
+    Introduced with the GAP-026 fix.
+  question: null
+  status: open
+
+- id: GAP-050
+  class: unstated
+  flow: FLOW-002
+  step: "reading which store answered a query"
+  finding: >
+    Write commands report the resolved `store`; the read paths (`query`/`search`/`context`)
+    do not.
+  actual_today: >
+    OBSERVED. `add`/`update`/`get` carry `store` (they share `_emit_document`); `query`
+    returns rows with no store field (`_emit_document_list`). An agent reading results
+    cannot tell which store answered without issuing a separate command.
+  actors_affected: [AI coding agent]
+  evidence:
+    - src/docir/entry_points/cli/app.py   # _emit_document vs _emit_document_list
+    - analysis/99-log.md                  # DELTA-PROBE-3
+  confidence: observed
+  severity: cosmetic
+  impact: >
+    Introduced by the GAP-023 fix, which reasoned about writes only. Reads are the safer
+    half — nothing lands in the wrong place — but "which store am I reading?" is the same
+    question, and the answer is now available on some commands and not others.
+  frequency: "every read"
+  proposed_default: >
+    Emit `store` on the list paths too, or state that it is a write-path field. Note the
+    token cost: `store` is one absolute path per *response* on writes, but the list emitter
+    would need it once per response rather than per row.
+  question: null
+  status: open

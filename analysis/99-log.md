@@ -429,3 +429,60 @@ REVERT GAP-036  `docir import` built, then removed the same day, before committi
        GAP-036 returns to OPEN; the reasoning is recorded there so it is not rebuilt
        naively. The agent guide now carries the review-then-add workflow instead.
 ```
+
+## DELTA PASS — 2026-07-29, v0.7.0 (39 commits since the original run at 560aea5)
+
+Scope: the surface *added or changed* since v0.2.1, not a re-derivation. The existing
+register was appended to, never rewritten (SKILL.md §1.6). 37 of 46 recorded gaps had been
+resolved; the question was what the fixing itself introduced.
+
+```
+FRAME    delta only: 34 source files changed, +1951/-265; 8 new CLI flags
+INVENTORY same evidence ranks as the original run — 1, 5 and 6 still absent
+EXTRACT  P1 via the Typer command tree (authoritative, not the docs)
+DETECT   7 empirical probes against the real CLI, listed below
+```
+
+### Probes
+
+```
+DELTA-PROBE-1  docir --home X init            → store created in CWD, X untouched   GAP-047
+DELTA-PROBE-2  init --force-schema (no --force) → silent no-op                      GAP-049
+DELTA-PROBE-3  store field on read paths      → absent on query/search/context      GAP-050
+DELTA-PROBE-4  query --stale --include-archived → correct; archived excluded by default — NO gap
+DELTA-PROBE-5  check --fix with unknown-tag   → correctly returned in `remaining`  — NO gap
+DELTA-PROBE-6  tag rename X X --merge         → registry entry deleted, docs keep the tag  GAP-048
+DELTA-PROBE-7  add --id in a random store     → adopted; next id still random      — NO gap
+```
+
+Three of seven probes found nothing. Recorded so the coverage is not overstated: the
+stale/archived interaction, `check --fix`'s handling of the new finding kinds, and
+cross-style id adoption are all correct.
+
+### What the delta pass was for
+
+**Two of the four findings were introduced by the fixes themselves**, which is the argument
+for running one at all:
+
+- GAP-048 (self-merge corrupts the registry) came from the GAP-028 merge, four commits
+  earlier. Its tests asked "does merging two tags work?" and never "what if they are the
+  same tag?". It shipped in 0.7.0 and manufactured precisely the `unknown-tag` state that
+  the GAP-016 work had taught `check` to detect — one fix creating the condition another
+  fix had just learned to report.
+- GAP-050 came from the GAP-023 fix, which reasoned about writes and did not ask whether
+  reads have the same question. GAP-049 came from the GAP-026 fix.
+
+**A feature added to close a gap is new surface, and its degenerate cases are unexamined by
+construction** — the tests written alongside it are shaped by the gap it was closing.
+
+GAP-047 is different: it predates the original run and that run missed it. `init` is the one
+command that builds its own home rather than using the resolved settings, so it fell outside
+a review that traced `Settings.resolve`. Worth remembering that "every command does X" is a
+claim to verify per command, not per resolver.
+
+### Coverage — what this pass did NOT examine
+
+Unchanged since v0.2.1 and not re-read: the daemon transport and lifecycle, the embedding
+scheduler, `lint --deep`, the agents module beyond the template, and Alembic. The nine
+cosmetic gaps left open from the original run were not re-examined either; they were
+assessed for priority on 2026-07-29 (see the entries) but not re-derived from code.

@@ -10,6 +10,7 @@ from docir.platform.errors import (
     TagAlreadyExistsError,
     TagInUseError,
     TagNotFoundError,
+    ValidationError,
 )
 
 
@@ -227,3 +228,30 @@ def test_force_remove_reports_the_documents_it_stripped(seeded: Dispatcher) -> N
 def test_removing_an_unused_tag_reports_no_documents(dispatcher: Dispatcher) -> None:
     dispatcher.dispatch("tag_add", {"key": "spare", "description": "d"})
     assert dispatcher.dispatch("tag_remove", {"key": "spare"})["documents"] == []
+
+
+def test_self_merge_is_rejected(dispatcher: Dispatcher) -> None:
+    """A self-merge used to corrupt the registry (found by the 0.7.0 delta pass).
+
+    `tag rename auth auth --merge` reported success, deleted `auth` from the
+    registry, and left every document still carrying it — manufacturing exactly
+    the `unknown-tag` state `check` reports. `delete(old)` runs unconditionally,
+    and rewriting `old -> new` is a no-op when they are the same string, so
+    nothing put the entry back.
+    """
+    dispatcher.dispatch("tag_add", {"key": "auth", "description": "Auth."})
+    dispatcher.dispatch(
+        "add", {"type": "decision", "title": "T", "description": "d", "tags": ["auth"]}
+    )
+    with pytest.raises(ValidationError):
+        dispatcher.dispatch("tag_rename", {"old": "auth", "new": "auth", "merge": True})
+
+    assert [t["key"] for t in dispatcher.dispatch("tag_list", {})] == ["auth"]
+    assert list(dispatcher.dispatch("get", {"doc_id": "adr-0001"})["tags"]) == ["auth"]
+    assert not [i for i in dispatcher.dispatch("check", {}) if i["kind"] == "unknown-tag"]
+
+
+def test_self_rename_without_merge_is_rejected_too(dispatcher: Dispatcher) -> None:
+    dispatcher.dispatch("tag_add", {"key": "auth", "description": "Auth."})
+    with pytest.raises(ValidationError):
+        dispatcher.dispatch("tag_rename", {"old": "auth", "new": "auth"})

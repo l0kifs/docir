@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-07-30
+
+docir now maintains its own documentation in docir, and doing so found eight defects — every
+one by running the tool against a real 101-document corpus rather than reading the code.
+
+### Upgrade notes
+
+- **Tag keys must match `^[a-z][a-z0-9-]*$`.** `docir tag add Auth` and
+  `docir tag rename x Auth` now fail where they used to succeed, so a script that mints
+  mixed-case or underscored keys needs updating. Keys **already in a registry are never
+  rewritten** — no migration runs, nothing is lowercased for you. An existing key that
+  fails the rule becomes a new `tag-key-format` *warning* from `docir check`, and the fix
+  is `docir tag rename Auth auth`. `--strict` is unaffected.
+- **A document may no longer relate to itself.** `docir update X --set-related X` is now a
+  Tier 0 error. Self-edges already on disk are left alone and still surface as a `cycle`
+  finding.
+- **`docir lint --deep` reports less.** A `duplicate` is suppressed when the two documents
+  are already linked, and a type can opt out of `scope-creep` with `max_body_chars`. If you
+  were counting findings, the number moved for both reasons.
+
 ### Fixed
 
 - **`docir lint --deep` no longer reports a duplicate for two documents you have linked.**
@@ -632,7 +652,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/l0kifs/docir/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/l0kifs/docir/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/l0kifs/docir/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/l0kifs/docir/compare/v0.6.0...v0.7.0

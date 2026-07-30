@@ -259,15 +259,19 @@ shared **platform**, wired by thin **entry_points**. Dependencies flow
 [tach](https://docs.gauge.sh) in CI — not by convention. Each module exposes exactly one
 public file (`api.py`) described by a `CONTRACT.md`.
 
-See [docs/doc-index-architecture.md](docs/doc-index-architecture.md) for the design
-rationale and [docs/architecture-rules.md](docs/architecture-rules.md) for the module rules.
+The design rationale and the module rules are themselves docir documents — run
+`docir get arch-1cfb1b212237` and `docir get arch-322e5f992ad2`, or browse
+[`.docir/docs/architectures/`](.docir/docs/architectures/). [`docs/README.md`](docs/README.md)
+maps every pre-migration path to its id.
 
 ## Contributing
 
-Issues and PRs welcome. Read the [architecture rules](docs/architecture-rules.md) and the
-[ADRs](docs/adr/) first — module boundaries are machine-checked by [tach](https://docs.gauge.sh)
-in CI, alongside lint, type-check, and a coverage gate. Every design deviation is recorded
-as an ADR.
+Issues and PRs welcome. docir dogfoods itself: its ADRs, architecture documents, runbooks
+and gap register live in its own store, so `docir context "what you are about to change"`
+is how you orient. Read the architecture rules and the ADRs (`docir query --type decision`)
+first — module boundaries are machine-checked by [tach](https://docs.gauge.sh) in CI,
+alongside lint, type-check, and a coverage gate. Every design deviation is recorded as an
+ADR, added with `docir add --type decision`, never by hand.
 
 ```bash
 uv sync                                              # dev environment

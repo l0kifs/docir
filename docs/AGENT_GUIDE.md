@@ -2,8 +2,7 @@
 
 The canonical agent guide now **ships with docir** as a packaged instruction
 template and is installed into a project (or globally) with one command — it is
-no longer maintained as a copy here (see
-[ADR-0008](adr/ADR-0008-agent-instruction-scaffolding.md)).
+no longer maintained as a copy here (see ADR-0008 — `docir get adr-3a2d5ee7bc84`).
 
 ## Install it
 

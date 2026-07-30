@@ -3,11 +3,22 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 Read `README.md` first — it explains what `docir` is (markdown compiled into a derived index),
-the file format, the CLI surface, and the read/write flows. Read
-[`docs/doc-index-architecture.md`](docs/doc-index-architecture.md) for the design rationale and
-[`docs/architecture-rules.md`](docs/architecture-rules.md) for the module rules this codebase is
-held to. This file covers what those do not: commands, the module boundaries and how they are
-machine-checked, and invariants that look like cruft but are load-bearing.
+the file format, the CLI surface, and the read/write flows.
+
+**docir's own documentation lives in docir.** The ADRs, the architecture documents, the
+runbooks and the gap register are documents in the project store (`.docir/docs/`), so read
+them through the CLI rather than by path:
+
+```bash
+docir get arch-1cfb1b212237        # Doc-Index CLI — Architecture (design rationale)
+docir get arch-322e5f992ad2        # Architecture Rules — Modular DDD (the module rules)
+docir query --type decision        # every ADR; the number is in the title
+docir context "<what you are about to change>"   # ranked skeletons, no bodies
+```
+
+Ids are random, so [`docs/README.md`](docs/README.md) holds the stable old-path → id map.
+This file covers what those documents do not: commands, the module boundaries and how they
+are machine-checked, and invariants that look like cruft but are load-bearing.
 
 ## Commands
 
@@ -64,7 +75,8 @@ place that knows the command vocabulary, so the wire contract and the local cont
 ### Module layout (enforced, not aspirational)
 
 The codebase is vertical bounded-context **modules** over shared **platform** capabilities, wired by
-thin **entry_points** — the shape `docs/architecture-rules.md` mandates. `tach` proves it in CI.
+thin **entry_points** — the shape `arch-322e5f992ad2` (Architecture Rules) mandates. `tach`
+proves it in CI.
 
 ```
 src/docir/
@@ -93,7 +105,8 @@ it has no shared-index baseline edges.
 - Every `api.py` has a `CONTRACT.md` beside it. **A change to `api.py` and its `CONTRACT.md` must
   land in the same commit** — `scripts/check_contract_sync.py` fails the build otherwise (§8.6).
 - New modules, merges/splits, platform additions, or deliberate rule violations get an ADR in
-  `docs/adr/` (§14). Read them — they explain the deviations below.
+  the store as a `decision` document (§14) — `docir add --type decision`, listed by
+  `docir query --type decision`. Read them; they explain the deviations below.
 
 ### The shared-index baseline (read before touching persistence)
 

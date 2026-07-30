@@ -1,0 +1,17 @@
+agents: AI-assistant instructions and the agent contract.
+architecture: Module boundaries, layering and the dependency graph.
+blocking: 'Gap severity: wrong answer or data loss.'
+cli: Command surface, flags, output shape and exit codes.
+cosmetic: 'Gap severity: recorded, not urgent.'
+daemon: Background process, socket transport and lifecycle.
+docs: Project documentation and the agent guide.
+embeddings: Vector generation, models and the embedding scheduler.
+integrity: Id allocation, duplicate detection and repair.
+material: 'Gap severity: affects real users, has a workaround.'
+persistence: SQLite index, schema migrations, unit of work.
+release: Packaging, publishing and version history.
+retrieval: Ranking, fusion, search and context assembly.
+schema: Document types, statuses, profiles and validation.
+staleness: Review cadence, owner and verified dates.
+tags: The tag registry and its referential integrity.
+testing: Test strategy, fixtures and coverage gates.

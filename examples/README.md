@@ -56,4 +56,4 @@ deterministic embedder, so they stay offline and reproducible.
 - The generated files under the workspace `docs/` directory are the source of
   truth — plain markdown with YAML frontmatter, ready to commit to git.
 - `uv run docir --help` lists every command.
-- `docs/doc-index-architecture.md` explains the full design.
+- The full design is a docir document in docir's own store: `docir get arch-1cfb1b212237`.

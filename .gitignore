@@ -223,7 +223,6 @@ examples/.workspace/
 .DS_Store
 .local-data/
 
-# A docir store accidentally created in this checkout. docir's own docs are
-# plain markdown under docs/ — this repo does not dogfood a store, so any
-# .docir/ here is a stray from running the CLI with the repo as the CWD.
-.docir/
+# docir dogfoods its own store: .docir/docs/ and .docir/docs-schema.yaml are
+# committed, the derived index is ignored by .docir/.gitignore. Do not ignore
+# .docir/ wholesale — that is what kept this repo from using its own product.

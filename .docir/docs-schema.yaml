@@ -1,0 +1,124 @@
+# docir document schema.
+#
+# The frozen, domain-agnostic *core* (the `decision` type, the relation-kind
+# registry, and staleness cadences) is always included. Layer domain-specific
+# types by naming *profiles* below; bundled profiles are:
+#   software  -> issue, architecture, release_note
+#   research  -> hypothesis, experiment, finding
+#   ops       -> runbook, incident, postmortem
+#   qa        -> test_plan, test_case
+#   legal     -> policy, contract, obligation
+#
+# You can enable several at once, and add your own inline `types:` /
+# `relation_types:` here — they are merged last and win on name conflicts.
+#
+# Typed edges: a document's `related` entries carry a relation *kind*. Write a
+# bare id for the default `relates_to`, or `<id>:<kind>` (CLI) / `{to, kind}`
+# (frontmatter) for a typed edge.
+#
+# Staleness: give a type a `review_days` cadence; `docir check` flags documents
+# whose last `verified` date (or last edit) is older than that. Set `owner` and
+# stamp `docir update <id> --verified` to reset the clock.
+#
+# Run `docir schema show` to see the fully merged result, and
+# `docir schema validate` to check this file before it reaches a write.
+
+profiles: [software, ops]
+
+# --------------------------------------------------------------------------
+# Inline types (merged last, win on name conflicts)
+# --------------------------------------------------------------------------
+types:
+  # Descriptive registers rather than decisions: the glossary, the actor
+  # catalog, the business-rule register, the discovery frame and its probe log.
+  # They record what IS, so nothing about them is proposed/accepted — they are
+  # `active` until something supersedes them.
+  #
+  # level 5 matches `architecture`, the highest rank in play. Reference material
+  # is what everything else is written against, and the Tier 1 layering check
+  # warns when a doc `depends_on`/`refines` something of a LOWER level — so a
+  # lower rank here would make every architecture doc citing the glossary a
+  # false positive.
+  reference:
+    prefix: ref
+    level: 5
+    required: []
+    default_status: active
+    inactive_statuses: [superseded]
+    review_days: 365
+    statuses:
+      active: [superseded]
+      superseded: []
+
+# Ids are collision-resistant hex tokens (adr-3f9a2b1c7d4e), so people
+# authoring docs on concurrent branches never mint the same id. Switch to
+# `sequential` for human-friendly numbers (adr-0007) if this repo has a
+# single doc author. Per-type `id_style:` overrides this.
+id_style: random
+
+# --------------------------------------------------------------------------
+# Adding your own types
+# --------------------------------------------------------------------------
+# Uncomment and adapt. Three keys are REQUIRED on every type:
+#
+#   prefix          str  - id prefix, e.g. `tp` mints `tp-0001`. Must be UNIQUE
+#                          across the whole merged schema (core + every enabled
+#                          profile + these inline types).
+#   statuses        map  - `status: [statuses it may transition to]`. A MAPPING,
+#                          not a list. A terminal status maps to [].
+#   default_status  str  - the status a new document starts in. Must be one of
+#                          the keys in `statuses`.
+#
+# Optional keys:
+#
+#   required            list - extra frontmatter fields this type must carry, on
+#                              top of the always-required id/title/description/
+#                              type/status/created/updated.
+#   inactive_statuses   list - statuses treated as "closed" and hidden from the
+#                              default read path (widen back in with
+#                              `--include-inactive`).
+#   level               int  - layering rank. A higher-level doc depending on a
+#                              lower-level one is a Tier 1 `check` warning.
+#   review_days         int  - staleness cadence in days; 0 (default) = never
+#                              stale.
+#   id_style            str  - `sequential` (default) mints human-friendly ids
+#                              like tp-0007 from the index counter — safe only
+#                              within one shared index. Use `random` if people
+#                              author docs on concurrent branches; it mints
+#                              collision-resistant ids like tp-3f9a2b1c7d4e.
+#   allowed_relations   map  - `kind: [allowed target types]` whitelist ([] as
+#                              the target list means "any type"). CAREFUL: an
+#                              empty/absent mapping is permissive (any kind, any
+#                              target), but as soon as you list ONE kind it
+#                              becomes a strict whitelist — every kind you still
+#                              want, including `relates_to`, must be listed.
+#
+# relation_types:
+#   # Registers additional edge kinds on top of the core six (relates_to,
+#   # supersedes, depends_on, implements, contradicts, refines). Using a kind
+#   # that is not registered is a Tier 0 error.
+#   - governs
+#   - blocks
+#
+# types:
+#   test_plan:
+#     prefix: tp
+#     default_status: draft
+#     statuses:
+#       draft: [active]
+#       active: [deprecated]
+#       deprecated: []
+#     inactive_statuses: [deprecated]
+#     level: 3
+#     review_days: 180
+#
+#   runbook:
+#     prefix: rb
+#     default_status: draft
+#     statuses:
+#       draft: [active]
+#       active: [deprecated]
+#       deprecated: []
+#     allowed_relations:
+#       relates_to: []                  # [] = any target type
+#       depends_on: [runbook, decision] # only these target types

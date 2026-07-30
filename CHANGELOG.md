@@ -30,6 +30,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   merge introduces. It announces a skip when no project store is committed rather than
   exiting 0 silently, so a passing gate cannot be confused with an unchecked corpus.
 
+### Documentation
+
+- **docir now maintains its own documentation in docir.** A project-local store at `.docir/`
+  holds 93 documents: the 11 ADRs, the two architecture documents, two runbooks, the five
+  flow documents and the frame/actors/rules/glossary/probe-log registers from the discovery
+  bundle, plus the 50 gap findings and 17 clarifying questions as `issue` documents. Ids are
+  random, so each document keeps its `ADR-00NN` / `GAP-0NN` / `Q-0NN` / `FLOW-00N` number in
+  its title and [`docs/README.md`](docs/README.md) maps every pre-migration path to its id.
+  `docs/adr/`, the four loose `docs/*.md` files and `analysis/` are gone — each verified
+  present in the store field-by-field first.
+- **A `reference` type** is added inline in `docs-schema.yaml` for descriptive registers (a
+  glossary, an actor catalog, a rule register). They record what *is*, so they are `active`
+  until superseded. `level: 5` matches `architecture`, because reference material is what
+  everything else is written against and the layering check warns on a document that
+  `depends_on`/`refines` something of a lower level.
+- Prose citations became typed edges — each gap links to its flow and, where an executed
+  probe proved it, to the probe log; each question links to its gap. That took `docir check`
+  from 25 orphan warnings to zero findings.
+
 ## [0.8.0] - 2026-07-29
 
 Pagination on the list paths, UTC dates, and the scope of full-text search stated where
@@ -372,7 +391,7 @@ own claims for the first time — the benchmark that made that possible ships in
 
 ### Changed
 
-- **Semantic embeddings are on by default** ([ADR-0011](docs/adr/ADR-0011-semantic-embeddings-by-default.md)).
+- **Semantic embeddings are on by default** (ADR-0011, now `docir get adr-ab9c454b760c`).
   `fastembed` moves from an optional extra to a required dependency. Previously the shipped
   default was a dependency-free hashing embedder that scores *shared vocabulary* rather than
   meaning — the same signal the full-text index already provides — so both halves of the

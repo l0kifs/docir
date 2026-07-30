@@ -153,7 +153,7 @@ document's wording belongs in the easy half.
 
 Corpus documents can also carry:
 
-- `related: [key, key:kind]` — a typed edge ([ADR-0005](../docs/adr/ADR-0005-typed-relation-edges.md)).
+- `related: [key, key:kind]` — a typed edge (ADR-0005, `docir get adr-599055502f0e`).
   A bare key is `relates_to`.
 - `status_path: [accepted, superseded]` — legal transitions walked in order, applied after
   the edges are written. It is a path rather than a value because the schema's state

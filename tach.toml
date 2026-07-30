@@ -1,4 +1,4 @@
-# Tach — module-boundary enforcement (docs/architecture-rules.md §8).
+# Tach — module-boundary enforcement (§8 of the Architecture Rules; `docir get arch-322e5f992ad2`).
 #
 # The codebase is a set of vertical bounded contexts (modules/) over shared
 # technical capabilities (platform/), wired by entry_points/. Every allowed

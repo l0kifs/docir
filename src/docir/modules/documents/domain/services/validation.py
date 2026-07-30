@@ -20,6 +20,7 @@ from docir.platform.errors import (
     UnknownRelatedError,
     UnknownRelationKindError,
     UnknownTagError,
+    ValidationError,
 )
 
 
@@ -58,10 +59,39 @@ class Tier0Validator:
                     f"`docir tag add {key} --description ...`"
                 )
 
-    def validate_related(self, related: Iterable[str], known_ids: Iterable[str]) -> None:
-        """Every ``related`` id must already exist in the index."""
+    def validate_related(
+        self,
+        related: Iterable[str],
+        known_ids: Iterable[str],
+        *,
+        source_id: str | None = None,
+    ) -> None:
+        """Every ``related`` id must exist in the index, and none may be the document itself.
+
+        The self check is a plain :class:`ValidationError`, matching
+        ``cannot rename tag 't' to itself``: both are the same degenerate case —
+        an operation whose two ends are one thing — and that one was found the
+        same way, by asking "what if they are equal?" of a feature whose tests
+        only ever used two different values (GAP-048, then GAP-053).
+
+        A self-edge carries no meaning to preserve. ``related`` answers "what
+        else should I read", and the answer cannot be the document already in
+        hand; graph expansion cannot follow it anywhere. What it *did* do was
+        make the write path manufacture a one-node ``cycle`` — the finding
+        ``docir check`` exists to report — which no edit could clear except
+        removing the edge again.
+
+        Checked before existence so the message names the real problem: on
+        ``add --id``, the document is not yet indexed, and "does not exist in
+        the index" would be true but useless.
+        """
         existing = set(known_ids)
         for ref in related:
+            if source_id is not None and ref == source_id:
+                raise ValidationError(
+                    f"cannot relate document {ref!r} to itself; "
+                    "a `related` edge points at what to read next"
+                )
             if ref not in existing:
                 raise UnknownRelatedError(f"related document {ref!r} does not exist in the index")
 

@@ -7,7 +7,7 @@ owner: maintainer
 related:
 - ref-cb2beaa41604
 - arch-0a3c2d6d54a6
-status: open
+status: resolved
 tags:
 - integrity
 - material
@@ -63,3 +63,7 @@ the tag self-merge, and confirm the guard by injecting the bug.
 - `src/docir/modules/documents/domain/services/validation.py` (related-reference validation)
 - `src/docir/modules/documents/domain/services/graph_checks.py` (`_find_cycles`)
 - PROBE-R3 / PROBE-R3b in the 2026-07-30 probe log
+
+## Resolution
+
+FIXED 2026-07-30. Tier 0 rejects an edge whose target is the document itself, on both write paths: `update --set-related` and `add --id` (the only way `add` can name its own id, since an allocated one is not known to the caller). The error is a plain `ValidationError` — `cannot relate document 'adr-...' to itself` — matching `cannot rename tag 't' to itself`, because it is the same degenerate case that GAP-048 was: a feature whose tests only ever used two different values. The self check runs *before* the existence check so the message names the real problem; on `add --id` the document is not yet indexed and "does not exist in the index" would be true but useless. Self-edges already on disk are untouched and still surface as a `cycle` finding from `docir check` — the rule guards the write path, it does not rewrite anyone's files — and a test pins that. Verified by injecting the bug: with the self check disabled, both new guards fail.

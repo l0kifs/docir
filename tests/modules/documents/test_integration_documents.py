@@ -290,6 +290,56 @@ class TestTypedEdges:
         related = seeded.dispatch("get", {"doc_id": "issue-0001"})["related"]
         assert list(related) == [{"target": "adr-0001", "kind": "supersedes"}]
 
+    def test_a_document_cannot_relate_to_itself(self, seeded: Dispatcher) -> None:
+        """Guards GAP-053: the write path manufactured a `cycle` finding.
+
+        `--set-related <self>` was accepted, and `docir check` then reported a
+        one-node relation cycle that no edit cleared except removing the edge.
+        Same degenerate case as `tag rename X X` (GAP-048) — a feature whose
+        tests only ever used two different values.
+        """
+        with pytest.raises(ValidationError, match="itself"):
+            seeded.dispatch("update", {"doc_id": "adr-0001", "set_related": ["adr-0001"]})
+        with pytest.raises(ValidationError, match="itself"):
+            seeded.dispatch(
+                "update", {"doc_id": "adr-0001", "set_related": ["adr-0001:supersedes"]}
+            )
+        # and the rejection did not cost the legitimate edge
+        view = seeded.dispatch("update", {"doc_id": "adr-0001", "set_related": ["issue-0001"]})
+        assert view["related"][0]["target"] == "issue-0001"
+
+    def test_adopting_an_id_cannot_relate_it_to_itself(self, seeded: Dispatcher) -> None:
+        # The only way `add` can name its own id: `--id` adoption. The self
+        # message must win over "does not exist in the index", which is true
+        # here but useless.
+        with pytest.raises(ValidationError, match="itself"):
+            seeded.dispatch(
+                "add",
+                {
+                    "type": "decision",
+                    "title": "Self",
+                    "description": "d",
+                    "id": "adr-0099",
+                    "related": ["adr-0099"],
+                },
+            )
+
+    def test_a_self_edge_already_on_disk_is_still_reported(
+        self, seeded: Dispatcher, settings: Settings
+    ) -> None:
+        # The rule guards the write path; a file that predates it, or was
+        # hand-edited, still has to be visible — `check` is what sees it.
+        path = settings.docs_root / "issues" / "issue-0001-token-refresh-bug.md"
+        path.write_text(
+            path.read_text(encoding="utf-8").replace(
+                "related:\n- adr-0001", "related:\n- issue-0001"
+            ),
+            encoding="utf-8",
+        )
+        seeded.dispatch("reindex", {})
+        kinds = [f["kind"] for f in seeded.dispatch("check", {})]
+        assert "cycle" in kinds
+
     def test_unknown_relation_kind_rejected(self, seeded: Dispatcher) -> None:
         with pytest.raises(UnknownRelationKindError):
             seeded.dispatch(

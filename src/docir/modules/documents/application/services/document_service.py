@@ -125,7 +125,12 @@ class DocumentService:
         with self._uow_factory() as uow:
             self._validator.validate_tags(request.tags, [tag.key for tag in uow.tags.all()])
             id_to_type = {doc.id: doc.type for doc in uow.documents.all()}
-            self._validator.validate_related([ref.target for ref in refs], id_to_type)
+            # `request.doc_id` only on the adoption path: an allocated id is not
+            # known until below, and cannot be referenced by a caller who does
+            # not know it yet.
+            self._validator.validate_related(
+                [ref.target for ref in refs], id_to_type, source_id=request.doc_id
+            )
             self._validator.validate_relation_kinds(request.type, refs, id_to_type)
             doc_id = self._allocate_id(request, uow)
             document = Document(
@@ -658,7 +663,9 @@ class DocumentService:
         if request.set_related is not None:
             refs = _parse_refs(request.set_related)
             id_to_type = {doc.id: doc.type for doc in uow.documents.all()}
-            self._validator.validate_related([ref.target for ref in refs], id_to_type)
+            self._validator.validate_related(
+                [ref.target for ref in refs], id_to_type, source_id=base.id
+            )
             self._validator.validate_relation_kinds(base.type, refs, id_to_type)
             changes["related"] = refs
         if request.set_owner is not None:

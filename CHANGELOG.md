@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A document can no longer relate to itself.** `--set-related <self>` was accepted, and
+  `docir check` then reported a one-node relation cycle — the write path manufacturing the
+  finding the check path exists to report, clearable only by removing the edge again. Tier 0
+  now refuses it on both write paths with `cannot relate document 'adr-…' to itself`,
+  matching `cannot rename tag 't' to itself`: the same degenerate case, in a feature whose
+  tests only ever used two different values. Self-edges already on disk are untouched and
+  still surface as a `cycle` finding — the rule guards the write path, it does not rewrite
+  anyone's files.
 - **A transport failure is reported as an error, not a stack trace.** `runner.execute`
   wrapped only the *construction* of the executor in the handler that maps a `DocirError`
   onto its exit code; the dispatch call sat outside it. So every client-side daemon error —

@@ -41,7 +41,8 @@ files and the derived index never disagree.
   best-effort, so a partial rebuild must say so rather than look complete.
 - `MaintenanceService.check() -> [CheckIssue]` — Tier 1 structural findings (incl. staleness,
   and `unknown-type`/`unknown-status`/`unknown-tag`, the three Tier 0 rules a hand-edit can
-  bypass). All warnings: the document stays readable and its edges resolve.
+  bypass, plus `tag-key-format` for a registered key outside the shared grammar). All
+  warnings: the document stays readable and its edges resolve.
 - `MaintenanceService.lint_deep() -> [LintFinding]` — Tier 2 advisory findings
 - `MaintenanceService.reindex_embeddings()/flush_embeddings() -> int`
 - `load_schema(path) -> Schema` — load the per-type document schema. Rejects a status name no
@@ -85,7 +86,7 @@ review clock). `MaintenanceService` requires a `Clock` (staleness needs "today")
 
 ## Depends on
 - modules: indexing (relevance ranking + embedding scheduler)
-- platform: persistence, filesystem, embedding, clock, errors
+- platform: persistence, filesystem, embedding, clock, errors, naming (the tag-key grammar)
 
 ## Policy
 - permissions: none (single-user local CLI; see ADR-0003)

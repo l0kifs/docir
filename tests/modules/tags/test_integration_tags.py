@@ -6,6 +6,7 @@ import pytest
 
 from docir.config.settings import Settings
 from docir.entry_points.dispatch import Dispatcher
+from docir.modules.tags.domain.entities.tag import Tag
 from docir.platform.errors import (
     TagAlreadyExistsError,
     TagInUseError,
@@ -20,6 +21,68 @@ def test_add_and_list(dispatcher: Dispatcher, settings: Settings) -> None:
     tags = dispatcher.dispatch("tag_list", {})
     assert {t["key"] for t in tags} == {"auth", "api"}
     assert settings.tags_path.exists()
+
+
+def _register_legacy_key(uow_factory: object, key: str) -> None:
+    """Put a key in the registry the way one predating the rule got there.
+
+    Straight through the unit of work: `tag add` now refuses it, which is the
+    point — the only keys that can fail the grammar are ones written before it
+    existed or edited into `tags.yaml` by hand.
+    """
+    with uow_factory() as uow:  # type: ignore[operator]
+        uow.tags.save(Tag(key=key, description="Predates the format rule."))
+        uow.commit()
+
+
+class TestKeyFormat:
+    """GAP-027: any non-empty string was a valid key, so `auth`, `Auth` and
+    `authentication` could all exist and nothing objected."""
+
+    @pytest.mark.parametrize("key", ["Auth", "AUTH", "auth key", "auth_key", "9lives", "-auth", ""])
+    def test_a_key_outside_the_grammar_is_rejected(self, dispatcher: Dispatcher, key: str) -> None:
+        with pytest.raises(ValidationError):
+            dispatcher.dispatch("tag_add", {"key": key, "description": "d"})
+
+    @pytest.mark.parametrize("key", ["auth", "auth-n", "a", "oauth2", "x-9"])
+    def test_a_key_inside_the_grammar_is_accepted(self, dispatcher: Dispatcher, key: str) -> None:
+        assert dispatcher.dispatch("tag_add", {"key": key, "description": "d"})["key"] == key
+
+    def test_rename_validates_the_new_key(self, dispatcher: Dispatcher) -> None:
+        dispatcher.dispatch("tag_add", {"key": "auth", "description": "d"})
+        with pytest.raises(ValidationError):
+            dispatcher.dispatch("tag_rename", {"old": "auth", "new": "Auth"})
+
+    def test_renaming_away_from_a_legacy_key_is_the_migration_path(
+        self, dispatcher: Dispatcher, uow_factory: object
+    ) -> None:
+        # A key that predates the rule can only be fixed by renaming it, so
+        # `rename` must validate the NEW key and leave the old one alone.
+        _register_legacy_key(uow_factory, "Auth")
+        assert dispatcher.dispatch("tag_rename", {"old": "Auth", "new": "auth"}) is not None
+        assert {t["key"] for t in dispatcher.dispatch("tag_list", {})} == {"auth"}
+
+    def test_check_warns_about_a_legacy_key_without_failing_strict(
+        self, dispatcher: Dispatcher, uow_factory: object
+    ) -> None:
+        # A corpus written before the rule must not start failing CI for
+        # something its author could not have avoided.
+        _register_legacy_key(uow_factory, "Auth")
+        findings = dispatcher.dispatch("check", {})
+        offending = [f for f in findings if f["kind"] == "tag-key-format"]
+        assert len(offending) == 1
+        assert "'Auth'" in offending[0]["message"]
+        assert offending[0]["severity"] == "warning"
+        # A registry finding, not a document one — the key is in the message.
+        assert not offending[0]["doc_ids"]
+        # What `--strict` actually gates on: no error-severity finding.
+        assert [f for f in findings if f["severity"] == "error"] == []
+
+    def test_a_conforming_registry_produces_no_finding(self, dispatcher: Dispatcher) -> None:
+        # A count alone cannot tell "nothing is wrong" from "nothing is checked".
+        dispatcher.dispatch("tag_add", {"key": "auth", "description": "d"})
+        findings = dispatcher.dispatch("check", {})
+        assert [f for f in findings if f["kind"] == "tag-key-format"] == []
 
 
 class TestUsageCounts:

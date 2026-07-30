@@ -20,6 +20,7 @@ from docir.platform.errors import (
     ValidationError,
 )
 from docir.platform.filesystem.ports import DocumentFileStore, TagFileStore
+from docir.platform.naming import TAG_KEY_PATTERN, TAG_KEY_RULE, is_valid_tag_key
 from docir.platform.persistence.unit_of_work import UnitOfWork
 
 UnitOfWorkFactory = Callable[[], UnitOfWork]
@@ -36,6 +37,24 @@ def _require_positive_limit(limit: int) -> None:
 def _require_non_negative_offset(offset: int) -> None:
     if offset < 0:
         raise ValidationError(f"offset must be zero or greater, got {offset}")
+
+
+def _require_valid_key(key: str) -> None:
+    """Reject a key the vocabulary grammar does not allow (Tier 0).
+
+    Only the write paths that *mint* a key call this. Keys already on disk are
+    left alone and reported by `docir check` as a `tag-key-format` warning: a
+    store written before the rule existed would otherwise stop loading, and
+    quietly lowercasing someone's key is a silent rewrite of their data. The
+    migration path is `tag rename Auth auth`, which is why `rename` validates
+    the new key and not the old one.
+    """
+    if not is_valid_tag_key(key):
+        raise ValidationError(
+            f"invalid tag key {key!r}: use {TAG_KEY_RULE} (matching {TAG_KEY_PATTERN}). "
+            "Without a format rule two agents produce `auth`, `Auth` and "
+            "`authentication`, and the registry cannot tell they are one tag."
+        )
 
 
 class TagService:
@@ -56,6 +75,7 @@ class TagService:
 
     def add(self, key: str, description: str) -> TagView:
         """Register a new tag (``docs tag add``)."""
+        _require_valid_key(key)
         with self._uow_factory() as uow:
             if uow.tags.exists(key):
                 raise TagAlreadyExistsError(f"tag {key!r} already exists")
@@ -123,6 +143,9 @@ class TagService:
             # unconditionally, and rewriting `old -> new` is a no-op when they
             # are the same string, so nothing put the registry entry back.
             raise ValidationError(f"cannot rename tag {old!r} to itself")
+        # `new` only: renaming *away* from a legacy key is the migration path,
+        # so validating `old` would trap the very keys this rule wants gone.
+        _require_valid_key(new)
         with self._uow_factory() as uow:
             tag = uow.tags.get(old)
             if tag is None:

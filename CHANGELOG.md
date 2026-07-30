@@ -25,6 +25,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Tag keys have a format rule.** Any non-empty string was a valid key, so `auth`, `Auth`
+  and `authentication` could all exist and nothing objected — while document ids were
+  strictly regex-validated by contrast. `tag add` and `tag rename` now require
+  `^[a-z][a-z0-9-]*$` and reject anything else. Keys already in a registry are **never**
+  rewritten: silently lowercasing someone's key is a rewrite of their data, so an existing
+  non-conforming key is a new `tag-key-format` **warning** from `docir check` instead, and
+  the fix is `docir tag rename Auth auth`. `rename` validates only the new key, since
+  renaming away from a legacy key is the migration path. The rule stays a warning
+  deliberately — a `--strict` build must not fail for a key its author could not have
+  avoided.
 - **`docir tag list` reports a usage count per tag.** The registry could only grow: nothing
   distinguished a tag holding the vocabulary together from one no document has carried since
   it was coined. Each entry now carries `usage`, the number of indexed documents holding the

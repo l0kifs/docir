@@ -17,6 +17,7 @@ from datetime import date
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.entities.relation import Relation
 from docir.modules.documents.domain.schema import Schema
+from docir.platform.naming import TAG_KEY_RULE, is_valid_tag_key
 
 # DFS coloring states for cycle detection.
 _WHITE, _GREY, _BLACK = 0, 1, 2
@@ -47,7 +48,8 @@ _DEPENDENCY_KINDS = frozenset({"depends_on", "refines"})
 ERROR_KINDS: frozenset[str] = frozenset({"duplicate-id", "dangling", "malformed"})
 
 #: Everything else (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`,
-#: `unknown-status`, `unknown-tag`) describes shape or classification, not
+#: `unknown-status`, `unknown-tag`, `tag-key-format`) describes shape or
+#: classification, not
 #: damage. `orphan` in particular fires for any document with no relations — the
 #: default state of a new one — so treating these as build failures made the gate
 #: unusable on a healthy corpus.
@@ -109,6 +111,7 @@ class GraphChecker:
         issues.extend(self._find_unknown_status(documents))
         if known_tags is not None:
             issues.extend(self._find_unknown_tag(documents, known_tags))
+            issues.extend(self._find_tag_key_format(known_tags))
         issues.extend(self._find_dangling(documents, relations))
         issues.extend(self._find_cycles(relations))
         issues.extend(self._find_orphans(documents, relations))
@@ -175,6 +178,32 @@ class GraphChecker:
                 )
             )
         return issues
+
+    def _find_tag_key_format(self, known_tags: frozenset[str]) -> list[CheckIssue]:
+        """Flag registered keys the vocabulary grammar does not allow.
+
+        A finding about the *registry*, not about any document, so ``doc_ids``
+        is empty — the offending key is named in the message instead.
+
+        A warning, and it has to stay one. `tag add` rejects a bad key now, so
+        the only way to hold one is to predate the rule, and an existing corpus
+        must not start failing a `--strict` build for something its author
+        could not have avoided. Nothing repairs it either: the fix is a rename,
+        and only a human knows whether `Auth` meant `auth` or `authn`.
+        """
+        offenders = sorted(key for key in known_tags if not is_valid_tag_key(key))
+        return [
+            CheckIssue(
+                kind="tag-key-format",
+                message=(
+                    f"registered tag {key!r} is not {TAG_KEY_RULE}; "
+                    f"rename it with `docir tag rename {key} <new-key>` "
+                    "(`--merge` if the target already exists)"
+                ),
+                doc_ids=(),
+            )
+            for key in offenders
+        ]
 
     def _find_unknown_type(self, documents: list[Document]) -> list[CheckIssue]:
         """Flag documents whose ``type`` is not in the active schema.

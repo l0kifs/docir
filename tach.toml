@@ -67,6 +67,13 @@ depends_on = []
 path = "docir.platform.embedding"
 depends_on = []
 
+# Shared name grammars (ADR-0012). A pure leaf: the tag-key rule is applied by
+# `tags` on write and by `documents` in the Tier 1 check, and neither may import
+# the other.
+[[modules]]
+path = "docir.platform.naming"
+depends_on = []
+
 [[modules]]
 path = "docir.platform.transport"
 depends_on = ["docir.platform.errors"]
@@ -102,7 +109,7 @@ depends_on = []
 
 [[modules]]
 path = "docir.modules.documents.domain"
-depends_on = ["docir.platform.errors", "docir.platform.embedding"]
+depends_on = ["docir.platform.errors", "docir.platform.embedding", "docir.platform.naming"]
 
 [[modules]]
 path = "docir.modules.documents.application"
@@ -140,6 +147,7 @@ depends_on = [
     "docir.platform.clock",
     "docir.platform.errors",
     "docir.platform.filesystem",
+    "docir.platform.naming",
     "docir.platform.persistence",
 ]
 

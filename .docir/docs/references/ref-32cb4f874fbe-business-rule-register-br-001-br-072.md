@@ -291,20 +291,18 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 
 ## BR-029
 
-**Statement.** While a document's status is one of its type's `inactive_statuses`, the system shall exclude it from the list read paths unless `--include-resolved` is given.
+**Statement.** While a document's status is one of its type's `inactive_statuses`, the system shall exclude it from *every* read path — `query`, `search`, and both the ranked and graph-expanded halves of `context` — unless `--include-inactive` is given.
 
-**Pattern:** state · **Flow:** FLOW-002 · **Actor:** — · **Confidence:** observed · **Status:** disputed · **Owner:** repo maintainer
+**Pattern:** state · **Flow:** FLOW-002 · **Actor:** — · **Confidence:** observed · **Status:** confirmed · **Owner:** repo maintainer
 
-- *Given* issue-0001 status=resolved, referenced by adr-0001 · *when* docir context auth --limit 5 (no --include-resolved) · *then* OBSERVED: issue-0001 returned with status resolved, via_graph true. The same document is correctly hidden by `search` and `query`.
+- *Given* a resolved issue reachable only through its decision's edge · *when* `docir context auth --limit 5` · *then* OBSERVED: only the decision is returned; the resolved issue is not.
 
-**Notes:** STATED but NOT HELD on one of four paths. `context`'s graph-expansion step checks `archived` but not inactive status, so a resolved issue is returned without the flag.
+**Notes:** Was `disputed`: `context`'s graph-expansion step checked `archived` but not inactive status, so a resolved issue came back through a neighbour edge while `search` and `query` correctly hid it. Fixed — `DocumentService._is_visible` is the single visibility predicate, called by the ranked loop *and* by `_augment_with_related`, so the four paths cannot diverge again. The flag was also renamed: `--include-resolved` is deprecated in favour of `--include-inactive`, which covers every inactive status rather than the one named `resolved`. Re-verified 2026-07-30 by replaying the example above against the current CLI.
 
-**Open questions:** Q-005
+**Open questions:** Q-005 (answered)
 
 **Evidence:**
-- `src/docir/modules/documents/application/services/document_service.py:242`
-- `267-268`
-- `src/docir/platform/persistence/repositories.py:117-118`
+- `src/docir/modules/documents/application/services/document_service.py` (`_is_visible`)
 
 ## BR-030
 
@@ -381,17 +379,19 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 
 ## BR-041
 
-**Statement.** When the index is rebuilt, the system shall reconstruct it from the markdown files and the tag registry file, which are canonical.
+**Statement.** When the index is rebuilt, the system shall reconstruct it from the markdown files and the tag registry file, which are canonical — including the id counter, which is derived state and not stored in either.
 
-**Pattern:** event · **Flow:** FLOW-003 · **Actor:** — · **Confidence:** observed · **Status:** disputed · **Owner:** repo maintainer
+**Pattern:** event · **Flow:** FLOW-003 · **Actor:** — · **Confidence:** observed · **Status:** confirmed · **Owner:** repo maintainer
 
-**Notes:** INCOMPLETE. `id_sequences` is part of the index and is not reconstructed, so the rebuild is not faithful. This is the mechanism behind GAP-003. Also: malformed files are skipped silently and not counted (GAP-022); `--changed` skips the removal sweep so deleted files stay indexed (GAP-021).
+- *Given* a store with two documents and no index (a fresh clone — the index is gitignored) · *when* `docir reindex` then `docir add` · *then* OBSERVED: the new id does not collide and all three documents stay visible.
 
-**Open questions:** Q-001
+**Notes:** Was `disputed` as INCOMPLETE, and it was the mechanism behind GAP-003: `id_sequences` is part of the index and was not reconstructed, so the next `add` re-issued a live id and the older document fell out of every read path. Fixed — `_restore_id_sequences` raises each prefix to `max(numeric suffix on disk) + 1`, monotonically, with two allocation-time backstops. The two related complaints are fixed too: unparseable files are counted as `documents_skipped` rather than skipped silently, and `--changed` now runs the removal sweep. Re-verified 2026-07-30 by replaying the example above against the current CLI.
+
+**Open questions:** Q-001 (answered)
 
 **Evidence:**
-- `src/docir/modules/documents/application/services/maintenance_service.py:58-69`
-- `README.md:34`
+- `src/docir/modules/documents/application/services/maintenance_service.py` (`_restore_id_sequences`)
+- `tests/modules/documents/test_merge_safety.py`
 
 ## BR-042
 
@@ -405,18 +405,18 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 
 ## BR-043
 
-**Statement.** If `--strict` is given and any finding of any kind exists, then the system shall exit with code 1.
+**Statement.** If `--strict` is given and any finding of **error** severity exists, then the system shall exit 1. `--strict-all` restores the fail-on-any-finding behaviour.
 
-**Pattern:** unwanted · **Flow:** FLOW-003 · **Actor:** CI job · **Confidence:** observed · **Status:** disputed · **Owner:** repo maintainer
+**Pattern:** unwanted · **Flow:** FLOW-003 · **Actor:** CI job · **Confidence:** observed · **Status:** confirmed · **Owner:** repo maintainer
 
-- *Given* a fresh store with two unrelated documents and no other problems · *when* docir check --strict · *then* OBSERVED: exit 1, from two `orphan` findings
+- *Given* a corpus whose only findings are warnings · *when* `docir check --strict` · *then* OBSERVED: exit 0.
 
-**Notes:** All eight finding kinds are equal. `orphan` fires for any document with no relations — the default state of a new document — so the gate fails on a healthy corpus. There is no severity, no kind selection and no ignore mechanism, so the only way to keep CI green is to abandon the gate, which also abandons duplicate-id detection: the gate's stated purpose.
+**Notes:** Was `disputed`, and the statement itself was wrong rather than merely unmet: all finding kinds were equal, so `orphan` — which fires for any document with no relations, the default state of a new one — failed the gate on a healthy corpus. The only way to keep CI green was to abandon the gate, which also abandoned duplicate-id detection, its stated purpose. Fixed by giving findings a severity: `ERROR_KINDS` is `duplicate-id`/`dangling`/`malformed` (the corpus is *broken*); everything else is a warning about shape or age. `CheckIssue` derives severity from kind in `__post_init__`, so a new check classifies itself by being added to `ERROR_KINDS` or not. Re-verified 2026-07-30 by replaying the example above against the current CLI.
 
-**Open questions:** Q-004
+**Open questions:** Q-004 (answered)
 
 **Evidence:**
-- `src/docir/entry_points/cli/app.py:439-440`
+- `src/docir/modules/documents/domain/services/graph_checks.py` (`ERROR_KINDS`, `severity_for`)
 
 ## BR-044
 
@@ -431,19 +431,18 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 
 ## BR-045
 
-**Statement.** While a relation points from a higher-level type to a lower-level one and its kind is neither `supersedes` nor `contradicts`, the system shall report a layering violation.
+**Statement.** While a relation of kind `depends_on` or `refines` points from a higher-level type to a lower-level one, the system shall report a layering violation. No other kind is a dependency claim.
 
-**Pattern:** state · **Flow:** FLOW-003 · **Actor:** — · **Confidence:** observed · **Status:** disputed · **Owner:** repo maintainer
+**Pattern:** state · **Flow:** FLOW-003 · **Actor:** — · **Confidence:** observed · **Status:** confirmed · **Owner:** repo maintainer
 
-- *Given* software profile; adr-0001 related: [issue-0003] · *when* docir check · *then* OBSERVED: layering violation: decision 'adr-0001' depends on lower-level issue
+- *Given* the software profile and a decision related to the issue that motivated it · *when* `docir check` · *then* OBSERVED: no findings.
 
-**Notes:** In the default `software` profile decision=3 and issue=1, so linking a decision to the issue that motivated it — the pairing in the README's own example output — is a permanent violation. Either the levels, the exempt-kind list, or the rule is wrong.
+**Notes:** Was `disputed`, and the statement was inverted. It was written as an *exemption* list holding `supersedes`/`contradicts`, which made every other kind a dependency claim — including `relates_to`, the default for a bare id. So the most natural thing a user can model, and the pairing in the README's own example output, was a permanent violation no edit could silence. Fixed by naming the dependency kinds instead: `_DEPENDENCY_KINDS = {depends_on, refines}`. Accepted consequence: a relation kind added by a custom schema is not layering-checked until it is named there — silence on an unknown kind is the right default for a heuristic, noise on a correct one is not. Re-verified 2026-07-30 by replaying the example above against the current CLI.
 
-**Open questions:** Q-006
+**Open questions:** Q-006 (answered)
 
 **Evidence:**
-- `src/docir/modules/documents/domain/services/graph_checks.py:194-223`
-- `src/docir/modules/documents/domain/services/graph_checks.py:26`
+- `src/docir/modules/documents/domain/services/graph_checks.py` (`_DEPENDENCY_KINDS`)
 
 ## BR-046
 
@@ -531,18 +530,18 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 
 ## BR-064
 
-**Statement.** If an unrecognised agent target name is requested, then the system shall ignore it.
+**Statement.** If an unrecognised agent target name is requested, then the system shall refuse and name the available targets.
 
-**Pattern:** unwanted · **Flow:** FLOW-004 · **Actor:** — · **Confidence:** observed · **Status:** disputed · **Owner:** repo maintainer
+**Pattern:** unwanted · **Flow:** FLOW-004 · **Actor:** — · **Confidence:** observed · **Status:** confirmed · **Owner:** repo maintainer
 
-- *Given* a project directory · *when* docir agent install --agent claud · *then* OBSERVED: prints [], exit code 0, writes nothing. The user believes their agent is configured.
+- *Given* a project directory · *when* `docir agent install --agent claud` · *then* OBSERVED: exit 2, `error: unknown agent target(s): claud; available: claude, agents`, nothing written.
 
-**Notes:** This is the behaviour, not a defensible rule. Silent no-op on a typo in a once-per-repository onboarding command. Contrast `docir init --profiles`, which raises SchemaError naming the available profiles (composition.py:177-180) — the same class of input, handled correctly two files away.
+**Notes:** Was `disputed` — and the entry said so plainly: "this is the behaviour, not a defensible rule". A silent no-op on a typo in a once-per-repository onboarding command left the user believing their agent was configured, while `docir init --profiles` two files away raised on the same class of input. Fixed to match. Re-verified 2026-07-30 by replaying the example above against the current CLI.
 
-**Open questions:** Q-011
+**Open questions:** Q-011 (answered)
 
 **Evidence:**
-- `src/docir/modules/agents/application/service.py:96-98`
+- `src/docir/modules/agents/application/service.py`
 
 ## BR-069
 
@@ -615,3 +614,7 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 
 **Evidence:**
 - `src/docir/modules/tags/application/services/tag_service.py:43-52`
+
+## Verification status (2026-07-30)
+
+Of the 47 rules, **9 are `confirmed`, 38 are `assumed`, none is `disputed`.** The five that were disputed described v0.2.1 behaviour and were re-verified on 2026-07-30 by replaying each rule's own Given/When/Then against the current CLI: every disputed claim is now false, and the entries were rewritten to state what the system does rather than flipped. Two of them (BR-043, BR-045) had a wrong *statement*, not merely an unmet one — the layering rule was written as an exemption list, which made `relates_to` a dependency claim, and `--strict` was specified to fail on any finding, which failed a healthy corpus. The other 38 rules have NOT been re-verified since the v0.2.1 pass. `assumed` means reconstructed from the code and never confirmed by anyone who could say what was intended; it does not mean wrong, and it does not mean checked. That distinction is what archived issue GAP-002 recorded.

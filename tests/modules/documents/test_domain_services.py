@@ -249,6 +249,24 @@ class TestGraphChecker:
         assert not any(i.kind == "layering" for i in issues)
 
 
+def _schema_with_limits(limits: dict[str, int | None]) -> Schema:
+    """A schema whose types differ only in their `max_body_chars`."""
+    return Schema(
+        types={
+            name: TypeSchema(
+                name,
+                name[:3],
+                (),
+                ("proposed",),
+                "proposed",
+                {"proposed": frozenset()},
+                max_body_chars=limit,
+            )
+            for name, limit in limits.items()
+        }
+    )
+
+
 def _stale_schema() -> Schema:
     return Schema(
         types={
@@ -315,6 +333,32 @@ class TestSimilarityLinter:
         big = _doc("adr-0001", body="x" * 10)
         findings = SimilarityLinter(size_threshold_chars=5).find_scope_creep([big])
         assert findings and findings[0].kind == "scope-creep"
+
+    def test_a_type_may_opt_out_of_the_size_check(self) -> None:
+        """GAP-056: one threshold for every type made a register always too long.
+
+        A glossary or a rule register split in half is two half-registers, so
+        the advice could not be taken — the failure mode `orphan` had under
+        `--strict`, a warning that fires on correct usage.
+        """
+        schema = _schema_with_limits({"decision": None, "reference": 0})
+        linter = SimilarityLinter(size_threshold_chars=5)
+        register = _doc("ref-0001", doc_type="reference", body="x" * 10)
+        assert linter.find_scope_creep([register], schema) == []
+        # and a type that did not opt out is still flagged
+        flagged = linter.find_scope_creep([_doc("adr-0001", body="x" * 10)], schema)
+        assert [f.kind for f in flagged] == ["scope-creep"]
+
+    def test_a_type_may_set_its_own_limit(self) -> None:
+        schema = _schema_with_limits({"decision": 100})
+        linter = SimilarityLinter(size_threshold_chars=5)
+        assert linter.find_scope_creep([_doc("adr-0001", body="x" * 10)], schema) == []
+        assert linter.find_scope_creep([_doc("adr-0001", body="x" * 200)], schema)
+
+    def test_without_a_schema_the_flat_default_applies(self) -> None:
+        # The domain service stays usable standalone, as it was before.
+        big = _doc("adr-0001", body="x" * 10)
+        assert SimilarityLinter(size_threshold_chars=5).find_scope_creep([big])
 
 
 class TestMarkdownSections:

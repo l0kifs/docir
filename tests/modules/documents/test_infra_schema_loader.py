@@ -379,3 +379,52 @@ def test_every_bundled_profile_still_loads(profile: str) -> None:
     # them fails here rather than in an adopting repo.
     schema = parse_schema({"profiles": [profile]})
     assert schema.types
+
+
+class TestMaxBodyChars:
+    """GAP-056: the Tier 2 size threshold is per type, not one constant."""
+
+    def _schema(self, tmp_path, body: str):
+        path = tmp_path / "s.yaml"
+        path.write_text(body)
+        return load_schema(path)
+
+    def test_absent_leaves_it_unset_so_the_linter_default_applies(self, tmp_path) -> None:
+        schema = self._schema(tmp_path, "profiles: [software]\n")
+        assert schema.types["issue"].max_body_chars is None
+
+    def test_zero_is_kept_and_is_not_confused_with_absent(self, tmp_path) -> None:
+        # 0 means "never too long"; None means "use the default". A loader that
+        # collapsed them would silently re-enable the check on a register.
+        schema = self._schema(
+            tmp_path,
+            "types:\n  register:\n    prefix: reg\n    default_status: active\n"
+            "    statuses:\n      active: []\n    max_body_chars: 0\n",
+        )
+        assert schema.types["register"].max_body_chars == 0
+
+    def test_a_custom_limit_is_read(self, tmp_path) -> None:
+        schema = self._schema(
+            tmp_path,
+            "types:\n  note:\n    prefix: nt\n    default_status: active\n"
+            "    statuses:\n      active: []\n    max_body_chars: 1200\n",
+        )
+        assert schema.types["note"].max_body_chars == 1200
+
+    def test_a_non_integer_is_refused(self, tmp_path) -> None:
+        with pytest.raises(SchemaError, match="max_body_chars"):
+            self._schema(
+                tmp_path,
+                "types:\n  note:\n    prefix: nt\n    default_status: active\n"
+                "    statuses:\n      active: []\n    max_body_chars: lots\n",
+            )
+
+    def test_schema_show_reports_it(self, tmp_path) -> None:
+        schema = self._schema(
+            tmp_path,
+            "types:\n  note:\n    prefix: nt\n    default_status: active\n"
+            "    statuses:\n      active: []\n    max_body_chars: 0\n",
+        )
+        described = describe_schema(schema)
+        note = next(t for t in described["types"] if t["name"] == "note")
+        assert note["max_body_chars"] == 0

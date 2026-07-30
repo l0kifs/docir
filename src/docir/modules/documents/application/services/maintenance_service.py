@@ -274,7 +274,7 @@ class MaintenanceService:
             # unnoticed similarity is worth reporting (GAP-055).
             linked = {frozenset((rel.source, rel.target)) for rel in uow.documents.relations()}
         findings = self._linter.find_duplicates(vectors, linked)
-        findings.extend(self._linter.find_scope_creep(documents))
+        findings.extend(self._linter.find_scope_creep(documents, self._schema))
         return findings
 
     # -- helpers ------------------------------------------------------------

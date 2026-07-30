@@ -72,6 +72,7 @@ def describe_schema(schema: Schema) -> dict[str, object]:
                 "required": list(type_schema.required_fields),
                 "level": type_schema.level,
                 "review_days": type_schema.review_days,
+                "max_body_chars": type_schema.max_body_chars,
                 "id_style": type_schema.id_style,
                 "allowed_relations": {
                     kind: list(targets)
@@ -238,6 +239,13 @@ def _parse_type(name: str, spec: object, default_id_style: str) -> TypeSchema:
     if not isinstance(review_days, int) or isinstance(review_days, bool):
         raise SchemaError(f"type {name!r} 'review_days' must be an integer")
 
+    # Absent inherits the linter's default; 0 means "never too long".
+    max_body_chars = spec.get("max_body_chars")
+    if max_body_chars is not None and (
+        not isinstance(max_body_chars, int) or isinstance(max_body_chars, bool)
+    ):
+        raise SchemaError(f"type {name!r} 'max_body_chars' must be an integer")
+
     # A type without its own ``id_style`` inherits the schema-wide default.
     id_style = (
         default_id_style
@@ -257,6 +265,7 @@ def _parse_type(name: str, spec: object, default_id_style: str) -> TypeSchema:
         id_style=id_style,
         allowed_relations=_parse_allowed_relations(name, spec.get("allowed_relations")),
         review_days=review_days,
+        max_body_chars=max_body_chars,
     )
 
 

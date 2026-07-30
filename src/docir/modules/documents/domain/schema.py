@@ -72,6 +72,12 @@ class TypeSchema:
     # Review cadence in days for staleness. ``0`` means the type is never
     # considered stale (no human re-verification is expected).
     review_days: int = 0
+    # Body size (characters) past which Tier 2 suggests splitting the document.
+    # ``None`` inherits the linter's default; ``0`` means never — which is the
+    # right answer for a type that exists to hold a register. One threshold for
+    # every type made a glossary, a rule register and a probe log permanently
+    # "too long", and a document split in half is two half-registers (GAP-056).
+    max_body_chars: int | None = None
 
     def is_valid_status(self, status: str) -> bool:
         return status in self.statuses

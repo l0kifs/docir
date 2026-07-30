@@ -12,6 +12,7 @@ from collections.abc import Collection
 from dataclasses import dataclass
 
 from docir.modules.documents.domain.entities.document import Document
+from docir.modules.documents.domain.schema import Schema
 from docir.platform.embedding.vector import Embedding
 
 
@@ -80,11 +81,25 @@ class SimilarityLinter:
                     )
         return findings
 
-    def find_scope_creep(self, documents: list[Document]) -> list[LintFinding]:
-        """Flag documents whose body is large enough to smell like scope creep."""
+    def find_scope_creep(
+        self, documents: list[Document], schema: Schema | None = None
+    ) -> list[LintFinding]:
+        """Flag documents whose body is large enough to smell like scope creep.
+
+        The threshold is per type. One constant for every type made a glossary,
+        a rule register and a probe log permanently "too long" — and a register
+        split in half is two half-registers, so the advice could not be taken
+        (GAP-056). A type may set ``max_body_chars`` in the schema, with ``0``
+        meaning never; absent, it inherits this linter's default.
+
+        ``schema`` is optional for the same reason ``linked_pairs`` is: a caller
+        with no schema to offer gets the flat default rather than a signature it
+        cannot satisfy.
+        """
         findings: list[LintFinding] = []
         for doc in documents:
-            if len(doc.body) > self._size_threshold:
+            threshold = self._threshold_for(doc.type, schema)
+            if threshold and len(doc.body) > threshold:
                 findings.append(
                     LintFinding(
                         kind="scope-creep",
@@ -95,3 +110,10 @@ class SimilarityLinter:
                     )
                 )
         return findings
+
+    def _threshold_for(self, doc_type: str, schema: Schema | None) -> int:
+        """The body-size threshold for a type; ``0`` disables the check for it."""
+        if schema is None or doc_type not in schema.types:
+            return self._size_threshold
+        configured = schema.types[doc_type].max_body_chars
+        return self._size_threshold if configured is None else configured

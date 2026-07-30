@@ -87,6 +87,11 @@ _SCHEMA_FOOTER = """
 #                              lower-level one is a Tier 1 `check` warning.
 #   review_days         int  - staleness cadence in days; 0 (default) = never
 #                              stale.
+#   max_body_chars      int  - body size past which `lint --deep` suggests
+#                              splitting the document. Absent inherits the
+#                              default (8000); 0 means never — the right answer
+#                              for a type that exists to hold a register, since
+#                              a glossary split in half is two half-glossaries.
 #   id_style            str  - `sequential` (default) mints human-friendly ids
 #                              like tp-0007 from the index counter — safe only
 #                              within one shared index. Use `random` if people

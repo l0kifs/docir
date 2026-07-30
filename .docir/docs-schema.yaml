@@ -46,6 +46,10 @@ types:
     default_status: active
     inactive_statuses: [superseded]
     review_days: 365
+    # Never "too long": this type exists to hold a register, and a glossary or
+    # a rule register split in half is two half-registers. `lint --deep` used
+    # one threshold for every type and so advised splitting every one of them.
+    max_body_chars: 0
     statuses:
       active: [superseded]
       superseded: []

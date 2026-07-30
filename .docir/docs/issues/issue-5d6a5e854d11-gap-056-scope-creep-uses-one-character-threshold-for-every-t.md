@@ -7,7 +7,7 @@ owner: maintainer
 related:
 - ref-cb2beaa41604
 - adr-2a3f625bb2f8
-status: open
+status: resolved
 tags:
 - schema
 - material
@@ -66,3 +66,7 @@ the current constant as the default and no limit when a type sets it to 0. The b
   scope-creep threshold constant)
 - `.docir/docs-schema.yaml` (the `reference` type, added 2026-07-30)
 - PROBE-L2 in the 2026-07-30 probe log
+
+## Resolution
+
+FIXED 2026-07-30. `max_body_chars` is now a per-type schema key, wired exactly the way `review_days` is: parsed and type-checked by the loader, carried on `TypeSchema`, reported by `docir schema show`, and documented in the generated `docs-schema.yaml` template. Absent inherits the linter's default (8000); `0` means never. This store's `reference` type sets 0, because a glossary or a rule register split in half is two half-registers. `lint --deep` over docir's own corpus is now 4 findings, down from 21 — the 14 duplicates went with GAP-055 and the 5 registers with this. The 4 that remain are long documents where 'consider splitting' is at least arguable, which is what an advisory check should produce. `find_scope_creep` takes the schema optionally, for the same reason `find_duplicates` takes linked pairs optionally: a pure domain service should stay usable by a caller that has no schema to offer. Verified by injecting the bug twice — drop the per-type lookup, and drop the loader's parsing — and five guards fail across the two. The loader has its own test that `0` and absent stay distinguishable, since collapsing them would silently re-enable the check on exactly the type that opted out.

@@ -77,6 +77,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   renaming away from a legacy key is the migration path. The rule stays a warning
   deliberately — a `--strict` build must not fail for a key its author could not have
   avoided.
+- **A type can set its own `lint --deep` size limit.** The `scope-creep` heuristic used one
+  character threshold for every type, so a glossary, a rule register and a probe log were
+  permanently "too long" — and a register split in half is two half-registers, so the advice
+  could not be taken. `max_body_chars` is now a per-type schema key alongside `review_days`:
+  absent inherits the default (8000), `0` means never. Combined with the duplicate fix,
+  `lint --deep` over docir's own corpus drops from 21 findings to 4.
 - **`docir tag list` reports a usage count per tag.** The registry could only grow: nothing
   distinguished a tag holding the vocabulary together from one no document has carried since
   it was coined. Each entry now carries `usage`, the number of indexed documents holding the

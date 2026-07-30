@@ -105,3 +105,40 @@ in isolation and silent about its neighbour. The previous pass reached the same 
 from a different direction — "a feature added to close a gap is new surface, and its
 degenerate cases are unexamined by construction". Degenerate cases at boundaries is where
 to look next.
+
+## Third round, 2026-07-30 — the two areas the pass skipped
+
+The second round listed Alembic's upgrade path and `lint --deep` as not reached. Both were then reached.
+
+## Alembic — no defect, and thesis #1 demonstrated end to end
+
+```
+PROBE-A1  a fresh store reports revision 0002, relations carry `kind`   — NO gap
+PROBE-A2  walk the store back to 0001, run any command                  upgrades to 0002, exit 0
+PROBE-A3  what the dropped columns cost                                 owner, verified and the
+                                                                        edge kind come back empty
+PROBE-A4  `docir reindex`                                              restores all three from
+                                                                        the files; check clean
+```
+
+The upgrade fires automatically on the next command and needs no user action. A2-A4 are the important pair read together: dropping the columns loses the values, and `reindex` puts every one of them back — owner `platform-team`, verified `2026-07-30`, and the `supersedes` kind that had reverted to the `relates_to` server default — because the markdown files are canonical and the index is a projection. That is the product's first thesis, executed rather than asserted, and nobody had run it before.
+
+Read A3 carefully and do NOT record it as data loss: the downgrade is artificial. A real 0001 store predates typed edges and staleness entirely, so its edges *were* all `relates_to` and it had no owner or verified to lose — the server defaults migration 0002 chooses are exactly right for the data that actually exists at that revision. The loss here was manufactured by downgrading a store that already held 0002 data, which no user can do.
+
+Also observed: there is **no `alembic.ini`**. `run_migrations` builds the config in Python and points `script_location` at `Path(__file__).parent / "alembic"`, so alembic cannot be driven against a store by hand (`alembic current`, `alembic history`, `alembic downgrade`). Recorded and judged **not** a gap: a second declaration of the script location is exactly the drift the programmatic resolution exists to prevent, and the recovery story for this product is `reindex`, not hand-run migrations.
+
+## lint --deep — two findings
+
+```
+PROBE-L1  `lint --deep` over the 99-document store    21 findings in 5.2s
+          14 `duplicate`, every pair already linked                        GAP-055
+          7 `scope-creep`, 5 of them reference registers                   GAP-056
+```
+
+The runtime is worth recording: 5.2 seconds for the O(n²) comparison over 99 documents, which is well inside anything a person would notice, and the first number available for the ceiling the README warns about.
+
+Both findings are the same shape as defects this project has already fixed once — a heuristic that fires on correct usage (`orphan` under `--strict`, the layering exemption list). Every one of the 21 findings against the product's own corpus is unactionable, which makes `lint --deep` a command nobody runs twice.
+
+## Still not reached
+
+The 38 `assumed` rules and the ranking constants, unchanged from the second round and for the same reasons.

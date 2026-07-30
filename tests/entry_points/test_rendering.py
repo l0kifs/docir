@@ -157,8 +157,15 @@ class TestHumanRenderers:
         assert "no matching" in capsys.readouterr().out
 
     def test_render_tags(self, capsys: pytest.CaptureFixture[str]) -> None:
-        rendering.render_tags([{"key": "auth", "description": "d"}])
-        assert "auth" in capsys.readouterr().out
+        rendering.render_tags([{"key": "auth", "description": "d", "usage": 3}])
+        out = capsys.readouterr().out
+        assert "auth" in out
+        assert "3" in out
+
+    def test_render_tags_shows_a_dead_tag_as_zero(self, capsys: pytest.CaptureFixture[str]) -> None:
+        # Zero is the finding, so it has to be on screen, not blank.
+        rendering.render_tags([{"key": "dead", "description": "d", "usage": 0}])
+        assert "0" in capsys.readouterr().out
 
     def test_render_tags_empty(self, capsys: pytest.CaptureFixture[str]) -> None:
         rendering.render_tags([])

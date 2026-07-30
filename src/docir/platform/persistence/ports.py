@@ -103,6 +103,19 @@ class TagRepository(ABC):
         """Whether a tag with this key is registered."""
 
     @abstractmethod
+    def usage_counts(self, keys: Collection[str]) -> dict[str, int]:
+        """How many indexed documents carry each of ``keys``.
+
+        Keys nobody uses are absent from the mapping rather than mapped to 0 —
+        the caller supplies the zero, so a missing row cannot be confused with a
+        tag that was not asked about.
+
+        Counts every indexed document, archived included, because that is what
+        ``tag rm`` blocks on: a tag reported as unused that then refuses to be
+        removed would be worse than no count at all.
+        """
+
+    @abstractmethod
     def all(self) -> list[Tag]:
         """Return every registered tag."""
 

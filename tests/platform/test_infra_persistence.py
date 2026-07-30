@@ -144,6 +144,31 @@ class TestTagRepository:
         with uow_factory() as uow:
             assert not uow.tags.exists("auth")
 
+    def test_usage_counts_only_for_keys_asked_about(self, uow_factory: Factory) -> None:
+        with uow_factory() as uow:
+            for key in ("auth", "cache", "dead"):
+                uow.tags.save(Tag(key, "d"))
+            uow.documents.save(_doc("adr-0001", tags=("auth", "cache")))
+            uow.documents.save(_doc("adr-0002", tags=("auth",)))
+            uow.commit()
+        with uow_factory() as uow:
+            counts = uow.tags.usage_counts(["auth", "cache", "dead"])
+            # A key nobody uses is absent, not 0 — the caller supplies the zero,
+            # so "not asked about" and "used by nothing" stay distinguishable.
+            assert counts == {"auth": 2, "cache": 1}
+            assert uow.tags.usage_counts(["cache"]) == {"cache": 1}
+            assert uow.tags.usage_counts([]) == {}
+
+    def test_usage_counts_include_archived(self, uow_factory: Factory) -> None:
+        # `tag rm` blocks on archived documents too, so a count that skipped
+        # them would report a tag as dead that then refuses to be removed.
+        with uow_factory() as uow:
+            uow.tags.save(Tag("auth", "d"))
+            uow.documents.save(_doc("adr-0001", tags=("auth",), archived=True))
+            uow.commit()
+        with uow_factory() as uow:
+            assert uow.tags.usage_counts(["auth"]) == {"auth": 1}
+
 
 class TestSearchIndex:
     def test_index_search_remove(self, uow_factory: Factory) -> None:

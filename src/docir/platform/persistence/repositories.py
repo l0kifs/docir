@@ -246,6 +246,16 @@ class SqlAlchemyTagRepository(TagRepository):
         rows = self._session.scalars(stmt).all()
         return [Tag(key=row.key, description=row.description) for row in rows]
 
+    def usage_counts(self, keys: Collection[str]) -> dict[str, int]:
+        if not keys:
+            return {}
+        stmt = (
+            select(DocumentTagRow.tag_key, func.count())
+            .where(DocumentTagRow.tag_key.in_(list(keys)))
+            .group_by(DocumentTagRow.tag_key)
+        )
+        return {str(key): int(count) for key, count in self._session.execute(stmt).all()}
+
     def delete(self, key: str) -> None:
         row = self._session.get(TagRow, key)
         if row is not None:

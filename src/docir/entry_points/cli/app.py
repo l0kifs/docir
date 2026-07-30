@@ -511,7 +511,11 @@ def tag_list(
     limit: Annotated[int, typer.Option("--limit")] = DEFAULT_TAG_PAGE,
     offset: Annotated[int, typer.Option("--offset", help="Tags to skip; page with --limit.")] = 0,
 ) -> None:
-    """List registered tags, key-ordered.
+    """List registered tags, key-ordered, with a usage count each.
+
+    `usage` counts the indexed documents carrying the tag, archived included —
+    the same set `tag rm` refuses to remove over, so `0` means the tag is dead
+    and `tag rm` will take it without --force.
 
     Paged: a page shorter than --limit means you have reached the end. There is
     no total in the response — it is a bare JSON array, and a wrapper to carry

@@ -22,6 +22,47 @@ def test_add_and_list(dispatcher: Dispatcher, settings: Settings) -> None:
     assert settings.tags_path.exists()
 
 
+class TestUsageCounts:
+    """A registry that can only grow: nothing said which tags were dead."""
+
+    def test_list_reports_documents_per_tag(self, dispatcher: Dispatcher) -> None:
+        _two_tags_and_three_docs(dispatcher)
+        usage = {t["key"]: t["usage"] for t in dispatcher.dispatch("tag_list", {})}
+        assert usage == {"auth": 2, "authn": 1}
+
+    def test_a_tag_no_document_carries_reports_zero(self, dispatcher: Dispatcher) -> None:
+        # The whole point: a dead tag must be visible as 0, not absent.
+        dispatcher.dispatch("tag_add", {"key": "dead", "description": "Nobody uses this."})
+        assert dispatcher.dispatch("tag_list", {})[0]["usage"] == 0
+
+    def test_zero_means_remove_needs_no_force(self, dispatcher: Dispatcher) -> None:
+        # The count is only useful if it predicts what `tag rm` will do.
+        _two_tags_and_three_docs(dispatcher)
+        dispatcher.dispatch("tag_add", {"key": "dead", "description": "d"})
+        usage = {t["key"]: t["usage"] for t in dispatcher.dispatch("tag_list", {})}
+        assert usage["dead"] == 0
+        dispatcher.dispatch("tag_remove", {"key": "dead"})  # no force needed
+        with pytest.raises(TagInUseError):
+            dispatcher.dispatch("tag_remove", {"key": "auth"})
+
+    def test_archived_documents_still_count(self, dispatcher: Dispatcher) -> None:
+        # `tag rm` blocks on an archived document too, so a count that ignored
+        # them would call a tag dead that then refuses to be removed.
+        dispatcher.dispatch("tag_add", {"key": "auth", "description": "d"})
+        doc = dispatcher.dispatch(
+            "add", {"type": "decision", "title": "T", "description": "d", "tags": ["auth"]}
+        )
+        dispatcher.dispatch("archive", {"doc_id": doc["id"]})
+        assert dispatcher.dispatch("tag_list", {})[0]["usage"] == 1
+        with pytest.raises(TagInUseError):
+            dispatcher.dispatch("tag_remove", {"key": "auth"})
+
+    def test_the_count_follows_the_page(self, dispatcher: Dispatcher) -> None:
+        _two_tags_and_three_docs(dispatcher)
+        page = dispatcher.dispatch("tag_list", {"limit": 1, "offset": 1})
+        assert [(t["key"], t["usage"]) for t in page] == [("authn", 1)]
+
+
 def test_add_duplicate_rejected(dispatcher: Dispatcher) -> None:
     dispatcher.dispatch("tag_add", {"key": "auth", "description": "Auth."})
     with pytest.raises(TagAlreadyExistsError):

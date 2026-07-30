@@ -194,9 +194,17 @@ def render_tags(tags: Sequence[Mapping[str, object]]) -> None:
         return
     table = Table(show_header=True, header_style="bold")
     table.add_column("key")
+    table.add_column("docs", justify="right")
     table.add_column("description", overflow="fold")
     for tag in tags:
-        table.add_row(str(tag["key"]), str(tag["description"]))
+        # Dim a dead tag rather than hiding it: zero is the finding.
+        raw = tag.get("usage", 0)
+        usage = raw if isinstance(raw, int) else 0
+        table.add_row(
+            str(tag["key"]),
+            str(usage) if usage else "[dim]0[/]",
+            str(tag["description"]),
+        )
     console.print(table)
 
 

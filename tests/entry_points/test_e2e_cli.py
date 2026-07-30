@@ -419,6 +419,15 @@ class TestOutputModes:
         assert run("--pretty", "lint", "--deep").exit_code == 0  # render_findings (advisory)
         assert run("--pretty", "reindex").exit_code == 0  # render_message path
 
+    def test_tag_list_json_carries_usage_including_a_zero(self) -> None:
+        # The agent path: trimming drops empty fields, and a dead tag's `usage`
+        # of 0 is the one number this feature exists to report.
+        _seed_tag()
+        run("tag", "add", "dead", "--description", "Nobody uses this.")
+        run("add", "--type", "decision", "--title", "J", "--description", "d", "--tags", "auth")
+        usage = {t["key"]: t["usage"] for t in json.loads(run("tag", "list").stdout)}
+        assert usage == {"auth": 1, "dead": 0}
+
     def test_trim_drops_empty_fields_by_default(self) -> None:
         run("add", "--type", "decision", "--title", "J", "--description", "d")
         assert '"owner"' not in run("get", "adr-0001").stdout  # empty owner omitted

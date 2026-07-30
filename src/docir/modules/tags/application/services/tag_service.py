@@ -75,13 +75,25 @@ class TagService:
         A short page means the end: there is no total in the response, since it
         is a bare JSON array with nowhere to put one, and adding a wrapper would
         break every existing caller.
+
+        Each entry carries a ``usage`` count. Without it the registry could only
+        grow: nothing distinguished a tag holding the vocabulary together from
+        one no document has carried since it was coined. The count is fetched
+        for the page's keys only, so it costs one extra query per page rather
+        than one per tag.
         """
         _require_positive_limit(limit)
         _require_non_negative_offset(offset)
         with self._uow_factory() as uow:
+            tags = uow.tags.page(limit=limit, offset=offset)
+            counts = uow.tags.usage_counts([tag.key for tag in tags])
             return [
-                TagView(key=tag.key, description=tag.description)
-                for tag in uow.tags.page(limit=limit, offset=offset)
+                TagView(
+                    key=tag.key,
+                    description=tag.description,
+                    usage=counts.get(tag.key, 0),
+                )
+                for tag in tags
             ]
 
     def rename(self, old: str, new: str, *, merge: bool = False) -> tuple[str, ...]:

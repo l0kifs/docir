@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`docir tag list` reports a usage count per tag.** The registry could only grow: nothing
+  distinguished a tag holding the vocabulary together from one no document has carried since
+  it was coined. Each entry now carries `usage`, the number of indexed documents holding the
+  tag. Archived documents count, because that is the set `tag rm` blocks on — a tag reported
+  as dead that then demanded `--force` would be worse than no count at all. `0` therefore
+  means `tag rm` will take it without a flag, and a zero survives JSON trimming.
 - **CI gates document integrity.** `docir check --strict` runs after the test suite, failing
   the build on `error` findings — duplicate ids and dangling edges, which is what a branch
   merge introduces. It announces a skip when no project store is committed rather than

@@ -7,7 +7,7 @@ owner: maintainer
 related:
 - ref-cb2beaa41604
 - arch-3e305bc76ff0
-status: open
+status: resolved
 tags:
 - daemon
 - material
@@ -76,3 +76,7 @@ a traceback — injecting the bug to confirm the guard fails without the fix.
 - `src/docir/entry_points/cli/runner.py` (`execute`, `run_local`)
 - `src/docir/platform/transport/client.py` (`send`)
 - PROBE-D4 in the 2026-07-30 probe log
+
+## Resolution
+
+FIXED 2026-07-30. `runner.execute` now wraps the dispatch in `run_local` as well as the construction, so a `DocirError` raised client-side by the transport is rendered and mapped onto its exit code like every other domain error. Replaying PROBE-D4: `DOCIR_REQUEST_TIMEOUT=0.001 docir add` now prints `error: the daemon did not answer 'add' within 0.001s...` and exits **7**, where it printed a traceback and exited 1. Errors the daemon *returns* are untouched — they still arrive as a `Response` and go through `_unwrap` — and a test pins that path so the fix cannot regress it. Verified by injecting the bug: with the dispatch moved back outside the handler, two of the three new guards fail. Pinned by `TestTransportErrorsReachTheUser`.

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A transport failure is reported as an error, not a stack trace.** `runner.execute`
+  wrapped only the *construction* of the executor in the handler that maps a `DocirError`
+  onto its exit code; the dispatch call sat outside it. So every client-side daemon error —
+  an unreachable daemon, one that would not start, a request that went unanswered — escaped
+  Typer unhandled, printing a Python traceback and exiting 1 instead of the message and the
+  exit code the error carries. `DOCIR_REQUEST_TIMEOUT=0.001 docir add` now prints
+  `error: the daemon did not answer 'add' within 0.001s…` and exits 7. Errors the daemon
+  *returns* were never affected, which is why this survived; a test pins that path too.
 - **The benchmark measured a configuration nobody runs.** It built its store with the bare
   schema default (`sequential`, `adr-0007`) while `docir init` gives every real project
   `random` ids, so every token figure it had printed understated the shipped default by

@@ -79,16 +79,27 @@ def get_state() -> CliState:
 def execute(command: str, payload: dict[str, object]) -> object:
     """Run one command and return its result data, or exit on a domain error.
 
-    Building the executor goes through :func:`run_local` because it is not
-    error-free: it loads the schema, so an invalid ``docs-schema.yaml`` raises
-    before any request is dispatched. Left unwrapped, that surfaced as a raw
-    Python traceback and exit 1 while ``docir schema validate`` — the same error,
-    on the same file — printed a clean message and exit 3.
+    Both halves go through :func:`run_local`, and both need to.
+
+    Building the executor is not error-free: it loads the schema, so an invalid
+    ``docs-schema.yaml`` raises before any request is dispatched. Left unwrapped,
+    that surfaced as a raw Python traceback and exit 1 while ``docir schema
+    validate`` — the same error, on the same file — printed a clean message and
+    exit 3.
+
+    Dispatching is not error-free either, and that half was left outside the
+    handler when the first was fixed. A ``DocirError`` raised *client-side* by
+    the transport — an unreachable daemon, one that will not start, a request
+    that goes unanswered — escaped Typer the same way, so the default execution
+    mode reported its failures as a stack trace and exit 1 rather than the
+    message and the exit code the error carries. Errors the daemon *returns*
+    were never affected: they arrive as a `Response` and go through
+    :func:`_unwrap`, which is why this survived (GAP-052).
     """
     state = get_state()
     executor, closer = run_local(lambda: _build_executor(state.settings))
     try:
-        response = executor.execute(Request(command=command, payload=payload))
+        response = run_local(lambda: executor.execute(Request(command=command, payload=payload)))
     finally:
         if closer is not None:
             closer.close()

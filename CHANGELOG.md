@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The benchmark measured a configuration nobody runs.** It built its store with the bare
+  schema default (`sequential`, `adr-0007`) while `docir init` gives every real project
+  `random` ids, so every token figure it had printed understated the shipped default by
+  four characters per id. `docir context` is 464 tokens, not 448. Recall, precision and MRR
+  are unaffected.
 - **A command slower than five seconds no longer fails against the daemon.** The client
   set one socket timeout — `_CONNECT_TIMEOUT`, 5s — before connecting and left it in force
   for the reply, so the budget for reaching a local Unix socket also bounded however long
@@ -25,6 +30,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The benchmark prices the random-id entropy.** A random id is ~3× a sequential one and
+  appears in every skeleton and every `related` edge of every result, but nothing measured
+  the trade, so 48 bits had been chosen by default rather than deliberately.
+  `benchmarks/run.py` now reports id characters per result set against their sequential
+  equivalent, alongside a collision table by suffix length. **48 bits stays**: random ids
+  cost 3.4% of a `context` payload, while dropping to 32 bits would return about 1% of it
+  and buy a 1.16% chance of a duplicate id by ten thousand documents — the exact failure
+  `docir check --strict` exists to catch at merge time.
 - **Tag keys have a format rule.** Any non-empty string was a valid key, so `auth`, `Auth`
   and `authentication` could all exist and nothing objected — while document ids were
   strictly regex-validated by contrast. `tag add` and `tag rename` now require

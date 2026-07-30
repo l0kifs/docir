@@ -4,9 +4,8 @@ description: Small per document, paid on every read.
 id: issue-7a271eb0f21a
 owner: maintainer
 related:
-- adr-20eec6e2e2ca
-- arch-f220a644d654
-status: open
+- arch-1cfb1b212237
+status: resolved
 tags:
 - integrity
 - cosmetic
@@ -50,3 +49,7 @@ Fold "tokens returned per result set" into the benchmark proposed for GAP-001, t
 ---
 
 Migrated from the discovery gap register (GAP-042); the register itself now lives in this store.
+
+## Resolution
+
+MEASURED 2026-07-30; entropy kept at 48 bits, now deliberately. `benchmarks/run.py` prices both halves of the trade. Cost: random ids are 7.1% of a `context` payload (131 of ~1856 chars) and switching to sequential would return 3.4% of it. Benefit: at 48 bits the collision probability is effectively zero out to 100,000 documents; at 32 bits it is 1.16% by 10,000, and at 24 bits 2.94% by 1,000. Dropping to 32 bits would return about 1% of a result set and buy a permanent ~1-in-86 chance of the exact failure `docir check --strict` exists to catch at merge time. That is a bad trade, so 48 stays. The measurement also found the benchmark itself was wrong: it built its store with the bare schema default (`sequential`), while `docir init` gives every real project `random`, so every token figure it had ever printed understated the shipped default by four characters per id. `context` is 464 tokens, not 448. Quality figures are unaffected. Full tables in benchmarks/README.md §3b.

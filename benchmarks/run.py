@@ -21,9 +21,11 @@ threshold around it only once the numbers are understood.
 from __future__ import annotations
 
 import io
+import math
 import os
 import shutil
 import tempfile
+from collections.abc import Callable
 from contextlib import redirect_stdout
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,6 +35,12 @@ import yaml
 from docir.config.settings import Settings
 from docir.entry_points.cli import rendering
 from docir.entry_points.composition import build_container
+from docir.modules.documents.api import render_schema_yaml
+from docir.modules.documents.domain.value_objects.identifiers import RANDOM_SUFFIX_LENGTH
+
+#: Bits of entropy in a random id suffix, derived from the implementation rather
+#: than restated, so the table cannot describe a size docir no longer mints.
+_RANDOM_BITS = RANDOM_SUFFIX_LENGTH * 4
 
 BENCH_DIR = Path(__file__).resolve().parent
 
@@ -44,20 +52,57 @@ K = 5
 CHARS_PER_TOKEN = 4
 
 
+#: Digits a sequential suffix uses (`adr-0007`) — the alternative a random id is
+#: being priced against.
+SEQUENTIAL_DIGITS = 4
+
+#: Corpus sizes the collision table is computed at.
+_CORPUS_SIZES = (100, 1_000, 10_000, 100_000)
+
+
 @dataclass
 class Outcome:
     """One strategy's result for one task."""
 
     retrieved: list[str]
     payload_chars: int
+    #: Characters of that payload that are document ids — in the `id` field and
+    #: in every `related` target. This is what the entropy choice actually buys
+    #: and costs, and it was never measured (GAP-042).
+    id_chars: int
+    #: What those same ids would have cost as `adr-0007`.
+    sequential_id_chars: int
 
 
-def _emit_chars(data: object) -> int:
-    """Size of the JSON an agent would actually receive, via the real renderer."""
+def _emit(data: object) -> str:
+    """The JSON an agent would actually receive, via the real renderer."""
     buffer = io.StringIO()
     with redirect_stdout(buffer):
         rendering.emit_json(data, trim=True)
-    return len(buffer.getvalue())
+    return buffer.getvalue()
+
+
+def _id_cost(payload: str, all_ids: list[str]) -> tuple[int, int]:
+    """Characters spent on ids in ``payload``, actual and sequential-equivalent.
+
+    Counts occurrences rather than parsing: an id is quoted the same way in the
+    `id` field and in a `related` target, and both are paid for on every read.
+    """
+    actual = equivalent = 0
+    for doc_id in all_ids:
+        occurrences = payload.count(doc_id)
+        if not occurrences:
+            continue
+        prefix = doc_id.split("-", 1)[0]
+        actual += occurrences * len(doc_id)
+        equivalent += occurrences * (len(prefix) + 1 + SEQUENTIAL_DIGITS)
+    return actual, equivalent
+
+
+def _outcome(retrieved: list[str], data: object, all_ids: list[str]) -> Outcome:
+    payload = _emit(data)
+    id_chars, sequential = _id_cost(payload, all_ids)
+    return Outcome(retrieved, len(payload), id_chars, sequential)
 
 
 def build_store(home: Path) -> tuple[object, dict[str, str]]:
@@ -65,6 +110,12 @@ def build_store(home: Path) -> tuple[object, dict[str, str]]:
     os.environ["DOCIR_HOME"] = str(home)
     os.environ["DOCIR_NO_DAEMON"] = "1"
     settings = Settings.resolve(home=home, use_daemon=False)
+    # Mint `random` ids, which is what `docir init` writes and therefore what a
+    # real project store costs to read. Left to the bare schema default this
+    # measured `adr-0007` and quietly understated every token figure by four
+    # characters per id — the benchmark has to price the shipped default.
+    settings.ensure_directories()
+    settings.schema_path.write_text(render_schema_yaml(id_style="random"), encoding="utf-8")
     container = build_container(settings, background_embeddings=False)
     dispatcher = container.dispatcher
 
@@ -120,12 +171,13 @@ def strategies(dispatcher: object, task: str, ids: dict[str, str]) -> dict[str, 
     everything = dispatcher.dispatch("query", {"limit": 1000})
     bodies = [dispatcher.dispatch("get", {"doc_id": doc_id}) for doc_id in ids.values()]
 
+    all_ids = list(ids.values())
     return {
-        "context": Outcome(keys(context), _emit_chars(context)),
-        "context --expand 0": Outcome(keys(context_flat), _emit_chars(context_flat)),
-        "search": Outcome(keys(search), _emit_chars(search)),
-        "query (all skeletons)": Outcome(keys(everything), _emit_chars(everything)),
-        "read every body": Outcome(keys(everything), _emit_chars(bodies)),
+        "context": _outcome(keys(context), context, all_ids),
+        "context --expand 0": _outcome(keys(context_flat), context_flat, all_ids),
+        "search": _outcome(keys(search), search, all_ids),
+        "query (all skeletons)": _outcome(keys(everything), everything, all_ids),
+        "read every body": _outcome(keys(everything), bodies, all_ids),
     }
 
 
@@ -138,6 +190,57 @@ def score(retrieved: list[str], relevant: list[str]) -> tuple[float, float, floa
     precision = len(hits) / len(retrieved) if retrieved else 0.0
     rank = next((i + 1 for i, key in enumerate(retrieved) if key in relevant), 0)
     return recall, precision, (1 / rank if rank else 0.0)
+
+
+def _collision_probability(bits: int, documents: int) -> float:
+    """Birthday-problem odds that two of ``documents`` ids collide."""
+    return 1.0 - math.exp(-(documents**2) / (2 * 2**bits))
+
+
+def _report_id_cost(totals: dict, mean: Callable[[list[float]], float]) -> None:
+    """What the random-id entropy costs to read, and what it buys.
+
+    GAP-042: a random id is ~3x a sequential one and appears in every skeleton
+    and every edge of every result, but nothing measured the trade, so 48 bits
+    was chosen by default rather than deliberately.
+    """
+    print(f"\nid cost per result set (random {_RANDOM_BITS}-bit vs sequential):")
+    header = (
+        f"{'strategy':<22} {'~tokens':>9} {'id chars':>9} "
+        f"{'share':>7} {'as adr-0007':>12} {'saving':>8}"
+    )
+    print(header)
+    print("-" * len(header))
+    for name, bucket in totals.items():
+        chars = mean(bucket["chars"])
+        id_chars = mean(bucket["id_chars"])
+        seq = mean(bucket["seq_id_chars"])
+        share = id_chars / chars if chars else 0.0
+        saving = (id_chars - seq) / chars if chars else 0.0
+        print(
+            f"{name:<22} {chars / CHARS_PER_TOKEN:>9.0f} {id_chars:>9.0f} "
+            f"{share:>6.1%} {seq:>12.0f} {saving:>7.1%}"
+        )
+
+    print("\nwhat the entropy buys — odds that any two ids collide:")
+    header = f"{'suffix':<18} {'bits':>5} " + " ".join(f"{n:>10,}" for n in _CORPUS_SIZES)
+    print(header)
+    print("-" * len(header))
+    for hex_chars in (4, 6, 8, 12, 16):
+        bits = hex_chars * 4
+        row = " ".join(
+            f"{_collision_probability(bits, n):>10.2%}"
+            if n**2 / 2**bits > 1e-9
+            else f"{'<0.01%':>10}"
+            for n in _CORPUS_SIZES
+        )
+        marker = "  <- current" if hex_chars * 4 == _RANDOM_BITS else ""
+        print(f"{f'{hex_chars} hex':<18} {bits:>5} {row}{marker}")
+    print(
+        "\nRead the two tables together: the collision row is a one-off risk at merge\n"
+        "time, the id-cost row is paid on every read. Neither number decides on its\n"
+        "own — that is the point of measuring both."
+    )
 
 
 def main() -> int:
@@ -169,12 +272,23 @@ def main() -> int:
                 recall, precision, rr = score(outcome.retrieved, task["relevant"])
                 bucket = totals.setdefault(
                     name,
-                    {"recall": [], "precision": [], "rr": [], "chars": [], "lex": [], "sem": []},
+                    {
+                        "recall": [],
+                        "precision": [],
+                        "rr": [],
+                        "chars": [],
+                        "id_chars": [],
+                        "seq_id_chars": [],
+                        "lex": [],
+                        "sem": [],
+                    },
                 )
                 bucket["recall"].append(recall)
                 bucket["precision"].append(precision)
                 bucket["rr"].append(rr)
                 bucket["chars"].append(outcome.payload_chars)
+                bucket["id_chars"].append(outcome.id_chars)
+                bucket["seq_id_chars"].append(outcome.sequential_id_chars)
                 bucket["lex" if task["lexical"] else "sem"].append(recall)
 
         def mean(values: list[float]) -> float:
@@ -188,6 +302,8 @@ def main() -> int:
                 f"{name:<22} {mean(bucket['recall']):>9.2f} {mean(bucket['precision']):>8.2f} "
                 f"{mean(bucket['rr']):>6.2f} {mean(bucket['chars']) / CHARS_PER_TOKEN:>9.0f}"
             )
+
+        _report_id_cost(totals, mean)
 
         print(f"\nrecall@{K} split by how the task is worded:")
         print(f"{'strategy':<22} {'same words':>11} {'paraphrased':>12}")

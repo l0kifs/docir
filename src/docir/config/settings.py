@@ -1,8 +1,9 @@
 """Runtime settings and the ``~/.docir`` path layout.
 
-Backed by ``pydantic-settings``: the ``home`` and ``idle_timeout`` fields are
-populated from ``DOCIR_HOME`` / ``DOCIR_IDLE_TIMEOUT`` (the ``DOCIR_`` env
-prefix) or their defaults. Everything the application persists lives under the
+Backed by ``pydantic-settings``: the ``home``, ``idle_timeout`` and
+``request_timeout`` fields are populated from ``DOCIR_HOME`` /
+``DOCIR_IDLE_TIMEOUT`` / ``DOCIR_REQUEST_TIMEOUT`` (the ``DOCIR_`` env prefix) or
+their defaults. Everything the application persists lives under the
 single home directory; pointing ``DOCIR_HOME`` at a temp dir is what makes the
 whole system hermetic and testable — no global state leaks between runs.
 
@@ -27,6 +28,14 @@ HOME_ENV = "DOCIR_HOME"
 NO_DAEMON_ENV = "DOCIR_NO_DAEMON"
 #: Idle timeout (seconds) before the daemon shuts itself down.
 DEFAULT_IDLE_TIMEOUT = 900.0
+#: How long a client waits for the daemon's *reply* before giving up (seconds).
+#: Deliberately generous, and deliberately not the connect timeout: connecting to
+#: a local Unix socket either succeeds at once or not at all, while the reply
+#: arrives only after the daemon has done the work — a ``reindex`` over a large
+#: corpus is one request that legitimately runs for minutes. Sizing this like a
+#: connect budget is what made ``reindex`` fail on a 65-document store while the
+#: daemon completed it. Raise ``DOCIR_REQUEST_TIMEOUT`` for a slower corpus.
+DEFAULT_REQUEST_TIMEOUT = 300.0
 #: The per-project store directory name, discovered by walking up from the CWD
 #: (the ``.git`` model). ``docir init`` creates one; commands then scope to it.
 PROJECT_STORE_DIRNAME = ".docir"
@@ -119,6 +128,7 @@ class Settings(BaseSettings):
 
     home: Path = Field(default_factory=lambda: Path.home() / ".docir")
     idle_timeout: float = DEFAULT_IDLE_TIMEOUT
+    request_timeout: float = DEFAULT_REQUEST_TIMEOUT
     use_daemon: bool = False
     #: How ``home`` was chosen: ``flag`` | ``env`` | ``project`` | ``global``.
     #: Carried so callers can tell a deliberate store from a fallback — a write

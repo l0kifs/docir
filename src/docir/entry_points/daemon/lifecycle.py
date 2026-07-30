@@ -22,6 +22,11 @@ _READY_TIMEOUT = 10.0
 _POLL_INTERVAL = 0.05
 
 
+def _client(settings: Settings) -> DaemonClient:
+    """A client for this store, carrying the configured reply timeout."""
+    return DaemonClient(settings.socket_path, request_timeout=settings.request_timeout)
+
+
 @dataclass(frozen=True, slots=True)
 class DaemonStatus:
     """A snapshot of the daemon's state for ``docir daemon status``."""
@@ -66,12 +71,12 @@ def is_running(settings: Settings) -> bool:
     pid = read_pid(settings)
     if pid is None or not process_alive(pid):
         return False
-    return DaemonClient(settings.socket_path).is_available()
+    return _client(settings).is_available()
 
 
 def wait_until_ready(settings: Settings, timeout: float = _READY_TIMEOUT) -> bool:
     """Poll the socket until the daemon accepts connections or time runs out."""
-    client = DaemonClient(settings.socket_path)
+    client = _client(settings)
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if client.is_available():
@@ -113,7 +118,7 @@ def stop(settings: Settings) -> bool:
     from docir.platform.transport.messages import Request
 
     was_running = False
-    client = DaemonClient(settings.socket_path)
+    client = _client(settings)
     if client.is_available():
         was_running = True
         with contextlib.suppress(DaemonError):

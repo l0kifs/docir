@@ -60,3 +60,20 @@ jobs:
 
       - name: Tests + coverage
         run: uv run pytest --cov=docir --cov-fail-under=90
+
+      - name: Document integrity (docir check --strict)
+        # The merge-into-main guard: --strict exits 1 on `error` findings only —
+        # duplicate ids and dangling edges, which is exactly what a branch merge
+        # introduces. Warnings (orphan, cycle, layering, staleness) do not fail
+        # the build; `orphan` fires for every document with no relations, so
+        # gating on them would fail a healthy corpus.
+        #
+        # Announce the skip rather than passing silently: until the project
+        # store is committed there is nothing to check, and a gate that always
+        # exits 0 reads as "the corpus is clean" when it means "nothing ran".
+        run: |
+          if [ ! -d .docir/docs ]; then
+            echo "::notice::no committed .docir store — document integrity gate did not run"
+            exit 0
+          fi
+          uv run docir --no-daemon check --strict

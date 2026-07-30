@@ -268,6 +268,17 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   / f"docir-{sha1(home)[:12]}.sock"`. A deep home path would blow past the ~104-char `AF_UNIX` limit,
   so the socket cannot live under it; the hash keeps it stable per installation. The pid and log files
   *do* live under `DOCIR_HOME`.
+- **Reaching the socket and waiting for the reply are timed separately, and only one of them
+  is retryable.** `_CONNECT_TIMEOUT` (5s, `platform/transport/client.py`) covers the connect;
+  a local `AF_UNIX` connect succeeds at once or not at all. The reply is covered by
+  `settings.request_timeout` (300s, `DOCIR_REQUEST_TIMEOUT`), because it only arrives after
+  the daemon has done the work and one request can be a whole `reindex`. One shared timeout
+  meant every command slower than 5s failed while the daemon completed it — `reindex` over
+  65 documents takes ~10s. The two failures are then **different exceptions on purpose**: a
+  refused connect is a `DaemonError`, the request never landed, and `SocketExecutor` respawns
+  and resends it; an unanswered reply is a `DaemonTimeoutError` and is **never** resent,
+  because the daemon still has it and the old blanket retry killed it mid-transaction and ran
+  the command twice (for `add`, a second document). Do not collapse either pair back together.
 - **The daemon is disposable and respawned** by the client (`entry_points/daemon/lifecycle.py`); it
   self-shuts-down after an idle timeout. It is spawned as a detached `python -m docir daemon serve`,
   so `src/docir/__main__.py → entry_points.cli.app:main` and the hidden `daemon serve` command must

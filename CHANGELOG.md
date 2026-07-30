@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A command slower than five seconds no longer fails against the daemon.** The client
+  set one socket timeout — `_CONNECT_TIMEOUT`, 5s — before connecting and left it in force
+  for the reply, so the budget for reaching a local Unix socket also bounded however long
+  the daemon took to do the work. `docir reindex` over a 65-document store died with
+  `daemon socket error: timed out` at 5s while the daemon completed the rebuild in ~10s.
+  Connect and reply are now timed separately: connect keeps the 5s budget, the reply gets
+  `request_timeout` (300s, settable with `DOCIR_REQUEST_TIMEOUT`).
+- **A timed-out request is no longer resent.** `SocketExecutor` treated every `DaemonError`
+  as a stale socket: it killed the daemon and replayed the request. Combined with the bug
+  above, any write slower than 5s was executed, reported as failed, and then executed a
+  second time against a daemon killed mid-transaction — for `add`, a duplicate document.
+  A reply timeout now raises `DaemonTimeoutError`, which is never retried and names the
+  escapes (`docir daemon status`, `DOCIR_REQUEST_TIMEOUT`, `--no-daemon`).
+
+### Added
+
+- **CI gates document integrity.** `docir check --strict` runs after the test suite, failing
+  the build on `error` findings — duplicate ids and dangling edges, which is what a branch
+  merge introduces. It announces a skip when no project store is committed rather than
+  exiting 0 silently, so a passing gate cannot be confused with an unchecked corpus.
+
 ## [0.8.0] - 2026-07-29
 
 Pagination on the list paths, UTC dates, and the scope of full-text search stated where

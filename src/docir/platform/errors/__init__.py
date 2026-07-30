@@ -131,6 +131,19 @@ class DaemonError(DocirError):
     exit_code = 7
 
 
+class DaemonTimeoutError(DaemonError):
+    """The daemon took the request but did not answer within the time allowed.
+
+    Separate from :class:`DaemonError` because the two demand opposite responses.
+    A refused connection or a dead peer means the request never landed, so
+    respawning the daemon and resending is safe — and is what
+    ``SocketExecutor`` does. A reply timeout means the daemon *has* the request
+    and may still be executing it; resending would run the command a second
+    time, which for a write means a duplicate document. So this one is never
+    retried.
+    """
+
+
 # --- Agent instruction setup -----------------------------------------------
 
 

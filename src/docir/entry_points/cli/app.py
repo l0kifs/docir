@@ -846,7 +846,17 @@ def _emit_init(result: InitResult) -> None:
         "schema_written": result.schema_written,
         "gitignore_written": result.gitignore_written,
         "schema_preserved": result.schema_preserved,
+        "enclosing_home": str(result.enclosing_home) if result.enclosing_home else "",
     }
+    if result.enclosing_home is not None:
+        # Legitimate (a monorepo subproject) and easy to do by accident, so it
+        # is a warning rather than a refusal — but silence here means documents
+        # split across two corpora with nothing pointing at the split.
+        rendering.render_warning(
+            f"there is already a docir store at {result.enclosing_home}; commands run "
+            f"under {result.home.parent} will now use the new store, and the outer "
+            "store's `docir check` will not see documents added here."
+        )
     if result.schema_preserved:
         # Not an error, but --force did not do everything its name implies, and
         # silence here would read as "the schema was regenerated".

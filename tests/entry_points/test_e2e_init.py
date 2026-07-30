@@ -186,3 +186,31 @@ def test_force_schema_stands_alone(tmp_path: Path, settings) -> None:
     assert run("init", str(tmp_path), "--force-schema").exit_code == 0
 
     assert "# customised" not in schema.read_text(encoding="utf-8")
+
+
+class TestNestedStoreWarning:
+    def test_init_beneath_an_existing_store_warns_on_stderr(self, tmp_path: Path) -> None:
+        # GAP-054: the warning is the whole fix — the store is still created,
+        # because a monorepo subproject with its own store is legitimate.
+        assert run("init", str(tmp_path)).exit_code == 0
+        nested = tmp_path / "team"
+        nested.mkdir()
+        result = run("init", str(nested))
+        assert result.exit_code == 0
+        assert (nested / ".docir").is_dir()
+        # Rich wraps stderr at the console width, and wraps *inside* a long
+        # path, so the path is matched with whitespace removed entirely.
+        assert "already a docir store" in " ".join(result.stderr.split())
+        assert str(tmp_path / ".docir") in "".join(result.stderr.split())
+
+    def test_a_top_level_init_says_nothing(self, tmp_path: Path) -> None:
+        # A count of warnings cannot tell "nothing to warn about" from "the
+        # warning never fires", so pin the quiet case too.
+        assert "already a docir store" not in run("init", str(tmp_path)).stderr
+
+    def test_the_json_carries_the_enclosing_store(self, tmp_path: Path) -> None:
+        run("init", str(tmp_path))
+        nested = tmp_path / "team"
+        nested.mkdir()
+        payload = json.loads(run("--json", "init", str(nested)).stdout)
+        assert payload["enclosing_home"] == str((tmp_path / ".docir").resolve())

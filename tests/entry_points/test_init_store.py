@@ -118,3 +118,46 @@ class TestForceProtectsACustomisedSchema:
         initialize_store(settings)
         result = initialize_store(settings, force=True)
         assert result.schema_preserved is False
+
+
+class TestAShadowedStoreIsReported:
+    """GAP-054: `init` beneath an existing store captured every command run
+    under it, and said nothing.
+
+    Discovery walks *up*, so the nested store wins for the whole subtree and the
+    outer store's `check` never sees documents added there — they are not
+    orphaned or dangling, they are in a different corpus. ADR-0009 is right that
+    `init` must not *reuse* a parent store; that is a different decision from
+    not mentioning it.
+    """
+
+    def test_a_store_above_is_reported(self, tmp_path: Path) -> None:
+        initialize_store(_settings(tmp_path))
+        nested = tmp_path / "team"
+        nested.mkdir()
+        result = initialize_store(_settings(nested))
+        assert result.enclosing_home == (tmp_path / ".docir").resolve()
+
+    def test_a_store_with_nothing_above_reports_none(self, tmp_path: Path) -> None:
+        # Distinguishes "nothing is above" from "the check did not run".
+        assert initialize_store(_settings(tmp_path)).enclosing_home is None
+
+    def test_re_initialising_does_not_report_itself(self, tmp_path: Path) -> None:
+        initialize_store(_settings(tmp_path))
+        assert initialize_store(_settings(tmp_path), force=True).enclosing_home is None
+
+    def test_a_deeply_nested_store_finds_the_nearest_one(self, tmp_path: Path) -> None:
+        initialize_store(_settings(tmp_path))
+        middle = tmp_path / "a"
+        middle.mkdir()
+        initialize_store(_settings(middle))
+        deep = middle / "b" / "c"
+        deep.mkdir(parents=True)
+        assert initialize_store(_settings(deep)).enclosing_home == (middle / ".docir").resolve()
+
+    def test_an_explicitly_named_store_still_notices_a_sibling(self, tmp_path: Path) -> None:
+        # `--home /srv/docs` does not end in `.docir`, so the walk has to start
+        # at the store's own directory rather than its parent.
+        initialize_store(_settings(tmp_path))
+        named = Settings.resolve(home=tmp_path / "docs", use_daemon=False)
+        assert initialize_store(named).enclosing_home == (tmp_path / ".docir").resolve()

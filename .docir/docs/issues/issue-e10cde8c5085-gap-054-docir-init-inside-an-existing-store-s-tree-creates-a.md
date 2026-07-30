@@ -8,7 +8,7 @@ related:
 - ref-cb2beaa41604
 - arch-90c90751344f
 - adr-20eec6e2e2ca
-status: open
+status: resolved
 tags:
 - cli
 - material
@@ -79,3 +79,7 @@ legitimate layout, which is why this is a warning rather than an error.
   `is_unintended_global_fallback`)
 - `src/docir/entry_points/composition.py` (`initialize_store`)
 - PROBE-R7 / PROBE-R7b in the 2026-07-30 probe log
+
+## Resolution
+
+FIXED 2026-07-30. `docir init` now warns on stderr when a project store already exists above the one it is creating, naming the enclosing store and saying that commands run beneath the new one will use the new one and that the outer store's `check` will not see documents added there. `InitResult.enclosing_home` carries it, so the JSON path reports it too. It warns rather than refuses: a monorepo subproject with its own store is a legitimate layout, which is exactly why ADR-0009 has `init` create rather than reuse — the fix is to the silence, not to the rule. The check lives in `config/settings.enclosing_project_home`, beside `resolve` and `new_store_home`, for the reason recorded on the latter: a rule about which store is in play that lives anywhere else escapes the review that reads those two. It starts the walk at the store's own directory so an explicitly-named store (`--home /srv/docs`) still notices a sibling `.docir`, and skips a candidate equal to the new home so re-running `init` does not report the store against itself. Verified by injecting the bug: with the lookup stubbed to None, five of the eight new guards fail.

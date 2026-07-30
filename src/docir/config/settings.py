@@ -57,6 +57,34 @@ def discover_project_home(start: Path | None = None) -> Path | None:
     return None
 
 
+def enclosing_project_home(home: Path) -> Path | None:
+    """The nearest project store *above* ``home``, if one exists.
+
+    The third home decision, kept beside the other two for the reason recorded
+    on :func:`new_store_home`: a rule about which store is in play that lives
+    anywhere else escapes the review that reads these.
+
+    ``init`` deliberately does not reuse an enclosing store — reusing a parent
+    is the wrong answer when the caller asked for a new one (ADR-0009) — but
+    "do not reuse it" and "do not mention it" are different decisions, and only
+    the first was made. Discovery walks *up*, so a store created beneath another
+    captures every command run under it, silently, and the outer store's
+    ``check`` never sees those documents: they are not orphaned or dangling,
+    they are in a different corpus (GAP-054).
+
+    Starts at ``home``'s own directory so an explicitly-named store (``--home
+    /srv/docs``) still notices a sibling ``.docir``, and skips a candidate that
+    *is* ``home`` so re-initialising a store does not report itself.
+    """
+    home = Path(home).expanduser().resolve()
+    start = home.parent
+    for directory in (start, *start.parents):
+        candidate = directory / PROJECT_STORE_DIRNAME
+        if candidate.is_dir() and candidate != home:
+            return candidate
+    return None
+
+
 def new_store_home(directory: Path | None, explicit_home: Path | None) -> Path:
     """Where ``docir init`` should create a store — the counterpart to :meth:`Settings.resolve`.
 

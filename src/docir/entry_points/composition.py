@@ -17,7 +17,7 @@ from pathlib import Path
 
 from sqlalchemy import Engine
 
-from docir.config.settings import Settings
+from docir.config.settings import Settings, enclosing_project_home
 from docir.entry_points.dispatch import Dispatcher
 from docir.modules.documents.api import (
     ID_STYLES,
@@ -207,6 +207,11 @@ class InitResult:
     #: was kept. Not an error: the caller asked to regenerate the store's files
     #: and got everything that is safe to regenerate.
     schema_preserved: bool = False
+    #: A project store that already exists above this one, if any. The new store
+    #: shadows it for every command run beneath it, which is legitimate (a
+    #: monorepo subproject) and easy to do by accident, so it is reported rather
+    #: than refused.
+    enclosing_home: Path | None = None
 
 
 def initialize_store(
@@ -240,6 +245,10 @@ def initialize_store(
     if id_style not in ID_STYLES:
         raise SchemaError(f"unknown id_style {id_style!r}; available: {', '.join(ID_STYLES)}")
 
+    # Before creating anything: a store above this one is about to be shadowed
+    # for every command run beneath it, and nothing used to say so.
+    enclosing = enclosing_project_home(settings.home)
+
     settings.ensure_directories()
 
     schema_path = settings.schema_path
@@ -264,6 +273,7 @@ def initialize_store(
         gitignore_written=gitignore_written,
         id_style=id_style,
         schema_preserved=schema_preserved,
+        enclosing_home=enclosing,
     )
 
 

@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`docir init` says so when it creates a store beneath an existing one.** Discovery walks
+  up, so a nested `.docir` captures every command run under it — documents split across two
+  corpora, with the outer store's `check` unable to see the inner ones at all — and nothing
+  said a second store had been created or which one a write had landed in. `init` now warns
+  on stderr and reports `enclosing_home` in its JSON. It warns rather than refuses: a
+  monorepo subproject with its own store is legitimate, which is why `init` creates rather
+  than reuses (ADR-0009). The fix is to the silence, not to the rule.
 - **A document can no longer relate to itself.** `--set-related <self>` was accepted, and
   `docir check` then reported a one-node relation cycle — the write path manufacturing the
   finding the check path exists to report, clearable only by removing the edge again. Tier 0

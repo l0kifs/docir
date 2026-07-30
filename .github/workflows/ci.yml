@@ -14,17 +14,19 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0  # full history so contract-sync can diff against the base
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
       - name: Install UV
-        uses: astral-sh/setup-uv@v4
+        # Pinned to an exact release: astral-sh stopped publishing a floating
+        # major tag after v7, so `@v9` does not resolve.
+        uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
 
@@ -32,7 +34,7 @@ jobs:
         # fastembed is a hard dependency and the default embedder, so the test
         # suite exercises the real model. The weights are ~64 MB and never
         # change for a pinned model name — download them once, not every run.
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/fastembed
           key: fastembed-${{ runner.os }}-bge-small-en-v1.5

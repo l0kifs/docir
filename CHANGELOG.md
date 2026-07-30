@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`docir lint --deep` no longer reports a duplicate for two documents you have linked.**
+  The edge is the answer to "why are these similar" — the author has modelled the
+  connection, which is what typed edges are for — so the finding left nothing to do but
+  delete a document or unlink a correct relation. Measured against docir's own corpus, all
+  14 duplicate findings were such pairs and the command drops from 21 findings to 8. An
+  unlinked similar pair, the copy-paste the check exists to catch, is still reported.
 - **`docir init` says so when it creates a store beneath an existing one.** Discovery walks
   up, so a nested `.docir` captures every command run under it — documents split across two
   corpora, with the outer store's `check` unable to see the inner ones at all — and nothing

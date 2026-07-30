@@ -288,6 +288,29 @@ class TestSimilarityLinter:
         findings = SimilarityLinter(similarity_threshold=0.9).find_duplicates(vectors)
         assert findings and findings[0].kind == "duplicate"
 
+    def test_a_linked_pair_is_not_reported(self) -> None:
+        """GAP-055: the edge is the answer to "why are these two similar?".
+
+        Every one of the 14 duplicate findings against docir's own corpus was a
+        pair the author had linked on purpose, which leaves the reader nothing
+        to do but delete a document or unlink a correct relation.
+        """
+        vectors = [("a", Embedding((1.0, 0.0))), ("b", Embedding((1.0, 0.0)))]
+        linter = SimilarityLinter(similarity_threshold=0.9)
+        assert linter.find_duplicates(vectors, [frozenset(("a", "b"))]) == []
+        # direction is not part of the question
+        assert linter.find_duplicates(vectors, [frozenset(("b", "a"))]) == []
+        # and an unrelated edge does not silence the pair
+        assert linter.find_duplicates(vectors, [frozenset(("a", "c"))])
+
+    def test_an_unlinked_duplicate_is_still_reported(self) -> None:
+        # The case the check exists for. Without this, "no duplicates" and
+        # "duplicates are never reported" look identical.
+        vectors = [("a", Embedding((1.0, 0.0))), ("b", Embedding((1.0, 0.0)))]
+        findings = SimilarityLinter(similarity_threshold=0.9).find_duplicates(vectors, [])
+        assert [f.kind for f in findings] == ["duplicate"]
+        assert findings[0].doc_ids == ("a", "b")
+
     def test_scope_creep_flagged(self) -> None:
         big = _doc("adr-0001", body="x" * 10)
         findings = SimilarityLinter(size_threshold_chars=5).find_scope_creep([big])

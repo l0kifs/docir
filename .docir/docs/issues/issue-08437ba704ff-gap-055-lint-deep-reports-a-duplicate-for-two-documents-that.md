@@ -7,7 +7,7 @@ owner: maintainer
 related:
 - ref-cb2beaa41604
 - arch-0a3c2d6d54a6
-status: open
+status: resolved
 tags:
 - retrieval
 - material
@@ -68,3 +68,7 @@ reported.
 
 - `src/docir/modules/documents/application/services/maintenance_service.py` (`lint_deep`)
 - PROBE-L1 in the 2026-07-30 probe log
+
+## Resolution
+
+FIXED 2026-07-30. `SimilarityLinter.find_duplicates` takes the set of linked pairs and skips any pair joined by a relation in either direction; `MaintenanceService.lint_deep` supplies it from `uow.documents.relations()`. Against docir's own corpus `lint --deep` goes from 21 findings to 8 — all 14 duplicates were linked pairs, which is the measurement that motivated the change. The unlinked case, which is the copy-paste this check exists to catch, is still reported and has its own test: without it, "no duplicates" and "duplicates are never reported" look identical. `linked_pairs` defaults to empty rather than being required, because this is a pure domain service and a caller with no relation graph should get the unfiltered answer rather than a signature it cannot satisfy. Verified by injecting the bug: with the argument dropped at the call site, the integration guard fails.

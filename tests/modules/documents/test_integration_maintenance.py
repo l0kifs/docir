@@ -604,3 +604,25 @@ class TestPagination:
         # SQLite ignores a negative OFFSET, so it has to be caught before it.
         with pytest.raises(ValidationError):
             dispatcher.dispatch("query", {"limit": 5, "offset": -1})
+
+
+def test_lint_does_not_flag_a_pair_that_is_related(dispatcher: Dispatcher) -> None:
+    """GAP-055, through the full stack: linking the pair clears the finding."""
+    ids = []
+    for title in ("Auth tokens one", "Auth tokens two"):
+        ids.append(
+            dispatcher.dispatch(
+                "add",
+                {
+                    "type": "decision",
+                    "title": title,
+                    "description": "identical text about authentication tokens and refresh",
+                    "body": "the same body about authentication tokens and refresh sessions",
+                },
+            )["id"]
+        )
+    assert any(f["kind"] == "duplicate" for f in dispatcher.dispatch("lint", {}))
+
+    dispatcher.dispatch("update", {"doc_id": ids[0], "set_related": [ids[1]]})
+    findings = dispatcher.dispatch("lint", {})
+    assert [f for f in findings if f["kind"] == "duplicate"] == []

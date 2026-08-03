@@ -6,6 +6,13 @@
 # any user gets from `docir build` — if the command breaks, the project's own
 # documentation stops publishing.
 #
+# ONE-TIME SETUP: enable Pages first — Settings -> Pages -> Build and
+# deployment -> Source: **GitHub Actions**. `configure-pages` can create the
+# site itself with `enablement: true`, but only when the repository's default
+# workflow token has write permissions; where it does not, that fails with
+# "Resource not accessible by integration" *after* every real step has already
+# passed, which is a worse error than the plain "Pages is not enabled".
+#
 # The order of the steps is the interesting part. `.docir/docs/` is committed
 # and the derived index is gitignored, so a fresh clone has **no index at all**.
 # `docir build` reads the index, not the files, so without the reindex step it
@@ -37,11 +44,8 @@ jobs:
   build:
     name: Build the site
     runs-on: ubuntu-latest
-    # `pages: write` here as well as on the deploy job, so `configure-pages` can
-    # turn Pages on for a repository that has never had it. Without that the
-    # first run of this workflow in a fresh fork fails on "Get Pages site
-    # failed", having already done all the real work — which is a confusing
-    # place to learn about a settings toggle.
+    # `pages: write` here as well as on the deploy job, so `configure-pages`
+    # can read the Pages configuration.
     permissions:
       contents: read
       pages: write
@@ -101,10 +105,6 @@ jobs:
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
-        with:
-          # Enable Pages on a repository that has never had it, rather than
-          # failing and asking someone to find the setting.
-          enablement: true
 
       - name: Upload the artifact
         uses: actions/upload-pages-artifact@v4

@@ -38,6 +38,10 @@ dependencies = [
     # onnxruntime's 68 MB, and `entry_points/mcp/cmds.py` still imports it
     # lazily so no other command pays its ~0.3s import.
     "fastmcp>=3.4",
+    # Filesystem notifications for the daemon's docs watcher. Already arrived
+    # transitively with fastmcp; declared because depending on someone else's
+    # transitive dependency is depending on their next release notes.
+    "watchfiles>=1.0",
 ]
 
 [project.scripts]

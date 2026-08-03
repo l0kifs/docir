@@ -318,6 +318,21 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   and resends it; an unanswered reply is a `DaemonTimeoutError` and is **never** resent,
   because the daemon still has it and the old blanket retry killed it mid-transaction and ran
   the command twice (for `add`, a second document). Do not collapse either pair back together.
+- **The daemon watches `docs/` and reindexes what changes, and both halves of that
+  are load-bearing.** Hand-editing is *permitted* (the README's by-hand table), so the
+  window between an edit and a `reindex` was one where every read answered from a stale
+  index and nothing said so. It is safe to automate only because the files are canonical:
+  `reindex` writes no markdown, so it can only make the index agree with them — which is
+  why it defaults on (`DOCIR_WATCH=0` opts out) rather than being a flag. Two details are
+  easy to undo by accident: the watcher and the socket server share **one**
+  `SerializingExecutor`, wrapped once in `_run_server`, because the server serializes
+  clients but the watcher is a second writer and SQLite has one — two wrappers would each
+  be internally consistent and collectively useless. And `DocsWatcher._reindex` swallows
+  failures on purpose: a half-written file is normal (editors save in two steps) and the
+  next batch fixes it, while an exception would end the thread silently, leaving a daemon
+  that looks healthy and has stopped watching. `is_document` includes `tags.yaml`, which
+  is canonical and hand-editable but not markdown; filtering on `.md` alone leaves a
+  renamed tag unindexed while every document that used it reindexes fine.
 - **The daemon is disposable and respawned** by the client (`entry_points/daemon/lifecycle.py`); it
   self-shuts-down after an idle timeout. It is spawned as a detached `python -m docir daemon serve`,
   so `src/docir/__main__.py → entry_points.cli.app:main` and the hidden `daemon serve` command must

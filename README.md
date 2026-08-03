@@ -204,7 +204,12 @@ outside change — so hand-editing is supported, but not on every field:
 | `id` | ❌ never | it is the primary key; changing it orphans every inbound link |
 | `verified` | ❌ never | `docir update <id> --verified` — it asserts a human re-read the doc |
 
-**Then run `docir reindex && docir check`.** Reindex reports `documents_skipped` for files
+**Then run `docir reindex && docir check`** — or let the daemon do the reindex for
+you. It watches `.docir/docs/` and rebuilds what changed within a second of the
+edit, which is safe precisely because the files are canonical: a reindex only
+makes the index agree with them, and writes no markdown. `DOCIR_WATCH=0` turns it
+off; `--no-daemon` runs never watch, so CI still needs the explicit command.
+`docir check` is still yours to run. Reindex reports `documents_skipped` for files
 whose frontmatter will not parse — those are absent from every read path, not merely
 flagged — and `check` catches unregistered tags, undeclared statuses, unknown types,
 dangling links and duplicate ids. A hand-written `verified` date is the one thing nothing

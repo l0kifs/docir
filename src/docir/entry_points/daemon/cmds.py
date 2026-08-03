@@ -8,6 +8,8 @@ from docir.config.settings import Settings
 from docir.entry_points.cli import rendering
 from docir.entry_points.cli.runner import get_state
 from docir.entry_points.daemon import lifecycle
+from docir.entry_points.daemon.watcher import DocsWatcher
+from docir.platform.transport.messages import SerializingExecutor
 from docir.platform.transport.server import DaemonServer
 
 daemon_app = typer.Typer(help="Manage the background daemon.", no_args_is_help=True)
@@ -57,13 +59,17 @@ def _run_server(settings: Settings) -> None:
 
     container = build_container(settings, background_embeddings=True)
     lifecycle.write_pid(settings)
-    server = DaemonServer(
-        settings.socket_path,
-        InProcessExecutor(container.dispatcher),
-        idle_timeout=settings.idle_timeout,
-    )
+    # Wrapped once, shared by both callers. The server serializes clients; the
+    # watcher is a second writer on another thread, and SQLite has one.
+    executor = SerializingExecutor(InProcessExecutor(container.dispatcher))
+    watcher = DocsWatcher(settings, executor) if settings.watch else None
+    server = DaemonServer(settings.socket_path, executor, idle_timeout=settings.idle_timeout)
     try:
+        if watcher is not None:
+            watcher.start()
         server.serve_forever()
     finally:
+        if watcher is not None:
+            watcher.stop()
         container.close()
         lifecycle.clear_pid(settings)

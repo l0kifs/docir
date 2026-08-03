@@ -10,6 +10,7 @@ stateless client whether or not a daemon is running.
 
 from __future__ import annotations
 
+import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
@@ -68,3 +69,25 @@ class RequestExecutor(ABC):
     @abstractmethod
     def execute(self, request: Request) -> Response:
         """Run the command and return its response."""
+
+
+class SerializingExecutor(RequestExecutor):
+    """Runs one request at a time, whichever thread asks.
+
+    The daemon's socket loop already serializes *clients* — it handles one
+    connection at a time. The file watcher is a second caller on another
+    thread, and SQLite has exactly one writer, so a background reindex racing a
+    client ``add`` is a locked database rather than a queue.
+
+    Wrapping once and handing the same instance to both is what makes the lock
+    shared. Two wrappers would each be internally consistent and collectively
+    useless, which is the failure this class exists to make hard to write.
+    """
+
+    def __init__(self, inner: RequestExecutor) -> None:
+        self._inner = inner
+        self._lock = threading.Lock()
+
+    def execute(self, request: Request) -> Response:
+        with self._lock:
+            return self._inner.execute(request)

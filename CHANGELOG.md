@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The daemon watches `docs/` and reindexes what changes.** docir has always *permitted*
+  hand-editing a body — it is in the README's "what you may edit by hand" table — and then
+  asked you to remember `docir reindex`. Until you did, every read answered from a stale
+  index: `get` returned the old body, full-text missed the new words, the vector was never
+  recomputed, and nothing anywhere said so. Basic Memory, qmd and sqlite-memory all watch;
+  docir did not.
+
+  A debounced watcher now runs `reindex --changed` inside the daemon within about a second
+  of an edit. Automating it is safe for the reason the whole architecture rests on: the files
+  are canonical and the index is derived, so a reindex can only make the two agree — it
+  writes no markdown and cannot lose work. It is therefore **on by default**; `DOCIR_WATCH=0`
+  opts out, and `--no-daemon` runs never watch, so CI still runs the command explicitly.
+
+  The debounce is not decoration: a `git checkout` rewrites hundreds of files, and this
+  coalesces the burst into one rebuild. The watcher and the socket server share a single
+  `SerializingExecutor`, because the server serializes clients while the watcher is a second
+  writer and SQLite has exactly one. A failed rebuild is logged to `daemon.log` and the
+  watcher keeps going — a half-written file is normal, and a thread that dies on it would
+  leave a daemon that looks healthy and has silently stopped watching.
+- **`docir get <id> --section "<heading>"`** — read one section instead of the whole body,
+  the paired read for chunked ranking. `context` can now rank a document on one of its
+  sections; without this the follow-up was still a 28,000-character body. It returns exactly
+  the span `update --replace-section` would overwrite, so an agent cannot read one span and
+  overwrite another. An unknown heading errors **listing the real ones**, because discovering
+  them by fetching the whole body is the cost the flag exists to remove. Also on MCP as
+  `docir_get(doc_id, section=...)`.
+- **`benchmarks/run.py` reports semantic coverage** — how much of each body is inside a
+  vector, with the model's window measured empirically rather than hardcoded. Coverage is the
+  metric that describes this defect; recall cannot, because on a 26-document corpus FTS5
+  rescues the rank either way. Recall is kept beside it as the no-regression gate, which
+  matters: max-pooling over sections structurally favours documents with more of them.
+
 ### Fixed
 
 - **Most of a long document was not in the semantic index at all.** `bge-small-en-v1.5` reads
@@ -32,21 +66,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   marks every embedding dirty so a store whose vectors already match the current model does
   not upgrade to zero chunks. The cost is ~7x more vectors, and `context` loads every active
   vector per call, so the practical corpus ceiling drops by about that factor.
-
-### Added
-
-- **`docir get <id> --section "<heading>"`** — read one section instead of the whole body,
-  the paired read for chunked ranking. `context` can now rank a document on one of its
-  sections; without this the follow-up was still a 28,000-character body. It returns exactly
-  the span `update --replace-section` would overwrite, so an agent cannot read one span and
-  overwrite another. An unknown heading errors **listing the real ones**, because discovering
-  them by fetching the whole body is the cost the flag exists to remove. Also on MCP as
-  `docir_get(doc_id, section=...)`.
-- **`benchmarks/run.py` reports semantic coverage** — how much of each body is inside a
-  vector, with the model's window measured empirically rather than hardcoded. Coverage is the
-  metric that describes this defect; recall cannot, because on a 26-document corpus FTS5
-  rescues the rank either way. Recall is kept beside it as the no-regression gate, which
-  matters: max-pooling over sections structurally favours documents with more of them.
 
 - **`docir mcp serve` — the same commands, as MCP tools.** docir reached agents only through
   `docir agent install`, which teaches an assistant to run the CLI; a client that calls tools

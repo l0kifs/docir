@@ -458,6 +458,7 @@ dependencies = [
     { name = "rich" },
     { name = "sqlalchemy" },
     { name = "typer" },
+    { name = "watchfiles" },
 ]
 
 [package.dev-dependencies]
@@ -481,6 +482,7 @@ requires-dist = [
     { name = "rich", specifier = ">=13.9" },
     { name = "sqlalchemy", specifier = ">=2.0" },
     { name = "typer", specifier = ">=0.15" },
+    { name = "watchfiles", specifier = ">=1.0" },
 ]
 
 [package.metadata.requires-dev]

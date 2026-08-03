@@ -158,6 +158,11 @@ class Settings(BaseSettings):
     idle_timeout: float = DEFAULT_IDLE_TIMEOUT
     request_timeout: float = DEFAULT_REQUEST_TIMEOUT
     use_daemon: bool = False
+    #: Whether the daemon watches ``docs/`` and reindexes what changes. On by
+    #: default: the files are canonical and the index is derived, so an
+    #: automatic reindex can only make the two agree and can never lose work.
+    #: ``DOCIR_WATCH=0`` opts out.
+    watch: bool = True
     #: How ``home`` was chosen: ``flag`` | ``env`` | ``project`` | ``global``.
     #: Carried so callers can tell a deliberate store from a fallback — a write
     #: that lands in the global store because someone forgot ``docir init`` is

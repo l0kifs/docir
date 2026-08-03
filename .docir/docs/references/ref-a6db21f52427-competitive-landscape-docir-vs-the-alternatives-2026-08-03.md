@@ -133,8 +133,18 @@ boundaries and return the passage plus its location, so an agent reads 40 lines 
 architecture document that is a large token cost the skeleton contract was meant to avoid.
 
 ### 3. No reranking *(Basic Memory: cross-encoder; qmd: local LLM rerank)*
-RRF fusion is the state docir stops at. A cross-encoder rerank over the top-N is the standard
-next quality step and both close competitors already ship it.
+
+RRF fusion is the state docir stops at, and a cross-encoder rerank over the top-N
+is the standard next step both close competitors already ship. **docir built it
+and rejected it on measurement** (ADR-0015, `adr-d657a09b8c4a`): three models
+across two families (`ms-marco-MiniLM-L-6`, `-L-12`, `jina-reranker-v1-turbo`)
+and three shortlist widths all ranked *worse* than plain fusion — recall@5 0.97
+→ 0.90-0.93, MRR 0.97 → 0.85-0.89. These rerankers are trained on question →
+web-passage relevance; docir's queries are imperatives against terse design
+documents, and the model scored nearly every pair −8 to −11, where ordering is
+noise. The gap is real — docir has no reranker — but "docir should add one" is
+now measured false for the off-the-shelf option. An LLM reranker (what qmd
+does) is a different cost class and remains untested.
 
 ### 4. No file watching / auto-reindex *(all three retrieval competitors)*
 Hand-edit a body and the index is stale until someone runs `reindex`. Competitors watch the

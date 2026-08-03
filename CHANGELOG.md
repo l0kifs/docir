@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`docir mcp serve` — the same commands, as MCP tools.** docir reached agents only through
+  `docir agent install`, which teaches an assistant to run the CLI; a client that calls tools
+  over the Model Context Protocol and never runs a shell could not use docir at all, which is
+  most of them (Cursor, Codex, VS Code, ChatGPT, Claude Desktop). The server is built on the
+  existing `Dispatcher` rather than beside it — every tool is one `Request` through a
+  `RequestExecutor`, the same boundary the CLI and the daemon socket cross — so an MCP tool
+  and its CLI command cannot answer differently. 19 tools, one per dispatcher command except
+  the daemon's `ping`, plus a `docir_schema` tool for the one thing an agent needs that is not
+  a command: the valid types, statuses and relation kinds it must write against.
+
+  Details that are contract rather than convenience: reads return the same body-less
+  skeletons (`docir_context` / `docir_search` / `docir_query`), only `docir_get` carries a
+  body; every result goes through the same trimming the piped CLI's JSON does, so a tool
+  result costs an agent what captured CLI output costs it; read tools carry `readOnlyHint`
+  and `docir_delete` / `docir_tag_remove` carry `destructiveHint`; and requests go through
+  the daemon by default, so one warm embedding model serves every call (`--no-daemon` holds
+  a single in-process container instead).
+
+  ```bash
+  claude mcp add docir -- docir mcp serve   # stdio; --transport http also available
+  ```
+
+  `fastmcp` ships as a **default dependency**, not behind an extra. An extra would have been
+  the smaller install, but it puts the discovery problem on the wrong side: an agent that only
+  speaks MCP cannot be told to install the extra, because it cannot reach docir to be told.
+  The stack is ~12 MB against onnxruntime's 68 MB, and it costs no startup time — `mcp/cmds.py`
+  imports the server lazily, so only `docir mcp serve` pays fastmcp's ~0.3s import.
+
+### Changed
+
+- **The `embeddings` extra is gone.** It was kept as a no-op alias after fastembed became a
+  hard dependency in 0.8.0; `pip install docir[embeddings]` now warns about an unknown extra
+  and installs the same thing it would have anyway. Nothing to migrate — plain
+  `pip install docir` has included the embedding model since 0.8.0.
+
+- **JSON trimming moved to `entry_points/payload.py`.** It was private to `cli/rendering.py`,
+  and the MCP server needs the identical shape — an agent reading an absent field as "the
+  default" must be able to do so whichever transport it came over. No behaviour change; the
+  CLI's `--no-trim` still bypasses it.
+
 ## [0.9.0] - 2026-07-30
 
 docir now maintains its own documentation in docir, and doing so found eight defects — every

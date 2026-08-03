@@ -91,6 +91,7 @@ docir init
 
 # 3. teach this repo's AI agent to drive docir (writes a Claude Code skill)
 docir agent install            # add --agent agents for an AGENTS.md block
+                               # (or, for an MCP client: docir mcp serve)
 
 # 4. capture a decision…
 docir add --type decision --title "Auth strategy" \
@@ -195,6 +196,7 @@ can verify, which is exactly why it should not be written by hand.
 | `docir get <id>` | Full document with body |
 | `docir check` | Structural findings — duplicate ids, dangling edges, staleness (`--strict` gates CI on errors, `--fix` repairs them) |
 | `docir agent install` | Teach this repo's AI agent to drive docir |
+| `docir mcp serve` | Serve the same commands as MCP tools, for a client that speaks MCP |
 
 ### Full command reference
 
@@ -205,7 +207,7 @@ tag {add, list, rename, rm}
 agent {install, update}
 schema {show, validate}
 check [--fix] · lint · reindex · embed · version
-daemon serve
+daemon serve · mcp serve
 ```
 
 Store precedence (highest first): `--home` → `DOCIR_HOME` → a project-local `.docir/`
@@ -214,6 +216,27 @@ command in-process instead of over the daemon socket. Output is a Rich table at 
 compact JSON when piped; `--json` / `--pretty` force either, and `--no-trim` keeps every field.
 That applies to `--help` too — `docir --help | cat` returns the command vocabulary as JSON,
 so an agent can discover the CLI without parsing box-drawing characters.
+
+## Two ways an agent reaches docir
+
+Some agents run shell commands; some only call MCP tools. Both get the same
+vocabulary, because both go through the same dispatcher — an MCP tool and its
+CLI command cannot answer differently.
+
+```bash
+docir agent install               # a Claude skill / an AGENTS.md block: drive the CLI
+claude mcp add docir -- docir mcp serve   # or the same commands as MCP tools
+```
+
+`docir mcp serve` speaks stdio (what an MCP client spawns) or `--transport http`,
+and needs no extra — the MCP server ships with docir, because an agent that only
+speaks MCP cannot install the extra it would need to reach docir in the first
+place. `uvx docir mcp serve` runs it without installing anything.
+
+The tools are named `docir_context`, `docir_get`, `docir_add`, … Reads carry the
+`readOnlyHint` annotation and return the same body-less skeletons the CLI does,
+trimmed the same way; requests go through the daemon by default, so the
+embedding model stays warm across calls.
 
 ## How state is stored
 

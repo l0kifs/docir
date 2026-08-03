@@ -87,7 +87,7 @@ src/docir/
 │   ├── tags/        api.py + CONTRACT.md + domain/application          (the tag registry)
 │   ├── indexing/    api.py + CONTRACT.md + domain/application/infra    (hybrid ranking + the embedding scheduler)
 │   └── agents/      api.py + CONTRACT.md + domain/application/infra    (installs AI-assistant instructions; ADR-0008)
-└── entry_points/  cli · daemon · composition · dispatch                (wiring only, no business logic)
+└── entry_points/  cli · daemon · mcp · composition · dispatch          (wiring only, no business logic)
 ```
 
 Dependencies flow **`entry_points → modules → platform → config`**, and between modules only
@@ -325,6 +325,20 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   in-process — like `version` and `daemon serve`, not through the `RequestExecutor`/`Dispatcher`.
   Generated files carry a `<!-- docir:vX -->` stamp so `update` reports a version transition; a
   foreign `AGENTS.md` is never rewritten (only docir's marker block is).
+- **`docir mcp serve` is a third client of the dispatcher, not a second implementation
+  (ADR-0013).** Every tool in `entry_points/mcp/server.py` is one `Request` through a
+  `RequestExecutor` — the same boundary the CLI and the daemon socket cross — so an MCP tool
+  and its CLI command cannot answer differently. Exactly one tool per dispatcher command
+  (`ping` excepted: a liveness probe, not a document operation) plus `docir_schema`, which is
+  the one thing an agent needs that is not a command. `test_mcp_server.py` asserts the
+  exposed tool **names** against `Dispatcher._handlers`, so a new command that reaches only
+  the CLI fails the build; the names are prefixed (`docir_context`) because the CLI's are
+  generic verbs that collide in a client's tool list, and renaming one breaks saved prompts.
+  Results go through the same `trim` as the piped CLI JSON — that is why it lives in
+  `entry_points/payload.py` rather than in `cli/rendering.py`. `fastmcp` is a **default
+  dependency**, not an extra: an agent that only speaks MCP cannot be told to install one.
+  `server.py` imports it at module scope and `cmds.py` imports `server` *inside* the command —
+  keep that lazy, it is ~0.3s of import that no other command should pay.
 - **All exceptions live in `platform/errors`.** `DocirError` is the base and carries an `exit_code`;
   `entry_points/cli/runner.py` maps that onto the process exit code. Raise a typed subclass, not a
   bare `DocirError`, so the CLI reports the right code.

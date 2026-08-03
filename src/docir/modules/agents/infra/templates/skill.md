@@ -52,6 +52,11 @@ you intend to throw that file away. If you skip `docir init`, docs go to the glo
 store — fine for personal notes, but **not** what you want for a repo whose docs
 should live with the code.
 
+If your client reaches tools over MCP rather than a shell, `docir mcp serve`
+exposes this same vocabulary as MCP tools (`docir_context`, `docir_get`,
+`docir_add`, …) through the same dispatcher — everything below still applies,
+one name per command. This guide is written for the CLI.
+
 **Every write reports the `store` it landed in.** Check it: `path` is relative to
 the store, so it reads as repo-local wherever the store actually is. If `store`
 points at a home directory while you are working in a repo, the docs are going

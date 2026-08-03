@@ -32,12 +32,13 @@ dependencies = [
     # benchmarks/). Set DOCIR_EMBEDDER=deterministic for the dependency-free
     # hashing embedder; the test suite does.
     "fastembed>=0.5",
+    # The MCP server (ADR-0013). Also shipped by default rather than behind an
+    # extra: an agent that only speaks MCP cannot install the extra it would
+    # need, because it cannot reach docir to be told about it. ~12 MB against
+    # onnxruntime's 68 MB, and `entry_points/mcp/cmds.py` still imports it
+    # lazily so no other command pays its ~0.3s import.
+    "fastmcp>=3.4",
 ]
-
-[project.optional-dependencies]
-# Retained so `pip install docir[embeddings]` keeps working; fastembed is now a
-# hard dependency, so this extra adds nothing.
-embeddings = ["fastembed>=0.5"]
 
 [project.scripts]
 docir = "docir.entry_points.cli.app:main"

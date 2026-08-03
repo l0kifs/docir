@@ -18,14 +18,10 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from docir.entry_points.payload import trim as trim_payload
+
 console = Console()
 error_console = Console(stderr=True)
-
-_SCORE_DECIMALS = 4
-
-#: Rounded rather than dropped, so a real 0.0 similarity survives trimming — an
-#: absent `similarity` must mean "not scored", never "scored zero".
-_SCORE_KEYS = frozenset({"score", "similarity"})
 
 
 def emit_json(data: object, *, trim: bool = True) -> None:
@@ -33,32 +29,12 @@ def emit_json(data: object, *, trim: bool = True) -> None:
 
     With ``trim`` (the default) empty fields are omitted and ``score`` rounded;
     pass ``trim=False`` (the CLI's ``--no-trim``) to keep the full payload.
+
+    The trimming itself lives in ``entry_points.payload`` — the MCP server emits
+    the same shape over a different transport, and the two must not drift.
     """
-    payload = _trim(data) if trim else data
+    payload = trim_payload(data) if trim else data
     sys.stdout.write(json.dumps(payload, separators=(",", ":"), ensure_ascii=False) + "\n")
-
-
-def _trim(value: object) -> object:
-    """Drop information-free fields (empty str/list/map, null) and round scores.
-
-    Never drops ``False`` or a numeric ``0`` — only genuinely empty values — so an
-    omitted key always means "the default", never a real zero. Recurses into
-    nested lists and maps.
-    """
-    if isinstance(value, Mapping):
-        result: dict[str, object] = {}
-        for key, item in value.items():
-            if key in _SCORE_KEYS and isinstance(item, float):
-                result[str(key)] = round(item, _SCORE_DECIMALS)
-                continue
-            trimmed = _trim(item)
-            if trimmed is None or trimmed == "" or trimmed == [] or trimmed == {}:
-                continue
-            result[str(key)] = trimmed
-        return result
-    if isinstance(value, list | tuple):
-        return [_trim(item) for item in value]
-    return value
 
 
 def describe_help(ctx: object) -> dict[str, object]:

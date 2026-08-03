@@ -33,6 +33,7 @@ from docir.entry_points.composition import (
     initialize_store,
 )
 from docir.entry_points.daemon.cmds import daemon_app
+from docir.entry_points.mcp.cmds import mcp_app
 from docir.modules.agents.api import (
     AGENT_NAMES,
     DEFAULT_AGENTS,
@@ -63,6 +64,7 @@ app.add_typer(tag_app, name="tag")
 app.add_typer(agent_app, name="agent")
 app.add_typer(schema_app, name="schema")
 app.add_typer(daemon_app, name="daemon")
+app.add_typer(mcp_app, name="mcp")
 
 
 @app.callback()

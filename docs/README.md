@@ -42,6 +42,7 @@ existed before the migration:
 | `docs/doc-index-architecture.md` | `arch-1cfb1b212237` | [architectures/…doc-index-cli…](../.docir/docs/architectures/arch-1cfb1b212237-doc-index-cli-architecture.md) |
 | `docs/PUBLISHING.md` | `run-30aceb4eacc6` | [runbooks/…publishing-to-pypi…](../.docir/docs/runbooks/run-30aceb4eacc6-publishing-to-pypi.md) |
 | `docs/ai-code-check-checklist.md` | `run-22e0a6ce6ae1` | [runbooks/…ai-code-check-checklist…](../.docir/docs/runbooks/run-22e0a6ce6ae1-ai-code-check-checklist.md) |
+| `docs/COMPETITORS.md` | `ref-a6db21f52427` | [references/…competitive-landscape…](../.docir/docs/references/ref-a6db21f52427-competitive-landscape-docir-vs-the-alternatives-2026-08-03.md) |
 
 ## The discovery bundle (`analysis/`) also moved in
 

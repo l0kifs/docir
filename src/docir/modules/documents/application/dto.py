@@ -50,6 +50,10 @@ class DocumentView:
     stale: bool = False
     score: float | None = None
     via_graph: bool = False
+    #: Which section ``body`` was narrowed to, when the caller asked for one.
+    #: Absent means the body is whole — the trimmed JSON drops the field, so an
+    #: agent reads "no section key" as "you have all of it".
+    section: str | None = None
     #: Set only when ``--override`` actually bypassed the transition rules, so
     #: the CLI can say which rule was broken. Deliberately not persisted to the
     #: file: docir has no actors (ADR-0003), so "who overrode this" has no

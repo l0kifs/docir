@@ -9,7 +9,8 @@ full-text, embeddings) independently substitutable.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
+from dataclasses import dataclass
 
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.entities.relation import Relation
@@ -17,6 +18,15 @@ from docir.modules.documents.domain.value_objects.queries import DocumentFilter
 from docir.modules.indexing.domain.results import SearchHit
 from docir.modules.tags.domain.entities.tag import Tag
 from docir.platform.embedding.vector import Embedding
+
+
+@dataclass(frozen=True, slots=True)
+class StoredChunk:
+    """One section vector on its way into (or out of) storage."""
+
+    ordinal: int
+    heading: str
+    vector: Embedding
 
 
 class DocumentRepository(ABC):
@@ -180,3 +190,44 @@ class EmbeddingRepository(ABC):
         Vectors from another model are omitted rather than compared: they live in
         a different space, and a different width would raise outright.
         """
+
+
+class ChunkEmbeddingRepository(ABC):
+    """Stores per-section vectors — one row per ``(doc_id, ordinal)``.
+
+    Separate from :class:`EmbeddingRepository` because the two answer different
+    questions. The document vector says what a document is *about*; a chunk
+    vector says what one section of it *says*, and only the chunks put the tail
+    of a long document into the semantic index at all (ADR-0014).
+
+    There is no dirty flag here: a chunk set is derived from a body, so it is
+    invalidated by exactly the thing that invalidates the document vector.
+    :meth:`EmbeddingRepository.dirty_ids` remains the single queue, and chunks
+    are rewritten wholesale in the same transaction.
+    """
+
+    @abstractmethod
+    def replace(self, doc_id: str, chunks: Sequence[StoredChunk], model_id: str) -> None:
+        """Replace every chunk for a document with ``chunks``, atomically.
+
+        Wholesale rather than incremental: an edit renumbers the sections after
+        it, so a diff would have to rewrite most of them anyway, and a partial
+        failure would leave chunks describing two different bodies.
+        """
+
+    @abstractmethod
+    def remove(self, doc_id: str) -> None:
+        """Drop every chunk for a document."""
+
+    @abstractmethod
+    def active_vectors(self, model_id: str) -> list[tuple[str, Embedding]]:
+        """``(doc_id, vector)`` for every chunk of an active document.
+
+        Returns one entry per *chunk*, so a document appears many times; pooling
+        to a per-document score is the caller's job (ADR-0014 keeps that in the
+        scorer, where the ranking rule lives).
+        """
+
+    @abstractmethod
+    def headings(self, doc_id: str) -> list[str]:
+        """The stored section headings for a document, in body order."""

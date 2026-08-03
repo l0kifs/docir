@@ -16,19 +16,30 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable
+from typing import Protocol
 
 from docir.modules.indexing.application.ports.scheduler import EmbeddingScheduler
 from docir.platform.embedding import Embedder
+from docir.platform.persistence.ports import StoredChunk
 from docir.platform.persistence.unit_of_work import UnitOfWork
 
 UnitOfWorkFactory = Callable[[], UnitOfWork]
 
 
 def drain_dirty(uow_factory: UnitOfWorkFactory, embedder: Embedder) -> int:
-    """Recompute every dirty document's vector in one transaction.
+    """Recompute every dirty document's vectors in one transaction.
 
-    Returns the number of documents (re)embedded. A dirty row whose document
-    has vanished is dropped so it cannot wedge the queue forever.
+    Two vectors per document, not one: the document vector over title +
+    description + body, and one vector per section (ADR-0014). The document
+    vector is what the model can see of the whole — which for a body over
+    ~1,900 characters is only its head, because the model truncates and says
+    nothing about it. The chunk vectors are what put the rest of the body into
+    the index at all.
+
+    Both are written under the same dirty flag and in the same transaction, so
+    a document can never be indexed with vectors describing two different
+    bodies. Returns the number of documents (re)embedded; a dirty row whose
+    document has vanished is dropped so it cannot wedge the queue forever.
     """
     count = 0
     model_id = embedder.model_id
@@ -37,12 +48,34 @@ def drain_dirty(uow_factory: UnitOfWorkFactory, embedder: Embedder) -> int:
             document = uow.documents.get(doc_id)
             if document is None:
                 uow.embeddings.remove(doc_id)
+                uow.chunks.remove(doc_id)
                 continue
-            vector = embedder.embed(document.embedding_text())
-            uow.embeddings.set_vector(doc_id, vector, model_id)
+            uow.embeddings.set_vector(doc_id, embedder.embed(document.embedding_text()), model_id)
+            uow.chunks.replace(doc_id, _chunks_for(document, embedder), model_id)
             count += 1
         uow.commit()
     return count
+
+
+class _Chunkable(Protocol):
+    """The slice of a document this module is allowed to know about.
+
+    ``indexing`` may not import ``documents`` (tach enforces it), so the entity
+    is the seam: it hands over already-rendered ``(ordinal, heading, text)``
+    triples and nothing here needs to know what a Document is. A structural type
+    rather than ``object`` so the call still type-checks — the same shape the
+    fastembed adapter uses for its model handle (ADR-0011).
+    """
+
+    def embedding_chunks(self) -> tuple[tuple[int, str, str], ...]: ...
+
+
+def _chunks_for(document: _Chunkable, embedder: Embedder) -> list[StoredChunk]:
+    """Embed each section the document offers, in body order."""
+    return [
+        StoredChunk(ordinal=ordinal, heading=heading, vector=embedder.embed(text))
+        for ordinal, heading, text in document.embedding_chunks()
+    ]
 
 
 class InlineEmbeddingScheduler(EmbeddingScheduler):

@@ -7,7 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Most of a long document was not in the semantic index at all.** `bge-small-en-v1.5` reads
+  about 512 tokens and silently ignores the rest — appending a sentence past that point
+  returns a bit-identical vector, cosine 1.000000. Measured on real prose the window is
+  ~1,900 characters, and **84 of the 103 documents in docir's own store exceed it**:
+  corpus-wide, 44% of the text was inside a vector and 56% was not indexed semantically at
+  all. The architecture document had 8% of itself embedded; the rule register had 5%. Those
+  tails were not ranked badly, they were absent, and `docir context` returned a plausible
+  answer every time.
+
+  Full-text search hid it: FTS5 covers the whole body, so any query sharing vocabulary with
+  a document found it and RRF pulled it to rank 1 regardless. The failure showed only on
+  paraphrased queries against long documents — the case `docir context` exists for.
+
+  docir now embeds **each section as well as the document** (ADR-0014). Coverage on its own
+  store goes from **44% to 100%** (695 chunks over 103 documents), and on a real query —
+  "how does the daemon keep the model warm" — the architecture document moves from rank 3
+  with *no vector match* to rank 1 at similarity 0.696. Same corpus, chunking off vs on:
+  recall@5 holds at 0.97 and **MRR rises 0.94 → 0.97**.
+
+  Existing stores recompute on the next write or `docir embed --flush`; migration `0003`
+  marks every embedding dirty so a store whose vectors already match the current model does
+  not upgrade to zero chunks. The cost is ~7x more vectors, and `context` loads every active
+  vector per call, so the practical corpus ceiling drops by about that factor.
+
 ### Added
+
+- **`docir get <id> --section "<heading>"`** — read one section instead of the whole body,
+  the paired read for chunked ranking. `context` can now rank a document on one of its
+  sections; without this the follow-up was still a 28,000-character body. It returns exactly
+  the span `update --replace-section` would overwrite, so an agent cannot read one span and
+  overwrite another. An unknown heading errors **listing the real ones**, because discovering
+  them by fetching the whole body is the cost the flag exists to remove. Also on MCP as
+  `docir_get(doc_id, section=...)`.
+- **`benchmarks/run.py` reports semantic coverage** — how much of each body is inside a
+  vector, with the model's window measured empirically rather than hardcoded. Coverage is the
+  metric that describes this defect; recall cannot, because on a 26-document corpus FTS5
+  rescues the rank either way. Recall is kept beside it as the no-regression gate, which
+  matters: max-pooling over sections structurally favours documents with more of them.
 
 - **`docir mcp serve` — the same commands, as MCP tools.** docir reached agents only through
   `docir agent install`, which teaches an assistant to run the CLI; a client that calls tools

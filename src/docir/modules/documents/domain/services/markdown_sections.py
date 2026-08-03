@@ -1,7 +1,10 @@
-"""Body-edit helpers for the three ``docs update`` body modes.
+"""Section helpers for the body-edit modes and the section read path.
 
 These operate purely on markdown text — no I/O — so the section-manipulation
-rules (append at end, replace under a heading) are unit-testable in isolation.
+rules (append at end, replace under a heading, read one back) are unit-testable
+in isolation. :func:`extract_section` and :func:`replace_section` share one
+notion of where a section ends, which is what keeps ``get --section X`` and
+``update --replace-section X`` talking about the same span of the file.
 """
 
 from __future__ import annotations
@@ -64,3 +67,56 @@ def replace_section(body: str, heading: str, content: str) -> str:
         *lines[end_idx:],
     ]
     return "\n".join(new_lines).rstrip() + "\n"
+
+
+def section_headings(body: str) -> list[str]:
+    """Every heading in ``body``, in order, at any level.
+
+    Used to tell a caller what they *could* have asked for when the section they
+    named does not exist — a "no such section" error that does not list the real
+    ones just moves the search into another round trip.
+    """
+    return [
+        match.group(2).strip()
+        for line in body.splitlines()
+        if (match := _HEADING_RE.match(line)) is not None
+    ]
+
+
+def extract_section(body: str, heading: str) -> str:
+    """Return one section — its heading line and everything under it.
+
+    The counterpart to :func:`replace_section` and deliberately its mirror: the
+    same case-insensitive heading match, the same end boundary (the next heading
+    of equal or higher level), so what ``get --section X`` shows is exactly the
+    span ``update --replace-section X`` would overwrite.
+
+    Raises :class:`ValidationError` naming the headings that do exist, because
+    the caller is an agent that would otherwise have to fetch the whole body to
+    find out — the cost the section read path exists to avoid.
+    """
+    lines = body.splitlines()
+    target = heading.strip().lower()
+
+    start_idx: int | None = None
+    start_level = 0
+    for i, line in enumerate(lines):
+        match = _HEADING_RE.match(line)
+        if match and match.group(2).strip().lower() == target:
+            start_idx = i
+            start_level = len(match.group(1))
+            break
+
+    if start_idx is None:
+        available = section_headings(body)
+        listed = ", ".join(repr(name) for name in available) if available else "none"
+        raise ValidationError(f"no section {heading!r} in this document; available: {listed}")
+
+    end_idx = len(lines)
+    for j in range(start_idx + 1, len(lines)):
+        match = _HEADING_RE.match(lines[j])
+        if match and len(match.group(1)) <= start_level:
+            end_idx = j
+            break
+
+    return "\n".join(lines[start_idx:end_idx]).strip() + "\n"

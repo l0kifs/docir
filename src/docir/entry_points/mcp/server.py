@@ -228,17 +228,23 @@ def build_mcp_server(
         )
 
     @mcp.tool(annotations=_READ_ONLY)
-    def docir_get(doc_id: str) -> dict[str, Any]:
-        """Fetch one document in full, body included.
+    def docir_get(doc_id: str, section: str | None = None) -> dict[str, Any]:
+        """Fetch one document — the whole body, or a single section of it.
 
         The only read path that returns a body. Reach for it after a skeleton
         from `docir_context` / `docir_search` / `docir_query` tells you which
         document is worth the tokens.
 
+        Prefer `section` on a long document: architecture notes here run to tens
+        of thousands of characters, and one section is usually the part that
+        answers you. An unknown heading is an error listing the ones that exist,
+        so you can find the right name without fetching the whole body first.
+
         Args:
             doc_id: The document id (e.g. "adr-3f9a2b1c7d4e").
+            section: A heading. Returns that heading and the text under it.
         """
-        return run.one("get", {"doc_id": doc_id})
+        return run.one("get", {"doc_id": doc_id, "section": section})
 
     @mcp.tool(annotations=_READ_ONLY)
     def docir_schema() -> dict[str, Any]:

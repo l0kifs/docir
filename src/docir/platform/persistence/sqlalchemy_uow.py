@@ -14,6 +14,7 @@ from types import TracebackType
 from sqlalchemy.orm import Session, sessionmaker
 
 from docir.platform.persistence.repositories import (
+    SqlAlchemyChunkEmbeddingRepository,
     SqlAlchemyDocumentRepository,
     SqlAlchemyEmbeddingRepository,
     SqlAlchemySearchIndex,
@@ -36,6 +37,7 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         self.tags = SqlAlchemyTagRepository(session)
         self.search = SqlAlchemySearchIndex(session)
         self.embeddings = SqlAlchemyEmbeddingRepository(session)
+        self.chunks = SqlAlchemyChunkEmbeddingRepository(session)
         return self
 
     def __exit__(

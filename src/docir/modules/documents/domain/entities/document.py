@@ -12,6 +12,7 @@ import hashlib
 from dataclasses import dataclass, field, replace
 from datetime import date
 
+from docir.modules.documents.domain.services.chunking import EmbeddableChunk, split_body
 from docir.modules.documents.domain.value_objects.relations import RelatedRef
 
 
@@ -45,6 +46,21 @@ class Document:
         raw body text alone.
         """
         return f"{self.title}\n\n{self.description}\n\n{self.body}".strip()
+
+    def embedding_chunks(self) -> tuple[EmbeddableChunk, ...]:
+        """The per-section texts to embed alongside :meth:`embedding_text`.
+
+        The entity owns this rather than the scheduler because the scheduler
+        lives in ``indexing``, which may not depend on ``documents`` — the same
+        reason ``embedding_text`` is a method here. Each chunk's text is
+        prefixed with the title, so a section that never restates its subject
+        ("Rotation is a runbook step") can still be matched by a query phrased
+        in the document's terms.
+        """
+        return tuple(
+            EmbeddableChunk(chunk.ordinal, chunk.heading, chunk.embedding_text(self.title))
+            for chunk in split_body(self.body)
+        )
 
     def content_hash(self) -> str:
         """A stable hash over the content that matters for stale-write checks.

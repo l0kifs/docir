@@ -93,3 +93,41 @@
   lexical: false
   task: where does a shopper's basket live between visits
   relevant: [adr-sessions-redis, adr-sessions-postgres]
+
+# T15-T20 exist to make section-level retrieval measurable (added 2026-08-03).
+#
+# Each targets exactly one H2 section of one long document, using vocabulary
+# that appears in that section and nowhere else in the corpus. They are the
+# tasks a single whole-document vector should struggle with: the answering
+# section is roughly a sixth of the document, and the other five sixths are
+# about something else entirely.
+
+- id: T15
+  lexical: true
+  task: rotate the client certificate we present to the payment provider
+  relevant: [arch-provider-integration]
+
+- id: T16
+  lexical: false
+  task: our credentials for the gateway expire soon and nobody knows what breaks
+  relevant: [arch-provider-integration]
+
+- id: T17
+  lexical: true
+  task: tune the fraud score threshold that declines a checkout
+  relevant: [arch-checkout-runtime]
+
+- id: T18
+  lexical: false
+  task: a shopper asked us to erase everything we hold about them
+  relevant: [arch-data-lifecycle]
+
+- id: T19
+  lexical: true
+  task: put a legal hold on one account's payment records
+  relevant: [arch-data-lifecycle]
+
+- id: T20
+  lexical: false
+  task: shed traffic when the service is overloaded instead of falling over
+  relevant: [arch-checkout-runtime, issue-checkout-timeout]

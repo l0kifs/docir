@@ -7,7 +7,7 @@ the unit of work) and translates between ORM rows and domain entities.
 from __future__ import annotations
 
 import re
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 from datetime import date
 
 from sqlalchemy import delete, func, select
@@ -22,6 +22,7 @@ from docir.modules.indexing.domain.results import SearchHit
 from docir.modules.tags.domain.entities.tag import Tag
 from docir.platform.embedding.vector import Embedding
 from docir.platform.persistence.models import (
+    ChunkEmbeddingRow,
     DocumentRow,
     DocumentTagRow,
     EmbeddingRow,
@@ -29,9 +30,11 @@ from docir.platform.persistence.models import (
     TagRow,
 )
 from docir.platform.persistence.ports import (
+    ChunkEmbeddingRepository,
     DocumentRepository,
     EmbeddingRepository,
     SearchIndex,
+    StoredChunk,
     TagRepository,
 )
 
@@ -375,6 +378,53 @@ class SqlAlchemyEmbeddingRepository(EmbeddingRepository):
             row = EmbeddingRow(doc_id=doc_id, vector=None, dirty=True)
             self._session.add(row)
         return row
+
+
+class SqlAlchemyChunkEmbeddingRepository(ChunkEmbeddingRepository):
+    """Per-section vectors, backed by SQLAlchemy."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def replace(self, doc_id: str, chunks: Sequence[StoredChunk], model_id: str) -> None:
+        self._session.execute(delete(ChunkEmbeddingRow).where(ChunkEmbeddingRow.doc_id == doc_id))
+        for chunk in chunks:
+            self._session.add(
+                ChunkEmbeddingRow(
+                    doc_id=doc_id,
+                    ordinal=chunk.ordinal,
+                    heading=chunk.heading,
+                    vector=chunk.vector.to_bytes(),
+                    model_id=model_id,
+                )
+            )
+        self._session.flush()
+
+    def remove(self, doc_id: str) -> None:
+        self._session.execute(delete(ChunkEmbeddingRow).where(ChunkEmbeddingRow.doc_id == doc_id))
+        self._session.flush()
+
+    def active_vectors(self, model_id: str) -> list[tuple[str, Embedding]]:
+        stmt = (
+            select(ChunkEmbeddingRow.doc_id, ChunkEmbeddingRow.vector)
+            .join(DocumentRow, DocumentRow.id == ChunkEmbeddingRow.doc_id)
+            .where(DocumentRow.archived.is_(False))
+            .where(ChunkEmbeddingRow.vector.is_not(None))
+            .where(ChunkEmbeddingRow.model_id == model_id)
+            .order_by(ChunkEmbeddingRow.doc_id, ChunkEmbeddingRow.ordinal)
+        )
+        return [
+            (doc_id, Embedding.from_bytes(blob))
+            for doc_id, blob in self._session.execute(stmt).all()
+        ]
+
+    def headings(self, doc_id: str) -> list[str]:
+        stmt = (
+            select(ChunkEmbeddingRow.heading)
+            .where(ChunkEmbeddingRow.doc_id == doc_id)
+            .order_by(ChunkEmbeddingRow.ordinal)
+        )
+        return list(self._session.scalars(stmt).all())
 
 
 # -- module helpers ---------------------------------------------------------

@@ -368,10 +368,26 @@ def delete(
 
 
 @app.command()
-def get(doc_id: Annotated[str, typer.Argument()]) -> None:
-    """Return one document in full."""
+def get(
+    doc_id: Annotated[str, typer.Argument()],
+    section: Annotated[
+        str | None,
+        typer.Option(
+            "--section",
+            help="Return only this heading's section instead of the whole body.",
+        ),
+    ] = None,
+) -> None:
+    """Return one document in full, or just one section of it.
+
+    --section takes a heading and returns that heading plus the text under it —
+    the same span --replace-section would overwrite. It is the paired read for
+    `context`: a long document can rank on one of its sections, and this reads
+    that section without paying for a body that is often ten times its size. An
+    unknown heading is an error listing the ones that exist.
+    """
     _warn_on_global_fallback()
-    _emit_document(execute("get", {"doc_id": doc_id}))
+    _emit_document(execute("get", {"doc_id": doc_id, "section": section}))
 
 
 @app.command()

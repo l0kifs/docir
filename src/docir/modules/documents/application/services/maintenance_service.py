@@ -268,6 +268,10 @@ class MaintenanceService:
         """Tier 2 advisory checks (``docs lint --deep``)."""
         with self._uow_factory() as uow:
             self._scheduler.flush()
+            # Document vectors only, deliberately: the duplicate check asks
+            # "are these two documents the same document", and chunk vectors
+            # would answer "do these two documents share a section" — a
+            # different, much noisier question.
             vectors = uow.embeddings.active_vectors(self._embedder.model_id)
             documents = [d for d in uow.documents.all() if not d.archived]
             # A pair the author has linked has already been explained; only the
@@ -341,6 +345,7 @@ class MaintenanceService:
             if document.archived:
                 uow.search.remove(document.id)
                 uow.embeddings.remove(document.id)
+                uow.chunks.remove(document.id)
             else:
                 uow.search.index(document)
                 uow.embeddings.mark_dirty(document.id)
@@ -370,5 +375,6 @@ class MaintenanceService:
                 uow.documents.delete(orphaned.id)
                 uow.search.remove(orphaned.id)
                 uow.embeddings.remove(orphaned.id)
+                uow.chunks.remove(orphaned.id)
                 removed += 1
         return indexed, removed

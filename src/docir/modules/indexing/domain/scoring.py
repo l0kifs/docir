@@ -47,9 +47,25 @@ class HybridScorer:
     def semantic_ranking(
         self, query: Embedding, vectors: list[tuple[str, Embedding]]
     ) -> list[tuple[str, float]]:
-        """Rank candidate vectors by cosine similarity to the query, desc."""
-        scored = [(doc_id, query.cosine_similarity(vector)) for doc_id, vector in vectors]
-        scored.sort(key=lambda pair: pair[1], reverse=True)
+        """Rank candidate vectors by cosine similarity to the query, desc.
+
+        Accepts repeated ``doc_id`` entries and keeps each document's **best**
+        one — that is what turns per-section chunk vectors back into a document
+        ranking (ADR-0014). RRF fuses two rankings *of documents*, so the
+        collapse has to happen before fusion, not after it.
+
+        Max rather than mean: a document is relevant when *some* part of it
+        answers the query, and averaging in five sections about something else
+        is precisely the dilution chunking exists to undo. The consequence,
+        recorded rather than hidden, is that more sections mean more chances to
+        score — which is why the benchmark gates on no recall regression.
+        """
+        best: dict[str, float] = {}
+        for doc_id, vector in vectors:
+            similarity = query.cosine_similarity(vector)
+            if similarity > best.get(doc_id, float("-inf")):
+                best[doc_id] = similarity
+        scored = sorted(best.items(), key=lambda pair: (pair[1], pair[0]), reverse=True)
         return scored
 
     def fuse(

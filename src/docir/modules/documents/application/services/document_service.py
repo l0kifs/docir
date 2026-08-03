@@ -9,6 +9,7 @@ schedules the deferred embedding recompute off the critical path.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 
 from docir.modules.documents.application.dto import (
     AddDocumentRequest,
@@ -24,6 +25,7 @@ from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.schema import SEQUENTIAL_ID_STYLE, Schema
 from docir.modules.documents.domain.services.markdown_sections import (
     append_section,
+    extract_section,
     replace_section,
 )
 from docir.modules.documents.domain.services.validation import Tier0Validator
@@ -289,11 +291,26 @@ class DocumentService:
 
     # -- read path ----------------------------------------------------------
 
-    def get(self, doc_id: str) -> DocumentView:
-        """Return one document in full, regardless of status (``docs get``)."""
+    def get(self, doc_id: str, section: str | None = None) -> DocumentView:
+        """Return one document in full, regardless of status (``docs get``).
+
+        With ``section``, ``body`` carries only that heading and the text under
+        it, and ``section`` names what was returned. Same span
+        ``--replace-section`` would overwrite, so read and write agree about
+        what a section is.
+
+        This is the paired read for chunked retrieval: `context` can now rank a
+        document on one of its sections, and this is how that section gets read
+        without paying for a body that is frequently ten times its size. A
+        heading that does not exist raises, listing the ones that do — an agent
+        should not have to fetch the whole body to discover the names.
+        """
         with self._uow_factory() as uow:
             document = self._require(uow, doc_id)
-            return DocumentView.from_document(document, stale=self._is_stale(document))
+            view = DocumentView.from_document(document, stale=self._is_stale(document))
+            if section is None:
+                return view
+            return replace(view, body=extract_section(document.body, section), section=section)
 
     def query(self, request: QueryRequest) -> list[DocumentSummary]:
         """Structured metadata filtering (``docs query``) — skeleton results.
@@ -410,8 +427,15 @@ class DocumentService:
 
         with self._uow_factory() as uow:
             hits = uow.search.search(request.task, limit=_CONTEXT_CANDIDATES)
+            # Document vectors *and* section vectors, ranked together. The
+            # scorer keeps each document's best, so a long document is reachable
+            # by any one of its sections — for a body over ~1,900 characters the
+            # document vector covers only the head, and the rest of it is in the
+            # index only as chunks (ADR-0014).
+            model_id = self._embedder.model_id
             semantic = self._scorer.semantic_ranking(
-                query_vector, uow.embeddings.active_vectors(self._embedder.model_id)
+                query_vector,
+                uow.embeddings.active_vectors(model_id) + uow.chunks.active_vectors(model_id),
             )
             fused = self._scorer.fuse(hits, semantic)
 

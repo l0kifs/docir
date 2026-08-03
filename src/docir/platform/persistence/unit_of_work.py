@@ -13,6 +13,7 @@ from abc import ABC, abstractmethod
 from types import TracebackType
 
 from docir.platform.persistence.ports import (
+    ChunkEmbeddingRepository,
     DocumentRepository,
     EmbeddingRepository,
     SearchIndex,
@@ -27,6 +28,7 @@ class UnitOfWork(ABC):
     tags: TagRepository
     search: SearchIndex
     embeddings: EmbeddingRepository
+    chunks: ChunkEmbeddingRepository
 
     def __enter__(self) -> UnitOfWork:
         return self

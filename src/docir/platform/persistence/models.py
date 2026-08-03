@@ -89,6 +89,25 @@ class EmbeddingRow(Base):
     model_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
+class ChunkEmbeddingRow(Base):
+    """One section's vector. See ADR-0014 and migration ``0003``.
+
+    Keyed ``(doc_id, ordinal)``: a chunk has no identity beyond its position in
+    a body, and the whole set for a document is replaced together whenever that
+    body changes.
+    """
+
+    __tablename__ = "chunk_embeddings"
+
+    doc_id: Mapped[str] = mapped_column(
+        String, ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True
+    )
+    ordinal: Mapped[int] = mapped_column(Integer, primary_key=True)
+    heading: Mapped[str] = mapped_column(String, nullable=False, default="")
+    vector: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    model_id: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
 class SequenceRow(Base):
     __tablename__ = "id_sequences"
 

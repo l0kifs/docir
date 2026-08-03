@@ -28,6 +28,7 @@ import tempfile
 from collections.abc import Callable
 from contextlib import redirect_stdout
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 import yaml
@@ -36,6 +37,7 @@ from docir.config.settings import Settings
 from docir.entry_points.cli import rendering
 from docir.entry_points.composition import build_container
 from docir.modules.documents.api import render_schema_yaml
+from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.value_objects.identifiers import RANDOM_SUFFIX_LENGTH
 
 #: Bits of entropy in a random id suffix, derived from the implementation rather
@@ -43,6 +45,9 @@ from docir.modules.documents.domain.value_objects.identifiers import RANDOM_SUFF
 _RANDOM_BITS = RANDOM_SUFFIX_LENGTH * 4
 
 BENCH_DIR = Path(__file__).resolve().parent
+
+#: Any fixed date. `Document` requires one; nothing here reads it.
+_BENCH_DATE = date(2026, 1, 1)
 
 #: Result-set size every strategy is measured at. 5 is `docir context`'s default.
 K = 5
@@ -243,12 +248,96 @@ def _report_id_cost(totals: dict, mean: Callable[[list[float]], float]) -> None:
     )
 
 
+#: A distinctive sentence appended to a prefix to see whether the model still
+#: notices it. Nothing about it matters except that it is unlike the prefix.
+_CANARY = " ZZQQ a distinctive canary sentence about certificate rotation."
+
+
+def _embedding_window(embedder: object, sample: str) -> int | None:
+    """The prefix length past which ``embedder`` stops reading ``sample``.
+
+    Binary search on real corpus prose rather than repeated filler: the boundary
+    is a *token* count, and a degenerate string like "x x x" tokenizes at a rate
+    no document ever hits, which would put the answer hundreds of characters out.
+
+    ``None`` means the embedder showed no window at all — the hashing fallback
+    reads everything, so coverage is trivially complete and the table says so
+    rather than printing a fabricated 100%.
+    """
+
+    def truncates(prefix: str) -> bool:
+        with_canary = embedder.embed(prefix + _CANARY)
+        return embedder.embed(prefix).cosine_similarity(with_canary) >= 0.999999
+
+    if not truncates(sample):
+        return None
+    low, high = 0, len(sample)
+    while low < high - 32:
+        middle = (low + high) // 2
+        if truncates(sample[:middle]):
+            high = middle
+        else:
+            low = middle
+    return high
+
+
+def _report_coverage(container: object, corpus: list[dict]) -> None:
+    """How much of the corpus is actually inside a vector.
+
+    The headline number for chunking, and the one that measures the defect
+    rather than a proxy for it: a document longer than the window was not ranked
+    badly, it was absent from the semantic index past that point. Recall cannot
+    show this on a corpus this size — full-text search covers the whole body and
+    pulls the document to rank 1 regardless — so coverage is what is reported,
+    and recall is the no-regression gate beside it.
+    """
+    embedder = container.embedder
+    bodies = [f"{doc['title']}\n\n{doc['description']}\n\n{doc.get('body', '')}" for doc in corpus]
+    window = _embedding_window(embedder, max(bodies, key=len))
+
+    print("\nsemantic coverage — how much of each body is inside a vector:")
+    if window is None:
+        print(f"  {embedder.model_id} reads the whole body; coverage is 100% with or")
+        print("  without chunking. Re-run with the real model to see the difference.")
+        return
+
+    total = sum(len(body) for body in bodies)
+    whole_document = sum(min(window, len(body)) for body in bodies)
+    chunked = sum(
+        sum(min(window, len(text)) for _, _, text in _chunks_of(doc)) or min(window, len(body))
+        for doc, body in zip(corpus, bodies, strict=True)
+    )
+    over = sum(1 for body in bodies if len(body) > window)
+    print(f"  measured window: ~{window} chars · {over}/{len(bodies)} documents exceed it")
+    print(f"  {'strategy':<26}{'chars embedded':>16}{'coverage':>10}")
+    print(f"  {'one vector per document':<26}{whole_document:>16}{whole_document / total:>9.0%}")
+    print(
+        f"  {'+ one per section':<26}{min(chunked, total):>16}{min(chunked, total) / total:>9.0%}"
+    )
+
+
+def _chunks_of(doc: dict) -> list[tuple[int, str, str]]:
+    """The chunks docir would build for a corpus entry, without a store."""
+    document = Document(
+        id="bench-0000",
+        title=doc["title"],
+        description=doc["description"],
+        type=doc["type"],
+        status="draft",
+        created=_BENCH_DATE,
+        updated=_BENCH_DATE,
+        body=doc.get("body", ""),
+    )
+    return list(document.embedding_chunks())
+
+
 def main() -> int:
     home = Path(tempfile.mkdtemp(prefix="docir-bench-"))
     try:
         container, ids = build_store(home)
         dispatcher = container.dispatcher
         tasks = yaml.safe_load((BENCH_DIR / "tasks.yaml").read_text(encoding="utf-8"))
+        corpus = yaml.safe_load((BENCH_DIR / "corpus.yaml").read_text(encoding="utf-8"))
 
         # The resolved embedder, not the requested one: the default flipped to
         # fastembed (ADR-0011) and this line still announced "deterministic",
@@ -303,6 +392,7 @@ def main() -> int:
                 f"{mean(bucket['rr']):>6.2f} {mean(bucket['chars']) / CHARS_PER_TOKEN:>9.0f}"
             )
 
+        _report_coverage(container, corpus)
         _report_id_cost(totals, mean)
 
         print(f"\nrecall@{K} split by how the task is worded:")

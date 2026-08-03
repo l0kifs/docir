@@ -66,7 +66,8 @@ case. Run `docir init` first.
 ## Core loop
 
 1. **Discover** before coding: `docir context "<task>"` → minimal ranked set.
-2. **Read** the ones that matter: `docir get <id>`.
+2. **Read** the ones that matter: `docir get <id>`, or one section of a long
+   one with `docir get <id> --section "<heading>"`.
 3. **Implement** (outside docir).
 4. **Record** new decisions/issues: `docir add ...`.
 5. **Update** status when resolving: `docir update <id> --status resolved`.
@@ -79,6 +80,7 @@ case. Run `docir init` first.
 |---|---|
 | `docir context "<task>" [--limit N] [--expand N]` | Best first step: full-text and vector rankings fused, plus 1-hop related docs. Graph-pulled items marked `via_graph`. |
 | `docir get <id>` | Full doc (body included); works for any status. |
+| `docir get <id> --section "<heading>"` | Just that heading and the text under it. Architecture docs here run to tens of thousands of characters and docir ranks a document on its best-matching *section*, so this is usually the part that answered you. An unknown heading errors listing the real ones. |
 | `docir search "<text>"` | Full-text over **title, description and body only** — *not* tags. `docir search auth` will not find a doc merely tagged `auth`; use `docir query --tag auth`. Supports `--limit`/`--offset`. |
 | `docir query --type decision --status accepted --tag auth` | Structured filter; repeatable `--type/--status/--tag`. Pages with `--limit`/`--offset` — a page shorter than `--limit` means the end. |
 
@@ -86,7 +88,9 @@ case. Run `docir init` first.
 *skeletons* — id, title, description, tags, typed `related`, `owner`,
 `verified`, `stale` — **but not the body**. Scan those to judge relevance, then
 pull only the bodies you need with `docir get <id>`. This is the cheap path;
-never dump every body.
+never dump every body. On a long document prefer `--section`: each `##` section
+is embedded separately, so a hit often means one section matched, and that
+section is a fraction of the file.
 
 Default read path **hides** closed and archived docs. "Closed" means the type's
 *inactive* statuses — `superseded`/`rejected` for a decision, `resolved` for an

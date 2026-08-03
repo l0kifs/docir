@@ -38,7 +38,7 @@ uv run ty check                                        # type check (Astral ty)
 uv run vulture                                         # dead-code scan
 uv run tach check                                      # module boundaries (§8)
 uv run python scripts/check_contract_sync.py           # api.py <-> CONTRACT.md (§8.6)
-uv run pytest --cov=docir --cov-fail-under=90          # tests + coverage (currently 94%)
+uv run pytest --cov=docir --cov-fail-under=90          # tests + coverage (currently 96%)
 ```
 
 - **`tach check` exits 0 even though it prints `[WARN] ... deprecated` lines.** Those warnings are
@@ -49,9 +49,11 @@ uv run pytest --cov=docir --cov-fail-under=90          # tests + coverage (curre
 - **Single tests:** `uv run pytest tests/modules/documents/test_integration_documents.py -k archive`.
   The daemon end-to-end tests are marked `slow` and spawn a real subprocess:
   `uv run pytest -m "not slow"` skips them.
-- **Real embeddings** (ONNX, off by default): `uv sync --extra embeddings` then
-  `DOCIR_EMBEDDER=fastembed`. Everything otherwise uses the deterministic embedder so tests stay
-  hermetic and dependency-light.
+- **The real ONNX model is the default and a plain dependency** (ADR-0011; the `embeddings` extra
+  is gone). The test suite sets `DOCIR_EMBEDDER=deterministic` so it stays hermetic — which means
+  most tests never touch a model, and anything about the model's *token window* cannot be tested
+  that way: the hashing embedder has no window at all. Tests that need the real one are marked
+  `slow` and clear the env var (`tests/modules/documents/test_chunked_retrieval.py`).
 
 ## Architecture
 
@@ -246,7 +248,31 @@ means per-module storage plus an event bus, which is a rewrite the project delib
 - **Read paths return skeletons (two-tier retrieval).** `query`/`search`/`context` return
   `DocumentSummary` (frontmatter + typed edges + staleness, **no body**); only `get` returns the full
   `DocumentView` with the body. Do not add the body back to the list paths — the skeleton is the
-  context-saving contract.
+  context-saving contract. `get --section "<heading>"` narrows the body to one section and is the
+  paired read for chunked ranking (ADR-0014): it returns exactly the span `--replace-section` would
+  overwrite (`extract_section` and `replace_section` share one end boundary — do not let them
+  diverge, or an agent can read one span and overwrite another), and an unknown heading raises
+  *listing the real ones*, because discovering them by fetching the whole body is the cost the flag
+  removes.
+- **Every section is embedded, because the model never read the whole body (ADR-0014).**
+  `bge-small-en-v1.5` reads ~512 tokens (~1,900 chars of prose) and silently ignores the rest —
+  appending text past it returns a bit-identical vector. 84 of docir's own 103 documents exceed
+  that, so 56% of the corpus was absent from the semantic index while FTS5 hid it by covering the
+  whole body. `drain_dirty` now writes a document vector **and** one vector per `##` section
+  (`chunk_embeddings`, keyed `(doc_id, ordinal)`, migration `0003`), and
+  `HybridScorer.semantic_ranking` accepts repeated ids and keeps each document's **best** — RRF
+  fuses rankings *of documents*, so the collapse happens before fusion, not after. Load-bearing
+  details: `MAX_CHUNK_CHARS` (1200) is *derived* from the measured window, not chosen — a chunk that
+  overflows it reintroduces the bug one level down, and each chunk carries the title prefix that eats
+  into the budget; the splitter tracks fenced code blocks, because a `##` comment inside one is not a
+  heading and cutting there yields two invalid chunks; there is **no second dirty flag**, chunks are
+  rewritten wholesale under the existing `embeddings` queue in the same transaction; and `lint --deep`
+  deliberately still compares *document* vectors only, since chunk vectors would answer "do these
+  share a section" rather than "are these the same document". `indexing` may not import `documents`,
+  so the entity is the seam: `Document.embedding_chunks()` hands the scheduler positional
+  `(ordinal, heading, text)` triples. Coverage on docir's own store went 44% -> 100% (695 chunks);
+  recall@5 held at 0.97 while MRR rose 0.94 -> 0.97. Keep the recall gate — max-pooling structurally
+  favours documents with more sections.
 - **`context` has exactly one visibility predicate, and expansion runs both ways.**
   `DocumentService._is_visible` (archived + inactive status) is called by the ranked fusion loop
   *and* by `_augment_with_related`; do not inline the check into either. They used to differ —

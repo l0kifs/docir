@@ -264,3 +264,253 @@
     failure reason attached. Dead-letter queues are monitored but never drained
     automatically.
   related: [adr-dlq-manual]
+
+
+# --- Long documents whose answer sits past the embedding window (2026-08-03) --
+#
+# Everything above is 163-297 body characters. That made the failure these three
+# exist to expose unmeasurable, and the failure is not subtle: `bge-small-en-v1.5`
+# reads about 512 tokens and silently ignores the rest, so for a document longer
+# than roughly 2,000-3,000 characters the semantic index covers only the head.
+# Appending a sentence past that point leaves the vector bit-identical.
+#
+# docir's own store has a median body of ~2,900 characters and a maximum of
+# ~37,000, so this is the shape it actually holds, not a contrived one. Each
+# document below runs 5,000-6,000 characters across ten H2 sections, and the
+# section that answers its task is deliberately placed near the end — past the
+# window, where a single whole-document vector cannot see it at all.
+
+- key: arch-checkout-runtime
+  type: architecture
+  title: Checkout runtime — request path, limits and rollout
+  description: How a checkout request is served, deployed, observed, scored and shed under load.
+  body: |
+    ## Request path
+
+    A checkout request enters through the edge proxy, which terminates TLS and
+    attaches a request id. The checkout service resolves the basket, prices it,
+    reserves stock, and only then calls the payment service. Each hop passes the
+    request id along so one trace covers the whole path.
+
+    ## Service dependencies
+
+    Checkout depends on catalogue for prices, inventory for stock and payment
+    for authorization. Catalogue and inventory are read-only from here. A
+    dependency that does not answer within its budget is treated as unavailable
+    rather than retried inline, because the shopper is waiting.
+
+    ## Timeouts and budgets
+
+    The total budget for a checkout is four seconds. Catalogue gets 300ms,
+    inventory 500ms, payment two seconds, and the remainder is our own work.
+    Budgets are enforced by the client, not by the callee, so a slow dependency
+    cannot spend someone else's allowance.
+
+    ## Deployment topology
+
+    Three regions, active-active, with the basket store replicated per region
+    and payment records written to a single primary. A region can serve reads
+    during a partition but refuses new authorizations, because two regions
+    authorizing the same basket is worse than an outage.
+
+    ## Configuration and secrets
+
+    Configuration is environment variables rendered from a versioned file;
+    secrets come from the vault at start-up and are never written to disk. A
+    configuration change is a deploy like any other and goes through the same
+    review.
+
+    ## Observability
+
+    Every request emits a structured log line with the request id, the merchant,
+    the outcome and the duration of each dependency call. Metrics are RED —
+    rate, errors, duration — per endpoint. Traces are sampled at one percent,
+    and at one hundred percent for any request that ends in an error.
+
+    ## Feature flags and rollout
+
+    New checkout behaviour ships behind a flag, enabled first for internal
+    merchants, then one percent of traffic, then ten, then everyone. A flag at
+    one hundred percent for two weeks is deleted along with the branch it
+    guarded. Flags are never used for access control, only for rollout.
+
+    ## Rate limiting
+
+    Limits are per merchant and per IP, enforced at the edge with a token
+    bucket. A merchant gets 100 checkouts per second sustained and 300 burst; an
+    IP gets 20 per minute. Exceeding either returns 429 with a Retry-After
+    header. Limits are configuration, not code, and take effect without a deploy.
+
+    ## Fraud scoring
+
+    Every checkout is scored between 0 and 100 before authorization. Scores
+    above 80 are declined outright, 50 to 80 are sent to manual review, and
+    below 50 pass straight through. The thresholds are tuned monthly against the
+    previous month's chargebacks, and a change to them is an audited decision
+    rather than a config tweak. A scoring timeout fails open, because a payment
+    provider will still decline a genuinely bad card.
+
+    ## Capacity and load shedding
+
+    The service is provisioned for twice the peak of the last Black Friday. Past
+    that it sheds load rather than degrading for everyone: the edge starts
+    rejecting new sessions while letting requests that already hold a payment
+    reservation run to completion. Shedding is announced on the status page
+    automatically, and the shed threshold is deliberately below the point where
+    latency collapses, because a fast rejection is a better answer than a slow
+    timeout.
+  related: [arch-payment-boundaries]
+
+- key: arch-provider-integration
+  type: architecture
+  title: Payment provider integration surface
+  description: Everything crossing the boundary to the payment provider, and how it is kept working.
+  body: |
+    ## What the provider does for us
+
+    The provider tokenizes cards, authorizes and captures payments, issues
+    refunds and produces a nightly settlement file. It does not hold our order
+    state, and we do not ask it to. Anything the provider knows that we also
+    need is copied into our own records at the time it happens.
+
+    ## Request shape
+
+    Every call carries the merchant account, an idempotency key and a
+    correlation id we generate. Responses are JSON with a stable envelope; the
+    payload inside it varies by API version. We never parse an error string,
+    only the error code.
+
+    ## Sandbox and production environments
+
+    The sandbox has its own credentials, its own certificate and its own webhook
+    endpoint. Sandbox card numbers are documented by the provider and are the
+    only cards that may appear in a test. Nothing in the codebase may branch on
+    environment to decide business behaviour — only on endpoint and credentials.
+
+    ## Provider rate limits
+
+    The provider allows 50 requests per second per merchant account and returns
+    429 beyond that. Our client holds a shared token bucket sized at 40 to leave
+    headroom for retries. Batch jobs run at night and take half the bucket.
+
+    ## Schema versioning
+
+    The provider pins an API version per account. Upgrading is deliberate: read
+    the changelog, run the sandbox suite against the new version, then flip the
+    account. We are never more than two versions behind, because the provider
+    supports exactly three.
+
+    ## Outage handling
+
+    When the provider is down, authorization fails fast and the basket is kept.
+    We do not queue authorizations for later — a payment authorized an hour
+    after the shopper left is a chargeback waiting to happen.
+
+    ## Reconciliation inputs
+
+    The nightly settlement file is fetched over SFTP at 02:00 and is the only
+    input to reconciliation. If it is late we wait rather than reconcile a
+    partial file, and a file that fails its checksum is never processed.
+
+    ## Support escalation
+
+    Provider incidents are raised through the merchant portal with the
+    correlation ids of affected requests attached. Anything unresolved after two
+    hours goes to the named account manager. We keep our own timeline, because
+    the provider's status page has been wrong before.
+
+    ## Credentials and certificate rotation
+
+    We authenticate to the provider with mutual TLS. The client certificate is
+    valid for one year and must be rotated at ten months, never later: the
+    provider accepts both the old and the new certificate for a thirty-day
+    overlap window, and that overlap is the only safe time to swap. Rotation is
+    a runbook step performed by two people, not an automated job, because a
+    botched rotation takes payments down entirely and cannot be rolled back
+    faster than the provider propagates the change.
+
+    ## Key custody
+
+    The private key for that certificate lives only in the vault and is issued
+    to the service at start-up. No engineer has a copy, and the certificate
+    signing request is generated inside the vault so the key never leaves it.
+    An expiry alarm fires ninety days out, then weekly, then daily.
+  related: [arch-payment-boundaries]
+
+- key: arch-data-lifecycle
+  type: architecture
+  title: Data lifecycle — retention, deletion and legal hold
+  description: What each service keeps, for how long, and how a deletion or a hold is carried out.
+  body: |
+    ## Ownership
+
+    Each service owns its own records and nobody reads another service's tables.
+    Checkout owns baskets, payment owns authorizations and captures, analytics
+    owns the event stream. A question about a record is answered by asking its
+    owner, not by joining across boundaries.
+
+    ## What each service keeps
+
+    Checkout keeps a basket for 30 days after abandonment. The payment service
+    keeps authorization and capture records for seven years, which is the tax
+    retention period and is not negotiable. Analytics keeps event streams for 13
+    months. Nothing keeps a card number, only a provider token.
+
+    ## Classification
+
+    Records are classified as identifying, financial or operational.
+    Identifying data has the shortest clock and the tightest access; financial
+    data has the longest clock and the widest audit; operational data is
+    everything else and is kept as long as it is useful.
+
+    ## Access control
+
+    Reading an identifying field in production requires an approved reason and a
+    time-boxed grant. Grants expire after four hours and are never renewed
+    silently. Bulk export requires a second approver.
+
+    ## Backups and restore
+
+    Backups are nightly, encrypted, and kept for 35 days. A restore is a
+    full-cluster operation; there is no per-row restore. Deletion requests are
+    replayed against a restored cluster before it is put back into service,
+    which is why a restore is never a fast operation.
+
+    ## Anonymisation of analytics exports
+
+    Exports leaving the analytics boundary carry no identifiers. Shopper ids are
+    replaced with a per-export salted hash, so two exports cannot be joined.
+    Free-text fields are dropped entirely rather than scrubbed, because
+    scrubbing free text is not something we are willing to be confident about.
+
+    ## Audit trail
+
+    Every access to a payment record by a human is logged with the actor, the
+    record, the time and the stated reason. The audit log is append-only, kept
+    for seven years alongside the records it describes, and is itself never
+    subject to an erasure request.
+
+    ## Subject access requests
+
+    A shopper may ask for a copy of what we hold. The response is assembled from
+    each owning service, delivered within 30 days, and covers the basket
+    history, the payment records and the analytics identity.
+
+    ## Deletion requests
+
+    A shopper's erasure request is fulfilled within 30 days. It removes the
+    profile, the basket history and the analytics identity, and it replaces the
+    name and address on retained payment records with a tombstone. The payment
+    amounts and dates survive, because the tax obligation outlives the erasure
+    right, and the tombstone records that an erasure happened so a later reader
+    does not mistake the gap for corruption.
+
+    ## Legal hold
+
+    A legal hold freezes every record for one account, and it overrides both the
+    retention clock and an erasure request. Holds are applied by the legal team
+    through an audited admin action, never by an engineer with database access,
+    and every hold names the matter it belongs to. Nothing under hold is deleted
+    until the hold is lifted the same audited way, and the lift is itself
+    recorded so the freeze has a provable start and end.
+  related: [arch-payment-boundaries]

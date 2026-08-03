@@ -58,6 +58,7 @@ CPU-only, and runs locally — nothing is sent anywhere — but it is not free:
 | Download | **~64 MB**, once, on first use — the only step that needs network |
 | Install | **~240 MB** of dependencies (`onnxruntime`, `numpy`, `tokenizers`, …) |
 | Runtime | CPU only, no GPU, no API key; the daemon keeps the model warm |
+| Window | ~512 tokens (~1,900 chars) — which is why docir embeds **per section**, below |
 
 If that is too heavy — a CI image, a container you keep small, an air-gapped box — opt out
 and docir falls back to a dependency-free hashing embedder:
@@ -74,6 +75,31 @@ by turning graph expansion off, and on questions phrased in words the documents 
 model gets **0.86** where the fallback gets **0.79** — below the 0.79 that plain full-text
 search manages on its own. Corpus, tasks, judgments and caveats are in
 [benchmarks/](benchmarks/); `uv run python benchmarks/run.py` reproduces it.
+
+### Long documents are embedded per section
+
+The model reads about 512 tokens — roughly 1,900 characters — and silently ignores
+the rest. Not downweights: ignores. Append a sentence past that point and the
+vector comes back bit-identical. 84 of the 103 documents in docir's own store are
+longer than that, so **56% of the corpus was not in the semantic index at all** —
+and nothing said so, because full-text search covers the whole body and rescued
+the rank on any query that shared a word with the document.
+
+docir therefore embeds **each `##` section as well as the whole document**
+(ADR-0014), and a document ranks on its best-matching section. Coverage on
+docir's own store: **44% → 100%**. On the same corpus, `context` recall@5 holds at
+0.97 while MRR rises 0.94 → 0.97. `benchmarks/run.py` reports the coverage figure
+and measures the window empirically, so it stays honest if the model changes.
+
+Reading follows ranking: if `context` surfaced a document for one of its
+sections, read that section rather than the whole file.
+
+```bash
+docir get arch-1cfb1b212237 --section "Daemon process"
+```
+
+It returns the same span `update --replace-section` would overwrite, and an
+unknown heading errors listing the ones that exist.
 
 Switching embedders re-embeds rather than mixing vector spaces: docir records which model
 produced each vector, ignores the others, and recomputes them on the next write or
@@ -156,8 +182,8 @@ forces the table, `--no-trim` keeps every field.*
   You are not an agent: the files are yours, and the rule for humans is narrower — see
   [what you may edit by hand](#what-you-may-edit-by-hand).
 - **Reads return skeletons.** `query` / `search` / `context` return frontmatter + typed
-  edges + staleness — *no body*. Fetch bodies by id with `get`. An agent scans wide cheaply,
-  then reads deep only where it matters.
+  edges + staleness — *no body*. Fetch bodies by id with `get`, or a single section with
+  `get --section`. An agent scans wide cheaply, then reads deep only where it matters.
 - **Staleness is data, not a guess.** Optional `owner` / `verified` fields plus a per-type
   review cadence make "is this doc still true?" a first-class, checkable fact — and a
   worklist: `docir query --owner platform-team --stale` is one steward's review queue,
@@ -193,7 +219,7 @@ can verify, which is exactly why it should not be written by hand.
 | `docir update` | Edit content, metadata, or relations of an existing document |
 | `docir context <query>` | Ranked relevant set (skeletons) — full-text + vector, fused (`--min-score` to filter noise) |
 | `docir search` / `query` | Full-text search (title/description/body — **not tags**) / structured filter. Both page with `--limit`/`--offset`; `query --owner X --stale` is a review queue |
-| `docir get <id>` | Full document with body |
+| `docir get <id>` | Full document with body — or one section with `--section "<heading>"` |
 | `docir check` | Structural findings — duplicate ids, dangling edges, staleness (`--strict` gates CI on errors, `--fix` repairs them) |
 | `docir agent install` | Teach this repo's AI agent to drive docir |
 | `docir mcp serve` | Serve the same commands as MCP tools, for a client that speaks MCP |

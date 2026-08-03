@@ -108,7 +108,8 @@ class Dispatcher:
         return asdict(self._documents.update(request))
 
     def _get(self, payload: Payload) -> object:
-        return asdict(self._documents.get(_str(payload, "doc_id")))
+        view = self._documents.get(_str(payload, "doc_id"), _opt_str(payload, "section"))
+        return asdict(view)
 
     def _query(self, payload: Payload) -> object:
         request = QueryRequest(

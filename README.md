@@ -281,7 +281,11 @@ docir build --out site/        # one page per document, plus an index
 ```
 
 The result is self-contained — inline CSS, no external requests — so it opens
-from `file://` and publishes to GitHub Pages or S3 unchanged. It shows what only
+from `file://` and publishes to GitHub Pages or S3 unchanged. docir publishes its
+own store that way from [`.github/workflows/pages.yml`](.github/workflows/pages.yml);
+copy it. **Reindex first** — `.docir/docs/` is committed and the index is
+gitignored, so a fresh clone has none and `build` would otherwise publish an empty
+list (it warns, and the workflow gates on the page count). It shows what only
 docir knows: the typed relation graph **in both directions** (a superseded
 decision says so, in a banner, linking the one that replaced it), the staleness
 flag, tags, owner and dates. `--out` is regenerated on every build, so a document

@@ -51,6 +51,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   index also read "105 documents · 105 of 105" until you typed something, and every page
   logged a favicon 404.
 
+- **`docir build` says so when the site would be empty.** `.docir/docs/` is committed and
+  the index is gitignored, so a fresh clone has no index at all — and `build` reads the
+  index, not the files. It wrote a site with an empty document list and exited 0, which is
+  indistinguishable from a store that is genuinely empty. It now warns on stderr and names
+  the fix (`docir reindex`). Still exit 0: an empty store is legitimate.
+
+- **A Pages workflow publishing docir's own documents** — `.github/workflows/pages.yml`,
+  which is also the copyable example. It reindexes from the committed files, gates on
+  `check --strict` so a corpus with duplicate ids or dangling edges is never published,
+  builds, and asserts the page count before deploying. Both paths were rehearsed against a
+  pristine clone: with the reindex it publishes 105 documents, without it the gate fails.
+
 - **The daemon watches `docs/` and reindexes what changes.** docir has always *permitted*
   hand-editing a body — it is in the README's "what you may edit by hand" table — and then
   asked you to remember `docir reindex`. Until you did, every read answered from a stale

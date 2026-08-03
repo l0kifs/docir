@@ -981,6 +981,17 @@ def _emit_build(result: PublishResult, *, settings_home: str) -> None:
         "stale": result.stale,
         "store": settings_home,
     }
+    if result.documents == 0:
+        # An empty store is legitimate, so this is a warning rather than an
+        # error — but the index is derived and gitignored, so a fresh clone has
+        # none, and `build` otherwise writes a site with an empty index and
+        # exits 0. Silence there reads as "nothing to publish" when it means
+        # "nothing was read", which is the failure `check --strict` announces
+        # rather than passing quietly.
+        rendering.render_warning(
+            f"no documents found in {settings_home} — the site will be empty. The index "
+            "is derived and gitignored, so a fresh clone needs `docir reindex` first."
+        )
     state = get_state()
     if use_json(state):
         rendering.emit_json(data, trim=state.trim)

@@ -120,3 +120,17 @@ def test_a_second_build_into_its_own_output_is_fine(store, tmp_path) -> None:
     """The marker file is what makes "regenerate" safe to repeat."""
     assert _build(tmp_path).exit_code == 0
     assert _build(tmp_path).exit_code == 0
+
+
+def test_an_empty_store_says_so(settings: Settings, tmp_path) -> None:
+    """A fresh clone has no index, and a silent empty site looks like success.
+
+    `.docir/docs/` is committed and the index is gitignored, so the first thing
+    CI does is clone a store with no index at all. Without this, `build` writes
+    an index page listing nothing, reports `"documents":0`, and exits 0 —
+    indistinguishable from a store that is genuinely empty.
+    """
+    result = _build(tmp_path)
+    assert result.exit_code == 0, "an empty store is legitimate, not an error"
+    assert json.loads(result.stdout)["documents"] == 0
+    assert "docir reindex" in str(result.stderr), "the fix was not named"

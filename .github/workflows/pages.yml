@@ -1,0 +1,114 @@
+---
+# Publishes docir's own design documents as a static site.
+#
+# This is dogfooding with teeth: docir's ADRs, architecture notes and gap
+# register live in its own store, so the site this builds is the same artifact
+# any user gets from `docir build` — if the command breaks, the project's own
+# documentation stops publishing.
+#
+# The order of the steps is the interesting part. `.docir/docs/` is committed
+# and the derived index is gitignored, so a fresh clone has **no index at all**.
+# `docir build` reads the index, not the files, so without the reindex step it
+# would publish a site with an empty document list and exit 0. (`build` warns on
+# stderr in that case, and `check --strict` below fails on it, but the reindex
+# is what makes the point moot.)
+
+name: Publish documentation
+
+'on':
+  push:
+    branches: [main]
+    paths:
+      - '.docir/**'
+      - 'src/docir/modules/publishing/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+# Pages deployments must not run concurrently, and a queued one must not be
+# cancelled: the last push should win, not the first to finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build the site
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install UV
+        # Pinned to an exact release, as in ci.yml: astral-sh stopped publishing
+        # a floating major tag after v7, so `@v9` does not resolve.
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Rebuild the index from the committed files
+        # The index is a derived artifact and is gitignored, so it does not
+        # exist in a fresh clone. The hashing embedder is deliberate: `build`
+        # reads metadata, bodies and relations and never touches a vector, so
+        # downloading a 64 MB model here would buy nothing.
+        env:
+          DOCIR_EMBEDDER: deterministic
+        run: uv run docir --no-daemon reindex
+
+      - name: Document integrity gate
+        # Do not publish a corpus with duplicate ids or edges pointing at
+        # nothing. `--strict` fails on `error` findings only — warnings like
+        # `orphan` are the normal state of a new document and do not block.
+        env:
+          DOCIR_EMBEDDER: deterministic
+        run: uv run docir --no-daemon check --strict
+
+      - name: Build the site
+        env:
+          DOCIR_EMBEDDER: deterministic
+        run: uv run docir --no-daemon build --out site --title "docir — design documents"
+
+      - name: Assert the site is not empty
+        # The belt to the reindex step's braces. A site with no documents is a
+        # legitimate outcome for an empty store and a silent failure for this
+        # one, and the difference is invisible in a green check mark.
+        run: |
+          pages=$(find site -name '*.html' | wc -l)
+          echo "built $pages pages"
+          if [ "$pages" -lt 2 ]; then
+            echo "::error::the site has $pages pages — the store did not load"
+            exit 1
+          fi
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload the artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+  deploy:
+    name: Deploy to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

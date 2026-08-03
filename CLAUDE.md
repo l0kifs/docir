@@ -88,14 +88,18 @@ src/docir/
 │   ├── documents/   api.py + CONTRACT.md + domain/application/infra   (the document aggregate; write + read + maintenance)
 │   ├── tags/        api.py + CONTRACT.md + domain/application          (the tag registry)
 │   ├── indexing/    api.py + CONTRACT.md + domain/application/infra    (hybrid ranking + the embedding scheduler)
-│   └── agents/      api.py + CONTRACT.md + domain/application/infra    (installs AI-assistant instructions; ADR-0008)
+│   ├── agents/      api.py + CONTRACT.md + domain/application/infra    (installs AI-assistant instructions; ADR-0008)
+│   └── publishing/  api.py + CONTRACT.md + domain/application/infra    (renders the corpus as a static site; ADR-0016)
 └── entry_points/  cli · daemon · mcp · composition · dispatch          (wiring only, no business logic)
 ```
 
 Dependencies flow **`entry_points → modules → platform → config`**, and between modules only
 **`tags → documents → indexing`**. There are no cycles, and tach fails the build if you introduce one.
-`agents` is a self-contained leaf (depends only on `platform.errors`); it owns no index/DB state, so
-it has no shared-index baseline edges.
+`agents` and `publishing` are self-contained leaves (depending only on `platform.errors`); they own
+no index/DB state, so they have no shared-index baseline edges. **`publishing` takes documents as
+data — the `docir get` JSON shape — rather than importing `documents.api`**, which is what keeps it
+a leaf: the site is a projection of the public contract, not a second reader of the aggregate. Do
+not "simplify" it by handing it a `DocumentService`.
 
 - **Each module exposes exactly one public file, `api.py`.** Code outside a module (entry_points, or
   another module) may import **only** that module's `api`, never its `domain`/`application`/`infra`.
@@ -380,6 +384,15 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   dependency**, not an extra: an agent that only speaks MCP cannot be told to install one.
   `server.py` imports it at module scope and `cmds.py` imports `server` *inside* the command —
   keep that lazy, it is ~0.3s of import that no other command should pay.
+- **`docir build` regenerates its output directory, and that is why it guards it.** The site
+  is derived like the index, so every `*.html` is removed before writing — a document deleted
+  from the store must not survive as an orphaned page nobody can reach and nobody knows is
+  stale. "Delete everything here first" has to be sure it owns "here": a previous build leaves
+  `.docir-site`, and anything else non-empty is refused unless `--force`, because `--out` is a
+  path a person types. The build does one `query` then one `get` per document — bodies are
+  absent from every list path by contract (the skeleton rule), so a build that stopped at
+  `query` would report the right count and publish empty pages, which looks exactly like
+  success. `test_e2e_build.py::test_bodies_reach_the_pages` pins that.
 - **All exceptions live in `platform/errors`.** `DocirError` is the base and carries an `exit_code`;
   `entry_points/cli/runner.py` maps that onto the process exit code. Raise a typed subclass, not a
   bare `DocirError`, so the CLI reports the right code.

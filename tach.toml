@@ -214,6 +214,38 @@ depends_on = [
     "docir.modules.agents.infra",
 ]
 
+# -- publishing --------------------------------------------------------------
+# A second self-contained bounded context, like `agents`: it renders a corpus to
+# static HTML and owns no index/DB state. It takes documents as *data* (the
+# `docir get` JSON shape) rather than importing `documents`, which is what keeps
+# it a leaf and keeps the site a projection of the public contract.
+[[modules]]
+path = "docir.modules.publishing"
+depends_on = []
+
+[[modules]]
+path = "docir.modules.publishing.domain"
+depends_on = []
+
+[[modules]]
+path = "docir.modules.publishing.infra"
+depends_on = ["docir.modules.publishing.domain"]
+
+[[modules]]
+path = "docir.modules.publishing.application"
+depends_on = [
+    "docir.modules.publishing.domain",
+    "docir.modules.publishing.infra",
+    "docir.platform.errors",
+]
+
+[[modules]]
+path = "docir.modules.publishing.api"
+depends_on = [
+    "docir.modules.publishing.application",
+    "docir.modules.publishing.domain",
+]
+
 # ---------------------------------------------------------------------------
 # entry_points/ — thin wiring (imports module apis only)
 # ---------------------------------------------------------------------------
@@ -225,6 +257,7 @@ depends_on = [
     "docir.modules.agents.api",
     "docir.modules.documents.api",
     "docir.modules.indexing.api",
+    "docir.modules.publishing.api",
     "docir.modules.tags.api",
     "docir.platform.clock",
     "docir.platform.embedding",

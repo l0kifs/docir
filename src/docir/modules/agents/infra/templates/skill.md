@@ -390,6 +390,15 @@ to leave alone.
   skipped, not indexed — it exists on disk and is invisible to every read path. Non-zero
   means run `docir check` and fix the named file before trusting a search.
 
+## Publishing for humans
+
+`docir build --out site/` renders the whole store as a self-contained static
+site — one page per document, no external requests, publishable to GitHub Pages
+unchanged. Reach for it when someone asks for the decisions in a reviewable
+form; it shows the relation graph in both directions and flags stale documents.
+`--out` is regenerated each build, and a directory docir did not build is
+refused unless you pass `--force`.
+
 ## Working across git branches
 
 Only `docs/*.md` + `tags.yaml` are committed; the index is derived and gitignored.

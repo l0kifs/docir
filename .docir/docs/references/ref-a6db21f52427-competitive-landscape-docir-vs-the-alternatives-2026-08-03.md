@@ -147,13 +147,26 @@ now measured false for the off-the-shelf option. An LLM reranker (what qmd
 does) is a different cost class and remains untested.
 
 ### 4. No file watching / auto-reindex *(all three retrieval competitors)*
-Hand-edit a body and the index is stale until someone runs `reindex`. Competitors watch the
-directory. The daemon is already resident — it could watch.
+
+Hand-edit a body and the index was stale until someone ran `reindex`; competitors
+watch the directory. **Closed in 0.10.0**: the daemon now watches `docs/` and runs
+a debounced `reindex --changed` within about a second of an edit. Automating it is
+safe because the files are canonical and the index is derived — a reindex can only
+make the two agree, and writes no markdown — so it is on by default (`DOCIR_WATCH=0`
+opts out). `--no-daemon` runs still never watch, so CI runs the command explicitly.
 
 ### 5. No human-browsable output *(Log4brains)*
-Log4brains' pitch is a published, timeline-browsable ADR site on GitHub Pages. docir has no
-HTML export, no web UI, no `docir serve`. Decisions that only an agent can read are a hard sell
-to the humans who must approve them.
+
+Log4brains' pitch is a published, timeline-browsable ADR site on GitHub Pages.
+**Closed in 0.10.0** by `docir build --out site/` (ADR-0016, `adr-a343140d72e2`):
+one self-contained HTML page per document plus a filterable index, no external
+requests, publishable to Pages or S3 unchanged. It renders what Log4brains
+cannot — the typed relation graph **in both directions**, with an inbound
+`supersedes` surfaced as a banner above the body rather than a line in a list,
+plus staleness, owner and tags. docir still has no `serve` command and no
+timeline view; the static artifact was chosen over a live UI because it is a
+derived projection of the files, which is the architecture's own thesis, and
+because a URL can be linked in a pull request.
 
 ### 6. No enforcement of decisions against the codebase *(archgate, trackfw)*
 docir validates the *document graph*; archgate binds an ADR to an executable rule that fails CI

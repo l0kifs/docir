@@ -49,8 +49,14 @@ from docir.modules.documents.api import (
     describe_schema,
     load_schema,
 )
+from docir.modules.publishing.api import PublishRequest, PublishResult, build_site_builder
 from docir.modules.tags.api import DEFAULT_TAG_PAGE
 from docir.platform.errors import ValidationError
+
+#: How many documents one `build` enumerates. `query` pages, and a site build
+#: wants the whole corpus rather than a page of it — high enough that no real
+#: store hits it, finite so a runaway store cannot exhaust memory silently.
+_BUILD_PAGE_LIMIT = 10_000
 
 app = typer.Typer(
     help="Doc-Index CLI — git-backed markdown documents with a semantic index.",
@@ -174,6 +180,69 @@ def init(
         )
     )
     _emit_init(result)
+
+
+@app.command()
+def build(
+    out: Annotated[
+        Path,
+        typer.Option("--out", help="Directory to write the site into (regenerated)."),
+    ],
+    title: Annotated[str, typer.Option("--title", help="Site heading.")] = "Documentation",
+    include_archived: Annotated[
+        bool, typer.Option("--include-archived", help="Also publish archived documents.")
+    ] = False,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Overwrite a directory docir did not build."),
+    ] = False,
+) -> None:
+    """Render the store as a self-contained static site.
+
+    One HTML page per document plus an index, with no external requests — it
+    works from file:// and publishes to GitHub Pages or S3 unchanged. Everything
+    docir knows is on the page: the typed relation graph in both directions, the
+    staleness flag, tags, owner and dates.
+
+    The site is a derived artifact, like the index: --out is regenerated on every
+    build, so a document deleted from the store cannot survive as an orphaned
+    page. A directory that is not empty and was not built by docir is refused
+    unless you pass --force.
+
+    Inactive documents (a superseded decision, a resolved issue) are published:
+    the point of a browsable corpus is that a reader can follow a decision to the
+    one that replaced it. Archived documents are not, unless you ask.
+    """
+    _warn_on_global_fallback()
+    state = get_state()
+    skeletons = execute(
+        "query",
+        {
+            "limit": _BUILD_PAGE_LIMIT,
+            "include_archived": include_archived,
+            "include_inactive": True,
+        },
+    )
+    ids = [str(row["id"]) for row in _as_mappings(skeletons) if row.get("id")]
+    # One `get` per document, because bodies are deliberately absent from every
+    # list path (the skeleton contract). A site build is an offline operation
+    # run occasionally, so N round trips is the right trade against widening a
+    # read path that exists to stay narrow.
+    documents = [
+        mapping for doc_id in ids for mapping in _as_mappings([execute("get", {"doc_id": doc_id})])
+    ]
+    result = run_local(
+        lambda: build_site_builder().build(
+            PublishRequest(
+                out=out,
+                documents=documents,
+                title=title,
+                version=__version__,
+                force=force,
+            )
+        )
+    )
+    _emit_build(result, settings_home=str(state.settings.home))
 
 
 # -- schema introspection ---------------------------------------------------
@@ -887,6 +956,42 @@ def _emit_init(result: InitResult) -> None:
         rendering.emit_json(data, trim=state.trim)
     else:
         rendering.render_init(data)
+
+
+def _as_mappings(data: object) -> list[dict[str, object]]:
+    """Coerce a dispatcher payload into typed mappings, dropping anything else.
+
+    The executor's return type is deliberately ``object`` — one boundary, many
+    commands — so every caller that wants fields has to narrow. Rebuilding the
+    dicts rather than casting keeps the key type honest: the wire is JSON, where
+    keys are strings whatever the producer thought.
+    """
+    if not isinstance(data, list):
+        return []
+    return [
+        {str(key): value for key, value in row.items()} for row in data if isinstance(row, dict)
+    ]
+
+
+def _emit_build(result: PublishResult, *, settings_home: str) -> None:
+    data = {
+        "out": str(result.out),
+        "pages": result.pages,
+        "documents": result.documents,
+        "stale": result.stale,
+        "store": settings_home,
+    }
+    state = get_state()
+    if use_json(state):
+        rendering.emit_json(data, trim=state.trim)
+    else:
+        rendering.render_message(
+            f"[green]built[/] {result.documents} documents into {result.out} ({result.pages} files)"
+        )
+        if result.stale:
+            rendering.render_message(
+                f"[yellow]{result.stale}[/] past their review cadence — flagged on the index"
+            )
 
 
 def _emit_schema(data: dict[str, object]) -> None:

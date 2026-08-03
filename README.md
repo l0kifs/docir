@@ -227,13 +227,14 @@ can verify, which is exactly why it should not be written by hand.
 | `docir get <id>` | Full document with body — or one section with `--section "<heading>"` |
 | `docir check` | Structural findings — duplicate ids, dangling edges, staleness (`--strict` gates CI on errors, `--fix` repairs them) |
 | `docir agent install` | Teach this repo's AI agent to drive docir |
+| `docir build --out site/` | Render the store as a self-contained static site for humans |
 | `docir mcp serve` | Serve the same commands as MCP tools, for a client that speaks MCP |
 
 ### Full command reference
 
 ```
 init · add · update · archive · unarchive · delete
-get · query · search · context
+get · query · search · context · build
 tag {add, list, rename, rm}
 agent {install, update}
 schema {show, validate}
@@ -268,6 +269,24 @@ The tools are named `docir_context`, `docir_get`, `docir_add`, … Reads carry t
 `readOnlyHint` annotation and return the same body-less skeletons the CLI does,
 trimmed the same way; requests go through the daemon by default, so the
 embedding model stays warm across calls.
+
+## For the humans who approve the decisions
+
+An agent reads docir through the CLI or MCP. The people who have to *approve* a
+decision usually are not at a terminal, and a decision only an agent can read is
+a hard sell to them.
+
+```bash
+docir build --out site/        # one page per document, plus an index
+```
+
+The result is self-contained — inline CSS, no external requests — so it opens
+from `file://` and publishes to GitHub Pages or S3 unchanged. It shows what only
+docir knows: the typed relation graph **in both directions** (a superseded
+decision says so, in a banner, linking the one that replaced it), the staleness
+flag, tags, owner and dates. `--out` is regenerated on every build, so a document
+deleted from the store cannot survive as an orphaned page; a directory docir did
+not build is refused unless you pass `--force`.
 
 ## How state is stored
 

@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`docir build --out site/` — the store as a static site.** docir was CLI-only, which
+  quietly assumed the people who must approve a decision are the people who run commands.
+  They are not: a PR reviewer, a new hire and a manager all read decisions and none of them
+  will type `docir get adr-3f9a2b1c7d4e`. Log4brains' whole pitch is publishing ADRs this way.
+
+  One HTML page per document plus a filterable index, entirely self-contained — inline CSS,
+  no external requests — so it opens from `file://` and publishes to GitHub Pages or S3
+  unchanged. It renders what no other ADR site can: the **typed relation graph in both
+  directions**. Outgoing edges come from frontmatter; incoming edges are inverted from every
+  other document, because a reader landing on an old decision needs to know something
+  replaced it — and that edge lives on the *other* document. A `supersedes` inbound edge
+  becomes a banner above the body rather than a line in a list. Staleness, owner, tags and
+  dates are on the page; a dangling edge stays visible as a bare id, so the site shows the
+  same broken reference `docir check` reports.
+
+  The site is derived like the index: `--out` is regenerated on every build, so a document
+  deleted from the store cannot survive as an orphaned page. A directory that is not empty
+  and was not built by docir is refused unless `--force` — `--out` is a path a person types,
+  and a typo pointing at `src/` should not be answered by writing HTML into it. Inactive
+  documents are published (following a decision to the one that replaced it is the point);
+  archived ones need `--include-archived`.
+
+  It is a new leaf module, `publishing`, that imports nothing from `documents`: it takes the
+  documents as **data** — the same JSON `docir get` returns — so the site is a projection of
+  the public contract rather than a second reader of the aggregate.
+
 - **The daemon watches `docs/` and reindexes what changes.** docir has always *permitted*
   hand-editing a body — it is in the README's "what you may edit by hand" table — and then
   asked you to remember `docir reindex`. Until you did, every read answered from a stale

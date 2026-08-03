@@ -42,6 +42,9 @@ dependencies = [
     # transitively with fastmcp; declared because depending on someone else's
     # transitive dependency is depending on their next release notes.
     "watchfiles>=1.0",
+    # Markdown -> HTML for `docir build`. Already arrived transitively via rich;
+    # declared for the same reason watchfiles is.
+    "markdown-it-py>=3.0",
 ]
 
 [project.scripts]

@@ -35,6 +35,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   documents as **data** — the same JSON `docir get` returns — so the site is a projection of
   the public contract rather than a second reader of the aggregate.
 
+  Seven layout problems were found by opening the result in a browser rather than by reading
+  the markup, and every one of them is now pinned by a test. The index was a four-column
+  table that measured 426px at a 390px viewport — the page scrolled sideways — with rows
+  388px tall, so 105 documents showed two per screen; it is a grid list that reflows, at
+  191px a row. Every document printed its title twice, the second one larger, because docir's
+  own convention restates it as the body's first line and a body `h1` outranks the page
+  heading. Type, status and tags rendered as three identical grey pills, so one page read
+  `architecture · active · architecture · persistence · retrieval` with the same word meaning
+  two different things. The relation graph sat under the body — 4,068px down one ADR,
+  ~13,000px down the architecture document — and moving it up buried the document under 21
+  inbound links instead, so long lists are now `<details>` that show their count collapsed.
+  Body headings had no ids at all, so there was no way to link a section and no contents
+  list; there are now anchors on all of them and a table of contents above the body. The
+  index also read "105 documents · 105 of 105" until you typed something, and every page
+  logged a favicon 404.
+
 - **The daemon watches `docs/` and reindexes what changes.** docir has always *permitted*
   hand-editing a body — it is in the README's "what you may edit by hand" table — and then
   asked you to remember `docir reindex`. Until you did, every read answered from a stale

@@ -56,7 +56,7 @@ class TestStructure:
 
     def test_the_body_is_rendered_as_markdown(self) -> None:
         page = _pages()["adr-0001.html"]
-        assert "<h2>Context</h2>" in page
+        assert 'id="context">Context' in page
         assert "<code>code</code>" in page
         assert "&#35;&#35; Context" not in page
 
@@ -94,7 +94,7 @@ class TestSelfContained:
         what the renderer brings, not what a body says.
         """
         for name, page in _pages().items():
-            assert "<link " not in page, f"{name} pulls a stylesheet"
+            assert not re.search(r'<link[^>]+href="(?!data:)', page), f"{name} pulls a stylesheet"
             assert not re.search(r"<script[^>]+src=", page), f"{name} pulls a script"
             assert not re.search(r"<img[^>]+src=\"https?://", page), f"{name} pulls an image"
 
@@ -188,3 +188,142 @@ class TestWriting:
             .documents
             == 2
         )
+
+
+class TestReadability:
+    """Fixes that came from opening the site in a browser, not from the markup.
+
+    Each of these was a real defect found at a real viewport; without a test
+    they are one refactor away from coming back, and none of them would fail
+    anything else in the suite.
+    """
+
+    def test_a_body_repeating_the_title_does_not_print_it_twice(self) -> None:
+        """docir's own convention restates the title as the body's first line.
+
+        Published, that was the title twice — and the second one *larger*,
+        because a body `h1` outranks the page heading.
+        """
+        pages = render_site(
+            build_site([dict(_DOCS[0], body="# Old way\n\nThe body proper.\n")]),
+            title="Docs",
+            version="1",
+        )
+        # Exactly one h1 per page: the header's. The body's repeat is gone.
+        # (Counting the text would also match <title>, which is correct there.)
+        assert pages["adr-0001.html"].count("<h1") == 1
+
+    def test_a_body_heading_that_is_not_the_title_survives(self) -> None:
+        """Only the *repeat* is dropped; a real first heading is content."""
+        pages = render_site(
+            build_site([dict(_DOCS[0], body="# Something else\n\nBody.\n")]),
+            title="Docs",
+            version="1",
+        )
+        page = pages["adr-0001.html"]
+        assert ">Something else" in page
+        assert page.count("<h1") == 2, "the header's and the body's own"
+
+    def test_headings_are_addressable(self) -> None:
+        """The site's answer to `get --section`: a link to one section."""
+        body = "\n".join(f"## Section {n}\n\nText for {n}.\n" for n in range(1, 5))
+        pages = render_site(build_site([dict(_DOCS[0], body=body)]), title="Docs", version="1")
+        page = pages["adr-0001.html"]
+        assert 'id="section-1"' in page
+        assert 'href="#section-1"' in page, "no anchor to link the section with"
+
+    def test_repeated_headings_get_distinct_ids(self) -> None:
+        """Two sections called Context is normal; two links to one is not."""
+        body = "## Context\n\nA.\n\n## Decision\n\nB.\n\n## Context\n\nC.\n"
+        pages = render_site(build_site([dict(_DOCS[0], body=body)]), title="Docs", version="1")
+        page = pages["adr-0001.html"]
+        assert 'id="context"' in page and 'id="context-1"' in page
+
+    def test_a_long_document_gets_a_table_of_contents(self) -> None:
+        body = "\n".join(f"## Section {n}\n\nText.\n" for n in range(1, 6))
+        page = render_site(build_site([dict(_DOCS[0], body=body)]), title="Docs", version="1")[
+            "adr-0001.html"
+        ]
+        assert "Contents" in page
+        assert page.index("Contents") < page.index('<div class="body">')
+
+    def test_a_short_document_gets_none(self) -> None:
+        """Two links above a short body are furniture, not navigation."""
+        page = render_site(
+            build_site([dict(_DOCS[0], body="## One\n\nText.\n")]), title="Docs", version="1"
+        )["adr-0001.html"]
+        assert "Contents" not in page
+
+    def test_relations_sit_above_the_body(self) -> None:
+        """They were 4,068px down a 4,596px page — present and invisible."""
+        page = _pages()["adr-0002.html"]
+        assert page.index("Links to") < page.index('<div class="body">')
+
+    def test_type_status_and_tags_are_visually_distinct(self) -> None:
+        """One page read `architecture · active · architecture · persistence`.
+
+        Three different kinds of fact rendered as three identical grey pills,
+        with the same word meaning a type in one and a tag in the next.
+        """
+        page = render_site(
+            build_site([dict(_DOCS[0], tags=["decision", "auth"])]),
+            title="Docs",
+            version="1",
+        )["adr-0001.html"]
+        assert 'class="chip type"' in page
+        assert 'class="chip status"' in page
+        assert 'class="chip tag"' in page
+        # The type is `decision` and so is one of the tags; they must not read
+        # the same, which is exactly the case that exposed this.
+        assert ">#decision<" in page, "a tag is not marked as one"
+
+    def test_the_index_does_not_repeat_its_own_count(self) -> None:
+        """It read "105 documents · 105 of 105" until you typed something."""
+        index = _pages()["index.html"]
+        assert "2 documents" in index
+        assert "2 of 2" not in index
+
+    def test_the_index_reflows_instead_of_scrolling_sideways(self) -> None:
+        """A four-column table needed 426px at a 390px viewport.
+
+        Asserting on the mechanism rather than on pixels: a grid list with a
+        single-column breakpoint cannot overflow the way the table did.
+        """
+        index = _pages()["index.html"]
+        assert "<table" not in index
+        assert "grid-template-columns:1fr}" in index, "no single-column breakpoint"
+
+    def test_the_favicon_request_is_answered_without_a_network_call(self) -> None:
+        """Browsers ask for /favicon.ico on every page and log a 404 without it."""
+        assert 'rel="icon" href="data:,"' in _pages()["index.html"]
+
+    def test_a_long_relation_list_starts_collapsed(self) -> None:
+        """Moving relations up buried the document under its own graph.
+
+        docir's architecture document has 21 inbound edges; expanded above the
+        body they filled the entire first screen. The count stays visible
+        without a click, which is the part that was missing when they were at
+        the bottom.
+        """
+        many = [dict(_DOCS[0])] + [
+            {
+                "id": f"adr-1{n:03d}",
+                "title": f"Linker {n}",
+                "description": "d",
+                "type": "decision",
+                "status": "accepted",
+                "created": "2026-03-01",
+                "updated": "2026-03-01",
+                "body": "b",
+                "related": [{"target": "adr-0001", "kind": "relates_to"}],
+            }
+            for n in range(9)
+        ]
+        page = render_site(build_site(many), title="Docs", version="1")["adr-0001.html"]
+        assert '<details class="panel">' in page, "a 9-item list should be collapsed"
+        assert ">9</span></summary>" in page, "the count must be legible without expanding"
+
+    def test_a_short_relation_list_stays_open(self) -> None:
+        """Two links are context, not clutter — hiding them costs a click."""
+        page = _pages()["adr-0002.html"]
+        assert '<details class="panel" open>' in page

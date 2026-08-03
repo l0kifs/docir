@@ -37,6 +37,15 @@ jobs:
   build:
     name: Build the site
     runs-on: ubuntu-latest
+    # `pages: write` here as well as on the deploy job, so `configure-pages` can
+    # turn Pages on for a repository that has never had it. Without that the
+    # first run of this workflow in a fresh fork fails on "Get Pages site
+    # failed", having already done all the real work — which is a confusing
+    # place to learn about a settings toggle.
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -92,6 +101,10 @@ jobs:
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
+        with:
+          # Enable Pages on a repository that has never had it, rather than
+          # failing and asking someone to find the setting.
+          enablement: true
 
       - name: Upload the artifact
         uses: actions/upload-pages-artifact@v4

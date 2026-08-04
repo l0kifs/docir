@@ -45,9 +45,9 @@ def _pages() -> dict[str, str]:
 
 
 class TestStructure:
-    def test_one_page_per_document_plus_an_index(self) -> None:
+    def test_one_page_per_document_plus_index_and_graph(self) -> None:
         pages = _pages()
-        assert set(pages) == {"index.html", "adr-0001.html", "adr-0002.html"}
+        assert set(pages) == {"index.html", "graph.html", "adr-0001.html", "adr-0002.html"}
 
     def test_the_index_links_every_document(self) -> None:
         index = _pages()["index.html"]
@@ -80,6 +80,155 @@ class TestStructure:
         index = _pages()["index.html"]
         assert "past their review cadence" in index
         assert 'class="chip stale"' in index
+
+
+class TestGraphPage:
+    """The corpus as a map — the data reaches the page and stays inert."""
+
+    def test_the_graph_embeds_every_document(self) -> None:
+        graph = _pages()["graph.html"]
+        assert '"id":"adr-0001"' in graph
+        assert '"id":"adr-0002"' in graph
+        assert '"k":"supersedes"' in graph
+
+    def test_the_card_links_to_the_document_page(self) -> None:
+        """The graph is exploration; the page is the destination. A card
+        without the link strands the reader on a site that has full pages."""
+        assert 'class="open" href="${n.id}.html"' in _pages()["graph.html"]
+
+    def test_a_title_cannot_terminate_the_script(self) -> None:
+        """The HTML parser ends a script at the first `</script` it sees,
+        inside a JSON string literal or not — a hostile title would
+        otherwise parse as markup."""
+        pages = render_site(
+            build_site([dict(_DOCS[0], title="</script><img src=x onerror=alert(1)>")]),
+            title="Docs",
+            version="1",
+        )
+        graph = pages["graph.html"]
+        assert "<\\/script><img" in graph
+        assert "</script><img" not in graph
+
+    def test_the_graph_uses_the_site_theme_tokens(self) -> None:
+        """One site, one chrome: the map must not ship a second palette for
+        the page furniture."""
+        graph = _pages()["graph.html"]
+        assert "--accent:#0b5fff" in graph, "the site's light accent is absent"
+        assert "--accent:#7aa7ff" in graph, "the site's dark accent is absent"
+
+    def test_an_empty_corpus_still_renders_a_page(self) -> None:
+        """`build` on an empty store writes a site; the graph page must not
+        be the one file that throws on zero nodes."""
+        graph = render_site(build_site([]), title="Docs", version="1")["graph.html"]
+        assert '"nodes":[]' in graph
+
+    def test_an_empty_corpus_draws_no_ghost_ring(self) -> None:
+        """With no types the hub is undefined, and [hub, ...] laid out one
+        ring labelled "undefined 0" on an otherwise blank canvas."""
+        graph = render_site(build_site([]), title="Docs", version="1")["graph.html"]
+        assert "const order=types.length?" in graph
+
+    def test_index_and_documents_link_to_the_graph(self) -> None:
+        """A document page deep-links to itself: the reader lands on the map
+        with the document they were just reading already pinned."""
+        pages = _pages()
+        assert 'href="graph.html"' in pages["index.html"]
+        assert 'href="graph.html#adr-0001"' in pages["adr-0001.html"]
+
+    def test_the_graph_honours_the_fragment_deep_link(self) -> None:
+        """graph.html#<id> must pin that document on load — the other half of
+        the document page's link."""
+        graph = _pages()["graph.html"]
+        assert "location.hash.slice(1)" in graph
+        assert "if(target&&byId[target]) show(target);" in graph
+
+    def test_the_graph_links_back_to_the_index(self) -> None:
+        assert 'href="index.html"' in _pages()["graph.html"]
+
+
+class TestLanding:
+    """The index is the landing page: what a first visit needs, above the fold."""
+
+    def test_corpus_stats_sit_in_the_header(self) -> None:
+        index = _pages()["index.html"]
+        assert "2 documents · 1 type" in index
+
+    def test_the_graph_call_to_action_is_present(self) -> None:
+        assert 'class="cta" href="graph.html"' in _pages()["index.html"]
+
+    def test_a_small_corpus_gets_no_recent_strip(self) -> None:
+        """Five recent rows above a seven-row listing is the listing twice."""
+        assert 'id="recent"' not in _pages()["index.html"]
+
+    def test_rows_carry_structured_filter_data(self) -> None:
+        """The filter works off the markup alone — type, status and date must
+        be machine-readable on every filterable row, not just visible text."""
+        index = _pages()["index.html"]
+        assert 'data-type="decision"' in index
+        assert 'data-status="accepted"' in index
+        assert 'data-updated="2026-02-01"' in index
+
+    def test_facet_options_come_from_the_corpus_with_counts(self) -> None:
+        """An option no document matches filters to an empty page and looks
+        broken — facets list what exists, each with its result count."""
+        index = _pages()["index.html"]
+        assert 'data-fv="decision"' in index
+        assert 'data-fv="accepted"' in index
+        assert 'data-fv="superseded"' in index
+        assert 'data-fv="architecture"' not in index
+        assert '<span class="n">2</span>' in index, "the type count is missing"
+
+    def test_facets_are_multi_select_checkboxes(self) -> None:
+        index = _pages()["index.html"]
+        assert '<input type="checkbox" value="decision">' in index
+        assert "selT.has(r.dataset.type)" in index, "type match must be set-based (OR)"
+
+    def test_the_status_facet_narrows_to_the_selected_types(self) -> None:
+        """The script recomputes status availability from the type selection
+        and drops a selected status that becomes unavailable."""
+        index = _pages()["index.html"]
+        assert "function refreshStatus()" in index
+        assert "selS.delete(v)" in index
+
+    def test_the_date_facet_offers_presets_and_a_custom_range(self) -> None:
+        index = _pages()["index.html"]
+        assert 'name="dpre" value="30d"' in index
+        assert "last 30 days" in index
+        assert 'id="dfrom"' in index and 'id="dto"' in index
+
+    def test_hidden_means_hidden_despite_author_display_rules(self) -> None:
+        """[hidden] maps to display:none only in the UA stylesheet, and the
+        grid rows and flex facet labels override it — a filtered-out row
+        stayed visible whenever its section did not hide with it."""
+        assert "[hidden]{display:none!important}" in _pages()["index.html"]
+
+    def test_the_filter_state_is_mirrored_into_the_url(self) -> None:
+        """A filtered view must be a copyable link: the script writes the
+        combined state to the query string and restores it on load."""
+        index = _pages()["index.html"]
+        assert "URLSearchParams" in index
+        assert "history.replaceState" in index
+        assert "p0.get('updated')" in index
+        assert "p0.get('from')" in index
+
+    def test_a_garbage_date_in_the_url_is_dropped(self) -> None:
+        """The from/to variables feed string comparisons directly, and
+        "?from=garbage" sorts above every ISO date — the page silently
+        filtered to nothing."""
+        assert "isoRe.test" in _pages()["index.html"]
+
+    def test_a_larger_corpus_gets_one_and_it_is_not_filterable(self) -> None:
+        """The strip mirrors rows the type sections already carry; if its rows
+        joined the filter, every match would be counted (and shown) twice."""
+        many = [
+            dict(_DOCS[0], id=f"adr-1{n:03d}", title=f"Doc {n}", updated=f"2026-01-{n + 1:02d}")
+            for n in range(11)
+        ]
+        index = render_site(build_site(many), title="Docs", version="1")["index.html"]
+        assert 'id="recent"' in index
+        recent = index[index.index('id="recent"') : index.index("</section>")]
+        assert "data-hay" not in recent, "recent rows must not join the filter"
+        assert "Doc 10" in recent, "not sorted by updated date"
 
 
 class TestSelfContained:

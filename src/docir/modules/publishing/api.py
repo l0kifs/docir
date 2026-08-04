@@ -18,7 +18,13 @@ from docir.modules.publishing.application.service import (
     PublishResult,
     SiteBuilder,
 )
-from docir.modules.publishing.domain.site import Edge, Site, SiteDocument, build_site
+from docir.modules.publishing.domain.site import (
+    Edge,
+    Site,
+    SiteDocument,
+    build_site,
+    graph_payload,
+)
 
 
 def build_site_builder() -> SiteBuilder:
@@ -36,4 +42,5 @@ __all__ = [
     "SiteDocument",
     "build_site",
     "build_site_builder",
+    "graph_payload",
 ]

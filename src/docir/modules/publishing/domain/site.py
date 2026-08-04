@@ -149,6 +149,45 @@ def build_site(views: Sequence[Mapping[str, object]]) -> Site:
     return Site(documents=ordered, groups=groups)
 
 
+def graph_payload(site: Site) -> dict[str, list[dict[str, object]]]:
+    """The relation graph as data — the shape the graph page embeds.
+
+    Derived from the *resolved* site so degree counts both directions: a
+    document's visual weight on the map is how connected it is, not how many
+    edges it happens to declare itself. Dangling edges (target outside the
+    corpus) are excluded — the map cannot draw an arrow to a node that is not
+    there, and the document pages already surface the broken reference; the
+    graph silently omitting it is not a second loss.
+
+    Keys are deliberately terse (``t``/``ty``/``st``/``tg``/``up``/``ar``):
+    the payload is inlined into every graph page and the corpus appears once
+    per key per document.
+    """
+    ids = {document.id for document in site.documents}
+    nodes: list[dict[str, object]] = [
+        {
+            "id": document.id,
+            "t": document.title,
+            "ty": document.type,
+            "st": document.status,
+            "d": document.description,
+            "tg": list(document.tags),
+            "deg": sum(1 for edge in document.outgoing if edge.target in ids)
+            + len(document.incoming),
+            "up": document.updated,
+            "ar": document.archived,
+        }
+        for document in site.documents
+    ]
+    edges: list[dict[str, object]] = [
+        {"s": document.id, "t": edge.target, "k": edge.kind}
+        for document in site.documents
+        for edge in document.outgoing
+        if edge.target in ids
+    ]
+    return {"nodes": nodes, "edges": edges}
+
+
 def _document_sort_key(document: SiteDocument) -> tuple[str, str, str]:
     """Type, then newest first, then id.
 

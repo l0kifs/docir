@@ -41,6 +41,8 @@ from collections.abc import Iterable
 from markdown_it import MarkdownIt
 
 from docir.modules.publishing.domain.site import Edge, Site, SiteDocument
+from docir.modules.publishing.infra.graph import render_graph_page
+from docir.modules.publishing.infra.theme import CSS_TOKENS, FAVICON
 
 #: Below this width the index collapses to one column. Taken from the
 #: measurement that prompted it: the old table needed 426px at a 390px viewport.
@@ -58,19 +60,42 @@ _TOC_MIN_HEADINGS = 3
 _RELATIONS_INLINE_MAX = 5
 
 _STYLES = (
-    """\
-:root{--bg:#fff;--fg:#1a1a1a;--muted:#666;--line:#e3e3e3;--accent:#0b5fff;
---chip:#f2f4f7;--warn:#8a5a00;--warn-bg:#fff5e0;--code:#f6f8fa;--panel:#fafbfc}
-@media(prefers-color-scheme:dark){:root{--bg:#14161a;--fg:#e8e8e8;--muted:#9aa0aa;
---line:#2a2e35;--accent:#7aa7ff;--chip:#22262d;--warn:#ffcf70;--warn-bg:#3a2f14;
---code:#1c2027;--panel:#191c21}}
+    CSS_TOKENS
+    + """\
 *{box-sizing:border-box}
+/* The [hidden] attribute only maps to display:none in the UA stylesheet, and
+   any author display (the grid rows, the flex facet labels) overrides it —
+   so a filtered-out row stayed visible whenever its section did not hide
+   with it. The reset makes hidden mean hidden everywhere. */
+[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--fg);
 font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 .wrap{max-width:56rem;margin:0 auto;padding:2rem 1.25rem 5rem}
 a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 header.top{border-bottom:1px solid var(--line);margin-bottom:1.5rem;padding-bottom:1rem}
 header.top h1{margin:0 0 .25rem;font-size:1.5rem;line-height:1.3}
+header.top.landing{display:flex;justify-content:space-between;align-items:flex-start;
+gap:1rem;flex-wrap:wrap}
+.cta{display:inline-block;border:1px solid var(--accent);border-radius:.5rem;
+padding:.45rem .9rem;font-weight:600;white-space:nowrap}
+.fbar{display:flex;gap:.5rem;margin:.6rem 0 0;flex-wrap:wrap;align-items:center}
+.facet{position:relative}
+.facet>summary{list-style:none;cursor:pointer;padding:.35rem .6rem;font-size:.9rem;
+border:1px solid var(--line);border-radius:.45rem;user-select:none;white-space:nowrap}
+.facet>summary::-webkit-details-marker{display:none}
+.facet[open]>summary{background:var(--chip)}
+.fopts{position:absolute;top:calc(100% + .3rem);left:0;z-index:5;background:var(--bg);
+border:1px solid var(--line);border-radius:.5rem;padding:.55rem .7rem;min-width:12rem;
+box-shadow:0 8px 24px rgba(0,0,0,.14);display:flex;flex-direction:column;gap:.3rem}
+.fopts label{display:flex;gap:.45rem;align-items:center;font-size:.9rem;
+white-space:nowrap;cursor:pointer}
+.fopts .n{color:var(--muted);font-size:.8rem;margin-left:auto;padding-left:.8rem}
+.drange{display:flex;flex-direction:column;gap:.3rem;border-top:1px solid var(--line);
+padding-top:.45rem;margin-top:.2rem}
+.drange input[type=date]{padding:.25rem .4rem;border:1px solid var(--line);
+border-radius:.4rem;background:var(--bg);color:var(--fg);font:inherit;font-size:.85rem}
+#fclear{color:var(--accent);font:inherit;font-size:.9rem;border:0;background:none;
+cursor:pointer;padding:0}
 .sub{color:var(--muted);font-size:.9rem}
 h2.section{margin:2.25rem 0 .5rem;font-size:.8rem;text-transform:uppercase;
 letter-spacing:.06em;color:var(--muted)}
@@ -131,31 +156,168 @@ border-top:1px solid var(--line);padding-top:1rem}
 _FILTER_JS = """\
 const rows=[...document.querySelectorAll('li[data-hay]')];
 const q=document.getElementById('q'),count=document.getElementById('count');
-q.addEventListener('input',()=>{
+const fclear=document.getElementById('fclear');
+const recent=document.getElementById('recent');
+// Faceted-search semantics, per the standard playbook: multi-select inside a
+// facet is OR, facets combine as AND, results update on every change, and
+// each option shows the count it would yield.
+const selT=new Set(), selS=new Set();
+let dmode='', dfrom='', dto='';
+
+const iso=d=>d.toISOString().slice(0,10);
+// Preset windows are *rolling*: a copied "last 30 days" link shows the 30
+// days before whenever it is opened. An absolute view is what the custom
+// range is for. ISO dates compare correctly as strings — no Date parsing on
+// the compare path, no timezone to get wrong.
+function dateLo(){
+  if(dmode==='custom') return dfrom;
+  if(dmode==='year') return new Date().getFullYear()+'-01-01';
+  const days={'7d':7,'30d':30,'90d':90}[dmode];
+  if(!days) return '';
+  const d=new Date(); d.setDate(d.getDate()-days); return iso(d);
+}
+function dateHi(){ return dmode==='custom'?dto:''; }
+
+// One predicate with a `skip` so each facet's counts can be computed under
+// every *other* active filter — the number beside an option is what
+// selecting it would actually show.
+function rowHit(r,skip){
   const t=q.value.toLowerCase().trim();
+  const lo=dateLo(), hi=dateHi(), u=r.dataset.updated;
+  return (skip==='q'||!t||r.dataset.hay.includes(t))
+    &&(skip==='type'||!selT.size||selT.has(r.dataset.type))
+    &&(skip==='status'||!selS.size||selS.has(r.dataset.status))
+    &&(skip==='date'||((!lo||u>=lo)&&(!hi||u<=hi)));
+}
+
+// The status facet only offers what the selected types can have. Narrowed by
+// the *type* selection alone (not by date or text), so the list holds still
+// while typing. A selected status that disappears is unselected — keeping it
+// would filter to zero rows with no visible cause.
+function refreshStatus(){
+  const avail=new Set();
+  for(const r of rows) if(!selT.size||selT.has(r.dataset.type)) avail.add(r.dataset.status);
+  for(const lab of document.querySelectorAll('#sopts label')){
+    const v=lab.dataset.fv, ok=avail.has(v);
+    lab.hidden=!ok;
+    if(!ok&&selS.has(v)){ selS.delete(v); lab.querySelector('input').checked=false; }
+  }
+}
+function refreshCounts(){
+  for(const lab of document.querySelectorAll('#topts label')){
+    const v=lab.dataset.fv;
+    lab.querySelector('.n').textContent=
+      rows.filter(r=>r.dataset.type===v&&rowHit(r,'type')).length;
+  }
+  for(const lab of document.querySelectorAll('#sopts label')){
+    const v=lab.dataset.fv;
+    lab.querySelector('.n').textContent=
+      rows.filter(r=>r.dataset.status===v&&rowHit(r,'status')).length;
+  }
+}
+// The summary is the applied-state display: a closed facet must still say
+// how much of it is switched on.
+function refreshSummaries(){
+  document.getElementById('tsum').textContent=selT.size?' \\u00b7 '+selT.size:'';
+  document.getElementById('ssum').textContent=selS.size?' \\u00b7 '+selS.size:'';
+  const dl=dmode==='custom'?'range':dmode;
+  document.getElementById('dsum').textContent=dl?' \\u00b7 '+dl:'';
+}
+
+function apply(){
+  refreshStatus();
+  const t=q.value.toLowerCase().trim();
+  const on=!!(t||selT.size||selS.size||dmode);
   let shown=0;
-  for(const r of rows){const hit=!t||r.dataset.hay.includes(t);r.hidden=!hit;if(hit)shown++;}
+  for(const r of rows){const hit=rowHit(r,'');r.hidden=!hit;if(hit)shown++;}
   for(const s of document.querySelectorAll('section[data-type]')){
     s.hidden=![...s.querySelectorAll('li[data-hay]')].some(r=>!r.hidden);
   }
-  count.textContent=t?' \\u00b7 '+shown+' shown':'';
-});
-"""
+  // The recent strip is a browsing shortcut; while any filter is active,
+  // filtering has replaced browsing and the strip would only duplicate rows.
+  if(recent) recent.hidden=on;
+  fclear.hidden=!on;
+  count.textContent=on?' \\u00b7 '+shown+' shown':'';
+  refreshCounts(); refreshSummaries();
+  // The URL carries the whole filter state, so the current view is a
+  // copyable link. replaceState, not assignment: typing must not grow a
+  // history entry per keystroke.
+  const p=new URLSearchParams();
+  if(t)p.set('q',q.value.trim());
+  if(selT.size)p.set('type',[...selT].sort().join(','));
+  if(selS.size)p.set('status',[...selS].sort().join(','));
+  if(dmode==='custom'){ if(dfrom)p.set('from',dfrom); if(dto)p.set('to',dto); }
+  else if(dmode)p.set('updated',dmode);
+  const qs=p.toString();
+  history.replaceState(null,'',qs?'?'+qs:location.pathname);
+}
 
-#: An empty data: URI. Browsers request /favicon.ico on every page and log a 404
-#: when it is absent; this answers it without a network request, so the page
-#: stays offline-complete.
-_FAVICON = '<link rel="icon" href="data:,">'
+for(const cb of document.querySelectorAll('#topts input')) cb.onchange=()=>{
+  cb.checked?selT.add(cb.value):selT.delete(cb.value); apply();};
+for(const cb of document.querySelectorAll('#sopts input')) cb.onchange=()=>{
+  cb.checked?selS.add(cb.value):selS.delete(cb.value); apply();};
+for(const rb of document.querySelectorAll('input[name=dpre]')) rb.onchange=()=>{
+  dmode=rb.value; apply();};
+const dF=document.getElementById('dfrom'), dT=document.getElementById('dto');
+// Typing a date IS choosing the custom range — demanding the radio first
+// would make the visible inputs silently do nothing.
+const customRadio=document.querySelector('input[name=dpre][value=custom]');
+dF.oninput=()=>{dfrom=dF.value;dmode='custom';customRadio.checked=true;apply();};
+dT.oninput=()=>{dto=dT.value;dmode='custom';customRadio.checked=true;apply();};
+q.addEventListener('input',apply);
+fclear.onclick=()=>{
+  selT.clear(); selS.clear(); dmode=dfrom=dto=''; q.value='';
+  for(const cb of document.querySelectorAll('.fopts input[type=checkbox]')) cb.checked=false;
+  document.querySelector('input[name=dpre][value=""]').checked=true;
+  dF.value=dT.value=''; apply();};
+// A facet dropdown closes when the pointer goes elsewhere — the standard
+// popover contract; without it three open panels shingle over the list.
+addEventListener('pointerdown',e=>{
+  for(const d of document.querySelectorAll('details.facet[open]'))
+    if(!d.contains(e.target)) d.open=false;
+});
+
+// Arriving with a filter in the URL restores the controls, then applies.
+// A value naming an option that no longer exists (a type removed from the
+// corpus) is dropped rather than filtering everything to zero.
+const p0=new URLSearchParams(location.search);
+q.value=p0.get('q')||'';
+for(const v of (p0.get('type')||'').split(',')) if(v){
+  const cb=document.querySelector(`#topts input[value="${CSS.escape(v)}"]`);
+  if(cb){cb.checked=true;selT.add(v);}
+}
+for(const v of (p0.get('status')||'').split(',')) if(v){
+  const cb=document.querySelector(`#sopts input[value="${CSS.escape(v)}"]`);
+  if(cb){cb.checked=true;selS.add(v);}
+}
+const up=p0.get('updated')||'';
+if(['7d','30d','90d','year'].includes(up)){ dmode=up;
+  document.querySelector(`input[name=dpre][value="${up}"]`).checked=true; }
+// Only a well-formed date survives the URL. The date *inputs* can only hold
+// valid-or-empty values, but these variables feed string comparisons
+// directly — "?from=garbage" compares above every ISO date and would
+// silently filter the page to nothing.
+const isoRe=/^\\d{4}-\\d{2}-\\d{2}$/;
+const f0=p0.get('from')||'', t0=p0.get('to')||'';
+const fv=isoRe.test(f0)?f0:'', tv=isoRe.test(t0)?t0:'';
+if(fv||tv){ dmode='custom'; dfrom=fv; dto=tv; dF.value=fv; dT.value=tv;
+  customRadio.checked=true; }
+apply();
+"""
 
 
 def render_site(site: Site, *, title: str, version: str) -> dict[str, str]:
     """Render the whole site as ``relative path -> file contents``.
 
-    Returning content rather than writing it keeps this layer free of the
-    filesystem, so a test can assert on the HTML without a temp directory and
-    the writer has exactly one job.
+    One page per document, the index, and the graph — the corpus drawn as an
+    interactive map. Returning content rather than writing it keeps this layer
+    free of the filesystem, so a test can assert on the HTML without a temp
+    directory and the writer has exactly one job.
     """
-    pages = {"index.html": _render_index(site, title=title, version=version)}
+    pages = {
+        "index.html": _render_index(site, title=title, version=version),
+        "graph.html": render_graph_page(site, title=title),
+    }
     for document in site.documents:
         pages[page_name(document.id)] = _render_document(document, title=title, version=version)
     return pages
@@ -170,6 +332,16 @@ def page_name(doc_id: str) -> str:
 
 
 def _render_index(site: Site, *, title: str, version: str) -> str:
+    """The landing page, shaped by the usual landing rules, not invented ones.
+
+    Everything a first-time visitor needs sits above the fold: the headline
+    names the corpus, the sub-line carries its health at a glance (count,
+    types, stale), the search is the first focusable thing on the page, and
+    the one primary action — the graph — is a visible call-to-action rather
+    than a link buried in prose. A "recently updated" strip surfaces freshness
+    before the full type listing, because the reader who visits twice wants
+    what changed, not the taxonomy.
+    """
     sections = "\n".join(_render_group(name, documents) for name, documents in site.groups)
     stale = site.stale_count
     banner = (
@@ -179,20 +351,118 @@ def _render_index(site: Site, *, title: str, version: str) -> str:
         else ""
     )
     total = len(site.documents)
+    stats = f"{total} document{'s' if total != 1 else ''}"
+    if site.groups:
+        stats += f" · {len(site.groups)} type{'s' if len(site.groups) != 1 else ''}"
+    if stale:
+        stats += f" · {stale} stale"
     # The filtered count starts empty and is written only while filtering: shown
     # unconditionally it read "105 documents · 105 of 105", which says the same
     # thing twice and looks like a bug.
     body = f"""\
-<header class="top">
-  <h1>{html.escape(title)}</h1>
-  <p class="sub">{total} document{"s" if total != 1 else ""}<span id="count"></span></p>
+<header class="top landing">
+  <div>
+    <h1>{html.escape(title)}</h1>
+    <p class="sub">{stats}<span id="count"></span></p>
+  </div>
+  <a class="cta" href="graph.html">Explore the graph &#8594;</a>
 </header>
 {banner}
 <input id="q" type="search" placeholder="Filter by title, description, tag, id or status…"
        aria-label="Filter documents" autocomplete="off" autofocus>
+{_render_filter_bar(site)}
+{_render_recent(site)}
 {sections}
 <script>{_FILTER_JS}</script>"""
     return _page(title, body, version)
+
+
+def _render_filter_bar(site: Site) -> str:
+    """Faceted filters beside the free-text one: type, status, updated.
+
+    Facet options are checkboxes (multi-select is OR inside a facet, AND
+    across facets) with result counts, derived from the corpus rather than a
+    schema the site does not receive — an option no document matches filters
+    to an empty page and looks broken. The date facet offers rolling presets
+    plus an absolute custom range. The script narrows the status facet to the
+    selected types, keeps every count live, and mirrors the combined state
+    into the URL query so a filtered view is a copyable link.
+    """
+    type_counts = [(name, len(documents)) for name, documents in site.groups]
+    status_totals: dict[str, int] = {}
+    for document in site.documents:
+        status_totals[document.status] = status_totals.get(document.status, 0) + 1
+    presets = [
+        ("", "any time", True),
+        ("7d", "last 7 days", False),
+        ("30d", "last 30 days", False),
+        ("90d", "last 90 days", False),
+        ("year", "this year", False),
+        ("custom", "custom range", False),
+    ]
+    preset_rows = "".join(
+        f'<label><input type="radio" name="dpre" value="{value}"'
+        f"{' checked' if checked else ''}>{label}</label>"
+        for value, label, checked in presets
+    )
+    return f"""\
+<div class="fbar">
+  <details class="facet">
+    <summary>type<span id="tsum"></span></summary>
+    <div class="fopts" id="topts">{_facet_options(type_counts)}</div>
+  </details>
+  <details class="facet">
+    <summary>status<span id="ssum"></span></summary>
+    <div class="fopts" id="sopts">{_facet_options(sorted(status_totals.items()))}</div>
+  </details>
+  <details class="facet">
+    <summary>updated<span id="dsum"></span></summary>
+    <div class="fopts">{preset_rows}<div class="drange">
+      <label>from <input type="date" id="dfrom"></label>
+      <label>to <input type="date" id="dto"></label>
+    </div></div>
+  </details>
+  <button id="fclear" hidden>clear filters</button>
+</div>"""
+
+
+def _facet_options(counts: list[tuple[str, int]]) -> str:
+    return "".join(
+        f'<label data-fv="{html.escape(value)}">'
+        f'<input type="checkbox" value="{html.escape(value)}">{html.escape(value)}'
+        f'<span class="n">{count}</span></label>'
+        for value, count in counts
+    )
+
+
+#: How many documents the "recently updated" strip shows. Below roughly twice
+#: this, the strip would just repeat the listing underneath it.
+_RECENT_COUNT = 5
+
+
+def _render_recent(site: Site) -> str:
+    """The freshness strip — what changed, before the taxonomy.
+
+    Skipped for a small corpus, where the full listing *is* the recent list
+    and the strip would duplicate most of it. Items are not filterable
+    (no ``data-hay``): while a query is active the script hides the whole
+    strip, because every match already appears in its type section.
+    """
+    if len(site.documents) <= _RECENT_COUNT * 2:
+        return ""
+    recent = sorted(
+        sorted(site.documents, key=lambda d: d.id),
+        key=lambda d: d.updated,
+        reverse=True,
+    )[:_RECENT_COUNT]
+    items = "\n".join(_render_item(document, filterable=False) for document in recent)
+    return f"""\
+<section id="recent">
+<h2 class="section">recently updated</h2>
+<ul class="docs">
+{items}
+</ul>
+</section>"""
 
 
 def _render_group(type_name: str, documents: Iterable[SiteDocument]) -> str:
@@ -206,9 +476,11 @@ def _render_group(type_name: str, documents: Iterable[SiteDocument]) -> str:
 </section>"""
 
 
-def _render_item(document: SiteDocument) -> str:
+def _render_item(document: SiteDocument, *, filterable: bool = True) -> str:
     # The haystack carries every field the filter searches. Built here rather
-    # than in JS so the page filters with the markup alone, no fetch.
+    # than in JS so the page filters with the markup alone, no fetch. The
+    # recent strip opts out: its rows mirror ones the type sections already
+    # carry, and matching both would double-count every hit.
     haystack = " ".join(
         [
             document.id,
@@ -220,9 +492,17 @@ def _render_item(document: SiteDocument) -> str:
             document.owner,
         ]
     ).lower()
+    hay = (
+        f' data-hay="{html.escape(haystack)}"'
+        f' data-type="{html.escape(document.type)}"'
+        f' data-status="{html.escape(document.status)}"'
+        f' data-updated="{html.escape(document.updated)}"'
+        if filterable
+        else ""
+    )
     owner = f" · {html.escape(document.owner)}" if document.owner else ""
     return f"""\
-<li data-hay="{html.escape(haystack)}">
+<li{hay}>
   <div>
     <a class="t" href="{page_name(document.id)}">{html.escape(document.title)}</a>
     <p class="d">{html.escape(document.description)}</p>
@@ -245,7 +525,8 @@ def _render_document(document: SiteDocument, *, title: str, version: str) -> str
         dates += f" · owner {html.escape(document.owner)}"
 
     body = f"""\
-<p class="sub"><a href="index.html">← all documents</a></p>
+<p class="sub"><a href="index.html">← all documents</a> · \
+<a href="graph.html#{html.escape(document.id)}">view in graph</a></p>
 <header class="top">
   <h1>{html.escape(document.title)}</h1>
   <p class="sub">{html.escape(document.id)} · {dates}</p>
@@ -467,7 +748,7 @@ def _page(title: str, body: str, version: str) -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{html.escape(title)}</title>
-{_FAVICON}
+{FAVICON}
 <style>{_STYLES}</style>
 </head><body><div class="wrap">
 {body}

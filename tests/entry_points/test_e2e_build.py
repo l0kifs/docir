@@ -53,14 +53,24 @@ def _build(tmp_path, *extra: str):
     return runner.invoke(app, ["--no-daemon", "build", "--out", str(tmp_path / "site"), *extra])
 
 
-def test_it_builds_a_page_per_document_plus_an_index(store, tmp_path) -> None:
+def test_it_builds_a_page_per_document_plus_index_and_graph(store, tmp_path) -> None:
     result = _build(tmp_path)
     assert result.exit_code == 0, result.output
     report = json.loads(result.stdout)
     assert report["documents"] == 2
     site = tmp_path / "site"
     assert (site / "index.html").exists()
-    assert len(list(site.glob("*.html"))) == 3
+    assert (site / "graph.html").exists()
+    assert len(list(site.glob("*.html"))) == 4
+
+
+def test_the_graph_page_carries_the_real_corpus(store, tmp_path) -> None:
+    """The graph embeds its data at build time; a page with an empty payload
+    renders a plausible blank map, which looks exactly like success."""
+    _build(tmp_path)
+    graph = (tmp_path / "site" / "graph.html").read_text(encoding="utf-8")
+    assert '"t":"Old way"' in graph
+    assert '"t":"A problem"' in graph
 
 
 def test_bodies_reach_the_pages(store, tmp_path) -> None:

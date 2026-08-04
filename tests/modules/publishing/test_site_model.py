@@ -7,7 +7,7 @@ not match a rendered page".
 
 from __future__ import annotations
 
-from docir.modules.publishing.api import build_site
+from docir.modules.publishing.api import build_site, graph_payload
 
 _A = {
     "id": "adr-0001",
@@ -106,6 +106,47 @@ class TestOrdering:
         ids = [d.id for d in site.documents]
         assert sorted(ids) == ["adr-0001", "adr-0002", "arch-0001"]
         assert sum(len(docs) for _, docs in site.groups) == 3
+
+
+class TestGraphPayload:
+    """The graph as data — what the graph page embeds."""
+
+    def test_nodes_carry_the_map_fields(self) -> None:
+        payload = graph_payload(build_site([_C]))
+        (node,) = payload["nodes"]
+        assert node == {
+            "id": "arch-0001",
+            "t": "Architecture",
+            "ty": "architecture",
+            "st": "active",
+            "d": "How it fits together.",
+            "tg": ["core"],
+            "deg": 0,
+            "up": "2026-03-01",
+            "ar": False,
+        }
+
+    def test_degree_counts_both_directions(self) -> None:
+        """Visual weight is how connected a document is, not how many edges
+        it happens to declare itself — the hub everyone links *to* declares
+        none of its own edges."""
+        site = build_site([_A, _B])
+        degrees = {n["id"]: n["deg"] for n in graph_payload(site)["nodes"]}
+        assert degrees == {"adr-0001": 1, "adr-0002": 1}
+
+    def test_edges_are_typed_and_stored_once(self) -> None:
+        payload = graph_payload(build_site([_A, _B]))
+        assert payload["edges"] == [{"s": "adr-0002", "t": "adr-0001", "k": "supersedes"}]
+
+    def test_a_dangling_edge_is_excluded_and_not_counted(self) -> None:
+        """The map cannot draw an arrow to a node that is not there, and the
+        document pages already surface the broken reference. Left in, the
+        page's edge loop would skip it anyway — but its degree contribution
+        would inflate the node it hangs off."""
+        orphan = dict(_C, related=[{"target": "adr-9999", "kind": "relates_to"}])
+        payload = graph_payload(build_site([orphan]))
+        assert payload["edges"] == []
+        assert payload["nodes"][0]["deg"] == 0
 
 
 class TestFieldMapping:

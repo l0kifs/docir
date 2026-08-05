@@ -229,7 +229,13 @@ depends_on = []
 
 [[modules]]
 path = "docir.modules.publishing.infra"
-depends_on = ["docir.modules.publishing.domain"]
+# `platform.errors` is the shared error taxonomy, a pure primitive — the same
+# edge `documents.infra` declares, in the sanctioned direction
+# (modules -> platform). `infra/branding.py` reads a publisher-supplied logo
+# and has to reject a missing file or an unsupported format with a typed
+# error, so the CLI exits with the right code; raising a bare exception here
+# and translating it one layer up would be the taxonomy with extra steps.
+depends_on = ["docir.modules.publishing.domain", "docir.platform.errors"]
 
 [[modules]]
 path = "docir.modules.publishing.application"

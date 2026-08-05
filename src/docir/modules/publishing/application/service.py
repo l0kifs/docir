@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from docir.modules.publishing.domain.site import build_site
+from docir.modules.publishing.infra.branding import resolve_branding
 from docir.modules.publishing.infra.rendering import render_search_index, render_site
 from docir.platform.errors import DocirError
 
@@ -23,6 +24,10 @@ class PublishRequest:
     documents: Sequence[Mapping[str, object]]
     title: str = "Documentation"
     version: str = ""
+    #: The publisher's own mark for the top-left corner. ``None`` publishes
+    #: docir's. A site carrying someone else's logo is not their
+    #: documentation, so this is a build input rather than a constant.
+    logo: Path | None = None
     #: Overwrite a directory that is not a docir site. Off by default: `--out`
     #: is a path a person types, and a typo pointing at `src/` should not be
     #: answered by writing HTML into it.
@@ -54,14 +59,21 @@ class SiteBuilder:
         """
         out = Path(request.out)
         self._check_target(out, force=request.force)
+        # Before the guard clears the directory: an unreadable logo should
+        # fail the build, not empty the output and then fail it.
+        branding = resolve_branding(request.logo)
 
         site = build_site(request.documents)
-        pages = render_site(site, title=request.title, version=request.version)
+        pages = render_site(site, title=request.title, version=request.version, branding=branding)
         pages["search-index.json"] = render_search_index(site)
 
         out.mkdir(parents=True, exist_ok=True)
-        for existing in sorted(out.glob("*.html")):
-            existing.unlink()
+        # Both generated extensions are swept, for the same reason: a page and
+        # its markdown source are equally derived, and one left behind after
+        # its document is deleted is an orphan nobody knows is stale.
+        for pattern in ("*.html", "*.md"):
+            for existing in sorted(out.glob(pattern)):
+                existing.unlink()
         for name, content in pages.items():
             (out / name).write_text(content, encoding="utf-8")
         (out / MARKER_FILE).write_text("", encoding="utf-8")

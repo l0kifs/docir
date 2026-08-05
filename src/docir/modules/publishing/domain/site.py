@@ -25,6 +25,25 @@ from dataclasses import dataclass, field
 #: page shows, not about what retrieval pulls in.
 SUCCESSOR_KINDS = frozenset({"supersedes", "contradicts"})
 
+#: How an *incoming* edge of each kind reads from the target's side. A panel
+#: that says "refines" on both directions tells the reader the opposite of the
+#: truth for half its rows, so an inbound list is phrased from the page's own
+#: point of view. An unknown kind keeps its own name behind the arrow rather
+#: than guessing an English passive.
+#:
+#: It lives in the domain because both renderers need it — the document page's
+#: relation panel and the graph card's — and they must not disagree about what
+#: an edge means. `infra/graph.py` cannot import `infra/rendering.py` (the
+#: dependency runs the other way), so a copy in each was the alternative.
+INBOUND_KIND = {
+    "relates_to": "relates to",
+    "supersedes": "superseded by",
+    "refines": "refined by",
+    "implements": "implemented by",
+    "depends_on": "depended on by",
+    "contradicts": "contradicted by",
+}
+
 
 @dataclass(frozen=True, slots=True)
 class Edge:

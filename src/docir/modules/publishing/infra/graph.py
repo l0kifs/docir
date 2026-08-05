@@ -26,50 +26,110 @@ from __future__ import annotations
 import html
 import json
 
-from docir.modules.publishing.domain.site import Site, graph_payload
-from docir.modules.publishing.infra.theme import CSS_TOKENS, FAVICON
+from docir.modules.publishing.domain.site import INBOUND_KIND, Site, graph_payload
+from docir.modules.publishing.infra.branding import DOCIR_BRANDING, Branding, brand_html
+from docir.modules.publishing.infra.theme import CSS_TOKENS, THEME_SCRIPT, THEME_TOGGLE_JS
 
-#: Colour per document type — the categorical dimension. Types outside this
-#: map get spare hues, assigned deterministically in the script; the palette
-#: stays curated because these hues are tuned to hold up in both themes.
+#: Colour per document type — the categorical dimension. The values are the
+#: site's ``--t-*`` theme tokens (``theme.CSS_TOKENS``), not hex: the tokens
+#: carry separate light/dark steps validated for colour-vision-deficiency
+#: separation against each theme's surface (the old single-hex set measured
+#: ΔE 2.4 deutan between runbook and reference — indistinguishable, on the
+#: one page where colour is the at-rest type encoding). ``var()`` resolves in
+#: SVG presentation attributes and inline styles alike, so every consumer —
+#: nodes, rings, legend chips, card dots — follows the theme for free. Types
+#: outside this map still get spare hex hues, assigned deterministically in
+#: the script; those are theme-static, which is the accepted cost of an
+#: unknown type.
 _PALETTE = {
-    "decision": "#2f6feb",
-    "issue": "#d1742f",
-    "architecture": "#7048c4",
-    "reference": "#2a8c72",
-    "runbook": "#b3406e",
-    "release_note": "#5c6470",
+    "decision": "var(--t-decision)",
+    "issue": "var(--t-issue)",
+    "architecture": "var(--t-architecture)",
+    "reference": "var(--t-reference)",
+    "runbook": "var(--t-runbook)",
+    "release_note": "var(--t-release_note)",
 }
 
 _GRAPH_CSS = """\
 /* Edges need their own tone. `--line` is a 1px divider colour: on the dark
    background it made most edges effectively invisible until something
-   highlighted them. */
+   highlighted them. Declared in all three scopes the site's tokens use, or a
+   reader who *chooses* dark on a light OS gets a dark canvas drawn with the
+   light theme's edges. */
 :root{--edge:#c9cdd4;--edge-hi:#666}
-@media(prefers-color-scheme:dark){:root{--edge:#3a4250;--edge-hi:#9aa0aa}}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
+--edge:#3a4250;--edge-hi:#9aa0aa}}
+:root[data-theme="dark"]{--edge:#3a4250;--edge-hi:#9aa0aa}
 *{box-sizing:border-box}
 /* [hidden] must survive author display rules — see the site stylesheet. */
 [hidden]{display:none!important}
 html,body{height:100%}
+/* The same type stack as the pages. The map is an application view and its
+   own labels are sized in px against the SVG, but every piece of chrome on it
+   is a site component and must measure the same as its twin on a page. */
 body{margin:0;background:var(--bg);color:var(--fg);overflow:hidden;
-font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;
+-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
 a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.hd{display:flex;align-items:center;gap:.75rem;padding:.6rem 1rem;
-border-bottom:1px solid var(--line);flex-wrap:wrap}
-.back{font-weight:600}
-.hd .tag{font-size:.72rem;color:var(--muted);border:1px solid var(--line);
-border-radius:99px;padding:.05rem .5rem}
-.srch{padding:.4rem .7rem;border:1px solid var(--line);border-radius:.45rem;
-background:var(--bg);color:var(--fg);font-size:.85rem;min-width:13rem}
-.chip{display:inline-flex;align-items:center;gap:.35rem;padding:.15rem .55rem;
-border-radius:99px;border:1px solid var(--line);font-size:.75rem;color:var(--muted);
-white-space:nowrap;background:var(--bg)}
-.chip[aria-pressed="true"]{border-color:currentColor;background:var(--panel)}
-.dot{width:.55rem;height:.55rem;border-radius:99px;flex:none}
+/* ---- the top bar: the site's, to the pixel ----
+   It used to be its own thing — padding-derived height, wrapping onto two
+   rows, no theme control — so the one page reached from a call-to-action on
+   every other page was the one that looked like a different tool. Same
+   height, same padding, same gap, same order: identity left, controls right. */
+.topbar{display:flex;align-items:center;gap:.9rem;height:56px;padding:0 1.25rem;
+background:var(--bg);border-bottom:1px solid var(--line);flex:none}
+.brand{display:flex;align-items:center;gap:.55rem;font-weight:600;color:var(--fg);
+white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand:hover{text-decoration:none}
+.brand .sub{color:var(--muted);font-weight:400}
+/* Sized, not painted — the art is supplied (see infra/branding.py). `color`
+   is pinned because the mark lives inside a link and docir's draws its
+   bracket in `currentColor`: inherited, the bracket came out accent-blue
+   instead of the kit's ink (paper on dark). */
+.brandmark{height:22px;width:auto;max-width:10rem;flex:none;display:block;
+object-fit:contain;color:var(--fg)}
+/* Where the page listing marks the open document in the sidebar, the map has
+   no sidebar to mark — this says which page you are on. Same treatment as a
+   document's type chip. */
+.here{border:1px solid var(--line);border-radius:999px;color:var(--muted);
+font-size:.68rem;font-weight:500;text-transform:uppercase;letter-spacing:.05em;
+padding:.1rem .6rem;white-space:nowrap}
+/* The pages' search *button* and this filter *input* are different mechanisms
+   — a palette over titles, a live filter over nodes — and the same object to
+   the eye: same box, same corner, same place on the bar. */
+.srch{margin-left:auto;border:1px solid var(--line);border-radius:8px;
+background:var(--chip);color:var(--fg);font:inherit;font-size:.88rem;
+padding:.38rem .75rem;min-width:15rem}
+.srch::placeholder{color:var(--muted)}
+.srch:hover{border-color:var(--faint)}
+.srch:focus{background:var(--bg)}
+.tgl{border:1px solid var(--line);border-radius:8px;background:var(--bg);
+color:var(--muted);cursor:pointer;font:inherit;font-size:.84rem;padding:.34rem .7rem;
+white-space:nowrap}
+.tgl:hover{background:var(--chip)}
+.tgl[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);
+background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.count{color:var(--faint);font-size:.84rem;font-variant-numeric:tabular-nums;
+white-space:nowrap}
+.toplnk{color:var(--muted);font-size:.9rem;white-space:nowrap;border:0;background:none;
+cursor:pointer;font-family:inherit;padding:0}
+.toplnk:hover{color:var(--fg);text-decoration:none}
+.iconbtn{width:34px;height:34px;border:1px solid var(--line);border-radius:8px;
+display:inline-flex;align-items:center;justify-content:center;flex:none;font-size:.95rem}
+.iconbtn:hover{background:var(--chip)}
+.chip{display:inline-flex;align-items:center;gap:.35rem;padding:.1rem .6rem;
+border-radius:999px;border:1px solid var(--line);font-size:.76rem;color:var(--muted);
+white-space:nowrap;background:var(--bg);line-height:1.5}
+.chip[aria-pressed="true"]{border-color:currentColor;background:var(--chip)}
+/* A tag states a fact and a legend chip is a switch; they were the same pill. */
+.tag{display:inline-flex;align-items:center;border-radius:999px;padding:.1rem .6rem;
+font-size:.76rem;font-weight:400;line-height:1.5;background:var(--chip);color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none}
 .muted{color:var(--muted)}
-.k{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+.k{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;
+font-weight:600}
 .wrap{display:flex;flex-direction:column;height:100%}
 .main{flex:1;position:relative;overflow:hidden}
 svg{width:100%;height:100%;display:block;touch-action:none}
@@ -102,37 +162,63 @@ paint-order:stroke;stroke:var(--bg);stroke-width:3px;stroke-linejoin:round}
    chips forced the header onto two or three rows, while the map's top-left
    corner is empty at every zoom the layout produces. Collapsible for small
    screens, where the corner is not free. */
+/* Floating panels take the pages' own popover treatment — the 10px corner and
+   the themed `--shadow`. They carried a hardcoded light-mode shadow, which is
+   no shadow at all against the dark canvas they float over. */
 .legendbox{position:absolute;left:1rem;top:1rem;background:var(--panel);
-border:1px solid var(--line);border-radius:.6rem;box-shadow:0 1px 3px rgba(0,0,0,.12);
-padding:.45rem .6rem;max-height:calc(100% - 2rem);overflow:auto}
-.lgHead{display:block;font-size:.7rem;color:var(--muted);text-transform:uppercase;
-letter-spacing:.07em;padding:.1rem .15rem}
+border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);
+padding:.55rem .65rem;max-height:calc(100% - 2rem);overflow:auto;font-size:.85rem}
+.lgHead{display:block;font-size:.72rem;color:var(--muted);text-transform:uppercase;
+letter-spacing:.07em;font-weight:600;padding:.1rem .15rem}
 .lgHead::after{content:" \\25be"}
 .legendbox.closed .lgHead::after{content:" \\25b8"}
 .legendbox.closed .lgBody{display:none}
-.lgGroup{display:flex;flex-direction:column;gap:.3rem;align-items:flex-start;margin:.3rem 0}
-.lgSplit{border:0;border-top:1px solid var(--line);margin:.4rem 0}
+.lgGroup{display:flex;flex-direction:column;gap:.3rem;align-items:flex-start;margin:.35rem 0}
+.lgSplit{border:0;border-top:1px solid var(--line-soft);margin:.45rem 0}
+/* The card is the document rail, floated: the same label-over-content rhythm,
+   the same muted relation links grouped by kind, the same tag chips. */
 .card{position:absolute;right:1rem;top:1rem;width:20rem;max-width:calc(100% - 2rem);
-background:var(--panel);border:1px solid var(--line);border-radius:.6rem;
-box-shadow:0 1px 3px rgba(0,0,0,.12);padding:.9rem 1rem;
-max-height:calc(100% - 2rem);overflow:auto}
-.card h2{margin:.15rem 0 .3rem;font-size:.95rem;line-height:1.35}
+background:var(--panel);border:1px solid var(--line);border-radius:10px;
+box-shadow:var(--shadow);padding:.9rem 1rem;
+max-height:calc(100% - 2rem);overflow:auto;font-size:.85rem}
+.card h2{margin:.15rem 0 .3rem;font-size:1rem;font-weight:600;line-height:1.35}
 /* The link lists drop the browser bullet for a type-coloured dot, so the card
    speaks the same colour vocabulary as the map it describes. */
-.card ul{margin:.3rem 0 0;padding-left:.1rem;list-style:none}
-.card li{margin:.15rem 0;font-size:.82rem}
+.card ul{margin:.15rem 0 0;padding:0;list-style:none}
+.card li{margin:.3rem 0;font-size:.82rem;line-height:1.45}
+.card li a{color:var(--muted)}
+.card li a:hover{color:var(--accent)}
+.card .kgrp{margin:.5rem 0 0}
 .card .dot{display:inline-block;margin-right:.4rem;vertical-align:-.05em}
-.card .open{display:inline-block;margin:.4rem 0 0;font-weight:600;font-size:.85rem}
+.card .tags{display:flex;gap:.35rem;flex-wrap:wrap;margin:.45rem 0 0}
+.card .open{display:inline-block;margin:.6rem 0 0;font-weight:600;font-size:.85rem}
 .card .close{position:absolute;top:.5rem;right:.6rem;color:var(--muted);font-size:1.1rem}
-.hint{position:absolute;left:1rem;bottom:1rem;font-size:.75rem;color:var(--muted);
-background:var(--bg);border:1px solid var(--line);border-radius:.4rem;padding:.3rem .6rem}
-.hint kbd{border:1px solid var(--line);border-radius:.25rem;padding:0 .25rem;
-font:inherit;font-size:.7rem;margin:0 .05rem}
+.card .desc{color:var(--muted);font-size:.83rem;margin:.2rem 0 0;line-height:1.5}
+.hint{position:absolute;left:1rem;bottom:1rem;font-size:.78rem;color:var(--muted);
+background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:.34rem .7rem;
+box-shadow:var(--shadow)}
+.hint kbd{border:1px solid var(--line);border-radius:4px;padding:0 .3rem;
+font:inherit;font-size:.7rem;background:var(--chip);margin:0 .05rem}
+/* The pages' own narrow breakpoint. Past it the bar keeps its height and drops
+   what it can spare — the page marker, the wordmark tail, the way out in
+   words — instead of wrapping onto a second row and stealing canvas. */
+@media(max-width:920px){
+/* The filter yields the space, and the wordmark keeps a floor. `.brand` sets
+   `overflow:hidden` for its ellipsis, which makes it a scroll container —
+   whose `min-width:auto` resolves to 0 — so with six controls on the bar it
+   shrank past its own text and the site was left identified by a bare 22px
+   mark. The count is the one thing here that is only nice to know. */
+.srch{min-width:0;flex:1 1 5rem}
+.brand{min-width:4.5rem}
+.here,.count,.toplnk:not(.iconbtn){display:none}
+.brand .sub{display:none}}
 @media(max-width:44rem){.card{position:static;width:auto;margin:.75rem;max-height:16rem}}
 """
 
 _GRAPH_JS = """\
-const DATA=__DATA__, COLOR=__COLOR__;
+const DATA=__DATA__, COLOR=__COLOR__, INBOUND=__INBOUND__;
+
+__THEME_TOGGLE__
 
 // Relation kinds get their own visual vocabulary: a node's colour says what it
 // is, an edge's colour says what the link means. `relates_to` stays neutral
@@ -448,21 +534,28 @@ function show(id){
   selected=id;
   setHash(id);
   const out=DATA.edges.filter(e=>e.s===id), inc=DATA.edges.filter(e=>e.t===id);
-  const li=(e,dir)=>{const m=byId[dir==='out'?e.t:e.s];
-    return `<li><span class="dot" style="background:${COLOR[m.ty]||'#888'}"></span>`+
-      `<a href="#" data-go="${m.id}">${esc(m.t)}</a> `+
-      `<span class="k">${e.k}</span></li>`;};
+  // Grouped by kind with the direction in the label, exactly as a document
+  // page's relation panel does it — "refines" over an inbound edge states the
+  // opposite of the truth, and two "links to / linked from" buckets made the
+  // reader work out which of six kinds each row was. INBOUND phrasing comes
+  // from the domain, so the card and the rail cannot disagree.
+  const groups=new Map();
+  const put=(label,m)=>{ if(!groups.has(label))groups.set(label,[]); groups.get(label).push(m); };
+  for(const e of out) put(e.k.replace(/_/g,' ')+' \u2192', byId[e.t]);
+  for(const e of inc) put('\u2190 '+(INBOUND[e.k]||e.k.replace(/_/g,' ')), byId[e.s]);
+  const rel=[...groups].map(([label,ms])=>
+    `<div class="kgrp"><span class="k">${esc(label)}</span><ul>`+
+    ms.map(m=>`<li><span class="dot" style="background:${COLOR[m.ty]||'#888'}"></span>`+
+      `<a href="#" data-go="${m.id}">${esc(m.t)}</a></li>`).join('')+'</ul></div>').join('');
   card.hidden=false;
   card.innerHTML=`<button class="close" aria-label="Close">&#215;</button>
     <div class="k">${n.ty} &#183; ${n.st} &#183; ${n.up}</div><h2>${esc(n.t)}</h2>
-    <p class="muted" style="font-size:.83rem;margin:.2rem 0 .5rem">${esc(n.d)}</p>
-    <div style="display:flex;gap:.3rem;flex-wrap:wrap">`+
-    n.tg.map(t=>`<span class="chip">#${esc(t)}</span>`).join('')+`</div>
+    <p class="desc">${esc(n.d)}</p>
+    <div class="tags">`+
+    n.tg.map(t=>`<span class="tag">#${esc(t)}</span>`).join('')+`</div>
     <a class="open" href="${n.id}.html">open document &#8594;</a>`+
-    (out.length?`<div class="k" style="margin-top:.7rem">links to ${out.length}</div>`+
-      `<ul>${out.map(e=>li(e,'out')).join('')}</ul>`:'')+
-    (inc.length?`<div class="k" style="margin-top:.7rem">linked from ${inc.length}</div>`+
-      `<ul>${inc.map(e=>li(e,'in')).join('')}</ul>`:'');
+    (rel?`<div class="k" style="margin-top:.9rem">relations `+
+      `${out.length+inc.length}</div>${rel}`:'');
   card.querySelector('.close').onclick=()=>{
     card.hidden=true;selected=null;setHash(null);highlight(null)};
   for(const a of card.querySelectorAll('[data-go]'))
@@ -677,16 +770,20 @@ _SHELL = """<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Graph &#8212; __TITLE__</title>
 __FAVICON__
+<script>__THEME__</script>
 <style>__TOKENS____CSS__</style>
 </head><body>
 <div class="wrap">
-  <header class="hd">
-    <a class="back" href="index.html">&#8592; __TITLE__</a>
-    <span class="tag">graph</span>
-    <input class="srch" id="q" type="search" placeholder="Search titles, tags, ids&#8230;"
-           aria-label="Search documents">
-    <button class="chip" id="closed" aria-pressed="false">show closed</button>
-    <span class="muted" id="shown" style="font-size:.78rem"></span>
+  <header class="topbar">
+    <a class="brand" href="index.html">__MARK__ __BRAND__</a>
+    <span class="here">graph</span>
+    <input class="srch" id="q" type="search" placeholder="Filter the map&#8230; titles, tags, ids"
+           aria-label="Filter documents">
+    <button class="tgl" id="closed" aria-pressed="false">show closed</button>
+    <span class="count" id="shown"></span>
+    <a class="toplnk" href="index.html">Documents</a>
+    <button class="toplnk iconbtn" id="themeBtn" title="theme"
+            aria-label="toggle theme">&#9680;</button>
   </header>
   <div class="main">
     <!-- role=group, not img: img makes the whole subtree presentational, which
@@ -711,14 +808,29 @@ __FAVICON__
 """
 
 
-def render_graph_page(site: Site, *, title: str) -> str:
-    """Render the constellation page for a resolved site."""
+def render_graph_page(site: Site, *, title: str, branding: Branding = DOCIR_BRANDING) -> str:
+    """Render the constellation page for a resolved site.
+
+    The mark rides in the back-link so the map reads as part of the same
+    site as the pages it came from — it is the one page with none of the
+    site shell around it, and an unbranded corner made it look like a
+    different tool.
+    """
     data = json.dumps(graph_payload(site), separators=(",", ":"), ensure_ascii=False)
     color = json.dumps(_PALETTE, separators=(",", ":"))
-    script = _GRAPH_JS.replace("__DATA__", _script_safe(data)).replace("__COLOR__", color)
+    inbound = json.dumps(INBOUND_KIND, separators=(",", ":"))
+    script = (
+        _GRAPH_JS.replace("__DATA__", _script_safe(data))
+        .replace("__COLOR__", color)
+        .replace("__INBOUND__", inbound)
+        .replace("__THEME_TOGGLE__", THEME_TOGGLE_JS)
+    )
     return (
         _SHELL.replace("__TITLE__", html.escape(title))
-        .replace("__FAVICON__", FAVICON)
+        .replace("__BRAND__", brand_html(title))
+        .replace("__MARK__", branding.mark)
+        .replace("__FAVICON__", branding.favicon)
+        .replace("__THEME__", THEME_SCRIPT)
         .replace("__TOKENS__", CSS_TOKENS)
         .replace("__CSS__", _GRAPH_CSS)
         .replace("__JS__", script)

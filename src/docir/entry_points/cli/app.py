@@ -189,6 +189,10 @@ def build(
         typer.Option("--out", help="Directory to write the site into (regenerated)."),
     ],
     title: Annotated[str, typer.Option("--title", help="Site heading.")] = "Documentation",
+    logo: Annotated[
+        Path | None,
+        typer.Option("--logo", help="Image for the mark and favicon (default: docir's)."),
+    ] = None,
     include_archived: Annotated[
         bool, typer.Option("--include-archived", help="Also publish archived documents.")
     ] = False,
@@ -212,6 +216,11 @@ def build(
     Inactive documents (a superseded decision, a resolved issue) are published:
     the point of a browsable corpus is that a reader can follow a decision to the
     one that replaced it. Archived documents are not, unless you ask.
+
+    The top-left mark and the favicon are docir's own unless you pass --logo
+    (svg/png/jpg/webp/gif), which sets both — one flag brands the whole site. It
+    is inlined into every page so the site stays self-contained, which is why a
+    logo has a size limit: export it at header size.
     """
     _warn_on_global_fallback()
     state = get_state()
@@ -238,6 +247,7 @@ def build(
                 documents=documents,
                 title=title,
                 version=__version__,
+                logo=logo,
                 force=force,
             )
         )

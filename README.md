@@ -277,7 +277,10 @@ decision usually are not at a terminal, and a decision only an agent can read is
 a hard sell to them.
 
 ```bash
-docir build --out site/        # one page per document, plus an index
+docir build --out site/                             # one page per document, plus an index
+docir build --out site/ --title "Acme — decisions"  # names the heading, the tab and the wordmark
+docir build --out site/ --logo brand/mark.svg       # your logo in the corner and the tab
+docir build --out site/ --include-archived          # publish archived documents too
 ```
 
 The result is self-contained — inline CSS, no external requests — so it opens
@@ -290,7 +293,9 @@ gitignored, so a fresh clone has none and `build` would otherwise publish an emp
 list (it warns, and the workflow gates on the page count). It shows what only
 docir knows: the typed relation graph **in both directions** (a superseded
 decision says so, in a banner, linking the one that replaced it), the staleness
-flag, tags, owner and dates. `--out` is regenerated on every build, so a document
+flag, tags, owner and dates. `--title` is what the site calls itself — the
+heading, the browser tab and the name beside the mark; without it every page
+reads "Documentation". `--out` is regenerated on every build, so a document
 deleted from the store cannot survive as an orphaned page; a directory docir did
 not build is refused unless you pass `--force`.
 

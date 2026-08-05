@@ -47,7 +47,22 @@ def _pages() -> dict[str, str]:
 class TestStructure:
     def test_one_page_per_document_plus_index_and_graph(self) -> None:
         pages = _pages()
-        assert set(pages) == {"index.html", "graph.html", "adr-0001.html", "adr-0002.html"}
+        assert set(pages) == {
+            "index.html",
+            "graph.html",
+            "adr-0001.html",
+            "adr-0002.html",
+            "adr-0001.md",
+            "adr-0002.md",
+        }
+
+    def test_the_markdown_source_is_published_beside_each_page(self) -> None:
+        """ "View as Markdown" has to open something. The body, verbatim —
+        a reader who wants to quote or diff the document should not have to
+        install docir to get at it."""
+        pages = _pages()
+        assert pages["adr-0001.md"] == _DOCS[0]["body"]
+        assert 'href="adr-0001.md"' in pages["adr-0001.html"]
 
     def test_the_index_links_every_document(self) -> None:
         index = _pages()["index.html"]
@@ -61,12 +76,17 @@ class TestStructure:
         assert "&#35;&#35; Context" not in page
 
     def test_both_edge_directions_are_shown(self) -> None:
-        """No other ADR site renders the inbound half."""
+        """No other ADR site renders the inbound half.
+
+        One panel carries both directions; the arrow and the phrasing say
+        which is which, because "supersedes" over an inbound edge states the
+        opposite of the truth.
+        """
         old = _pages()["adr-0001.html"]
-        assert "Linked from" in old
+        assert "\u2190 superseded by" in old, "the inbound edge is not phrased from this page"
         assert 'href="adr-0002.html"' in old
         new = _pages()["adr-0002.html"]
-        assert "Links to" in new
+        assert "supersedes \u2192" in new
         assert 'href="adr-0001.html"' in new
 
     def test_a_superseded_document_says_so_before_its_body(self) -> None:
@@ -113,8 +133,8 @@ class TestGraphPage:
         """One site, one chrome: the map must not ship a second palette for
         the page furniture."""
         graph = _pages()["graph.html"]
-        assert "--accent:#0b5fff" in graph, "the site's light accent is absent"
-        assert "--accent:#7aa7ff" in graph, "the site's dark accent is absent"
+        assert "--accent:#0969da" in graph, "the site's light accent is absent"
+        assert "--accent:#58a6ff" in graph, "the site's dark accent is absent"
 
     def test_an_empty_corpus_still_renders_a_page(self) -> None:
         """`build` on an empty store writes a site; the graph page must not
@@ -145,6 +165,58 @@ class TestGraphPage:
     def test_the_graph_links_back_to_the_index(self) -> None:
         assert 'href="index.html"' in _pages()["graph.html"]
 
+    def test_the_graph_wears_the_site_top_bar(self) -> None:
+        """It had its own header — padding-derived height, wrapping onto two
+        rows — so the one page every other page advertises was the one that
+        looked like a different tool. Same component, same measurements."""
+        pages = _pages()
+        for name in ("index.html", "graph.html"):
+            bar = pages[name][pages[name].index(".topbar{") :]
+            rule = bar[: bar.index("}")]
+            assert "height:56px" in rule and "padding:0 1.25rem" in rule, name
+            assert "gap:.9rem" in rule, name
+        assert '<header class="topbar">' in pages["graph.html"]
+        assert '<a class="brand" href="index.html">' in pages["graph.html"]
+
+    def test_the_brand_measures_the_same_on_every_page(self) -> None:
+        """The muted tail rendered at 14.4px on a page and 16px on the graph.
+
+        A bare `.sub{font-size:.9rem}` utility — left behind when the landing's
+        stats line was renamed — captured `.brand .sub`, which the graph's
+        stylesheet has no equivalent of. The tail is the wordmark's size,
+        lighter and muted; only the graph was showing it correctly.
+        """
+        for name, page in _pages().items():
+            if not page.lstrip().startswith("<!doctype"):
+                continue
+            assert ".brand .sub{color:var(--muted);font-weight:400}" in page, name
+            assert "\n.sub{" not in page, f"{name} has an unscoped .sub rule again"
+
+    def test_the_graph_carries_the_theme_toggle(self) -> None:
+        """The theme was changeable on every page except this one, while the
+        choice made elsewhere still applied here — a persisted setting with no
+        control in sight to undo it."""
+        graph = _pages()["graph.html"]
+        assert 'id="themeBtn"' in graph
+        assert "localStorage.setItem('docir-theme',v)" in graph
+
+    def test_the_graph_edge_tone_follows_a_chosen_theme(self) -> None:
+        """`--edge` keyed off `prefers-color-scheme` alone, so a reader who
+        picked dark on a light OS got a dark canvas drawn with light edges."""
+        assert ':root[data-theme="dark"]{--edge:' in _pages()["graph.html"]
+
+    def test_the_card_groups_relations_like_the_document_rail(self) -> None:
+        """Two buckets labelled "links to"/"linked from" made the reader work
+        out which of six kinds each row was. The direction rides on the kind,
+        and the phrasing is the domain's so the two panels cannot disagree."""
+        graph = _pages()["graph.html"]
+        assert '"supersedes":"superseded by"' in graph, "the shared vocabulary is not embedded"
+        assert "INBOUND[e.k]" in graph
+        # The emitted markup, not the prose around it: the comment explaining
+        # what was replaced names the old headings too.
+        assert ">links to ${" not in graph, "the undifferentiated buckets are back"
+        assert ">relations `" in graph, "the card lost its relation count"
+
 
 class TestLanding:
     """The index is the landing page: what a first visit needs, above the fold."""
@@ -153,8 +225,20 @@ class TestLanding:
         index = _pages()["index.html"]
         assert "2 documents · 1 type" in index
 
-    def test_the_graph_call_to_action_is_present(self) -> None:
-        assert 'class="cta" href="graph.html"' in _pages()["index.html"]
+    def test_the_stats_are_stated_once(self) -> None:
+        """Sub-line *and* tiles meant a large corpus announced its own size
+        twice, in two typefaces, directly above itself."""
+        many = [dict(_DOCS[0], id=f"adr-1{n:03d}", title=f"Doc {n}") for n in range(11)]
+        index = render_site(build_site(many), title="Docs", version="1")["index.html"]
+        assert 'class="tiles"' in index
+        assert "11 documents · 1 type" not in index
+
+    def test_the_graph_is_reachable_from_every_page(self) -> None:
+        """The landing-only call-to-action was the one exit a reader who
+        arrived on a document could not see; the top bar is on every page."""
+        pages = _pages()
+        for name in ("index.html", "adr-0001.html"):
+            assert '<a class="toplnk" href="graph.html">Graph</a>' in pages[name]
 
     def test_a_small_corpus_gets_no_recent_strip(self) -> None:
         """Five recent rows above a seven-row listing is the listing twice."""
@@ -181,14 +265,80 @@ class TestLanding:
     def test_facets_are_multi_select_checkboxes(self) -> None:
         index = _pages()["index.html"]
         assert '<input type="checkbox" value="decision">' in index
-        assert "selT.has(r.dataset.type)" in index, "type match must be set-based (OR)"
+        assert "setHit(state.type,r.dataset.type)" in index, "type match must be set-based (OR)"
 
-    def test_the_status_facet_narrows_to_the_selected_types(self) -> None:
-        """The script recomputes status availability from the type selection
-        and drops a selected status that becomes unavailable."""
+    def test_a_zero_count_option_dims_instead_of_vanishing(self) -> None:
+        """An option that disappears reads as a bug ("where did it go?"), and
+        a selection that stops matching keeps its chip as the visible cause of
+        an empty list — so options ghost at count zero and are never silently
+        dropped."""
         index = _pages()["index.html"]
-        assert "function refreshStatus()" in index
-        assert "selS.delete(v)" in index
+        assert "classList.toggle('ghost',ghost)" in index
+        assert ".disabled=ghost" in index
+
+    def test_applied_filters_render_as_removable_chips(self) -> None:
+        """Chips above the list are the canonical display of applied state —
+        a count-only summary forces reopening every facet to see what is on."""
+        index = _pages()["index.html"]
+        assert 'id="chipsBar"' in index
+        assert "removeChipAt" in index
+        assert 'data-chip="${i}"' in index
+
+    def test_typed_tokens_become_chips(self) -> None:
+        """The box accepts the tracker grammar (type:x, is:stale, -status:y);
+        only a value the corpus actually has converts — the rest stays free
+        text and searches as words."""
+        index = _pages()["index.html"]
+        assert "extractTokens" in index
+        assert "(type|status|owner|is|updated)" in index
+
+    def test_the_owner_facet_appears_only_when_documents_have_owners(self) -> None:
+        """The site receives no schema; an owner facet over a corpus with no
+        owners is an empty dropdown that looks broken."""
+        assert 'id="oopts"' not in _pages()["index.html"]
+        owned = render_site(
+            build_site([dict(_DOCS[0], owner="maintainer")]), title="Docs", version="1"
+        )["index.html"]
+        assert 'id="oopts"' in owned
+        assert 'data-owner="maintainer"' in owned
+
+    def test_the_stale_toggle_appears_only_when_something_is_stale(self) -> None:
+        index = _pages()["index.html"]
+        assert 'id="staleTgl"' in index
+        assert 'data-stale="1"' in index
+        fresh = render_site(build_site([dict(_DOCS[0])]), title="Docs", version="1")["index.html"]
+        assert 'id="staleTgl"' not in fresh
+
+    def test_the_stale_banner_links_to_the_filtered_state(self) -> None:
+        """The banner names a problem; the link is the queue that answers it."""
+        assert 'href="?is=stale"' in _pages()["index.html"]
+
+    def test_a_zero_result_list_offers_recovery(self) -> None:
+        """A dead-end "no results" is the documented failure mode; the way out
+        — remove the last step, or start over — is offered in place."""
+        index = _pages()["index.html"]
+        assert 'id="noHits"' in index
+        assert 'id="undoLast"' in index
+        assert 'id="clearAllBtn"' in index
+
+    def test_back_undoes_filter_steps(self) -> None:
+        """Users perceive each facet change as a view, so each one is a
+        pushState entry Back can undo — while typing only replaces."""
+        index = _pages()["index.html"]
+        assert "history.pushState" in index
+        assert "popstate" in index
+
+    def test_preset_views_render_only_at_browsing_scale(self) -> None:
+        """Shortcuts through a listing that fits on one screen are furniture;
+        past that, one click reaches the states readers actually revisit."""
+        assert 'id="views"' not in _pages()["index.html"]
+        many = [
+            dict(_DOCS[0], id=f"adr-1{n:03d}", title=f"Doc {n}", stale=n == 0) for n in range(11)
+        ]
+        index = render_site(build_site(many), title="Docs", version="1")["index.html"]
+        assert 'id="views"' in index
+        assert 'data-sig="is=stale"' in index
+        assert "open issues" not in index, "no issue type in this corpus"
 
     def test_the_date_facet_offers_presets_and_a_custom_range(self) -> None:
         index = _pages()["index.html"]
@@ -208,8 +358,8 @@ class TestLanding:
         index = _pages()["index.html"]
         assert "URLSearchParams" in index
         assert "history.replaceState" in index
-        assert "p0.get('updated')" in index
-        assert "p0.get('from')" in index
+        assert "p.get('updated')" in index
+        assert "p.get('from')" in index
 
     def test_a_garbage_date_in_the_url_is_dropped(self) -> None:
         """The from/to variables feed string comparisons directly, and
@@ -229,6 +379,176 @@ class TestLanding:
         recent = index[index.index('id="recent"') : index.index("</section>")]
         assert "data-hay" not in recent, "recent rows must not join the filter"
         assert "Doc 10" in recent, "not sorted by updated date"
+
+
+class TestShell:
+    """The persistent chrome: top bar, corpus sidebar, palette, theme, rail."""
+
+    def test_every_page_carries_the_corpus_sidebar(self) -> None:
+        """A document page used to have two exits; now it has the corpus.
+        The current document is marked, so the reader knows where they are."""
+        pages = _pages()
+        for name in ("index.html", "adr-0001.html", "adr-0002.html"):
+            assert 'class="sidebar"' in pages[name]
+            assert "Old way" in pages[name] and "New way" in pages[name]
+        assert 'class="on" data-doc' in pages["adr-0001.html"]
+
+    def test_the_index_carries_a_corpus_rail(self) -> None:
+        """The landing's rail: how healthy the corpus is, and what is in it.
+        A reader who never runs the CLI still sees what `check` reports."""
+        index = _pages()["index.html"]
+        assert "Corpus health" in index
+        assert "Dangling edges" in index
+        assert "Types" in index
+
+    def test_type_names_read_as_headings_not_keys(self) -> None:
+        """`release_note` is a schema key; a heading listing eighteen of them
+        is prose. The facet option keeps the raw value — it has to match the
+        `type:release_note` token the same box accepts.
+        """
+        index = render_site(
+            build_site([dict(_DOCS[0], id="rel-1", type="release_note")]),
+            title="Docs",
+            version="1",
+        )["index.html"]
+        assert "Release notes" in index
+        assert 'data-fv="release_note"' in index, "the facet value must stay the schema key"
+
+    def test_sections_and_nav_carry_the_type_colour(self) -> None:
+        """The dot is reinforcement; the name beside it is the encoding.
+
+        The token must be matched with its fallback, the form `_type_dot`
+        actually emits. Counting the bare `var(--t-decision)` matched nothing
+        of the sort: the only two occurrences on the page were inside the old
+        brandmark's conic-gradient, so this passed for two years' worth of
+        commits while asserting nothing about the sidebar or the headings —
+        and went red the moment the mark became real art.
+        """
+        index = _pages()["index.html"]
+        dot = "var(--t-decision,var(--muted))"
+        assert index.count(dot) >= 3, "sidebar group, section heading and rail legend"
+
+    def test_the_document_actions_row_is_separate_from_the_chips(self) -> None:
+        """A chip states a fact; a button does something. Mixing them made
+        "view in graph" read as metadata."""
+        page = _pages()["adr-0001.html"]
+        assert 'class="actions"' in page
+        assert "View in graph" in page
+        assert 'class="abtn"' in page
+
+    def test_the_palette_exists_and_indexes_the_sidebar(self) -> None:
+        """⌘K search works offline because its data IS the sidebar links —
+        one copy of the corpus per page, so the two cannot disagree."""
+        page = _pages()["adr-0001.html"]
+        assert 'id="palScrim"' in page
+        assert ".sidebar a[data-doc]" in page
+
+    def test_the_theme_choice_paints_before_the_stylesheet(self) -> None:
+        """A chosen theme must not flash the wrong one on load: the restore
+        script runs before <style>, and the toggle persists the choice."""
+        page = _pages()["index.html"]
+        assert page.index("docir-theme") < page.index("<style>")
+        assert 'id="themeBtn"' in page
+
+    def test_the_breadcrumb_leaf_is_the_docir_id(self) -> None:
+        """One index per document: chrome identifies a document only by its
+        docir id; sequence labels inside titles are title text, not identity."""
+        page = _pages()["adr-0001.html"]
+        assert '<span class="bc-id">adr-0001</span>' in page
+        assert 'class="chip docid"' in page
+        assert "docir get adr-0001" in page, "the copyable command names the same id"
+
+    def test_relations_group_by_kind(self) -> None:
+        """The kind is a heading over its targets, not a per-row suffix."""
+        new = _pages()["adr-0002.html"]
+        assert '<span class="kind">supersedes →</span>' in new
+
+    def test_the_rail_carries_trust_and_the_local_map(self) -> None:
+        page = _pages()["adr-0001.html"]
+        assert "Trust" in page
+        assert "Local map" in page
+        # The map's neighbour is a real link to the other page, inside the svg.
+        map_part = page[page.index("Local map") :]
+        assert 'href="adr-0002.html"' in map_part[: map_part.index("</svg>")]
+
+    def test_a_document_with_no_relations_still_links_to_the_graph(self) -> None:
+        """The local map renders only with neighbours; the graph deep-link
+        must not disappear with it."""
+        pages = render_site(build_site([dict(_DOCS[0])]), title="Docs", version="1")
+        page = pages["adr-0001.html"]
+        assert "Local map" not in page
+        assert 'href="graph.html#adr-0001"' in page
+
+    def test_prev_next_stay_within_the_type(self) -> None:
+        """adr-0001 is the older decision: its only neighbour is the newer
+        one, labelled previous (the listing is newest-first)."""
+        page = _pages()["adr-0001.html"]
+        assert "previous" in page
+        assert 'class="pn"' in page
+
+    def test_relation_links_carry_hover_preview_data(self) -> None:
+        """The Quartz pattern: the target's summary answers "what is this?"
+        without the click, from data the renderer already resolved."""
+        old = _pages()["adr-0001.html"]
+        assert 'data-pt="New way"' in old
+        assert 'data-pd="Replacement."' in old
+
+    def test_code_blocks_are_framed_titled_and_copyable(self) -> None:
+        """The header carries the language and the copy button. The button
+        sits outside the <pre> it copies, so it cannot copy itself — the
+        failure the old floating button had to work around."""
+        page = render_site(
+            build_site([dict(_DOCS[0], body="```bash\ndocir get x --json\n```\n")]),
+            title="Docs",
+            version="1",
+        )["adr-0001.html"]
+        assert '<div class="codeblk"><div class="hd"><span>bash</span>' in page
+        assert '<button type="button">Copy</button>' in page
+        assert ".codeblk .hd button" in page, "the handler must find the header button"
+
+    def test_code_blocks_are_syntax_coloured(self) -> None:
+        """A snippet is the part a reader copies; one flat grey makes them
+        parse `docir build --out` before they can read it."""
+        page = render_site(
+            build_site([dict(_DOCS[0], body="```bash\n# note\ndocir build --out site/\n```\n")]),
+            title="Docs",
+            version="1",
+        )["adr-0001.html"]
+        assert '<span class="sy-cmt"># note</span>' in page
+        assert '<span class="sy-fn">docir</span>' in page
+        assert '<span class="sy-kw">build</span>' in page
+        assert '<span class="sy-flag">--out</span>' in page
+
+    def test_an_unknown_language_is_not_guessed_at(self) -> None:
+        """A wrong colour asserts a structure that is not there. The frame
+        still renders; only the colouring is withheld."""
+        page = render_site(
+            build_site([dict(_DOCS[0], body="```brainfuck\n# not a comment\n```\n")]),
+            title="Docs",
+            version="1",
+        )["adr-0001.html"]
+        assert "<span>brainfuck</span>" in page
+        assert "sy-cmt" not in page[page.index('<div class="body">') :]
+
+    def test_the_foot_hints_name_the_cli_edit_path(self) -> None:
+        """The site is read-only; the way to change a page is the CLI, and
+        the page says so with the exact command."""
+        page = _pages()["adr-0001.html"]
+        assert "docir update adr-0001" in page
+
+    def test_stat_tiles_render_only_at_browsing_scale(self) -> None:
+        assert 'class="tiles"' not in _pages()["index.html"]
+        many = [
+            dict(_DOCS[0], id=f"adr-1{n:03d}", title=f"Doc {n}", stale=n == 0) for n in range(11)
+        ]
+        index = render_site(build_site(many), title="Docs", version="1")["index.html"]
+        assert 'class="tiles"' in index
+        assert 'href="?is=stale"' in index
+
+    def test_the_stale_queue_link_appears_only_when_something_is_stale(self) -> None:
+        assert 'href="index.html?is=stale"' in _pages()["adr-0001.html"]
+        fresh = render_site(build_site([dict(_DOCS[0])]), title="Docs", version="1")
+        assert "?is=stale" not in fresh["adr-0001.html"]
 
 
 class TestSelfContained:
@@ -389,24 +709,30 @@ class TestReadability:
         assert 'id="context"' in page and 'id="context-1"' in page
 
     def test_a_long_document_gets_a_table_of_contents(self) -> None:
+        """Section navigation — the site's answer to `get --section`."""
         body = "\n".join(f"## Section {n}\n\nText.\n" for n in range(1, 6))
         page = render_site(build_site([dict(_DOCS[0], body=body)]), title="Docs", version="1")[
             "adr-0001.html"
         ]
-        assert "Contents" in page
-        assert page.index("Contents") < page.index('<div class="body">')
+        assert "On this page" in page
+        assert page.index("On this page") < page.index('<div class="body">')
+        assert ".rail .toc a" in page, "the scroll-spy must find the contents links"
 
     def test_a_short_document_gets_none(self) -> None:
         """Two links above a short body are furniture, not navigation."""
         page = render_site(
             build_site([dict(_DOCS[0], body="## One\n\nText.\n")]), title="Docs", version="1"
         )["adr-0001.html"]
-        assert "Contents" not in page
+        assert "On this page" not in page
 
     def test_relations_sit_above_the_body(self) -> None:
-        """They were 4,068px down a 4,596px page — present and invisible."""
+        """They were 4,068px down a 4,596px page — present and invisible.
+
+        The rail renders before the content column in source order, so the
+        guarantee survives the move out of the body's own column.
+        """
         page = _pages()["adr-0002.html"]
-        assert page.index("Links to") < page.index('<div class="body">')
+        assert page.index("Relations") < page.index('<div class="body">')
 
     def test_type_status_and_tags_are_visually_distinct(self) -> None:
         """One page read `architecture · active · architecture · persistence`.
@@ -420,7 +746,9 @@ class TestReadability:
             version="1",
         )["adr-0001.html"]
         assert 'class="chip type"' in page
-        assert 'class="chip status"' in page
+        # Status carries its semantic colour: superseded reads as a warning,
+        # not the same grey pill as everything else.
+        assert 'class="chip status st-warn"' in page
         assert 'class="chip tag"' in page
         # The type is `decision` and so is one of the tags; they must not read
         # the same, which is exactly the case that exposed this.
@@ -443,16 +771,22 @@ class TestReadability:
         assert "grid-template-columns:1fr}" in index, "no single-column breakpoint"
 
     def test_the_favicon_request_is_answered_without_a_network_call(self) -> None:
-        """Browsers ask for /favicon.ico on every page and log a 404 without it."""
-        assert 'rel="icon" href="data:,"' in _pages()["index.html"]
+        """Browsers ask for /favicon.ico on every page and log a 404 without it.
 
-    def test_a_long_relation_list_starts_collapsed(self) -> None:
-        """Moving relations up buried the document under its own graph.
+        It used to be answered with an empty `data:,` — a 404 silencer that
+        left the tab blank. It is the site's logo now (`test_branding.py`);
+        this still pins the property that made it a data URI in the first
+        place, which is that it costs no request.
+        """
+        assert 'rel="icon" href="data:image/' in _pages()["index.html"]
 
-        docir's architecture document has 21 inbound edges; expanded above the
-        body they filled the entire first screen. The count stays visible
-        without a click, which is the part that was missing when they were at
-        the bottom.
+    def test_a_long_relation_list_is_open_and_last_in_the_rail(self) -> None:
+        """Collapsing was the fix for relations sitting *first* in the rail:
+        docir's architecture document has 21 inbound edges and they filled the
+        first screen. Ordered last there is nothing below them to push away,
+        so the list is open — a click to see what a document connects to is a
+        click to see the thing the typed graph exists for — and the count
+        rides in the heading, which is what the summary was carrying.
         """
         many = [dict(_DOCS[0])] + [
             {
@@ -469,10 +803,7 @@ class TestReadability:
             for n in range(9)
         ]
         page = render_site(build_site(many), title="Docs", version="1")["adr-0001.html"]
-        assert '<details class="panel">' in page, "a 9-item list should be collapsed"
-        assert ">9</span></summary>" in page, "the count must be legible without expanding"
-
-    def test_a_short_relation_list_stays_open(self) -> None:
-        """Two links are context, not clutter — hiding them costs a click."""
-        page = _pages()["adr-0002.html"]
-        assert '<details class="panel" open>' in page
+        assert "<details" not in page[page.index('class="rail"') : page.index('<main class="main"')]
+        assert 'Relations <span class="n">9</span>' in page, "the count belongs in the heading"
+        rail = page[page.index('class="rail"') : page.index('<main class="main"')]
+        assert rail.index("Local map") < rail.index("Relations"), "the glance comes first"

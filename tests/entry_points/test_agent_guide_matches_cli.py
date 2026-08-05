@@ -22,6 +22,7 @@ sentence, which is the failure this guards). Product-name mentions — `~/.docir
 
 from __future__ import annotations
 
+import pathlib
 import re
 
 import pytest
@@ -29,6 +30,10 @@ import typer.main
 
 from docir.entry_points.cli.app import app
 from docir.modules.agents.infra.template_provider import PackagedTemplateProvider
+
+#: docir's own front door. It goes stale the same way the packaged guide
+#: does and is the first thing an adopter reads.
+_README = (pathlib.Path(__file__).resolve().parents[2] / "README.md").read_text(encoding="utf-8")
 
 #: Added by the parser at parse time, so it is on every command but on no
 #: command's declared params.
@@ -196,3 +201,42 @@ def test_invocation_exists_in_the_cli(invocation: str) -> None:
                 f"`docir {' '.join(path)}` has no {flag} "
                 f"(known: {', '.join(sorted(known))}) — in: {invocation}"
             )
+
+
+#: Commands whose *unset* flags produce output that is silently wrong rather
+#: than absent, so the docs have to name every one of them.
+#:
+#: `build` is the only member today. A site published without `--title` is
+#: headed "Documentation" in its heading, its browser tab and beside its mark;
+#: without `--logo` it wears docir's; without `--include-archived` it quietly
+#: omits documents. Nothing errors, nobody is prompted, and the reader has no
+#: way to tell the result from an intended one — so an undocumented flag here
+#: is a wrong artifact distributed to everyone who reads the site.
+_MUST_DOCUMENT_EVERY_FLAG = [("build",)]
+
+#: The root command's own flags — how to talk to the store (`--home`,
+#: `--no-daemon`) and how to print (`--json`, `--pretty`, `--no-trim`), plus
+#: `--help`. They are about the invocation, not about what a command produces,
+#: and the README documents them once in their own paragraph rather than under
+#: every command. Read off the CLI instead of listed here, so a new global flag
+#: is excluded without anyone remembering to come back.
+_GLOBAL_FLAGS = TREE[()]
+
+
+@pytest.mark.parametrize("path", _MUST_DOCUMENT_EVERY_FLAG, ids=lambda p: " ".join(p))
+@pytest.mark.parametrize("doc", ["guide", "readme"])
+def test_the_docs_name_every_flag_that_shapes_the_output(doc: str, path: tuple[str, ...]) -> None:
+    """The inverse of the test above, and the half that was missing.
+
+    `test_invocation_exists_in_the_cli` proves that every flag the docs *write*
+    is real. It cannot notice a flag nobody wrote — so `docir build --title`
+    went undocumented in both the guide and the README from the day it shipped,
+    while `--logo`, added much later, was documented immediately. The reader's
+    only signal was a site that called itself "Documentation".
+    """
+    text = GUIDE if doc == "guide" else _README
+    missing = sorted(flag for flag in TREE[path] - _GLOBAL_FLAGS if flag not in text)
+    assert not missing, (
+        f"`docir {' '.join(path)}` has {', '.join(missing)}, "
+        f"undocumented in the {doc} — a build that needs them looks like one that did not"
+    )

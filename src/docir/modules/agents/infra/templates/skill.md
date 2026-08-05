@@ -396,8 +396,19 @@ to leave alone.
 site — one page per document, no external requests, publishable to GitHub Pages
 unchanged. Reach for it when someone asks for the decisions in a reviewable
 form; it shows the relation graph in both directions and flags stale documents.
-`--out` is regenerated each build, and a directory docir did not build is
-refused unless you pass `--force`.
+
+```bash
+docir build --out site/ --title "<project> — design docs"   # heading, tab, wordmark
+docir build --out site/ --logo assets/logo.svg              # mark + favicon
+docir build --out site/ --include-archived                  # archived docs too
+```
+
+Always pass `--title`: it is what the site calls itself, and the default is the
+word "Documentation" on every page. `--logo` sets the top-left mark *and* the
+favicon — pass it when the repo has its own logo, otherwise the site carries
+docir's. Archived documents are left out unless you ask for them. `--out` is
+regenerated each build, and a directory docir did not build is refused unless
+you pass `--force`.
 
 ## Working across git branches
 

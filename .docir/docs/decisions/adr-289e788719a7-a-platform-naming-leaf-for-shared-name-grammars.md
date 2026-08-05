@@ -8,6 +8,7 @@ related:
 - kind: refines
   to: arch-322e5f992ad2
 - issue-9cb85759076d
+- issue-e71e1ad9b0ef
 status: accepted
 tags:
 - architecture

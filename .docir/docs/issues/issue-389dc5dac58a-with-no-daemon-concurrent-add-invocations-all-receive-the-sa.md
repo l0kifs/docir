@@ -7,6 +7,7 @@ related:
 - arch-3e305bc76ff0
 - ref-1509d5dbb4c3
 - ref-32cb4f874fbe
+- issue-96b03701503b
 status: resolved
 tags:
 - integrity

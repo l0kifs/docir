@@ -151,9 +151,70 @@ class TestGraphChecker:
 
     def test_cycle_detected(self) -> None:
         docs = [_doc("adr-0001"), _doc("adr-0002")]
-        rels = [Relation("adr-0001", "adr-0002"), Relation("adr-0002", "adr-0001")]
+        rels = [
+            Relation("adr-0001", "adr-0002", "supersedes"),
+            Relation("adr-0002", "adr-0001", "supersedes"),
+        ]
         issues = GraphChecker(_schema()).check(docs, rels)
         assert any(i.kind == "cycle" for i in issues)
+
+    def test_a_mutual_relates_to_pair_is_not_a_cycle(self) -> None:
+        """Guards issue-44875a5a6ca6: the default kind is symmetric.
+
+        "A relates to B" and "B relates to A" are one statement written twice,
+        so a pair that references each other is modelled correctly. Counting
+        every kind made that a permanent warning: converting this store's prose
+        cross-references into edges proposed 260 `relates_to` edges and turned a
+        clean `check` into 127 cycles, so 120 correct edges were dropped instead.
+        """
+        docs = [_doc("adr-0001"), _doc("adr-0002")]
+        rels = [Relation("adr-0001", "adr-0002"), Relation("adr-0002", "adr-0001")]
+        issues = GraphChecker(_schema()).check(docs, rels)
+        assert [i for i in issues if i.kind == "cycle"] == []
+
+    def test_a_mutual_contradicts_pair_is_not_a_cycle(self) -> None:
+        """`contradicts` is symmetric too — if A contradicts B, B contradicts A."""
+        docs = [_doc("adr-0001"), _doc("adr-0002")]
+        rels = [
+            Relation("adr-0001", "adr-0002", "contradicts"),
+            Relation("adr-0002", "adr-0001", "contradicts"),
+        ]
+        issues = GraphChecker(_schema()).check(docs, rels)
+        assert [i for i in issues if i.kind == "cycle"] == []
+
+    def test_a_self_edge_is_a_cycle_whatever_its_kind(self) -> None:
+        """Symmetry excuses a mutual pair; it is what makes a self-edge empty.
+
+        Narrowing the kinds nearly took this with it — `check` is the only thing
+        that sees a self-edge a merge or a hand-edit wrote (issue-2ebfc018f29a),
+        and the default kind is the one such an edge will carry.
+        """
+        docs = [_doc("adr-0001")]
+        rels = [Relation("adr-0001", "adr-0001")]
+        issues = GraphChecker(_schema()).check(docs, rels)
+        assert any(i.kind == "cycle" for i in issues)
+
+    def test_a_longer_directed_loop_is_still_a_cycle(self) -> None:
+        """Narrowing the kinds must not narrow the check to pairs."""
+        docs = [_doc("adr-0001"), _doc("adr-0002"), _doc("adr-0003")]
+        rels = [
+            Relation("adr-0001", "adr-0002", "depends_on"),
+            Relation("adr-0002", "adr-0003", "refines"),
+            Relation("adr-0003", "adr-0001", "implements"),
+        ]
+        issues = GraphChecker(_schema()).check(docs, rels)
+        assert any(i.kind == "cycle" for i in issues)
+
+    def test_a_symmetric_edge_cannot_complete_a_directed_loop(self) -> None:
+        """The `relates_to` hop is not a step the loop may be closed through."""
+        docs = [_doc("adr-0001"), _doc("adr-0002"), _doc("adr-0003")]
+        rels = [
+            Relation("adr-0001", "adr-0002", "supersedes"),
+            Relation("adr-0002", "adr-0003"),
+            Relation("adr-0003", "adr-0001", "supersedes"),
+        ]
+        issues = GraphChecker(_schema()).check(docs, rels)
+        assert [i for i in issues if i.kind == "cycle"] == []
 
     def test_layering_violation(self) -> None:
         docs = [_doc("arch-0001", "decision"), _doc("issue-0001", "issue")]

@@ -9,7 +9,7 @@ related:
 - arch-0a3c2d6d54a6
 - adr-599055502f0e
 - issue-9cb85759076d
-status: open
+status: resolved
 tags:
 - integrity
 - material
@@ -58,3 +58,22 @@ meaningful for kinds that assert *direction* — `supersedes`, `depends_on`, `re
 `implements`. `relates_to` and `contradicts` are symmetric and should not contribute
 edges to the cycle graph at all. Keep the constant separate from
 `_DEPENDENCY_KINDS`: they answer different questions and have already diverged once.
+
+## Resolution
+
+FIXED. `_find_cycles` now builds its adjacency from `_DIRECTED_KINDS`
+(`supersedes`, `depends_on`, `refines`, `implements`) only. `relates_to` and
+`contradicts` are symmetric and contribute no edge, so a mutually-referencing
+pair is no longer a finding.
+
+One exception, found by a test rather than by reasoning: a **self**-edge is
+reported whatever its kind. Symmetry is what makes a mutual pair legitimate and
+it is exactly what makes "A relates to A" empty, so the narrowing had to stop
+short of it — `check` is the only thing that sees a self-edge a merge or a
+hand-edit put on disk (issue-2ebfc018f29a). The first version of this fix
+silently dropped that detection and
+`test_a_self_edge_already_on_disk_is_still_reported` caught it.
+
+The 101 edges the old rule had blocked were added in the same pass: every
+document that cites another by id in its prose now carries the edge. `docir
+check` reports nothing, and no `cycle` finding was traded for them.

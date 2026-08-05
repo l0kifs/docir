@@ -10,6 +10,7 @@ related:
 - issue-40d1792bc9f9
 - issue-6817ed1851e2
 - issue-9cb85759076d
+- issue-99afeec3a7ce
 status: resolved
 tags:
 - schema

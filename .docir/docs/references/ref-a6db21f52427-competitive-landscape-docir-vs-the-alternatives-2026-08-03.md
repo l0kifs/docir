@@ -7,6 +7,8 @@ owner: maintainer
 related:
 - adr-354a4270ecd8
 - arch-1cfb1b212237
+- adr-a343140d72e2
+- adr-d657a09b8c4a
 status: active
 tags:
 - docs

@@ -10,6 +10,7 @@ related:
 - arch-90c90751344f
 - ref-1509d5dbb4c3
 - issue-40d1792bc9f9
+- issue-2b28fd8b1dfa
 status: resolved
 tags:
 - schema

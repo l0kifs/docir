@@ -8,6 +8,7 @@ related:
 - arch-90c90751344f
 - issue-389dc5dac58a
 - issue-b7ddde3ce860
+- issue-6a0ad9a70f84
 status: resolved
 tags:
 - integrity

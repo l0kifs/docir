@@ -10,6 +10,7 @@ related:
 - ref-1509d5dbb4c3
 - issue-8c37bf22ba3c
 - issue-e183d47cdee1
+- issue-5bfbc6f2699d
 status: resolved
 tags:
 - embeddings

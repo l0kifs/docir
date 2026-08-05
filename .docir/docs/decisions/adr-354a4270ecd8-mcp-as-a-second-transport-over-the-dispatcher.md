@@ -8,6 +8,7 @@ related:
 - adr-3a2d5ee7bc84
 - kind: refines
   to: arch-1cfb1b212237
+- ref-a6db21f52427
 status: accepted
 tags:
 - architecture

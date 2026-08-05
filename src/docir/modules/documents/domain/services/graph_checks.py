@@ -42,6 +42,27 @@ _WHITE, _GREY, _BLACK = 0, 1, 2
 #: one is not.
 _DEPENDENCY_KINDS = frozenset({"depends_on", "refines"})
 
+#: Relation kinds that assert a *direction*, and so are the only ones a cycle can
+#: be read from. A cycle finding claims "these documents point at each other in a
+#: loop that cannot be true" — which is only a claim at all when the edge means
+#: something asymmetric. `relates_to` (the default kind, and what a bare id in
+#: `related:` means) and `contradicts` are symmetric: "A relates to B" and "B
+#: relates to A" are the same statement, so a mutually-referencing pair is
+#: correct modelling rather than a loop.
+#:
+#: Counting every kind meant exactly that pair reported a permanent `cycle`.
+#: Converting this store's prose cross-references into typed edges proposed 260
+#: `relates_to` edges and took `docir check` from 0 findings to 127 cycles, none
+#: of them wrong; the only way to keep `check` readable was to drop 120 correct
+#: edges. Same defect as the one :data:`_DEPENDENCY_KINDS` was introduced to end,
+#: one check over.
+#:
+#: Kept separate from :data:`_DEPENDENCY_KINDS` on purpose: they answer different
+#: questions — "does this edge assert reliance?" versus "does this edge have a
+#: direction at all?" — and an edge can have the second without the first. They
+#: have already diverged once and will again.
+_DIRECTED_KINDS = frozenset({"supersedes", "depends_on", "refines", "implements"})
+
 
 #: Findings that mean the corpus is *broken* — a document is unreachable, or an
 #: edge resolves to nothing. These are what a merge gate must stop.
@@ -285,7 +306,17 @@ class GraphChecker:
     def _find_cycles(self, relations: list[Relation]) -> list[CheckIssue]:
         adjacency: dict[str, list[str]] = {}
         for rel in relations:
-            adjacency.setdefault(rel.source, []).append(rel.target)
+            # Only directed kinds can form a loop worth reporting; see
+            # `_DIRECTED_KINDS`. A pair of documents that merely reference each
+            # other is modelled correctly, not cyclic.
+            #
+            # A *self*-edge is the exception and is reported whatever its kind:
+            # symmetry is what makes a mutual pair legitimate, and it is exactly
+            # what makes "A relates to A" empty. The write path rejects one, so
+            # this is the only thing that sees a self-edge a merge or a
+            # hand-edit put on disk (issue-2ebfc018f29a).
+            if rel.source == rel.target or rel.kind in _DIRECTED_KINDS:
+                adjacency.setdefault(rel.source, []).append(rel.target)
 
         color: dict[str, int] = {}
         issues: list[CheckIssue] = []

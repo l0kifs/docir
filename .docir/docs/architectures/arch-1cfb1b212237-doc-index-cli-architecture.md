@@ -4,7 +4,8 @@ description: 'The design rationale: git as source of truth, the SQLite index as 
   derived projection.'
 id: arch-1cfb1b212237
 owner: maintainer
-related: []
+related:
+- adr-599055502f0e
 status: active
 tags:
 - architecture

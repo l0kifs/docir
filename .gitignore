@@ -222,6 +222,7 @@ examples/.workspace/
 
 .DS_Store
 .local-data/
+.playwright-mcp/
 
 # docir dogfoods its own store: .docir/docs/ and .docir/docs-schema.yaml are
 # committed, the derived index is ignored by .docir/.gitignore. Do not ignore

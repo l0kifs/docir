@@ -9,7 +9,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/docir)](https://pypi.org/project/docir/) [![Python](https://img.shields.io/pypi/pyversions/docir)](https://pypi.org/project/docir/) [![CI](https://img.shields.io/github/actions/workflow/status/l0kifs/docir/ci.yml?branch=main)](https://github.com/l0kifs/docir/actions) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-[The idea](#the-idea) · [Quickstart](#quickstart) · [Why not just…](#why-not-just) · [Commands](#commands) · [Docs](docs/)
+[The idea](#the-idea) · [Quickstart](#quickstart) · [Why not just…](#why-not-just) · [Commands](#commands) · [Docs](docs/) · [Live site](https://l0kifs.github.io/docir/index.html)
 
 </div>
 
@@ -282,7 +282,9 @@ docir build --out site/        # one page per document, plus an index
 
 The result is self-contained — inline CSS, no external requests — so it opens
 from `file://` and publishes to GitHub Pages or S3 unchanged. docir publishes its
-own store that way from [`.github/workflows/pages.yml`](.github/workflows/pages.yml);
+own store that way — browse it live at
+[l0kifs.github.io/docir](https://l0kifs.github.io/docir/index.html) — from
+[`.github/workflows/pages.yml`](.github/workflows/pages.yml);
 copy it, and enable Pages once under Settings → Pages → Source: **GitHub Actions**. **Reindex first** — `.docir/docs/` is committed and the index is
 gitignored, so a fresh clone has none and `build` would otherwise publish an empty
 list (it warns, and the workflow gates on the page count). It shows what only

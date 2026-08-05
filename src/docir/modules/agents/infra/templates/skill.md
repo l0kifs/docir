@@ -333,6 +333,30 @@ types:
     review_days: 180
 ```
 
+`relation_types` also takes a **mapping**, which is how you declare what a kind
+*means*. Three optional properties, all defaulting to false:
+
+| property | effect |
+|---|---|
+| `symmetric` | the edge says the same thing both ways, so a mutually-referencing pair is not a `cycle` finding |
+| `dependency` | the source *relies on* the target — the only claim the Tier 1 `layering` check reads |
+| `successor` | the *incoming* direction answers "is this still current?", so `docir context` follows it backwards |
+
+```yaml
+relation_types:
+  governs:     {dependency: true}
+  duplicates:  {symmetric: true}
+  replaced_by: {successor: true}
+  blocks:      {}                  # registered, all defaults
+```
+
+Defaults are asymmetric on purpose: a kind you do not describe is still
+cycle-checked (so a `blocks` loop is reported) but adds no layering warning and
+changes no traversal. The core six carry their meaning without being listed —
+`relates_to` and `contradicts` are symmetric, `supersedes`/`contradicts` are
+successors, `depends_on`/`refines` are dependencies. `docir schema show` prints
+the resolved properties of every kind.
+
 `allowed_relations` is a **whitelist trap**: absent/empty means permissive (any
 kind, any target), but listing one kind restricts the type to *only* the listed
 kinds — re-list every kind you still want, including `relates_to`.

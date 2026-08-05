@@ -56,13 +56,11 @@ _CONTEXT_CANDIDATES = 25
 #: are closed still fills the response.
 _SEARCH_OVERFETCH = 2
 
-#: Relation kinds whose *incoming* direction answers "is this still current?".
-#: Followed backwards during ``context`` expansion so a document reached by the
-#: ranker carries its own replacement with it. Kept deliberately separate from
-#: the layering check's kind set (`graph_checks._DEPENDENCY_KINDS`), which held
-#: these same two kinds for an unrelated reason until it was inverted into a
-#: dependency allowlist — they have since diverged completely.
-_SUCCESSOR_KINDS = frozenset({"supersedes", "contradicts"})
+#: Which kinds answer "is this still current?" is now a schema property
+#: (``RelationKindSchema.successor``), read per call from
+#: ``Schema.successor_relation_kinds()``. It was a frozenset of two names here,
+#: which meant a custom kind with exactly this shape — `replaced_by`, `revokes` —
+#: could not be followed backwards at all, and nothing said so.
 
 
 def _parse_refs(tokens: tuple[str, ...]) -> tuple[RelatedRef, ...]:
@@ -633,8 +631,7 @@ class DocumentService:
                 selected[neighbour_id] = self._summary(neighbour, via_graph=True)
                 added += 1
 
-    @staticmethod
-    def _neighbours_of(uow: UnitOfWork, seed: str) -> list[str]:
+    def _neighbours_of(self, uow: UnitOfWork, seed: str) -> list[str]:
         """One-hop neighbours of ``seed``: successors first, then outgoing links.
 
         Expansion used to follow outgoing edges only, which left the graph unable
@@ -643,7 +640,7 @@ class DocumentService:
         replacement sits one hop away *backwards* and was never reachable from
         the document it replaces.
         """
-        successors = uow.documents.incoming(seed, kinds=_SUCCESSOR_KINDS)
+        successors = uow.documents.incoming(seed, kinds=self._schema.successor_relation_kinds())
         outgoing = uow.documents.outgoing(seed)
         return [*successors, *(t for t in outgoing if t not in set(successors))]
 

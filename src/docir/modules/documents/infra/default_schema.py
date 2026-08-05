@@ -108,8 +108,30 @@ _SCHEMA_FOOTER = """
 #   # Registers additional edge kinds on top of the core six (relates_to,
 #   # supersedes, depends_on, implements, contradicts, refines). Using a kind
 #   # that is not registered is a Tier 0 error.
+#   #
+#   # A plain list registers kinds with default meaning: directed (so a loop of
+#   # them is a `cycle` finding), not a dependency, not a successor.
 #   - governs
 #   - blocks
+#   #
+#   # The mapping form declares what a kind *means*. Every property is optional
+#   # and defaults as above; naming a core kind to set one leaves the rest alone.
+#   #   symmetric   the edge says the same thing both ways, so a pair of
+#   #               documents referencing each other is not a `cycle`
+#   #               (`relates_to` and `contradicts` are symmetric by default)
+#   #   dependency  the source *relies on* the target, which is the only claim
+#   #               the `layering` check reads (`depends_on`, `refines`)
+#   #   successor   the *incoming* direction answers "is this still current?",
+#   #               so `docir context` follows it backwards (`supersedes`,
+#   #               `contradicts`)
+#   #
+#   # governs:   {dependency: true}
+#   # blocks:    {}                    # registered, all defaults
+#   # duplicates: {symmetric: true}
+#   # replaced_by: {successor: true}
+#
+#   # Run `docir schema show` to see the resolved properties of every kind —
+#   # a core kind carries its meaning without being named here.
 #
 # types:
 #   test_plan:

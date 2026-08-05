@@ -8,7 +8,7 @@ import pytest
 
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.entities.relation import Relation
-from docir.modules.documents.domain.schema import Schema, TypeSchema
+from docir.modules.documents.domain.schema import RelationKindSchema, Schema, TypeSchema
 from docir.modules.documents.domain.services.graph_checks import GraphChecker
 from docir.modules.documents.domain.services.markdown_sections import (
     append_section,
@@ -181,6 +181,39 @@ class TestGraphChecker:
         ]
         issues = GraphChecker(_schema()).check(docs, rels)
         assert [i for i in issues if i.kind == "cycle"] == []
+
+    def test_a_schema_declared_symmetric_kind_is_not_a_cycle(self) -> None:
+        """The point of making this schema data: a custom kind can say so."""
+        schema = Schema(
+            types=_schema().types,
+            relation_types=frozenset({"duplicates"}),
+            relation_kinds={"duplicates": RelationKindSchema("duplicates", symmetric=True)},
+        )
+        docs = [_doc("adr-0001"), _doc("adr-0002")]
+        rels = [
+            Relation("adr-0001", "adr-0002", "duplicates"),
+            Relation("adr-0002", "adr-0001", "duplicates"),
+        ]
+        assert [i for i in GraphChecker(schema).check(docs, rels) if i.kind == "cycle"] == []
+
+    def test_an_undeclared_custom_kind_is_still_cycle_checked(self) -> None:
+        """A `blocks` deadlock is real; silence here would be a coverage loss."""
+        docs = [_doc("adr-0001"), _doc("adr-0002")]
+        rels = [
+            Relation("adr-0001", "adr-0002", "blocks"),
+            Relation("adr-0002", "adr-0001", "blocks"),
+        ]
+        assert any(i.kind == "cycle" for i in GraphChecker(_schema()).check(docs, rels))
+
+    def test_a_schema_declared_dependency_kind_is_layering_checked(self) -> None:
+        schema = Schema(
+            types=_schema().types,
+            relation_types=frozenset({"governs"}),
+            relation_kinds={"governs": RelationKindSchema("governs", dependency=True)},
+        )
+        docs = [_doc("arch-0001", "decision"), _doc("issue-0001", "issue")]
+        rels = [Relation("arch-0001", "issue-0001", "governs")]
+        assert any(i.kind == "layering" for i in GraphChecker(schema).check(docs, rels))
 
     def test_a_self_edge_is_a_cycle_whatever_its_kind(self) -> None:
         """Symmetry excuses a mutual pair; it is what makes a self-edge empty.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from docir.modules.documents.domain.schema import Schema, TypeSchema
+from docir.modules.documents.domain.schema import RelationKindSchema, Schema, TypeSchema
 from docir.platform.errors import (
     InvalidStatusError,
     InvalidStatusTransitionError,
@@ -140,3 +140,58 @@ class TestRelationConstraints:
                 types={"obligation": _obligation_type()},
                 relation_types=frozenset({"relates_to"}),  # 'implements' missing
             )
+
+
+class TestRelationKindProperties:
+    """What a relation kind *means* is schema data, not a hardcoded name set.
+
+    Before this, three frozensets in three modules decided whether a kind was
+    cycle-checked, layering-checked and followed backwards. A kind a custom
+    schema added could join none of them, so it was silently exempt from all
+    three and nothing said so.
+    """
+
+    def test_core_kinds_carry_their_properties_without_being_declared(self) -> None:
+        """A bare `relation_types:` list is what every existing schema says.
+
+        The properties cannot live only in the core YAML: an inline-only schema
+        never merges it, and a non-symmetric `relates_to` is the 127-false-cycles
+        bug (issue-44875a5a6ca6) back again.
+        """
+        schema = Schema(types={}, relation_types=frozenset({"relates_to", "supersedes"}))
+        assert schema.is_symmetric_relation("relates_to")
+        assert not schema.is_symmetric_relation("supersedes")
+        assert schema.is_dependency_relation("depends_on")
+        assert schema.successor_relation_kinds() == frozenset({"supersedes", "contradicts"})
+
+    def test_an_undeclared_custom_kind_is_directed_and_otherwise_silent(self) -> None:
+        """Keep the check it already had; add no warning it never had."""
+        schema = Schema(types={}, relation_types=frozenset({"blocks"}))
+        assert not schema.is_symmetric_relation("blocks"), "so a `blocks` loop is a cycle"
+        assert not schema.is_dependency_relation("blocks"), "no new layering warning"
+        assert "blocks" not in schema.successor_relation_kinds(), "no new traversal"
+
+    def test_a_declared_property_wins_over_the_core_default(self) -> None:
+        schema = Schema(
+            types={},
+            relation_types=frozenset({"relates_to"}),
+            relation_kinds={"relates_to": RelationKindSchema("relates_to", symmetric=False)},
+        )
+        assert not schema.is_symmetric_relation("relates_to")
+
+    def test_a_custom_kind_can_be_declared_a_successor(self) -> None:
+        """The reason this is configurable: `replaced_by` had no way in."""
+        schema = Schema(
+            types={},
+            relation_types=frozenset({"revokes"}),
+            relation_kinds={"revokes": RelationKindSchema("revokes", successor=True)},
+        )
+        assert schema.successor_relation_kinds() == frozenset(
+            {"revokes", "supersedes", "contradicts"}
+        )
+
+    def test_properties_resolve_for_a_kind_no_schema_registers(self) -> None:
+        """An unconfigured schema accepts any kind, so lookups must still answer."""
+        schema = Schema(types={})
+        assert schema.is_symmetric_relation("relates_to")
+        assert not schema.is_symmetric_relation("whatever")

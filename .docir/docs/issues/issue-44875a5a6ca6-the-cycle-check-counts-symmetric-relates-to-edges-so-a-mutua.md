@@ -6,6 +6,7 @@ description: A cycle is only meaningful for relation kinds that assert direction
 id: issue-44875a5a6ca6
 owner: maintainer
 related:
+- adr-234b956a48d8
 - arch-0a3c2d6d54a6
 - adr-599055502f0e
 - issue-9cb85759076d

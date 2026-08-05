@@ -12,6 +12,12 @@ the loader merges ``core -> each profile -> the file's own inline overrides``.
 from __future__ import annotations
 
 # The frozen core: the relation-kind registry + universal types + cadences.
+#
+# The list form is deliberate: what these six kinds *mean* (symmetric /
+# dependency / successor) lives in `schema.CORE_RELATION_KINDS`, not here, so
+# that an inline-only schema — one with no `profiles:` key, which never merges
+# this file — still gets a symmetric `relates_to`. Declaring it in both places
+# would be two definitions waiting to disagree.
 CORE_SCHEMA_YAML = """\
 relation_types:
   - relates_to      # generic association (the default when no kind is given)

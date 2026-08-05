@@ -236,9 +236,29 @@ def _format_related(value: object) -> str:
     return ", ".join(parts)
 
 
+def _render_relation_kinds(data: Mapping[str, object]) -> str:
+    """Each kind with the properties it actually carries, resolved.
+
+    A bare name list cannot answer the question a reader has here — whether an
+    edge of this kind is cycle-checked, layering-checked, or followed backwards
+    — and a core kind carries those without appearing in the file at all.
+    """
+    entries = data.get("relation_kinds")
+    if not isinstance(entries, list | tuple) or not entries:
+        return _join(data.get("relation_types"))
+    rendered = []
+    for entry in entries:
+        if not isinstance(entry, Mapping):
+            continue
+        flags = [p for p in ("symmetric", "dependency", "successor") if entry.get(p)]
+        name = str(entry.get("name", ""))
+        rendered.append(f"{name} ({', '.join(flags)})" if flags else name)
+    return ", ".join(rendered)
+
+
 def render_schema(data: Mapping[str, object]) -> None:
     """Render the merged schema: the relation registry plus a per-type table."""
-    kinds = _join(data.get("relation_types")) or "unconstrained (any kind accepted)"
+    kinds = _render_relation_kinds(data) or "unconstrained (any kind accepted)"
     console.print(f"[dim]relation kinds:[/] {kinds}")
 
     table = Table(show_header=True, header_style="bold")

@@ -22,48 +22,21 @@ from docir.platform.naming import TAG_KEY_RULE, is_valid_tag_key
 # DFS coloring states for cycle detection.
 _WHITE, _GREY, _BLACK = 0, 1, 2
 
-#: Relation kinds that assert a *dependency*, and so are the only ones a layering
-#: violation can be read from. Everything else — `relates_to`, `supersedes`,
-#: `contradicts`, `implements`, and any kind a custom schema adds — is lateral or
-#: merely associative, and says nothing about which document relies on which.
+#: Relation-kind *meaning* used to live here, as two hardcoded frozensets: one
+#: for "asserts a dependency" (layering) and one for "asserts a direction"
+#: (cycles). Both are now properties on the schema
+#: (:class:`~docir.modules.documents.domain.schema.RelationKindSchema`), because
+#: a kind a custom schema adds could never join either set and so was silently
+#: exempt from both checks — see the ADR for typed relation semantics.
 #:
-#: This was written the other way round, as an exemption list holding
-#: `supersedes`/`contradicts`, which made *every other* kind a dependency claim.
-#: The default kind for a bare id in `related:` is `relates_to`, so the most
-#: natural thing a user can model — a decision linking the issue that motivated
-#: it, the pairing in the README's own quickstart — produced a permanent
-#: violation that no edit could silence. A warning that fires on correct usage
-#: teaches people to ignore the whole of `docs check`, which is where the
-#: duplicate-id detection lives.
-#:
-#: Consequence of the allowlist, accepted deliberately: a relation kind added by
-#: a custom schema is not layering-checked until it is named here. Silence on an
-#: unknown kind is the right default for a heuristic warning; noise on a correct
-#: one is not.
-_DEPENDENCY_KINDS = frozenset({"depends_on", "refines"})
-
-#: Relation kinds that assert a *direction*, and so are the only ones a cycle can
-#: be read from. A cycle finding claims "these documents point at each other in a
-#: loop that cannot be true" — which is only a claim at all when the edge means
-#: something asymmetric. `relates_to` (the default kind, and what a bare id in
-#: `related:` means) and `contradicts` are symmetric: "A relates to B" and "B
-#: relates to A" are the same statement, so a mutually-referencing pair is
-#: correct modelling rather than a loop.
-#:
-#: Counting every kind meant exactly that pair reported a permanent `cycle`.
-#: Converting this store's prose cross-references into typed edges proposed 260
-#: `relates_to` edges and took `docir check` from 0 findings to 127 cycles, none
-#: of them wrong; the only way to keep `check` readable was to drop 120 correct
-#: edges. Same defect as the one :data:`_DEPENDENCY_KINDS` was introduced to end,
-#: one check over.
-#:
-#: Kept separate from :data:`_DEPENDENCY_KINDS` on purpose: they answer different
-#: questions — "does this edge assert reliance?" versus "does this edge have a
-#: direction at all?" — and an edge can have the second without the first. They
-#: have already diverged once and will again.
-_DIRECTED_KINDS = frozenset({"supersedes", "depends_on", "refines", "implements"})
-
-
+#: The history is worth keeping because both sets were wrong the same way first.
+#: Each began as an *exemption* list, which made every other kind — including
+#: `relates_to`, what a bare id in `related:` means — carry the claim. For
+#: layering that produced a permanent violation on the most natural thing a user
+#: can model (a decision linking the issue that motivated it); for cycles it
+#: turned a mutually-referencing pair into a permanent warning, 127 of them on
+#: this store. A warning that fires on correct usage teaches people to ignore
+#: the whole of `docs check`, which is where the duplicate-id detection lives.
 #: Findings that mean the corpus is *broken* — a document is unreachable, or an
 #: edge resolves to nothing. These are what a merge gate must stop.
 ERROR_KINDS: frozenset[str] = frozenset({"duplicate-id", "dangling", "malformed"})
@@ -306,16 +279,18 @@ class GraphChecker:
     def _find_cycles(self, relations: list[Relation]) -> list[CheckIssue]:
         adjacency: dict[str, list[str]] = {}
         for rel in relations:
-            # Only directed kinds can form a loop worth reporting; see
-            # `_DIRECTED_KINDS`. A pair of documents that merely reference each
-            # other is modelled correctly, not cyclic.
+            # Only a kind with a *direction* can form a loop worth reporting. A
+            # symmetric kind says the same thing both ways, so a pair of
+            # documents that reference each other is modelled correctly rather
+            # than cyclically; the schema decides which is which
+            # (`RelationKindSchema.symmetric`).
             #
             # A *self*-edge is the exception and is reported whatever its kind:
             # symmetry is what makes a mutual pair legitimate, and it is exactly
             # what makes "A relates to A" empty. The write path rejects one, so
             # this is the only thing that sees a self-edge a merge or a
             # hand-edit put on disk (issue-2ebfc018f29a).
-            if rel.source == rel.target or rel.kind in _DIRECTED_KINDS:
+            if rel.source == rel.target or not self._schema.is_symmetric_relation(rel.kind):
                 adjacency.setdefault(rel.source, []).append(rel.target)
 
         color: dict[str, int] = {}
@@ -381,7 +356,7 @@ class GraphChecker:
                 type_by_id[doc.id] = doc.type
         issues: list[CheckIssue] = []
         for rel in relations:
-            if rel.kind not in _DEPENDENCY_KINDS:
+            if not self._schema.is_dependency_relation(rel.kind):
                 continue
             src_level = level_by_id.get(rel.source)
             tgt_level = level_by_id.get(rel.target)

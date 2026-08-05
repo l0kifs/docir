@@ -428,3 +428,97 @@ class TestMaxBodyChars:
         described = describe_schema(schema)
         note = next(t for t in described["types"] if t["name"] == "note")
         assert note["max_body_chars"] == 0
+
+
+def _minimal_type(prefix: str) -> dict[str, object]:
+    return {"prefix": prefix, "statuses": {"a": []}, "default_status": "a"}
+
+
+class TestRelationKindMappingForm:
+    """`relation_types:` accepts a mapping of kind -> properties.
+
+    The list form is what every schema written before this says, so it has to
+    keep parsing and keep meaning "defaults". The mapping form is the `types:`
+    shape — a named thing that carries configuration is keyed by its name.
+    """
+
+    def test_the_list_form_still_parses_and_means_defaults(self) -> None:
+        schema = parse_schema(
+            {
+                "types": {"note": _minimal_type("nt")},
+                "relation_types": ["relates_to", "blocks"],
+            }
+        )
+        assert schema.relation_types == frozenset({"relates_to", "blocks"})
+        assert schema.is_symmetric_relation("relates_to"), "core default survives"
+        assert not schema.is_symmetric_relation("blocks")
+
+    def test_the_mapping_form_registers_kinds_and_their_properties(self) -> None:
+        schema = parse_schema(
+            {
+                "types": {"note": _minimal_type("nt")},
+                "relation_types": {
+                    "relates_to": None,
+                    "duplicates": {"symmetric": True},
+                    "revokes": {"successor": True},
+                    "governs": {"dependency": True},
+                },
+            }
+        )
+        assert schema.relation_types == frozenset(
+            {"relates_to", "duplicates", "revokes", "governs"}
+        )
+        assert schema.is_symmetric_relation("duplicates")
+        assert schema.is_dependency_relation("governs")
+        assert "revokes" in schema.successor_relation_kinds()
+
+    def test_naming_a_core_kind_to_set_one_flag_keeps_the_others(self) -> None:
+        """Partial declaration must not silently reset what it did not mention."""
+        schema = parse_schema(
+            {
+                "types": {"note": _minimal_type("nt")},
+                "relation_types": {"contradicts": {"dependency": True}},
+            }
+        )
+        kind = schema.relation_kind("contradicts")
+        assert kind.dependency, "the declared flag"
+        assert kind.symmetric and kind.successor, "the core's, not reset to False"
+
+    def test_an_unknown_property_is_rejected(self) -> None:
+        with pytest.raises(SchemaError, match="unknown property 'directed'"):
+            parse_schema(
+                {
+                    "types": {"note": _minimal_type("nt")},
+                    "relation_types": {"blocks": {"directed": True}},
+                }
+            )
+
+    def test_non_mapping_properties_are_rejected(self) -> None:
+        with pytest.raises(SchemaError, match="properties must be a mapping"):
+            parse_schema(
+                {
+                    "types": {"note": _minimal_type("nt")},
+                    "relation_types": {"blocks": ["symmetric"]},
+                }
+            )
+
+    def test_a_profiled_schema_may_add_a_kind_without_resetting_the_core(self) -> None:
+        """Merge is per key: the fragments each contribute, none replaces."""
+        schema = parse_schema({"profiles": ["software"], "relation_types": {"blocks": None}})
+        assert "blocks" in schema.relation_types
+        assert "supersedes" in schema.relation_types, "still registered by the core"
+        assert schema.is_symmetric_relation("relates_to"), "core properties intact"
+
+    def test_schema_show_reports_the_resolved_properties(self) -> None:
+        """The file shows the ingredients; only this shows what a kind means."""
+        described = describe_schema(parse_schema({"profiles": ["software"]}))
+        kinds = {k["name"]: k for k in described["relation_kinds"]}
+        assert kinds["relates_to"]["symmetric"] is True
+        assert kinds["supersedes"]["successor"] is True
+        assert kinds["depends_on"]["dependency"] is True
+        assert kinds["implements"] == {
+            "name": "implements",
+            "symmetric": False,
+            "dependency": False,
+            "successor": False,
+        }

@@ -104,6 +104,60 @@ class TypeSchema:
 
 
 @dataclass(frozen=True, slots=True)
+class RelationKindSchema:
+    """What a relation kind *means*, so the checks can stop hardcoding names.
+
+    Three independent properties, each read by exactly one consumer:
+
+    ``symmetric``
+        ``A -kind-> B`` and ``B -kind-> A`` are the same statement, so a
+        mutually-referencing pair is correct modelling rather than a loop. The
+        cycle check skips these edges. A *self*-edge is still reported whatever
+        the kind: symmetry is what makes a mutual pair legitimate and exactly
+        what makes "A relates to A" empty.
+    ``dependency``
+        The edge asserts that the source *relies on* the target, which is the
+        only claim a layering violation can be read from.
+    ``successor``
+        The edge's *incoming* direction answers "is this still current?", so
+        ``context`` expansion follows it backwards — a ``supersedes`` edge points
+        from the new document to the old one, and without this the replacement
+        sits one hop away in the unreachable direction.
+
+    All three default to false, and that asymmetry is deliberate. ``symmetric``
+    off means the kind *is* cycle-checked, so a custom kind keeps the coverage it
+    had before kinds were distinguished at all; ``dependency`` and ``successor``
+    off mean a custom kind adds no warning and changes no traversal until its
+    author asks for it. The default is "check what you already checked, do
+    nothing new".
+    """
+
+    name: str
+    symmetric: bool = False
+    dependency: bool = False
+    successor: bool = False
+
+
+#: Properties of the six kinds the frozen core registers. These live here rather
+#: than in ``CORE_SCHEMA_YAML`` because a schema written before this existed —
+#: any file with a bare ``relation_types:`` list, which is every one of them —
+#: must still get them. Declaring them only in the core YAML would leave an
+#: inline-only schema with a non-symmetric ``relates_to``, which is the 127-false-
+#: cycles bug (issue-44875a5a6ca6) reintroduced through the back door.
+CORE_RELATION_KINDS: dict[str, RelationKindSchema] = {
+    "relates_to": RelationKindSchema("relates_to", symmetric=True),
+    "supersedes": RelationKindSchema("supersedes", successor=True),
+    "contradicts": RelationKindSchema("contradicts", symmetric=True, successor=True),
+    "depends_on": RelationKindSchema("depends_on", dependency=True),
+    "refines": RelationKindSchema("refines", dependency=True),
+    "implements": RelationKindSchema("implements"),
+}
+
+#: The property names a schema may set on a relation kind.
+RELATION_KIND_PROPERTIES: tuple[str, ...] = ("symmetric", "dependency", "successor")
+
+
+@dataclass(frozen=True, slots=True)
 class Schema:
     """The full set of document-type grammars."""
 
@@ -112,6 +166,11 @@ class Schema:
     # An *empty* set means relation kinds are unconstrained — the permissive
     # backward-compatible default for schemas that predate typed edges.
     relation_types: frozenset[str] = frozenset()
+    # Per-kind property *overrides*, keyed by kind name. Deliberately separate
+    # from ``relation_types``: that set stays the single answer to "is this kind
+    # registered", while properties resolve for any kind — including one in a
+    # permissive schema that registers nothing at all.
+    relation_kinds: dict[str, RelationKindSchema] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         prefixes: dict[str, str] = {}
@@ -138,6 +197,31 @@ class Schema:
     def is_known_relation_kind(self, kind: str) -> bool:
         """Whether ``kind`` is a registered relation kind (always true if unconfigured)."""
         return not self.relation_types or kind in self.relation_types
+
+    def relation_kind(self, kind: str) -> RelationKindSchema:
+        """The resolved properties of ``kind``: declared, else core, else default."""
+        declared = self.relation_kinds.get(kind)
+        if declared is not None:
+            return declared
+        return CORE_RELATION_KINDS.get(kind, RelationKindSchema(kind))
+
+    def is_symmetric_relation(self, kind: str) -> bool:
+        """Whether ``kind`` says the same thing in both directions."""
+        return self.relation_kind(kind).symmetric
+
+    def is_dependency_relation(self, kind: str) -> bool:
+        """Whether ``kind`` asserts that the source relies on the target."""
+        return self.relation_kind(kind).dependency
+
+    def successor_relation_kinds(self) -> frozenset[str]:
+        """Kinds whose incoming direction answers "is this still current?"."""
+        overridden = {k for k, v in self.relation_kinds.items() if v.successor}
+        core = {
+            k
+            for k, v in CORE_RELATION_KINDS.items()
+            if v.successor and k not in self.relation_kinds
+        }
+        return frozenset(overridden | core)
 
     def review_days_for(self, doc_type: str) -> int:
         """The review cadence in days for a type (``0`` = never stale)."""

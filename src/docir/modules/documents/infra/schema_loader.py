@@ -14,8 +14,11 @@ from pathlib import Path
 import yaml
 
 from docir.modules.documents.domain.schema import (
+    CORE_RELATION_KINDS,
     DEFAULT_ID_STYLE,
     ID_STYLES,
+    RELATION_KIND_PROPERTIES,
+    RelationKindSchema,
     Schema,
     TypeSchema,
 )
@@ -59,6 +62,19 @@ def describe_schema(schema: Schema) -> dict[str, object]:
     """
     return {
         "relation_types": sorted(schema.relation_types),
+        # The resolved properties, not the declared ones: what a kind *means* is
+        # the thing a reader cannot work out from the file, since an undeclared
+        # core kind still carries the core's flags.
+        "relation_kinds": [
+            {
+                "name": kind,
+                **{
+                    prop: getattr(schema.relation_kind(kind), prop)
+                    for prop in RELATION_KIND_PROPERTIES
+                },
+            }
+            for kind in sorted(schema.relation_types or CORE_RELATION_KINDS)
+        ],
         "types": [
             {
                 "name": type_schema.name,
@@ -97,6 +113,7 @@ def parse_schema(raw: object) -> Schema:
     return Schema(
         types=_parse_types_mapping(types_raw, _parse_id_style(raw.get("id_style"))),
         relation_types=frozenset(_parse_relation_types(raw.get("relation_types"))),
+        relation_kinds=_parse_relation_kinds(raw.get("relation_types")),
     )
 
 
@@ -127,25 +144,79 @@ def _merge_profiled(raw: object) -> Schema:
 
     merged_types: dict[str, TypeSchema] = {}
     merged_kinds: set[str] = set()
+    merged_props: dict[str, RelationKindSchema] = {}
     for fragment in fragments:
         if not isinstance(fragment, dict):
             continue
         merged_kinds.update(_parse_relation_types(fragment.get("relation_types")))
+        # Per key, not wholesale: a profile registering a kind must not drop the
+        # properties the core declared for the ones it did not mention.
+        merged_props.update(_parse_relation_kinds(fragment.get("relation_types")))
         types_raw = fragment.get("types")
         if isinstance(types_raw, dict):
             merged_types.update(_parse_types_mapping(types_raw, default_id_style))
 
     if not merged_types:
         raise SchemaError("resolved schema has no types after merging profiles")
-    return Schema(types=merged_types, relation_types=frozenset(merged_kinds))
+    return Schema(
+        types=merged_types,
+        relation_types=frozenset(merged_kinds),
+        relation_kinds=merged_props,
+    )
 
 
 def _parse_relation_types(value: object) -> set[str]:
+    """The registered kind *names*, from either the list or the mapping form."""
     if value is None:
         return set()
+    if isinstance(value, dict):
+        return {str(key) for key in value}
     if not isinstance(value, list):
-        raise SchemaError("'relation_types' must be a list of kind names")
+        raise SchemaError(
+            "'relation_types' must be a list of kind names, or a mapping of "
+            "kind name to its properties"
+        )
     return {str(item) for item in value}
+
+
+def _parse_relation_kinds(value: object) -> dict[str, RelationKindSchema]:
+    """The *declared* per-kind properties — only the mapping form carries any.
+
+    The list form stays valid and means "every kind takes its defaults", which is
+    what every schema written before this said and must keep meaning. A mapping
+    entry may give a subset of the properties or nothing at all (``blocks:``),
+    and whatever it omits falls back to the core default for that name — so
+    naming a core kind to set one flag cannot silently reset the others.
+    """
+    if not isinstance(value, dict):
+        return {}
+    kinds: dict[str, RelationKindSchema] = {}
+    for raw_name, raw_props in value.items():
+        name = str(raw_name)
+        base = CORE_RELATION_KINDS.get(name, RelationKindSchema(name))
+        if raw_props is None:
+            kinds[name] = base
+            continue
+        if not isinstance(raw_props, dict):
+            raise SchemaError(
+                f"relation kind {name!r}: properties must be a mapping, got "
+                f"{type(raw_props).__name__}"
+            )
+        given = {str(key): val for key, val in raw_props.items()}
+        unknown = set(given) - set(RELATION_KIND_PROPERTIES)
+        if unknown:
+            allowed = ", ".join(RELATION_KIND_PROPERTIES)
+            raise SchemaError(
+                f"relation kind {name!r}: unknown propert"
+                f"{'y' if len(unknown) == 1 else 'ies'} "
+                f"{', '.join(sorted(repr(u) for u in unknown))}; allowed: {allowed}"
+            )
+        props = {
+            prop: bool(given[prop]) if prop in given else getattr(base, prop)
+            for prop in RELATION_KIND_PROPERTIES
+        }
+        kinds[name] = RelationKindSchema(name, **props)
+    return kinds
 
 
 def _parse_id_style(value: object, *, where: str = "schema") -> str:

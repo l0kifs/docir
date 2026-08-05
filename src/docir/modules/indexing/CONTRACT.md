@@ -15,7 +15,7 @@ document embeddings are (re)computed.
 - `EmbeddingScheduler.schedule(id) / flush()` — queue and drain recomputes
 
 ## Events published
-- none (no event bus; see ADR-0002)
+- none (no event bus; see adr-d3e3616400bf)
 
 ## Events consumed
 - none
@@ -23,11 +23,11 @@ document embeddings are (re)computed.
 ## Owns
 - data: per-document embedding vectors and the dirty-recompute queue.
   Physically stored in the shared index owned by `platform` (grandfathered;
-  see ADR-0002).
+  see adr-d3e3616400bf).
 
 ## Depends on
 - modules: none
 - platform: persistence, embedding
 
 ## Policy
-- permissions: none (single-user local CLI; see ADR-0003)
+- permissions: none (single-user local CLI; see adr-90e994d931cc)

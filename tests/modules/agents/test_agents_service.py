@@ -113,7 +113,7 @@ class TestInstall:
             svc.install(install_req(agents=("agents",), use_global=True))
 
     def test_unknown_agent_is_rejected(self) -> None:
-        """Guards GAP-024 — and this test asserted the opposite.
+        """Guards issue-b8220546282c — and this test asserted the opposite.
 
         `--agent claud` was silently skipped: `[]`, exit 0, nothing written. A
         once-per-repo onboarding command reported success while doing nothing,
@@ -123,7 +123,7 @@ class TestInstall:
 
         The old test was named `test_unknown_agent_is_ignored` and asserted the
         empty result, so the suite could never have caught this — the same trap
-        as GAP-006, GAP-008 and GAP-040.
+        as issue-9cb85759076d, issue-40d1792bc9f9 and issue-87a27629f6a6.
         """
         svc, _ = make()
         with pytest.raises(AgentSetupError):

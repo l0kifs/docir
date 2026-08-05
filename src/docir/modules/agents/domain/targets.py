@@ -2,7 +2,7 @@
 
 A *target* is one place an AI coding assistant reads its instructions from, plus
 the *form* those instructions take there. docir ships exactly two — mirroring the
-smallest proven surface (see ADR-0008):
+smallest proven surface (see adr-3a2d5ee7bc84):
 
 - ``claude`` — a standalone Claude Code *skill* file the assistant auto-loads by
   its frontmatter ``description``. Installable per-project or globally.

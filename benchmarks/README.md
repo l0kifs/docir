@@ -127,7 +127,7 @@ On a 23-document corpus. The ratio grows with corpus size, since `context` is bo
 
 ### 3b. What the random-id entropy costs, and what it buys
 
-GAP-042: a random id is ~3× the length of a sequential one and appears in every skeleton
+issue-7a271eb0f21a: a random id is ~3× the length of a sequential one and appears in every skeleton
 and every `related` edge of every result, and nothing measured the trade — so 48 bits was
 chosen by default rather than deliberately. Both halves are now measured.
 
@@ -191,7 +191,7 @@ document's wording belongs in the easy half.
 
 Corpus documents can also carry:
 
-- `related: [key, key:kind]` — a typed edge (ADR-0005, `docir get adr-599055502f0e`).
+- `related: [key, key:kind]` — a typed edge (`docir get adr-599055502f0e`).
   A bare key is `relates_to`.
 - `status_path: [accepted, superseded]` — legal transitions walked in order, applied after
   the edges are written. It is a path rather than a value because the schema's state

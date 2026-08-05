@@ -2,7 +2,7 @@
 name: docir
 description: Use docir to read and write this project's git-backed design docs — decisions/ADRs, issues, architecture notes — instead of editing markdown by hand. Trigger whenever the repo uses docir (a `docir` command is available, a `.docir/` store exists in the repo or `~/.docir`, or docs carry docir frontmatter) and you are about to implement a feature (pull relevant decisions first), record or resolve a decision/issue/ADR, search project knowledge, or restructure/migrate existing markdown docs into docir. Covers the read path (`docir context/get/search/query`) and the write path (`docir init/add/update/archive`) — every doc write MUST go through the CLI.
 ---
-<!-- docir:v0.8.0 — generated file, do not edit by hand; refresh with `docir agent update` after upgrading docir -->
+<!-- docir:v0.9.0 — generated file, do not edit by hand; refresh with `docir agent update` after upgrading docir -->
 
 # docir — Agent Guide
 
@@ -53,6 +53,11 @@ you intend to throw that file away. If you skip `docir init`, docs go to the glo
 store — fine for personal notes, but **not** what you want for a repo whose docs
 should live with the code.
 
+If your client reaches tools over MCP rather than a shell, `docir mcp serve`
+exposes this same vocabulary as MCP tools (`docir_context`, `docir_get`,
+`docir_add`, …) through the same dispatcher — everything below still applies,
+one name per command. This guide is written for the CLI.
+
 **Every write reports the `store` it landed in.** Check it: `path` is relative to
 the store, so it reads as repo-local wherever the store actually is. If `store`
 points at a home directory while you are working in a repo, the docs are going
@@ -62,7 +67,8 @@ case. Run `docir init` first.
 ## Core loop
 
 1. **Discover** before coding: `docir context "<task>"` → minimal ranked set.
-2. **Read** the ones that matter: `docir get <id>`.
+2. **Read** the ones that matter: `docir get <id>`, or one section of a long
+   one with `docir get <id> --section "<heading>"`.
 3. **Implement** (outside docir).
 4. **Record** new decisions/issues: `docir add ...`.
 5. **Update** status when resolving: `docir update <id> --status resolved`.
@@ -75,6 +81,7 @@ case. Run `docir init` first.
 |---|---|
 | `docir context "<task>" [--limit N] [--expand N]` | Best first step: full-text and vector rankings fused, plus 1-hop related docs. Graph-pulled items marked `via_graph`. |
 | `docir get <id>` | Full doc (body included); works for any status. |
+| `docir get <id> --section "<heading>"` | Just that heading and the text under it. Architecture docs here run to tens of thousands of characters and docir ranks a document on its best-matching *section*, so this is usually the part that answered you. An unknown heading errors listing the real ones. |
 | `docir search "<text>"` | Full-text over **title, description and body only** — *not* tags. `docir search auth` will not find a doc merely tagged `auth`; use `docir query --tag auth`. Supports `--limit`/`--offset`. |
 | `docir query --type decision --status accepted --tag auth` | Structured filter; repeatable `--type/--status/--tag`. Pages with `--limit`/`--offset` — a page shorter than `--limit` means the end. |
 
@@ -82,7 +89,9 @@ case. Run `docir init` first.
 *skeletons* — id, title, description, tags, typed `related`, `owner`,
 `verified`, `stale` — **but not the body**. Scan those to judge relevance, then
 pull only the bodies you need with `docir get <id>`. This is the cheap path;
-never dump every body.
+never dump every body. On a long document prefer `--section`: each `##` section
+is embedded separately, so a hit often means one section matched, and that
+section is a fraction of the file.
 
 Default read path **hides** closed and archived docs. "Closed" means the type's
 *inactive* statuses — `superseded`/`rejected` for a decision, `resolved` for an
@@ -381,6 +390,26 @@ to leave alone.
   **Read `documents_skipped` in the output.** A file whose frontmatter does not parse is
   skipped, not indexed — it exists on disk and is invisible to every read path. Non-zero
   means run `docir check` and fix the named file before trusting a search.
+
+## Publishing for humans
+
+`docir build --out site/` renders the whole store as a self-contained static
+site — one page per document, no external requests, publishable to GitHub Pages
+unchanged. Reach for it when someone asks for the decisions in a reviewable
+form; it shows the relation graph in both directions and flags stale documents.
+
+```bash
+docir build --out site/ --title "<project> — design docs"   # heading, tab, wordmark
+docir build --out site/ --logo assets/logo.svg              # mark + favicon
+docir build --out site/ --include-archived                  # archived docs too
+```
+
+Always pass `--title`: it is what the site calls itself, and the default is the
+word "Documentation" on every page. `--logo` sets the top-left mark *and* the
+favicon — pass it when the repo has its own logo, otherwise the site carries
+docir's. Archived documents are left out unless you ask for them. `--out` is
+regenerated each build, and a directory docir did not build is refused unless
+you pass `--force`.
 
 ## Working across git branches
 

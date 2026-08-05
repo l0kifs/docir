@@ -5,7 +5,7 @@ auto-detects already-installed targets and refreshes them to the running docir
 version, and can *add* a target passed explicitly via ``--agent``. Neither ever
 clobbers foreign content: a skill file is entirely docir's, and an ``AGENTS.md``
 is only touched inside docir's marker block (or appended to when explicitly
-adding that target). See ADR-0008.
+adding that target). See adr-3a2d5ee7bc84.
 
 The service is pure orchestration over two ports (a template source and a file
 sink) plus an injected version string, so it is fully testable in memory.

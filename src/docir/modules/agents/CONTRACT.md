@@ -30,7 +30,7 @@ note}` where `action` is an `InstallAction` (`created`/`updated`/`skipped`). A
   installed→refreshed transition.
 
 ## Events published
-- none (no event bus; see ADR-0002)
+- none (no event bus; see adr-d3e3616400bf)
 
 ## Events consumed
 - none
@@ -45,6 +45,6 @@ note}` where `action` is an `InstallAction` (`created`/`updated`/`skipped`). A
 - platform: errors
 
 ## Policy
-- permissions: none (single-user local CLI; see ADR-0003)
+- permissions: none (single-user local CLI; see adr-90e994d931cc)
 - transport: runs in-process only; not routed through the daemon/dispatcher
-  (see ADR-0008)
+  (see adr-3a2d5ee7bc84)

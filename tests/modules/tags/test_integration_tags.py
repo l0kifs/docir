@@ -36,7 +36,7 @@ def _register_legacy_key(uow_factory: object, key: str) -> None:
 
 
 class TestKeyFormat:
-    """GAP-027: any non-empty string was a valid key, so `auth`, `Auth` and
+    """issue-e71e1ad9b0ef: any non-empty string was a valid key, so `auth`, `Auth` and
     `authentication` could all exist and nothing objected."""
 
     @pytest.mark.parametrize("key", ["Auth", "AUTH", "auth key", "auth_key", "9lives", "-auth", ""])
@@ -173,13 +173,13 @@ def test_remove_unused_tag(dispatcher: Dispatcher) -> None:
     assert dispatcher.dispatch("tag_list", {}) == []
 
 
-# -- the staleness clock (GAP-020) ------------------------------------------
+# -- the staleness clock (issue-9ed4905e0db8) ------------------------------------------
 #
 # `stale_reference_date()` falls back to `updated` when a document has no
 # explicit `verified`, and tag rename/rm rewrote every referencing document with
 # `updated = today`. A pure classification edit therefore made overdue documents
 # report as freshly reviewed — a bulk administrative action silently forging the
-# one trust signal the product offers, which is what ADR-0006 argues staleness
+# one trust signal the product offers, which is what adr-bd7c4f3c5764 argues staleness
 # must never be. `check --fix` and `delete --force` already leave `updated`
 # alone for the same reason.
 
@@ -235,7 +235,7 @@ def test_force_remove_does_not_reset_the_staleness_clock(
     assert view["stale"] is True
 
 
-# -- consolidating two tags (GAP-028) ---------------------------------------
+# -- consolidating two tags (issue-cc61d038cf8f) ---------------------------------------
 #
 # Renaming onto an existing key was rejected outright, so two tags could never
 # be merged: the only path was `tag rm --force` on one — throwing the
@@ -321,7 +321,7 @@ def test_merge_onto_a_new_key_behaves_like_a_plain_rename(dispatcher: Dispatcher
 
 
 def test_force_remove_reports_the_documents_it_stripped(seeded: Dispatcher) -> None:
-    """Guards GAP-030. A forced removal rewrites other people's files and said
+    """Guards issue-d69a47904478. A forced removal rewrites other people's files and said
     only `removed <key>` — the same silence `delete --force` and
     `tag rename --merge` were fixed for."""
     result = seeded.dispatch("tag_remove", {"key": "auth", "force": True})

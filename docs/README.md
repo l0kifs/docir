@@ -20,24 +20,26 @@ CLI exists to prevent; use `docir update`.
 ## Ids are random, so this table is the stable map
 
 The store mints collision-resistant random ids (`--id-style random`), which is what lets
-two branches add documents without minting the same id — but it means `adr-0002` is no
-longer an address. The **ADR number is preserved in each document's title**, so
-`docir search "ADR-0002" --include-inactive` finds it, and this table maps the paths that
-existed before the migration:
+two branches add documents without minting the same id. A document's id is its **only**
+identifier: the `ADR-0002` / `GAP-007` / `FLOW-003` sequence labels these documents were
+migrated from are gone from the titles, the filenames and the prose, because two identity
+systems for one corpus is one too many. Search by what a document *says* instead —
+`docir context "why is the index shared across modules"` — and use this table for the
+paths that existed before the migration:
 
 | was | id | now |
 |---|---|---|
-| `docs/adr/ADR-0001-adopt-modular-ddd-with-tach.md` | `adr-d87a60ee4ece` | [decisions/…adr-0001…](../.docir/docs/decisions/adr-d87a60ee4ece-adr-0001-adopt-modular-ddd-enforced-by-tach.md) |
-| `docs/adr/ADR-0002-shared-derived-index.md` | `adr-d3e3616400bf` | [decisions/…adr-0002…](../.docir/docs/decisions/adr-d3e3616400bf-adr-0002-keep-the-shared-derived-index-and-single-unit-of-wo.md) |
-| `docs/adr/ADR-0003-no-authorization-concern.md` | `adr-90e994d931cc` | [decisions/…adr-0003…](../.docir/docs/decisions/adr-90e994d931cc-adr-0003-authorization-and-cross-cutting-concerns-are-not-in.md) |
-| `docs/adr/ADR-0004-central-test-tree.md` | `adr-909fc2a170d0` | [decisions/…adr-0004…](../.docir/docs/decisions/adr-909fc2a170d0-adr-0004-keep-a-central-test-tree-organized-per-module.md) |
-| `docs/adr/ADR-0005-typed-relation-edges.md` | `adr-599055502f0e` | [decisions/…adr-0005…](../.docir/docs/decisions/adr-599055502f0e-adr-0005-typed-relation-edges-per-type-allowed-relations.md) |
-| `docs/adr/ADR-0006-staleness-as-data.md` | `adr-bd7c4f3c5764` | [decisions/…adr-0006…](../.docir/docs/decisions/adr-bd7c4f3c5764-adr-0006-staleness-as-data-owner-verified-review-cadence.md) |
-| `docs/adr/ADR-0007-core-plus-profiles.md` | `adr-2a3f625bb2f8` | [decisions/…adr-0007…](../.docir/docs/decisions/adr-2a3f625bb2f8-adr-0007-a-frozen-core-schema-swappable-domain-profiles.md) |
-| `docs/adr/ADR-0008-agent-instruction-scaffolding.md` | `adr-3a2d5ee7bc84` | [decisions/…adr-0008…](../.docir/docs/decisions/adr-3a2d5ee7bc84-adr-0008-agent-instruction-scaffolding-as-a-self-contained-m.md) |
-| `docs/adr/ADR-0009-per-project-store.md` | `adr-20eec6e2e2ca` | [decisions/…adr-0009…](../.docir/docs/decisions/adr-20eec6e2e2ca-adr-0009-per-project-store-discovery-docir-init.md) |
-| `docs/adr/ADR-0010-qa-profile-and-schema-introspection.md` | `adr-c0ce6f347f3e` | [decisions/…adr-0010…](../.docir/docs/decisions/adr-c0ce6f347f3e-adr-0010-a-qa-profile-a-release-note-type-and-schema-introsp.md) |
-| `docs/adr/ADR-0011-semantic-embeddings-by-default.md` | `adr-ab9c454b760c` | [decisions/…adr-0011…](../.docir/docs/decisions/adr-ab9c454b760c-adr-0011-semantic-embeddings-on-by-default.md) |
+| `docs/adr/ADR-0001-adopt-modular-ddd-with-tach.md` | `adr-d87a60ee4ece` | [decisions/…adopt-modular-ddd…](../.docir/docs/decisions/adr-d87a60ee4ece-adopt-modular-ddd-enforced-by-tach.md) |
+| `docs/adr/ADR-0002-shared-derived-index.md` | `adr-d3e3616400bf` | [decisions/…shared-derived-index…](../.docir/docs/decisions/adr-d3e3616400bf-keep-the-shared-derived-index-and-single-unit-of-work.md) |
+| `docs/adr/ADR-0003-no-authorization-concern.md` | `adr-90e994d931cc` | [decisions/…no-authorization-concern…](../.docir/docs/decisions/adr-90e994d931cc-authorization-and-cross-cutting-concerns-are-not-instantiate.md) |
+| `docs/adr/ADR-0004-central-test-tree.md` | `adr-909fc2a170d0` | [decisions/…central-test-tree…](../.docir/docs/decisions/adr-909fc2a170d0-keep-a-central-test-tree-organized-per-module.md) |
+| `docs/adr/ADR-0005-typed-relation-edges.md` | `adr-599055502f0e` | [decisions/…typed-relation-edges…](../.docir/docs/decisions/adr-599055502f0e-typed-relation-edges-per-type-allowed-relations.md) |
+| `docs/adr/ADR-0006-staleness-as-data.md` | `adr-bd7c4f3c5764` | [decisions/…staleness-as-data…](../.docir/docs/decisions/adr-bd7c4f3c5764-staleness-as-data-owner-verified-review-cadence.md) |
+| `docs/adr/ADR-0007-core-plus-profiles.md` | `adr-2a3f625bb2f8` | [decisions/…core-plus-profiles…](../.docir/docs/decisions/adr-2a3f625bb2f8-a-frozen-core-schema-swappable-domain-profiles.md) |
+| `docs/adr/ADR-0008-agent-instruction-scaffolding.md` | `adr-3a2d5ee7bc84` | [decisions/…agent-instruction-scaffolding…](../.docir/docs/decisions/adr-3a2d5ee7bc84-agent-instruction-scaffolding-as-a-self-contained-module.md) |
+| `docs/adr/ADR-0009-per-project-store.md` | `adr-20eec6e2e2ca` | [decisions/…per-project-store…](../.docir/docs/decisions/adr-20eec6e2e2ca-per-project-store-discovery-docir-init.md) |
+| `docs/adr/ADR-0010-qa-profile-and-schema-introspection.md` | `adr-c0ce6f347f3e` | [decisions/…qa-profile…](../.docir/docs/decisions/adr-c0ce6f347f3e-a-qa-profile-a-release-note-type-and-schema-introspection.md) |
+| `docs/adr/ADR-0011-semantic-embeddings-by-default.md` | `adr-ab9c454b760c` | [decisions/…semantic-embeddings…](../.docir/docs/decisions/adr-ab9c454b760c-semantic-embeddings-on-by-default.md) |
 | `docs/architecture-rules.md` | `arch-322e5f992ad2` | [architectures/…architecture-rules…](../.docir/docs/architectures/arch-322e5f992ad2-architecture-rules-modular-ddd.md) |
 | `docs/doc-index-architecture.md` | `arch-1cfb1b212237` | [architectures/…doc-index-cli…](../.docir/docs/architectures/arch-1cfb1b212237-doc-index-cli-architecture.md) |
 | `docs/PUBLISHING.md` | `run-30aceb4eacc6` | [runbooks/…publishing-to-pypi…](../.docir/docs/runbooks/run-30aceb4eacc6-publishing-to-pypi.md) |
@@ -63,8 +65,8 @@ frame and probe log are embedded verbatim.
 | `analysis/03-rules.yaml` | `reference` | `ref-32cb4f874fbe` |
 | `analysis/04-glossary.yaml` | `reference` | `ref-cbf147832c37` |
 | `analysis/99-log.md` | `reference` | `ref-1509d5dbb4c3` |
-| `analysis/05-gaps.yaml` | 50 `issue` documents | title carries `GAP-0NN` |
-| `analysis/06-questions.yaml` | 17 `issue` documents | title carries `Q-0NN` |
+| `analysis/05-gaps.yaml` | 50 `issue` documents | one per `GAP-0NN` |
+| `analysis/06-questions.yaml` | 17 `issue` documents | one per `Q-0NN` |
 
 `reference` is an inline type added to `docs-schema.yaml` for descriptive registers — the
 glossary, the actor catalog, the rule register, the frame and the probe log. They record
@@ -81,8 +83,12 @@ Two documents still contain `analysis/...` paths — the frame and the probe log
 where the discovery run wrote its output in 2026-07. Rewriting that would falsify a
 historical record, so each carries a trailing "Note on paths" section instead.
 
-GAP-051, found by the migration itself, was filed and resolved through `docir add` /
-`docir update` — the store is the live register now.
+`issue-d79dbf1075fa`, found by the migration itself, was filed and resolved through
+`docir add` / `docir update` — the store is the live register now.
+
+Each migrated document keeps a "Migrated from the discovery gap register (GAP-0NN)" line
+in its body. That is the one place a sequence label still appears, and deliberately: it
+records what the document *used to be called*, which is history rather than an address.
 
 ## What deliberately stayed outside the store
 

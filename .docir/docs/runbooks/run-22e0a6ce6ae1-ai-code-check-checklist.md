@@ -11,10 +11,8 @@ tags:
 - docs
 title: AI Code-Check Checklist
 type: runbook
-updated: '2026-07-30'
+updated: '2026-08-05'
 ---
-
-# AI Code-Check Checklist
 
 A checklist for an AI agent reviewing/testing **new code**, built to catch the obvious mistakes and edge cases that generic "review this code" passes miss (duplicate registration accepted, empty password accepted, etc.).
 

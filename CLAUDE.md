@@ -12,7 +12,7 @@ them through the CLI rather than by path:
 ```bash
 docir get arch-1cfb1b212237        # Doc-Index CLI — Architecture (design rationale)
 docir get arch-322e5f992ad2        # Architecture Rules — Modular DDD (the module rules)
-docir query --type decision        # every ADR; the number is in the title
+docir query --type decision        # every ADR (a document's id is its only address)
 docir context "<what you are about to change>"   # ranked skeletons, no bodies
 ```
 
@@ -25,7 +25,7 @@ are machine-checked, and invariants that look like cruft but are load-bearing.
 One `uv`-managed package, Python 3.12+. State lives in a single resolved store per invocation.
 Home precedence (highest first): `--home` → `DOCIR_HOME` → a project-local `.docir/` discovered by
 walking up from the CWD (created by `docir init`; the git model) → the global `~/.docir` default
-(ADR-0009). Discovery is inert whenever a home is explicitly given (every test sets `DOCIR_HOME`).
+(adr-20eec6e2e2ca). Discovery is inert whenever a home is explicitly given (every test sets `DOCIR_HOME`).
 
 ```bash
 uv sync                                          # create/refresh the environment
@@ -49,7 +49,7 @@ uv run pytest --cov=docir --cov-fail-under=90          # tests + coverage (curre
 - **Single tests:** `uv run pytest tests/modules/documents/test_integration_documents.py -k archive`.
   The daemon end-to-end tests are marked `slow` and spawn a real subprocess:
   `uv run pytest -m "not slow"` skips them.
-- **The real ONNX model is the default and a plain dependency** (ADR-0011; the `embeddings` extra
+- **The real ONNX model is the default and a plain dependency** (adr-ab9c454b760c; the `embeddings` extra
   is gone). The test suite sets `DOCIR_EMBEDDER=deterministic` so it stays hermetic — which means
   most tests never touch a model, and anything about the model's *token window* cannot be tested
   that way: the hashing embedder has no window at all. Tests that need the real one are marked
@@ -88,8 +88,8 @@ src/docir/
 │   ├── documents/   api.py + CONTRACT.md + domain/application/infra   (the document aggregate; write + read + maintenance)
 │   ├── tags/        api.py + CONTRACT.md + domain/application          (the tag registry)
 │   ├── indexing/    api.py + CONTRACT.md + domain/application/infra    (hybrid ranking + the embedding scheduler)
-│   ├── agents/      api.py + CONTRACT.md + domain/application/infra    (installs AI-assistant instructions; ADR-0008)
-│   └── publishing/  api.py + CONTRACT.md + domain/application/infra    (renders the corpus as a static site; ADR-0016)
+│   ├── agents/      api.py + CONTRACT.md + domain/application/infra    (installs AI-assistant instructions; adr-3a2d5ee7bc84)
+│   └── publishing/  api.py + CONTRACT.md + domain/application/infra    (renders the corpus as a static site; adr-a343140d72e2)
 └── entry_points/  cli · daemon · mcp · composition · dispatch          (wiring only, no business logic)
 ```
 
@@ -120,7 +120,7 @@ not "simplify" it by handing it a `DocumentService`.
 a file write and its metadata/FTS/relation update commit atomically. A strict reading of the rules
 (§5.1/§5.3, one owner per table, no shared transaction) would forbid that; going fully compliant
 means per-module storage plus an event bus, which is a rewrite the project deliberately deferred
-(**ADR-0002**). The consequences you will see:
+(**adr-d3e3616400bf**). The consequences you will see:
 
 - The repositories, unit-of-work, models, and file stores live in `platform/persistence` and
   `platform/filesystem`, and they map each context's domain entities — so `platform → *.domain`
@@ -130,7 +130,7 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   sanctioned responses to a boundary error are: route through the module's `api`, move the shared
   thing into `platform`, or (last resort) merge the modules — never widen a baseline. Shrinking it
   (splitting the index per module behind events) is the only allowed direction and would supersede
-  ADR-0002.
+  adr-d3e3616400bf.
 - All cross-context *data* access goes through `platform` (the shared repos), not through another
   module's code. That is why `tags` imports nothing from `documents` even though tag rename rewrites
   documents — it reaches them via `uow.documents`, keeping the module graph acyclic.
@@ -184,12 +184,12 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   past its review cadence, a different concept on a different clock.
 - **Only a human content edit may move `updated`.** Staleness falls back to `updated` when a
   document has no explicit `verified`, so any mechanical rewrite that bumps it launders the
-  review clock — the one trust signal the product offers (ADR-0006). Three write paths rewrite
+  review clock — the one trust signal the product offers (adr-bd7c4f3c5764). Three write paths rewrite
   documents without touching `updated`: `check --fix`, `delete --force`, and `tag rename` /
   `tag rm --force`. `TagService` therefore has **no `Clock`** — it was injected only to stamp
   the date it must not stamp. Adding a fourth mechanical rewrite? It does not set `updated`.
   (The alternative — measure staleness from `verified` only — is rejected: it makes every
-  never-verified document stale from `created`, which is GAP-006's failure mode again.)
+  never-verified document stale from `created`, which is issue-9cb85759076d's failure mode again.)
 - **A forced delete compensates for the edges it breaks.** `delete --force` strips the edge
   from every referencing document in the same transaction and returns their ids (the CLI
   prints "unlinked from ..."), so it cannot leave a dangling reference — the pattern
@@ -221,13 +221,13 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   unknown/disallowed relation kind); Tier 1 (`docir check`) is non-blocking structural graph warnings
   (incl. **staleness** and **unknown-type**); Tier 2 (`docir lint --deep`) is advisory heuristics (embedding similarity,
   scope creep). Never promote a heuristic to a hard error.
-- **Relation edges are typed (ADR-0005).** `related` entries carry a `kind` (`RelatedRef{target,
+- **Relation edges are typed (adr-599055502f0e).** `related` entries carry a `kind` (`RelatedRef{target,
   kind}`); the on-disk form is a bare id for the default `relates_to` (so pre-typed files round-trip
   unchanged) or a `{to, kind}` mapping. `relations.kind` is a **non-key** column — one kind per
   ordered `(source, target)` pair — added by migration `0002`. The `relation_types` registry is
   **permissive when empty** (schemas predating typed edges accept any kind). Per-type
   `allowed_relations` is a whitelist enforced at Tier 0.
-- **Staleness is data, not a heuristic (ADR-0006).** Optional `owner`/`verified` frontmatter +
+- **Staleness is data, not a heuristic (adr-bd7c4f3c5764).** Optional `owner`/`verified` frontmatter +
   per-type `review_days`; `docir check` emits a Tier 1 `stale` finding and read views carry a `stale`
   flag. `MaintenanceService`/`DocumentService` need a `Clock` for "today". **AST-anchored** staleness
   is intentionally *not* built — human `--verified` is the honest baseline; anchoring is a future
@@ -253,12 +253,12 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   `DocumentSummary` (frontmatter + typed edges + staleness, **no body**); only `get` returns the full
   `DocumentView` with the body. Do not add the body back to the list paths — the skeleton is the
   context-saving contract. `get --section "<heading>"` narrows the body to one section and is the
-  paired read for chunked ranking (ADR-0014): it returns exactly the span `--replace-section` would
+  paired read for chunked ranking (adr-927aa43d9635): it returns exactly the span `--replace-section` would
   overwrite (`extract_section` and `replace_section` share one end boundary — do not let them
   diverge, or an agent can read one span and overwrite another), and an unknown heading raises
   *listing the real ones*, because discovering them by fetching the whole body is the cost the flag
   removes.
-- **Every section is embedded, because the model never read the whole body (ADR-0014).**
+- **Every section is embedded, because the model never read the whole body (adr-927aa43d9635).**
   `bge-small-en-v1.5` reads ~512 tokens (~1,900 chars of prose) and silently ignores the rest —
   appending text past it returns a bit-identical vector. 84 of docir's own 103 documents exceed
   that, so 56% of the corpus was absent from the semantic index while FTS5 hid it by covering the
@@ -290,7 +290,7 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   `graph_checks._DEPENDENCY_KINDS` — they briefly held the same two kinds for unrelated reasons
   and have since diverged entirely. `DocumentRepository.incoming` takes an optional `kinds` filter
   for this; unfiltered it is still the delete integrity check.
-- **The schema is core + profiles (ADR-0007).** `infra/profiles.py` holds a frozen domain-agnostic
+- **The schema is core + profiles (adr-2a3f625bb2f8).** `infra/profiles.py` holds a frozen domain-agnostic
   core (the `decision` type + relation registry + cadences) and bundled profiles (software/research/
   ops/legal). A `docs-schema.yaml` with a `profiles:` key merges `core -> profiles -> inline`; a file
   with no `profiles:` key parses inline-only (fully backward compatible). The default is
@@ -355,14 +355,14 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   `<dir>/.docir`, both is an error). They sit side by side and cross-reference each other
   because `init` used to compute its own home in the CLI layer, silently ignored `--home`,
   and so escaped every review that traced `resolve`. Do not move either out.
-- **`docir init` scopes a repo to a project-local `.docir/` store (ADR-0009).** It is a bootstrap
+- **`docir init` scopes a repo to a project-local `.docir/` store (adr-20eec6e2e2ca).** It is a bootstrap
   operation in the composition root (`initialize_store`), run in-process by a thin CLI command (no
   daemon/dispatcher). It writes `docs-schema.yaml` + a `.gitignore` for the derived index and runs
   migrations via the normal startup path. `Settings.resolve` discovers the store by walking up for
   `.docir/` (`config/settings.discover_project_home`), so the commit story is `.docir/docs/` +
   `docs-schema.yaml` committed, index gitignored. Do not reach into `documents.infra` for the schema —
   `DEFAULT_SCHEMA_YAML`/`PROFILE_NAMES` are exported from `documents.api`.
-- **`docir agent install/update` bypasses the daemon/dispatcher on purpose (ADR-0008).** The
+- **`docir agent install/update` bypasses the daemon/dispatcher on purpose (adr-3a2d5ee7bc84).** The
   `agents` module installs AI-assistant instruction files (a Claude skill / an `AGENTS.md` block)
   from one packaged template (`modules/agents/infra/templates/skill.md`, the canonical guide — edit
   it there, not `docs/AGENT_GUIDE.md`, which is now a pointer). It touches no index/DB, so the CLI
@@ -371,7 +371,7 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   Generated files carry a `<!-- docir:vX -->` stamp so `update` reports a version transition; a
   foreign `AGENTS.md` is never rewritten (only docir's marker block is).
 - **`docir mcp serve` is a third client of the dispatcher, not a second implementation
-  (ADR-0013).** Every tool in `entry_points/mcp/server.py` is one `Request` through a
+  (adr-354a4270ecd8).** Every tool in `entry_points/mcp/server.py` is one `Request` through a
   `RequestExecutor` — the same boundary the CLI and the daemon socket cross — so an MCP tool
   and its CLI command cannot answer differently. Exactly one tool per dispatcher command
   (`ping` excepted: a liveness probe, not a document operation) plus `docir_schema`, which is
@@ -397,7 +397,7 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   `entry_points/cli/runner.py` maps that onto the process exit code. Raise a typed subclass, not a
   bare `DocirError`, so the CLI reports the right code.
 - **`fastembed` is the default embedder and a hard dependency; the hashing one is the
-  fallback (ADR-0011).** It was optional, which meant the shipped default scored *shared vocabulary*
+  fallback (adr-ab9c454b760c).** It was optional, which meant the shipped default scored *shared vocabulary*
   rather than meaning — `DeterministicEmbedder` is signed feature hashing, the same signal
   FTS5 already provides, and two paraphrases with no words in common score 0.0. Measured
   (`benchmarks/`, 2026-07-27 re-based corpus — compare only against figures from that run):
@@ -414,7 +414,7 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   Tests that load the real model are marked `slow` (~4 s cold, ~2 ms warm); CI caches
   `~/.cache/fastembed`. Run `uv run python benchmarks/run.py` before and after touching ranking.
 - **Vectors record which model produced them, and mismatches are recomputed, not compared
-  (ADR-0011).**
+  (adr-ab9c454b760c).**
   `set_vector` writes `embeddings.model_id`; `active_vectors(model_id)` returns only matching
   rows and `dirty_ids(model_id)` treats a foreign or NULL `model_id` as dirty. Without this,
   changing embedder made `docir context` raise `dimension mismatch: 256 != 384` in every
@@ -424,7 +424,7 @@ means per-module storage plus an event bus, which is a rewrite the project delib
 
 ## Testing
 
-Central `tests/` tree, organized to mirror the modules (**ADR-0004** — tests are not yet co-located
+Central `tests/` tree, organized to mirror the modules (**adr-909fc2a170d0** — tests are not yet co-located
 inside `src/docir/modules/**`, a recorded deviation from §9):
 
 ```
@@ -466,13 +466,13 @@ tests/
 
 Real, documented, not stylistic — don't be surprised, and don't paper over them silently:
 
-- **The shared index/UoW is a deviation, not the target end-state (ADR-0002).** `platform` is not a
+- **The shared index/UoW is a deviation, not the target end-state (adr-d3e3616400bf).** `platform` is not a
   pure leaf; the `platform → *.domain` tach edges are the baseline that must only shrink. The
   intended future move is per-module storage fed by domain events, which removes them.
-- **No authorization / cross-cutting machinery (ADR-0003).** `docir` is a single-user local CLI with
+- **No authorization / cross-cutting machinery (adr-90e994d931cc).** `docir` is a single-user local CLI with
   no actors or permissions, so §6/§6.1 are intentionally not instantiated. If it ever grows real
   actors, a cross-cutting concern must be introduced per §6.
-- **Tests are centralized, not inside their modules (ADR-0004).** The next sanctioned refactor is to
+- **Tests are centralized, not inside their modules (adr-909fc2a170d0).** The next sanctioned refactor is to
   co-locate them under `src/docir/modules/**`.
 - `MaintenanceService` (reindex/check/lint) lives in `documents` and reaches the search/embedding
   index through `indexing.api` and the shared UoW; it is the one genuinely cross-cutting operation,

@@ -169,7 +169,7 @@ class TestGraphChecker:
         assert any(i.kind == "layering" for i in issues)
 
     def test_relates_to_never_reports_layering(self) -> None:
-        """Guards GAP-008: the default kind is not a dependency claim.
+        """Guards issue-40d1792bc9f9: the default kind is not a dependency claim.
 
         `relates_to` is what every bare id in `related:` becomes, so when the
         check exempted only supersedes/contradicts, a decision linking the issue
@@ -307,7 +307,7 @@ class TestSimilarityLinter:
         assert findings and findings[0].kind == "duplicate"
 
     def test_a_linked_pair_is_not_reported(self) -> None:
-        """GAP-055: the edge is the answer to "why are these two similar?".
+        """issue-08437ba704ff: the edge is the answer to "why are these two similar?".
 
         Every one of the 14 duplicate findings against docir's own corpus was a
         pair the author had linked on purpose, which leaves the reader nothing
@@ -335,7 +335,7 @@ class TestSimilarityLinter:
         assert findings and findings[0].kind == "scope-creep"
 
     def test_a_type_may_opt_out_of_the_size_check(self) -> None:
-        """GAP-056: one threshold for every type made a register always too long.
+        """issue-5d6a5e854d11: one threshold for every type made a register always too long.
 
         A glossary or a rule register split in half is two half-registers, so
         the advice could not be taken — the failure mode `orphan` had under

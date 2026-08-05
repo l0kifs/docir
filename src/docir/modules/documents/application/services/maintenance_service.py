@@ -275,7 +275,7 @@ class MaintenanceService:
             vectors = uow.embeddings.active_vectors(self._embedder.model_id)
             documents = [d for d in uow.documents.all() if not d.archived]
             # A pair the author has linked has already been explained; only the
-            # unnoticed similarity is worth reporting (GAP-055).
+            # unnoticed similarity is worth reporting (issue-08437ba704ff).
             linked = {frozenset((rel.source, rel.target)) for rel in uow.documents.relations()}
         findings = self._linter.find_duplicates(vectors, linked)
         findings.extend(self._linter.find_scope_creep(documents, self._schema))
@@ -370,7 +370,7 @@ class MaintenanceService:
         for orphaned in uow.documents.all():
             # Named `orphaned`, not `stale`: in this codebase `stale` is the
             # review-cadence feature. An index row whose file is gone is a
-            # different thing entirely (GAP-032).
+            # different thing entirely (issue-d8295c5c76d1).
             if orphaned.id not in seen:
                 uow.documents.delete(orphaned.id)
                 uow.search.remove(orphaned.id)

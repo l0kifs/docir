@@ -73,7 +73,7 @@ which returns the full `DocumentView`. A `related` entry is a typed edge
 review clock). `MaintenanceService` requires a `Clock` (staleness needs "today").
 
 ## Events published
-- none (no event bus; see ADR-0002)
+- none (no event bus; see adr-d3e3616400bf)
 
 ## Events consumed
 - none
@@ -82,11 +82,11 @@ review clock). `MaintenanceService` requires a `Clock` (staleness needs "today")
 - data: document metadata (including `owner`/`verified` stewardship fields), the
   typed relation graph (each edge carries a `kind`), and the canonical markdown
   files. Physically these live in the shared index/filesystem owned by `platform`
-  (grandfathered; see ADR-0002).
+  (grandfathered; see adr-d3e3616400bf).
 
 ## Depends on
 - modules: indexing (relevance ranking + embedding scheduler)
 - platform: persistence, filesystem, embedding, clock, errors, naming (the tag-key grammar)
 
 ## Policy
-- permissions: none (single-user local CLI; see ADR-0003)
+- permissions: none (single-user local CLI; see adr-90e994d931cc)

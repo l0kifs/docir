@@ -78,7 +78,7 @@ publisher's own mark) and `force`. `PublishResult` reports `out`, `pages`,
   guessing — a wrong colour asserts a structure the source does not have.
 - **Chrome identifies a document only by its docir id.** The breadcrumb leaf,
   the id chip and the copyable `docir get <id>` command all carry the id;
-  sequence labels inside titles ("ADR-0016") are title text, never parsed or
+  sequence labels inside titles ("adr-a343140d72e2") are title text, never parsed or
   displayed as identity. Every page ends with the copyable
   `docir update <id>` / `--verified` commands: the site is read-only and says
   what the write path is.

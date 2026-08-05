@@ -3,7 +3,7 @@
 The canonical instruction guide ships as ``templates/skill.md`` inside this
 package and is loaded via ``importlib.resources`` so it resolves identically from
 an editable checkout and from an installed wheel. This one packaged file is the
-single source of truth for what every target embeds (see ADR-0008).
+single source of truth for what every target embeds (see adr-3a2d5ee7bc84).
 """
 
 from __future__ import annotations

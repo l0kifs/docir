@@ -10,10 +10,8 @@ tags:
 - release
 title: Publishing to PyPI
 type: runbook
-updated: '2026-07-30'
+updated: '2026-08-05'
 ---
-
-# Publishing to PyPI
 
 This project uses [UV](https://docs.astral.sh/uv/) as the package manager and GitHub Actions for automated publishing to PyPI.
 

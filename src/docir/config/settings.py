@@ -65,12 +65,12 @@ def enclosing_project_home(home: Path) -> Path | None:
     anywhere else escapes the review that reads these.
 
     ``init`` deliberately does not reuse an enclosing store — reusing a parent
-    is the wrong answer when the caller asked for a new one (ADR-0009) — but
+    is the wrong answer when the caller asked for a new one (adr-20eec6e2e2ca) — but
     "do not reuse it" and "do not mention it" are different decisions, and only
     the first was made. Discovery walks *up*, so a store created beneath another
     captures every command run under it, silently, and the outer store's
     ``check`` never sees those documents: they are not orphaned or dangling,
-    they are in a different corpus (GAP-054).
+    they are in a different corpus (issue-e10cde8c5085).
 
     Starts at ``home``'s own directory so an explicitly-named store (``--home
     /srv/docs``) still notices a sibling ``.docir``, and skips a candidate that
@@ -91,7 +91,7 @@ def new_store_home(directory: Path | None, explicit_home: Path | None) -> Path:
     Kept in this module deliberately. ``init`` used to compute its home in the
     CLI layer and so drifted out of sync with every other command, silently
     ignoring ``--home`` and creating the store in whatever directory the shell
-    happened to be in (GAP-047). A review that traced ``resolve`` never saw it,
+    happened to be in (issue-638068ed09a6). A review that traced ``resolve`` never saw it,
     because it did not use it. Both home decisions now sit here and are read
     together.
 

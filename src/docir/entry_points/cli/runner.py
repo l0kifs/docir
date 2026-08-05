@@ -94,7 +94,7 @@ def execute(command: str, payload: dict[str, object]) -> object:
     mode reported its failures as a stack trace and exit 1 rather than the
     message and the exit code the error carries. Errors the daemon *returns*
     were never affected: they arrive as a `Response` and go through
-    :func:`_unwrap`, which is why this survived (GAP-052).
+    :func:`_unwrap`, which is why this survived (issue-06f48d8f239f).
     """
     state = get_state()
     executor, closer = run_local(lambda: _build_executor(state.settings))

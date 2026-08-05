@@ -1,4 +1,4 @@
-"""End-to-end tests for ``docir schema show/validate`` (ADR-0010)."""
+"""End-to-end tests for ``docir schema show/validate`` (adr-c0ce6f347f3e)."""
 
 from __future__ import annotations
 
@@ -109,7 +109,7 @@ class TestSchemaValidate:
         assert result.exit_code != 0, f"expected failure: {reason}"
 
     def test_diagnoses_a_schema_too_broken_to_start_the_store(self, tmp_path: Path) -> None:
-        # The reason both commands run in-process (ADR-0010): build_container
+        # The reason both commands run in-process (adr-c0ce6f347f3e): build_container
         # loads the schema, so routing them through the dispatcher would make
         # them unreachable in exactly the situation they exist for. A normal
         # command must fail here, while `schema validate` still reports why.

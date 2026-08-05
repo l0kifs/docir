@@ -94,14 +94,14 @@ class TestUpdate:
             seeded.dispatch("update", {"doc_id": "issue-0001", "status": "open"})
 
     def test_override_reports_the_rule_it_broke(self, seeded: Dispatcher) -> None:
-        """Guards GAP-014: a forced transition is no longer silent.
+        """Guards issue-0783d236d565: a forced transition is no longer silent.
 
         The escape hatch stays — a document stranded by a schema change needs
         one — but it used to leave a document indistinguishable from one that
         transitioned legally. The operator is now told, at the moment they
         bypass it, which rule they bypassed and what the legal moves were.
 
-        Deliberately not written to the file: docir has no actors (ADR-0003), so
+        Deliberately not written to the file: docir has no actors (adr-90e994d931cc), so
         "who overrode this" has no answer worth storing, and git already records
         the status change itself.
         """
@@ -205,7 +205,7 @@ class TestUpdate:
 
 
 class TestDiskDivergenceScoping:
-    """Only `--replace-body` is blocked when the file diverged (states GAP-037).
+    """Only `--replace-body` is blocked when the file diverged (states issue-be95d3e242a3).
 
     The guard was applied to one of five edit modes and nothing recorded why,
     so it read as an oversight. It is not. Every edit is applied to the document
@@ -273,7 +273,7 @@ class TestTypedEdges:
     def test_frontmatter_accepts_target_as_well_as_to(
         self, seeded: Dispatcher, settings: Settings
     ) -> None:
-        """Guards GAP-034: the file says `to`, the JSON says `target`.
+        """Guards issue-8d5b5b45e2fc: the file says `to`, the JSON says `target`.
 
         An agent that reads a result and then hand-writes frontmatter reaches
         for the key it just saw. `to` stays canonical on write so files do not
@@ -291,11 +291,11 @@ class TestTypedEdges:
         assert list(related) == [{"target": "adr-0001", "kind": "supersedes"}]
 
     def test_a_document_cannot_relate_to_itself(self, seeded: Dispatcher) -> None:
-        """Guards GAP-053: the write path manufactured a `cycle` finding.
+        """Guards issue-2ebfc018f29a: the write path manufactured a `cycle` finding.
 
         `--set-related <self>` was accepted, and `docir check` then reported a
         one-node relation cycle that no edit cleared except removing the edge.
-        Same degenerate case as `tag rename X X` (GAP-048) — a feature whose
+        Same degenerate case as `tag rename X X` (issue-9bbca6c0f434) — a feature whose
         tests only ever used two different values.
         """
         with pytest.raises(ValidationError, match="itself"):
@@ -402,7 +402,7 @@ class TestQuerySearchContext:
 
 
 class TestContextBudget:
-    """``--limit`` is a hard ceiling on the response (guards GAP-005).
+    """``--limit`` is a hard ceiling on the response (guards issue-996b567e5131).
 
     Graph expansion used to run *after* the limit and was itself uncapped, so a
     densely linked corpus blew straight through it: three seeds with out-degree
@@ -480,8 +480,8 @@ class TestContextBudget:
 
 
 class TestContextGraphVisibility:
-    """Graph-reached neighbours obey the same rules as ranked hits (GAP-004),
-    and expansion reaches successors backwards (GAP-019).
+    """Graph-reached neighbours obey the same rules as ranked hits (issue-8c37bf22ba3c),
+    and expansion reaches successors backwards (issue-5bfbc6f2699d).
 
     These are the two halves of one defect in ``_augment_with_related``: it
     checked ``archived`` but not inactive status, so the closed-work filter held
@@ -584,7 +584,7 @@ class TestContextGraphVisibility:
 
 
 class TestRelevanceFloor:
-    """`context` can answer "nothing relevant exists" (guards GAP-017).
+    """`context` can answer "nothing relevant exists" (guards issue-93152f7b9213).
 
     The emitted `score` is RRF, so it is rank-derived: against a store holding
     only "Postgres connection pooling", `context "how do I bake sourdough
@@ -677,7 +677,7 @@ class TestRelevanceFloor:
 
 
 class TestSearchFillsItsLimit:
-    """`search` widens the candidate pool rather than under-returning (GAP-018).
+    """`search` widens the candidate pool rather than under-returning (issue-e19a2fde1805).
 
     Closed documents are filtered after the index returns, because FTS5 does not
     know a status. With a fixed `limit * 2` over-fetch, a corpus where most top
@@ -737,7 +737,7 @@ class TestSearchFillsItsLimit:
 
 
 class TestNoOpPathsStillComputeStaleness:
-    """A no-op archive/unarchive reports staleness correctly (guards GAP-015).
+    """A no-op archive/unarchive reports staleness correctly (guards issue-7d4fdccf8343).
 
     The early return built the view without a `stale=` argument, so the
     dataclass default of False won: `get` said `stale: true` for a document that
@@ -814,7 +814,7 @@ class TestArchiveDelete:
 
 
 class TestForcedDeleteCompensates:
-    """A forced delete strips the edges it breaks (guards GAP-007).
+    """A forced delete strips the edges it breaks (guards issue-fd547a293d01).
 
     It used to leave the referencing document pointing at nothing, in the
     canonical file, forever: `check` reported it, no command fixed it, and
@@ -847,7 +847,7 @@ class TestForcedDeleteCompensates:
     def test_staleness_clock_is_not_laundered(self, seeded: Dispatcher) -> None:
         # Matches `check --fix`, not `tag rm --force`: staleness records when a
         # human last vouched for the content, and having a link removed from
-        # underneath you is not that. (The tag path does bump it — GAP-020.)
+        # underneath you is not that. (The tag path does bump it — issue-9ed4905e0db8.)
         before = seeded.dispatch("get", {"doc_id": "issue-0001"})["updated"]
         seeded.dispatch("delete", {"doc_id": "adr-0001", "force": True})
         assert seeded.dispatch("get", {"doc_id": "issue-0001"})["updated"] == before

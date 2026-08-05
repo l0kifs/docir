@@ -64,7 +64,7 @@ def test_force_rewrites_an_untouched_schema(tmp_path: Path) -> None:
 
 
 class TestForceProtectsACustomisedSchema:
-    """`--force` no longer destroys a customised schema (guards GAP-026).
+    """`--force` no longer destroys a customised schema (guards issue-fde9a7151bd1).
 
     `--force` overwrote `docs-schema.yaml` and `.gitignore` under one flag, so
     re-running `init` to refresh the gitignore silently replaced every type,
@@ -121,12 +121,12 @@ class TestForceProtectsACustomisedSchema:
 
 
 class TestAShadowedStoreIsReported:
-    """GAP-054: `init` beneath an existing store captured every command run
+    """issue-e10cde8c5085: `init` beneath an existing store captured every command run
     under it, and said nothing.
 
     Discovery walks *up*, so the nested store wins for the whole subtree and the
     outer store's `check` never sees documents added there — they are not
-    orphaned or dangling, they are in a different corpus. ADR-0009 is right that
+    orphaned or dangling, they are in a different corpus. adr-20eec6e2e2ca is right that
     `init` must not *reuse* a parent store; that is a different decision from
     not mentioning it.
     """

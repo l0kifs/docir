@@ -6,13 +6,22 @@ id: ref-1509d5dbb4c3
 owner: maintainer
 related:
 - arch-1cfb1b212237
+- adr-90e994d931cc
+- adr-ab9c454b760c
+- issue-0ff355fa21dd
+- issue-9ed4905e0db8
+- issue-b4f441c7210f
+- issue-cc61d038cf8f
+- issue-d7767bef9399
+- issue-f01a7a585fc1
+- issue-f6a5d0b86806
 status: active
 tags:
 - docs
 - testing
 title: Discovery probe log — PROBE-1..N and the delta pass
 type: reference
-updated: '2026-07-30'
+updated: '2026-08-05'
 ---
 
 # Run log — append-only
@@ -38,7 +47,7 @@ updated: '2026-07-30'
 
 **Consequence:** the two highest-value evidence ranks (1, 5) are missing entirely. Every
 "frequency" and "actual impact" statement in `05-gaps.yaml` is therefore `unknown` rather
-than measured. Recorded as `GAP-001`.
+than measured. Recorded as `issue-e183d47cdee1`.
 
 ## PHASE 2 — extraction
 
@@ -97,17 +106,17 @@ PROBE-9  delete then add                 → id NOT reused (counter monotonic) �
 Coverage checklists from `gap-checklists.md` §2 iterated mechanically against every flow and
 the `document` / `tag` entities. Result: **39 gaps** — 6 blocking, 20 material, 13 cosmetic.
 
-Checklist items that produced findings: bulk import/export (GAP-036), merge/deduplicate
-(GAP-028), delete + compensating action (GAP-007), every-state-has-an-exit (GAP-010), concurrent
-transition by two actors (GAP-009, GAP-037), duplicate submission / idempotency (GAP-009),
-admin override + audit (GAP-014), support diagnosis tooling (GAP-012), notifications (GAP-011),
-time/timezone (GAP-038), volume limits (GAP-039), observability (GAP-001), migration of data
-created under older rules (GAP-025).
+Checklist items that produced findings: bulk import/export (issue-20933967697b), merge/deduplicate
+(issue-cc61d038cf8f), delete + compensating action (issue-fd547a293d01), every-state-has-an-exit (issue-b47a1203baa2), concurrent
+transition by two actors (issue-389dc5dac58a, issue-be95d3e242a3), duplicate submission / idempotency (issue-389dc5dac58a),
+admin override + audit (issue-0783d236d565), support diagnosis tooling (issue-476b4e188fab), notifications (issue-b4f441c7210f),
+time/timezone (issue-7e16dfe2521c), volume limits (issue-f6a5d0b86806), observability (issue-e183d47cdee1), migration of data
+created under older rules (issue-ed49c1d03894).
 
 Checklist items examined and found **adequately covered** (recorded so coverage is not
 overstated): create validation (BR-001..BR-005), read visibility (BR-028, BR-029), field
 mutability by state (BR-005), transfer of ownership (`--set-owner`), retention (git holds
-history), permissions (N/A per ADR-0003), rounding/currency/tax (no money in this domain).
+history), permissions (N/A per adr-90e994d931cc), rounding/currency/tax (no money in this domain).
 
 Smell scan (`gap-checklists.md` §3, automated regex over all 45 rule statements): **0 hits**.
 
@@ -127,12 +136,12 @@ SELF-4  Q/BR/GAP cross-references were inconsistent after renumbering. Reconcile
         verified no dangling or undefined ids in either direction.
 ```
 
-Claims I attempted to refute and could **not**: GAP-003, GAP-004, GAP-005, GAP-006, GAP-009,
-GAP-010, GAP-017, GAP-024 — each is reproducible by the probe recorded above.
+Claims I attempted to refute and could **not**: issue-b7ddde3ce860, issue-8c37bf22ba3c, issue-996b567e5131, issue-9cb85759076d, issue-389dc5dac58a,
+issue-b47a1203baa2, issue-93152f7b9213, issue-b8220546282c — each is reproducible by the probe recorded above.
 
 Claim I did refute and narrowed: an early reading that `docir context --limit` overflows in
 every case. PROBE-4 (`--limit 1` → 1 result) shows it overflows only when selected documents
-have outgoing edges to documents not already selected. GAP-005 states that actual condition.
+have outgoing edges to documents not already selected. issue-996b567e5131 states that actual condition.
 
 ## Quality gates (SKILL.md §9)
 
@@ -189,8 +198,8 @@ DOC  packaged agent guide corrected: `docir reindex --all` does not exist     �
 ```
 
 Attribution was tested, not assumed: each fix was reverted in isolation and the new tests
-re-run, to confirm they fail against the old behaviour (`assert 9 == 3` for GAP-005;
-8 concurrent adds colliding for GAP-009).
+re-run, to confirm they fail against the old behaviour (`assert 9 == 3` for issue-996b567e5131;
+8 concurrent adds colliding for issue-389dc5dac58a).
 
 ### Findings produced BY these changes
 
@@ -207,7 +216,7 @@ Rules restated rather than left stale: BR-006 (id allocation is style-dependent,
 counter-only) and BR-007 (uniqueness) move `disputed` → `confirmed`. BR-073/BR-074 added for
 schema-wide `id_style` inheritance and the `init` default.
 
-**Blocking gaps still open: GAP-006, GAP-012, GAP-001.**
+**Blocking gaps still open: issue-9cb85759076d, issue-476b4e188fab, issue-e183d47cdee1.**
 
 ```
 FIX  GAP-041  counter restore now keyed on the schema's declared id_style, with a
@@ -231,7 +240,7 @@ NEW  found while testing: `_as_list` accepted only `list`, but `dataclasses.asdi
      separately from the JSON one. Both are now asserted in the same test.
 ```
 
-**Blocking gaps still open: GAP-001 only** (nothing measures whether docir works).
+**Blocking gaps still open: issue-e183d47cdee1 only** (nothing measures whether docir works).
 
 ```
 FIX  GAP-001  benchmarks/ — 20-doc corpus, 12 judged tasks, recall/precision/MRR +
@@ -320,9 +329,9 @@ NEW      benchmarks/run.py printed `embedder: deterministic (default)` from
          `Container` now carries the built embedder and the harness prints its model_id.
 ```
 
-The shape is GAP-045's again, one layer up: a default changed and the thing describing it
+The shape is issue-0ff355fa21dd's again, one layer up: a default changed and the thing describing it
 did not. There it was a test exclusion; here it was the measurement's own header — inside
-the harness built to settle GAP-043, which was itself a docs-honesty gap.
+the harness built to settle issue-f01a7a585fc1, which was itself a docs-honesty gap.
 
 ```
 FIX  GAP-046  corpus re-based to 23 docs / 14 tasks: a supersedes-linked decision pair
@@ -332,7 +341,7 @@ FIX  GAP-046  corpus re-based to 23 docs / 14 tasks: a supersedes-linked decisio
               context recall@5 0.93 -> 0.96 (fastembed), 0.89 -> 0.93 (deterministic).
 ```
 
-**A conclusion this re-base weakened, recorded rather than buried.** ADR-0011's headline
+**A conclusion this re-base weakened, recorded rather than buried.** adr-ab9c454b760c's headline
 number — `context` 0.96 with the model vs 0.88 without — becomes 0.96 vs 0.93 on the new
 corpus, because the two new tasks depend on the relation graph and graph expansion helps
 both embedders equally. The ADR's decision still holds, but the evidence for it had to move:
@@ -353,14 +362,14 @@ FIX  GAP-008  layering check reads a dependency allowlist (`depends_on`, `refine
 
 Third instance of the same trap, now worth naming: `test_layering_violation` built a
 default-kind edge and asserted a violation, so the suite encoded the defect as intent and
-could never have caught it. GAP-006 had it (`test_check_strict_gates_ci` asserted the
-unusable gate), GAP-045 had it in a different form (an exclusion whose premise had
+could never have caught it. issue-9cb85759076d had it (`test_check_strict_gates_ci` asserted the
+unusable gate), issue-0ff355fa21dd had it in a different form (an exclusion whose premise had
 expired). In all three the defect was found by running the tool and reading the output as a
 user would, never by reading or running the tests. A test written from the implementation
 tests that the implementation is itself; only a test written from the intended behaviour can
 disagree with the code.
 
-`_SUCCESSOR_KINDS` and the layering set have now diverged, as the GAP-019 comment predicted
+`_SUCCESSOR_KINDS` and the layering set have now diverged, as the issue-5bfbc6f2699d comment predicted
 they should be free to: `{supersedes, contradicts}` and `{depends_on, refines}` share
 nothing. Keeping them separate cost one duplicated frozenset and avoided coupling two
 unrelated rules through a shared constant.
@@ -401,13 +410,13 @@ intended. This one asserted nothing at all while appearing to assert a great dea
 ## Follow-up — forced delete compensates for what it breaks (2026-07-28)
 
 ```
-FIX  GAP-007  `delete --force` strips the edge from every referencing document in
+FIX  issue-fd547a293d01  `delete --force` strips the edge from every referencing document in
               the same transaction and reports them ("deleted X; unlinked from Y").
               PROBE-6/PROBE-7 replayed: file reads `related: []`, no dangling
               finding, a later `update` has nothing to re-persist.      → resolved
               Deviates from the proposed `tag rm --force` pattern on one point:
               `updated` is NOT advanced. Copying it wholesale would have
-              reproduced GAP-020, which is open against the tag path for exactly
+              reproduced issue-9ed4905e0db8, which is open against the tag path for exactly
               that. Follows `check --fix` instead.
 ```
 
@@ -428,22 +437,22 @@ GAP-007 moves from *recoverable* to *prevented*. `check --fix` stays as the reco
 for edges broken outside the CLI — which, after this, is the only way left to break one.
 
 ```
-NEW      05-gaps.yaml GAP-001 carried a duplicate `resolution:` key, and five entries in
-         06-questions.yaml (Q-002/003/004/007/012) carried duplicate `answered`/`authority`/
+NEW      05-gaps.yaml issue-e183d47cdee1 carried a duplicate `resolution:` key, and five entries in
+         06-questions.yaml (issue-96b03701503b/003/004/007/012) carried duplicate `answered`/`authority`/
          `answer` keys with the trailing copy set to null. YAML keeps the last key, so the
          primary deliverable parsed with four answered BLOCKING questions reading as
-         unanswered and GAP-001's resolution reading as absent. Only the prose was ever
+         unanswered and issue-e183d47cdee1's resolution reading as absent. Only the prose was ever
          read; nothing parsed these files. Duplicates removed, `answered_note` folded into
          `answer`; both files now round-trip through yaml.safe_load with the intended values.
 ```
 
 ```
-REVERT GAP-036  `docir import` built, then removed the same day, before committing.
+REVERT issue-20933967697b  `docir import` built, then removed the same day, before committing.
        Two reasons: random-ids-by-default removes its only unique capability, and it
        reported `imported 2, failed 0` over a file holding three decisions (one
        superseded, one rejected) plus a file whose body said "DRAFT — do not rely on
        this". A command that makes adoption look finished is worse than no command.
-       GAP-036 returns to OPEN; the reasoning is recorded there so it is not rebuilt
+       issue-20933967697b returns to OPEN; the reasoning is recorded there so it is not rebuilt
        naively. The agent guide now carries the review-then-add workflow instead.
 ```
 
@@ -463,12 +472,12 @@ DETECT   7 empirical probes against the real CLI, listed below
 ### Probes
 
 ```
-DELTA-PROBE-1  docir --home X init            → store created in CWD, X untouched   GAP-047
-DELTA-PROBE-2  init --force-schema (no --force) → silent no-op                      GAP-049
-DELTA-PROBE-3  store field on read paths      → absent on query/search/context      GAP-050
+DELTA-PROBE-1  docir --home X init            → store created in CWD, X untouched   issue-638068ed09a6
+DELTA-PROBE-2  init --force-schema (no --force) → silent no-op                      issue-9417ffd5306d
+DELTA-PROBE-3  store field on read paths      → absent on query/search/context      issue-c2b4e38e76d9
 DELTA-PROBE-4  query --stale --include-archived → correct; archived excluded by default — NO gap
 DELTA-PROBE-5  check --fix with unknown-tag   → correctly returned in `remaining`  — NO gap
-DELTA-PROBE-6  tag rename X X --merge         → registry entry deleted, docs keep the tag  GAP-048
+DELTA-PROBE-6  tag rename X X --merge         → registry entry deleted, docs keep the tag  issue-9bbca6c0f434
 DELTA-PROBE-7  add --id in a random store     → adopted; next id still random      — NO gap
 ```
 

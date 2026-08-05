@@ -3,7 +3,7 @@
 Installs and refreshes the AI-assistant instruction files that teach a coding
 agent to drive docir (a Claude Code skill and/or an ``AGENTS.md`` block). This
 module owns no index or database state — it is a local scaffolding operation over
-the filesystem and the packaged instruction template (see ADR-0008), so it runs
+the filesystem and the packaged instruction template (see adr-3a2d5ee7bc84), so it runs
 in-process and never touches the daemon or the shared unit-of-work.
 
 Consumers build a service through :func:`build_agent_service` and drive it with

@@ -46,7 +46,7 @@ class SimilarityLinter:
         relation. Measured against docir's own corpus, every one of the 14
         duplicate findings was such a pair: a `Q-0NN` question and the `GAP-0NN`
         it came from, linked precisely to say they are about the same thing
-        (GAP-055).
+        (issue-08437ba704ff).
 
         The case worth keeping is the unlinked one — two documents nobody has
         noticed are about the same thing — which is the copy-paste this check
@@ -89,7 +89,7 @@ class SimilarityLinter:
         The threshold is per type. One constant for every type made a glossary,
         a rule register and a probe log permanently "too long" — and a register
         split in half is two half-registers, so the advice could not be taken
-        (GAP-056). A type may set ``max_body_chars`` in the schema, with ``0``
+        (issue-5d6a5e854d11). A type may set ``max_body_chars`` in the schema, with ``0``
         meaning never; absent, it inherits this linter's default.
 
         ``schema`` is optional for the same reason ``linked_pairs`` is: a caller

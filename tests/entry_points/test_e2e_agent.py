@@ -1,7 +1,7 @@
 """End-to-end tests for ``docir agent install/update`` through the real CLI.
 
 These drive the Typer app in-process. The commands do not go through the
-daemon/dispatcher (ADR-0008), so they need no index; they write instruction
+daemon/dispatcher (adr-3a2d5ee7bc84), so they need no index; they write instruction
 files into the tmp project directory passed as the argument.
 """
 

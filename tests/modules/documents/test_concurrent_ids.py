@@ -1,6 +1,6 @@
 """Concurrent id allocation across independent processes.
 
-Guards GAP-009: ``docir --no-daemon add`` run in parallel used to hand every
+Guards issue-389dc5dac58a: ``docir --no-daemon add`` run in parallel used to hand every
 caller the same id. ``next_number`` read the counter, incremented it in Python,
 then wrote it back, so N processes could all read the same value before any of
 them committed. Six simultaneous adds returned ``adr-0002`` six times; five of

@@ -28,7 +28,7 @@ Neither `rename` nor `remove` advances a rewritten document's `updated`: a bulk
 classification edit is not a human re-verification (see the staleness invariant).
 
 ## Events published
-- none (no event bus; see ADR-0002)
+- none (no event bus; see adr-d3e3616400bf)
 
 ## Events consumed
 - none
@@ -36,11 +36,11 @@ classification edit is not a human re-verification (see the staleness invariant)
 ## Owns
 - data: the tag registry (`docs/tags.yaml` and its index projection).
   Physically stored in the shared index/filesystem owned by `platform`
-  (grandfathered; see ADR-0002).
+  (grandfathered; see adr-d3e3616400bf).
 
 ## Depends on
 - modules: none
 - platform: persistence, filesystem, errors, naming (the tag-key grammar)
 
 ## Policy
-- permissions: none (single-user local CLI; see ADR-0003)
+- permissions: none (single-user local CLI; see adr-90e994d931cc)

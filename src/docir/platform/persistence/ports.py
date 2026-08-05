@@ -198,7 +198,7 @@ class ChunkEmbeddingRepository(ABC):
     Separate from :class:`EmbeddingRepository` because the two answer different
     questions. The document vector says what a document is *about*; a chunk
     vector says what one section of it *says*, and only the chunks put the tail
-    of a long document into the semantic index at all (ADR-0014).
+    of a long document into the semantic index at all (adr-927aa43d9635).
 
     There is no dirty flag here: a chunk set is derived from a body, so it is
     invalidated by exactly the thing that invalidates the document vector.
@@ -224,7 +224,7 @@ class ChunkEmbeddingRepository(ABC):
         """``(doc_id, vector)`` for every chunk of an active document.
 
         Returns one entry per *chunk*, so a document appears many times; pooling
-        to a per-document score is the caller's job (ADR-0014 keeps that in the
+        to a per-document score is the caller's job (adr-927aa43d9635 keeps that in the
         scorer, where the ranking rule lives).
         """
 

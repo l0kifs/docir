@@ -8,7 +8,7 @@ from docir.platform.clock import SystemClock
 
 
 def test_today_is_the_utc_date() -> None:
-    """Dates are UTC, not local (guards GAP-038).
+    """Dates are UTC, not local (guards issue-7e16dfe2521c).
 
     They are written into committed files and read by other people, so a
     local-time stamp made the same moment two different dates either side of

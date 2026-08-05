@@ -72,7 +72,7 @@ class Tier0Validator:
         ``cannot rename tag 't' to itself``: both are the same degenerate case —
         an operation whose two ends are one thing — and that one was found the
         same way, by asking "what if they are equal?" of a feature whose tests
-        only ever used two different values (GAP-048, then GAP-053).
+        only ever used two different values (issue-9bbca6c0f434, then issue-2ebfc018f29a).
 
         A self-edge carries no meaning to preserve. ``related`` answers "what
         else should I read", and the answer cannot be the document already in

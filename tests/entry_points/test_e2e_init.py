@@ -145,7 +145,7 @@ class TestDiscoveryThroughCli:
 
 
 class TestInitHonoursHome:
-    """`docir init` used to ignore `--home` (guards GAP-047).
+    """`docir init` used to ignore `--home` (guards issue-638068ed09a6).
 
     Every other command honours it; `init` computed its store from the
     positional directory alone, so `docir --home /srv/docs init` silently
@@ -178,7 +178,7 @@ class TestInitHonoursHome:
 
 
 def test_force_schema_stands_alone(tmp_path: Path, settings) -> None:
-    """Guards GAP-049: `--force-schema` without `--force` was a silent no-op."""
+    """Guards issue-9417ffd5306d: `--force-schema` without `--force` was a silent no-op."""
     assert run("init", str(tmp_path)).exit_code == 0
     schema = tmp_path / ".docir" / "docs-schema.yaml"
     schema.write_text(schema.read_text(encoding="utf-8") + "\n# customised\n", encoding="utf-8")
@@ -190,7 +190,7 @@ def test_force_schema_stands_alone(tmp_path: Path, settings) -> None:
 
 class TestNestedStoreWarning:
     def test_init_beneath_an_existing_store_warns_on_stderr(self, tmp_path: Path) -> None:
-        # GAP-054: the warning is the whole fix — the store is still created,
+        # issue-e10cde8c5085: the warning is the whole fix — the store is still created,
         # because a monorepo subproject with its own store is legitimate.
         assert run("init", str(tmp_path)).exit_code == 0
         nested = tmp_path / "team"

@@ -1,4 +1,4 @@
-"""The splitting rule — pure text in, chunks out (ADR-0014).
+"""The splitting rule — pure text in, chunks out (adr-927aa43d9635).
 
 Every case here is a boundary the rule has to get right for the vectors built
 from it to mean anything. The code-fence case is the one that silently corrupts

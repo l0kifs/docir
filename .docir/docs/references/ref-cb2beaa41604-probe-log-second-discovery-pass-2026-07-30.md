@@ -7,16 +7,17 @@ owner: maintainer
 related:
 - ref-0f48dc93d435
 - ref-1509d5dbb4c3
+- adr-ab9c454b760c
+- issue-b8220546282c
+- issue-b928ad676595
 status: active
 tags:
 - docs
 - testing
 title: Probe log — second discovery pass, 2026-07-30
 type: reference
-updated: '2026-07-30'
+updated: '2026-08-05'
 ---
-
-# Probe log — second discovery pass, 2026-07-30
 
 Every probe below was executed against a throwaway store built by `docir init`, with
 `DOCIR_EMBEDDER=deterministic` unless stated. Frame: `ref-0f48dc93d435`. Predecessor log
@@ -52,7 +53,7 @@ PROBE-E2  read the store under a different embedder     similarity absent, no er
 PROBE-E3  `add --wait-embeddings`                       exit 0, vector present         — NO gap
 ```
 
-E2 is the behaviour ADR-0011 promises and is worth pinning here: switching `DOCIR_EMBEDDER`
+E2 is the behaviour adr-ab9c454b760c promises and is worth pinning here: switching `DOCIR_EMBEDDER`
 does **not** raise `dimension mismatch`. The foreign-model vectors are ignored, `context`
 returns rows with `similarity` absent rather than zero — absent meaning "no current vector",
 which is why `--min-score` does not filter them — and `embed --flush` recomputes both
@@ -79,7 +80,7 @@ are in the frozen **core** and therefore survive any profile change. Only a prof
 type (`issue`, `architecture`) demonstrates the case.
 
 R6: `docir agent update` with nothing installed returns `[]` and exits 0. Recorded and
-judged **not** a gap — an empty result is the honest answer, and unlike GAP-024's silent
+judged **not** a gap — an empty result is the honest answer, and unlike issue-b8220546282c's silent
 no-op on a *typo*, nothing here was mistyped. Noted so the judgement is visible rather than
 assumed.
 
@@ -92,7 +93,7 @@ assumed.
   heuristic were not exercised on a corpus large enough to say anything.
 - **The 38 `assumed` rules** in `ref-32cb4f874fbe`. Out of scope by decision: re-deriving
   them from the same code produces the same assumptions. They need a human who can say what
-  was intended — the finding archived issue GAP-002 records.
+  was intended — the finding archived issue issue-b928ad676595 records.
 - **The ranking constants.** `benchmarks/` measures them; reasoning about them here would
   add nothing.
 

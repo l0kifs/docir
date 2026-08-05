@@ -59,7 +59,7 @@ class TestInProcessExecutor:
 
 
 class TestTransportErrorsReachTheUser:
-    """GAP-052: a `DocirError` raised client-side by the transport escaped Typer.
+    """issue-06f48d8f239f: a `DocirError` raised client-side by the transport escaped Typer.
 
     `runner.execute` wrapped only the *construction* of the executor in the
     handler that maps a domain error onto its exit code, so an unreachable

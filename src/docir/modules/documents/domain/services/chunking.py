@@ -12,7 +12,7 @@ Chunking is the fix: embed each section separately, so every part of a document
 lands inside some vector. This module owns the *splitting* rule and nothing
 else — pure text in, pure text out, no I/O, no embedder.
 
-The rule (ADR-0014):
+The rule (adr-927aa43d9635):
 
 * Split at ``##`` and deeper headings. ``#`` is the document title repeated in
   the body and is not a section boundary.

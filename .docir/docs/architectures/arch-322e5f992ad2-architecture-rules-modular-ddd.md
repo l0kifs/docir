@@ -11,10 +11,8 @@ tags:
 - testing
 title: Architecture Rules — Modular DDD
 type: architecture
-updated: '2026-07-30'
+updated: '2026-08-05'
 ---
-
-# Architecture Rules — Modular DDD
 
 Audience: AI coding agent creating and maintaining this project.
 Scope: language-independent. Substitute your ecosystem's equivalents for

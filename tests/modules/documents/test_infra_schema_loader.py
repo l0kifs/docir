@@ -147,7 +147,7 @@ class TestProfilesAndCore:
 
 
 class TestBundledProfileIntegrity:
-    """Guards the one global namespace every bundled profile shares (ADR-0010)."""
+    """Guards the one global namespace every bundled profile shares (adr-c0ce6f347f3e)."""
 
     def test_every_profile_combination_has_unique_prefixes(self) -> None:
         # Prefix uniqueness is enforced across the *merged* schema, so a new
@@ -197,7 +197,7 @@ class TestRenderSchemaYaml:
         assert render_schema_yaml() == DEFAULT_SCHEMA_YAML
 
     def test_named_profiles_are_generated_not_substituted(self) -> None:
-        # Regression guard (ADR-0010): the body used to be built by replacing the
+        # Regression guard (adr-c0ce6f347f3e): the body used to be built by replacing the
         # literal "profiles: [software]" in DEFAULT_SCHEMA_YAML. If that sentinel
         # ever drifted the replace silently no-opped, so `init --profiles X`
         # wrote the *default* profiles while reporting X. Generating the line
@@ -286,7 +286,7 @@ class TestRelationAndStalenessFields:
 
 
 class TestStatusNamesMustBeDeclared:
-    """A status name the type does not declare is rejected at load (GAP-010).
+    """A status name the type does not declare is rejected at load (issue-b47a1203baa2).
 
     `statuses: {open: [closd]}` used to load happily. The typo surfaced much
     later, on the first write, as `invalid transition 'open' -> 'closed'` — a
@@ -382,7 +382,7 @@ def test_every_bundled_profile_still_loads(profile: str) -> None:
 
 
 class TestMaxBodyChars:
-    """GAP-056: the Tier 2 size threshold is per type, not one constant."""
+    """issue-5d6a5e854d11: the Tier 2 size threshold is per type, not one constant."""
 
     def _schema(self, tmp_path, body: str):
         path = tmp_path / "s.yaml"

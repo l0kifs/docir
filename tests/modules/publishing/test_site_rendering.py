@@ -807,3 +807,55 @@ class TestReadability:
         assert 'Relations <span class="n">9</span>' in page, "the count belongs in the heading"
         rail = page[page.index('class="rail"') : page.index('<main class="main"')]
         assert rail.index("Local map") < rail.index("Relations"), "the glance comes first"
+
+
+class TestDocRefLinks:
+    """A body citing another document by id gets a link to it.
+
+    The id is the only identifier a document has, so it is what a body writes
+    when it cites one — and written plain it published as an unlinked string of
+    hex. Each case below is a place the pass must *not* fire, which is the half
+    a naive regex over the rendered HTML gets wrong.
+
+    Every assertion reads the `<main>` region: the stylesheet names the class
+    too, so a whole-page substring check passes on the CSS alone.
+    """
+
+    @staticmethod
+    def _main(body: str) -> str:
+        docs = [dict(_DOCS[0], body=body), _DOCS[1]]
+        page = render_site(build_site(docs), title="Docs", version="1")["adr-0001.html"]
+        return page[page.index("<main class=") : page.index("</main>")]
+
+    def test_a_bare_id_becomes_a_link_to_its_page(self) -> None:
+        main = self._main("Superseded by adr-0002 last spring.\n")
+        assert '<a class="docref" href="adr-0002.html"><code>adr-0002</code></a>' in main
+
+    def test_an_id_in_a_code_span_becomes_the_same_link(self) -> None:
+        """Both spellings mean the same document, so both must read the same."""
+        assert self._main("Superseded by `adr-0002`.\n") == self._main("Superseded by adr-0002.\n")
+
+    def test_an_id_no_document_claims_is_left_alone(self) -> None:
+        """Membership does the real work — the shape pattern only nominates."""
+        main = self._main("Compare adr-9999 and docs-schema and foo-bar here.\n")
+        assert "docref" not in main
+        assert "adr-9999" in main and "foo-bar" in main
+
+    def test_an_id_inside_a_code_block_is_not_linked(self) -> None:
+        main = self._main("```\ndocir get adr-0002\n```\n")
+        assert "docref" not in main
+
+    def test_an_id_that_is_already_a_link_is_not_nested(self) -> None:
+        main = self._main("[adr-0002](https://elsewhere.test) is external.\n")
+        assert "docref" not in main
+        assert 'href="https://elsewhere.test"' in main
+
+    def test_surrounding_prose_survives(self) -> None:
+        main = self._main("Both adr-0002 and adr-0002 apply, unlike foo-bar.\n")
+        assert main.count('class="docref" href="adr-0002.html"') == 2
+        assert "apply, unlike foo-bar." in main
+
+    def test_a_document_does_not_link_to_itself(self) -> None:
+        """A self-link reads as a live cross-reference and goes nowhere."""
+        main = self._main("This is adr-0001, for the record.\n")
+        assert 'class="docref" href="adr-0001.html"' not in main

@@ -90,7 +90,7 @@ class EmbeddingRow(Base):
 
 
 class ChunkEmbeddingRow(Base):
-    """One section's vector. See ADR-0014 and migration ``0003``.
+    """One section's vector. See adr-927aa43d9635 and migration ``0003``.
 
     Keyed ``(doc_id, ordinal)``: a chunk has no identity beyond its position in
     a body, and the whole set for a document is replaced together whenever that

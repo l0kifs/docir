@@ -289,7 +289,7 @@ def schema_validate() -> None:
     15 shipped types — `release_note.published`, `postmortem.published`,
     `experiment.complete`, `hypothesis.supported`, `obligation.breached` — every
     one a correct terminal state for a document that stays relevant. A warning
-    that fires on the product's own defaults is GAP-008 again.
+    that fires on the product's own defaults is issue-40d1792bc9f9 again.
     """
     settings = get_state().settings
     schema = run_local(lambda: load_schema(settings.schema_path))

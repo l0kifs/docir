@@ -6,16 +6,24 @@ id: ref-301bcc84b75c
 owner: maintainer
 related:
 - arch-1cfb1b212237
+- adr-90e994d931cc
+- arch-0a3c2d6d54a6
+- arch-3e305bc76ff0
+- arch-90c90751344f
+- arch-ccfcceeb35eb
+- arch-f220a644d654
+- issue-389dc5dac58a
+- issue-476b4e188fab
+- issue-9cb85759076d
+- issue-b4f441c7210f
 status: active
 tags:
 - docs
 - agents
 title: Actor catalog — who and what drives docir
 type: reference
-updated: '2026-07-30'
+updated: '2026-08-05'
 ---
-
-# Actor catalog — who and what drives docir
 
 Reconstructed from the code and tests. `observed` means read off code or executed;
 `inferred` means reasoned from the design.
@@ -23,11 +31,11 @@ Reconstructed from the code and tests. `observed` means read off code or execute
 ## ACT-001 — AI coding agent
 
 **Type:** system · **Frequency:** every coding session; the primary caller
-**Flows:** FLOW-001, FLOW-002, FLOW-005
+**Flows:** arch-3e305bc76ff0, arch-f220a644d654, arch-ccfcceeb35eb
 
 **Goal.** Before writing code, obtain the design decisions/issues/architecture notes relevant to the current task, cheaply enough to afford doing it every session.
 
-**Authority.** Full write authority — may add, update, archive, delete any document and mutate the tag registry. No permission model exists (ADR-0003), so it can do anything a human can.
+**Authority.** Full write authority — may add, update, archive, delete any document and mutate the tag registry. No permission model exists (adr-90e994d931cc), so it can do anything a human can.
 
 **Evidence:** README.md:8, src/docir/entry_points/cli/rendering.py:1-9, src/docir/modules/agents/infra/templates/skill.md, src/docir/modules/documents/application/dto.py:86-91
 
@@ -38,7 +46,7 @@ Reconstructed from the code and tests. `observed` means read off code or execute
 ## ACT-002 — repository maintainer / developer
 
 **Type:** human · **Frequency:** at decision points; bursty, low volume
-**Flows:** FLOW-001, FLOW-002, FLOW-003, FLOW-004, FLOW-005, FLOW-006
+**Flows:** arch-3e305bc76ff0, arch-f220a644d654, arch-0a3c2d6d54a6, arch-90c90751344f, arch-ccfcceeb35eb, FLOW-006
 
 **Goal.** Capture a decision once, in the repo, and have it resurface when it becomes relevant — without maintaining a wiki.
 
@@ -51,7 +59,7 @@ Reconstructed from the code and tests. `observed` means read off code or execute
 ## ACT-003 — CI job
 
 **Type:** scheduler · **Frequency:** per pull request
-**Flows:** FLOW-003
+**Flows:** arch-0a3c2d6d54a6
 
 **Goal.** Block a merge that would corrupt the document graph (duplicate ids, dangling refs).
 
@@ -61,12 +69,12 @@ Reconstructed from the code and tests. `observed` means read off code or execute
 
 **Confidence:** observed
 
-**Notes:** This actor is asserted by the docs but has NO fixture, example workflow, or template anywhere in the repo — `.github/workflows/` runs the project's own tests, not `docir check`. Its requirements are therefore inferred, and they are not met (GAP-006).
+**Notes:** This actor is asserted by the docs but has NO fixture, example workflow, or template anywhere in the repo — `.github/workflows/` runs the project's own tests, not `docir check`. Its requirements are therefore inferred, and they are not met (issue-9cb85759076d).
 
 ## ACT-004 — embedding scheduler
 
 **Type:** scheduler · **Frequency:** debounced 2s after any content write (daemon); inline otherwise
-**Flows:** FLOW-001, FLOW-002
+**Flows:** arch-3e305bc76ff0, arch-f220a644d654
 
 **Goal.** Bring semantic vectors up to date after content changes, off the write path.
 
@@ -79,7 +87,7 @@ Reconstructed from the code and tests. `observed` means read off code or execute
 ## ACT-005 — docir daemon
 
 **Type:** system · **Frequency:** continuous while in use; exits after 900s idle
-**Flows:** FLOW-001, FLOW-002, FLOW-004
+**Flows:** arch-3e305bc76ff0, arch-f220a644d654, arch-90c90751344f
 
 **Goal.** Keep the embedding model warm and serialize writes into the store.
 
@@ -89,12 +97,12 @@ Reconstructed from the code and tests. `observed` means read off code or execute
 
 **Confidence:** observed
 
-**Notes:** Load-bearing far beyond its stated role: it is the *only* thing that makes concurrent id allocation safe (PROBE-10 vs PROBE-11). The docs attribute that safety to the SequenceRow counter instead. See GAP-009.
+**Notes:** Load-bearing far beyond its stated role: it is the *only* thing that makes concurrent id allocation safe (PROBE-10 vs PROBE-11). The docs attribute that safety to the SequenceRow counter instead. See issue-389dc5dac58a.
 
 ## ACT-006 — git / branch merge
 
 **Type:** external_partner · **Frequency:** per merge
-**Flows:** FLOW-003
+**Flows:** arch-0a3c2d6d54a6
 
 **Goal.** Integrate two developers' documents into one history.
 
@@ -109,7 +117,7 @@ Reconstructed from the code and tests. `observed` means read off code or execute
 ## ACT-007 — document owner / steward
 
 **Type:** human · **Frequency:** per review cadence (365d for decision/architecture, 180d for qa/ops)
-**Flows:** FLOW-003
+**Flows:** arch-0a3c2d6d54a6
 
 **Goal.** Re-verify that a document is still true when its review cadence elapses.
 
@@ -119,12 +127,12 @@ Reconstructed from the code and tests. `observed` means read off code or execute
 
 **Confidence:** observed
 
-**Notes:** The staleness feature names this actor but never reaches them: `owner` is only ever interpolated into a `check` message. No notification, no queue, no "my documents" filter. The actor exists in the data model and nowhere in the flows. See GAP-011.
+**Notes:** The staleness feature names this actor but never reaches them: `owner` is only ever interpolated into a `check` message. No notification, no queue, no "my documents" filter. The actor exists in the data model and nowhere in the flows. See issue-b4f441c7210f.
 
 ## ACT-008 — support / operator recovering a broken store
 
 **Type:** human · **Frequency:** unknown — no data
-**Flows:** FLOW-003
+**Flows:** arch-0a3c2d6d54a6
 
 **Goal.** Diagnose and repair a store that has duplicate ids, dangling refs, or a lost doc.
 
@@ -132,4 +140,4 @@ Reconstructed from the code and tests. `observed` means read off code or execute
 
 **Confidence:** assumed
 
-**Notes:** NO actor of this kind is served. `docir check` reports duplicate-id and dangling findings but there is no `docir repair`, no `--fix`, no runbook, and no documented manual procedure. Every failure mode this analysis confirmed leaves the user here with no tool. See GAP-012.
+**Notes:** NO actor of this kind is served. `docir check` reports duplicate-id and dangling findings but there is no `docir repair`, no `--fix`, no runbook, and no documented manual procedure. Every failure mode this analysis confirmed leaves the user here with no tool. See issue-476b4e188fab.

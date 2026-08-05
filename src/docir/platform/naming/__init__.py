@@ -7,7 +7,7 @@ two copies of a regex are two definitions waiting to disagree, and the whole
 point of a controlled vocabulary is that there is one rule.
 
 Pure: no I/O, no dependencies, safe for a ``domain`` layer to import (see
-ADR-0012).
+adr-289e788719a7).
 """
 
 from __future__ import annotations

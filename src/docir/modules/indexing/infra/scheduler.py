@@ -30,7 +30,7 @@ def drain_dirty(uow_factory: UnitOfWorkFactory, embedder: Embedder) -> int:
     """Recompute every dirty document's vectors in one transaction.
 
     Two vectors per document, not one: the document vector over title +
-    description + body, and one vector per section (ADR-0014). The document
+    description + body, and one vector per section (adr-927aa43d9635). The document
     vector is what the model can see of the whole — which for a body over
     ~1,900 characters is only its head, because the model truncates and says
     nothing about it. The chunk vectors are what put the rest of the body into
@@ -64,7 +64,7 @@ class _Chunkable(Protocol):
     is the seam: it hands over already-rendered ``(ordinal, heading, text)``
     triples and nothing here needs to know what a Document is. A structural type
     rather than ``object`` so the call still type-checks — the same shape the
-    fastembed adapter uses for its model handle (ADR-0011).
+    fastembed adapter uses for its model handle (adr-ab9c454b760c).
     """
 
     def embedding_chunks(self) -> tuple[tuple[int, str, str], ...]: ...

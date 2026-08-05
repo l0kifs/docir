@@ -73,7 +73,7 @@ class Outcome:
     payload_chars: int
     #: Characters of that payload that are document ids — in the `id` field and
     #: in every `related` target. This is what the entropy choice actually buys
-    #: and costs, and it was never measured (GAP-042).
+    #: and costs, and it was never measured (issue-7a271eb0f21a).
     id_chars: int
     #: What those same ids would have cost as `adr-0007`.
     sequential_id_chars: int
@@ -205,7 +205,7 @@ def _collision_probability(bits: int, documents: int) -> float:
 def _report_id_cost(totals: dict, mean: Callable[[list[float]], float]) -> None:
     """What the random-id entropy costs to read, and what it buys.
 
-    GAP-042: a random id is ~3x a sequential one and appears in every skeleton
+    issue-7a271eb0f21a: a random id is ~3x a sequential one and appears in every skeleton
     and every edge of every result, but nothing measured the trade, so 48 bits
     was chosen by default rather than deliberately.
     """
@@ -340,7 +340,7 @@ def main() -> int:
         corpus = yaml.safe_load((BENCH_DIR / "corpus.yaml").read_text(encoding="utf-8"))
 
         # The resolved embedder, not the requested one: the default flipped to
-        # fastembed (ADR-0011) and this line still announced "deterministic",
+        # fastembed (adr-ab9c454b760c) and this line still announced "deterministic",
         # so every run so far reported a configuration it had not measured.
         embedder = container.embedder.model_id
         print(f"\ncorpus: {len(ids)} documents · tasks: {len(tasks)} · k={K}")

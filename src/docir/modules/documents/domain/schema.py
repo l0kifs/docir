@@ -76,7 +76,7 @@ class TypeSchema:
     # ``None`` inherits the linter's default; ``0`` means never — which is the
     # right answer for a type that exists to hold a register. One threshold for
     # every type made a glossary, a rule register and a probe log permanently
-    # "too long", and a document split in half is two half-registers (GAP-056).
+    # "too long", and a document split in half is two half-registers (issue-5d6a5e854d11).
     max_body_chars: int | None = None
 
     def is_valid_status(self, status: str) -> bool:

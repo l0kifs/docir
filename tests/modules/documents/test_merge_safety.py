@@ -70,7 +70,7 @@ def test_check_detects_duplicate_id_from_merged_file(container, settings: Settin
 
 
 def test_reindex_restores_the_id_counter(container, settings: Settings) -> None:
-    # Guards GAP-003: the counter lives in the derived index, which is gitignored.
+    # Guards issue-b7ddde3ce860: the counter lives in the derived index, which is gitignored.
     # A fresh clone therefore reindexes from files alone; before this fix the next
     # add re-minted a live id, and the older document fell out of every read path.
     docs = container.dispatcher
@@ -124,7 +124,7 @@ def _doc_file(doc_id: str, title: str) -> str:
 
 
 def test_reindex_ignores_random_ids_when_restoring_the_counter(settings: Settings) -> None:
-    # Guards GAP-041. Hex digits include the decimal digits, so ~1 random token in
+    # Guards issue-f09fab3f5c36. Hex digits include the decimal digits, so ~1 random token in
     # 281 is all-digits and parses as a valid (huge) sequential number. Restoring
     # the counter from it would push the next sequential id to eleven digits.
     settings.ensure_directories()
@@ -156,7 +156,7 @@ def test_reindex_ignores_random_ids_when_restoring_the_counter(settings: Setting
 
 
 def test_reindex_still_restores_the_counter_for_sequential_types(settings: Settings) -> None:
-    # The guard above must not disarm the GAP-003 fix for genuine sequential ids.
+    # The guard above must not disarm the issue-b7ddde3ce860 fix for genuine sequential ids.
     settings.ensure_directories()
     decisions = settings.docs_root / "decisions"
     decisions.mkdir(parents=True, exist_ok=True)
@@ -203,7 +203,7 @@ def test_check_detects_dangling_reference(
     # still names an id no file provides.
     #
     # This used `delete --force` before, which no longer produces the state —
-    # that command now strips the edges it breaks (GAP-007). A dangling edge is
+    # that command now strips the edges it breaks (issue-fd547a293d01). A dangling edge is
     # now only reachable from outside the CLI, which is where it always came
     # from in practice.
     drop_file_of("adr-0001")
@@ -213,7 +213,7 @@ def test_check_detects_dangling_reference(
 
 
 class TestAdoptingAnExistingId:
-    """`add --id` preserves a numbered corpus (guards GAP-036).
+    """`add --id` preserves a numbered corpus (guards issue-20933967697b).
 
     A repository adopting docir with ADR-007..ADR-042 lost every number, and so
     every historical cross-reference; the documented workaround was to keep a

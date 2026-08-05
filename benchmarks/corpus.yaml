@@ -7,7 +7,7 @@
 # `key` is a stable handle used by tasks.yaml; the actual docir id is allocated
 # at load time and mapped back, so the judgments survive any id-style change.
 #
-# `related` entries are `key` or `key:kind` (a typed edge, ADR-0005).
+# `related` entries are `key` or `key:kind` (a typed edge, adr-599055502f0e).
 # `status_path` walks legal transitions in order — decisions start `proposed`, so
 # reaching `superseded` means `[accepted, superseded]`. Applied after the edges,
 # because a closed document cannot be edited.

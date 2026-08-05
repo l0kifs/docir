@@ -14,7 +14,7 @@ tags:
 - agents
 title: Competitive landscape — docir vs. the alternatives (2026-08-03)
 type: reference
-updated: '2026-08-03'
+updated: '2026-08-05'
 ---
 
 # Competitive landscape — docir vs. the alternatives
@@ -136,7 +136,7 @@ architecture document that is a large token cost the skeleton contract was meant
 
 RRF fusion is the state docir stops at, and a cross-encoder rerank over the top-N
 is the standard next step both close competitors already ship. **docir built it
-and rejected it on measurement** (ADR-0015, `adr-d657a09b8c4a`): three models
+and rejected it on measurement** (adr-d657a09b8c4a, `adr-d657a09b8c4a`): three models
 across two families (`ms-marco-MiniLM-L-6`, `-L-12`, `jina-reranker-v1-turbo`)
 and three shortlist widths all ranked *worse* than plain fusion — recall@5 0.97
 → 0.90-0.93, MRR 0.97 → 0.85-0.89. These rerankers are trained on question →
@@ -158,7 +158,7 @@ opts out). `--no-daemon` runs still never watch, so CI runs the command explicit
 ### 5. No human-browsable output *(Log4brains)*
 
 Log4brains' pitch is a published, timeline-browsable ADR site on GitHub Pages.
-**Closed in 0.10.0** by `docir build --out site/` (ADR-0016, `adr-a343140d72e2`):
+**Closed in 0.10.0** by `docir build --out site/` (adr-a343140d72e2, `adr-a343140d72e2`):
 one self-contained HTML page per document plus a filterable index, no external
 requests, publishable to Pages or S3 unchanged. It renders what Log4brains
 cannot — the typed relation graph **in both directions**, with an inbound

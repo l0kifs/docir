@@ -86,7 +86,7 @@ and nothing said so, because full-text search covers the whole body and rescued
 the rank on any query that shared a word with the document.
 
 docir therefore embeds **each `##` section as well as the whole document**
-(ADR-0014), and a document ranks on its best-matching section. Coverage on
+(adr-927aa43d9635), and a document ranks on its best-matching section. Coverage on
 docir's own store: **44% → 100%**. On the same corpus, `context` recall@5 holds at
 0.97 while MRR rises 0.94 → 0.97. `benchmarks/run.py` reports the coverage figure
 and measures the window empirically, so it stays honest if the model changes.

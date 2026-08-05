@@ -51,7 +51,7 @@ class HybridScorer:
 
         Accepts repeated ``doc_id`` entries and keeps each document's **best**
         one — that is what turns per-section chunk vectors back into a document
-        ranking (ADR-0014). RRF fuses two rankings *of documents*, so the
+        ranking (adr-927aa43d9635). RRF fuses two rankings *of documents*, so the
         collapse has to happen before fusion, not after it.
 
         Max rather than mean: a document is relevant when *some* part of it

@@ -6,12 +6,14 @@ id: ref-9e4cce368b80
 owner: maintainer
 related:
 - arch-1cfb1b212237
+- adr-90e994d931cc
+- issue-e183d47cdee1
 status: active
 tags:
 - docs
 title: Discovery frame — docir at v0.2.1, run 2026-07-26
 type: reference
-updated: '2026-07-30'
+updated: '2026-08-05'
 ---
 
 # Frame
@@ -27,7 +29,7 @@ Run: 2026-07-26 · analyst: Claude (agent) · repo: `docir` @ `main` `560aea5` (
 - **Unit of value**: a *retrieval that changes what the agent does*. A decision found
   before the code is written is the whole product.
 - **Success metric**: **NONE FOUND.** No telemetry, no analytics, no usage counters, no
-  benchmark harness anywhere in the repo. → `GAP-001`.
+  benchmark harness anywhere in the repo. → `issue-e183d47cdee1`.
   The README's own comparison table (README:39-48) is labelled *"Rough orientation, not
   a benchmark"*, i.e. the project's central claim (token-cheap, better retrieval) is
   explicitly unmeasured by its author.
@@ -42,7 +44,7 @@ Run: 2026-07-26 · analyst: Claude (agent) · repo: `docir` @ `main` `560aea5` (
 | CI job | Runs `docir check --strict` as a merge gate | observed (app.py:419-440) |
 | docir's own maintainer (Sergei Konovalov) | Sole decision owner for every rule below | observed (LICENSE, git log) |
 
-**No revenue model, no tenancy, no accounts.** MIT, single-maintainer OSS. ADR-0003 records
+**No revenue model, no tenancy, no accounts.** MIT, single-maintainer OSS. adr-90e994d931cc records
 the deliberate absence of authorization. Consequence for this run: there is no "business"
 with departments — the decision owner for *every* question is the maintainer. That is
 recorded as a frame-level risk, not a per-question owner.
@@ -75,7 +77,7 @@ recorded as a frame-level risk, not a per-question owner.
 |---|---|---|
 | Everything | repo maintainer (`Sergei Konovalov`) | Single-maintainer project; no separable SME roles exist |
 
-→ `GAP-002`: a single decision owner is also the single point of knowledge. Every
+→ `issue-b928ad676595`: a single decision owner is also the single point of knowledge. Every
 `unstated` rule in this register lives only in that person's head and in git history.
 
 ## Budget

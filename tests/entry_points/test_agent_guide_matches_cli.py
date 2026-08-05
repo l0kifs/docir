@@ -1,6 +1,6 @@
 """Every `docir ...` command in the packaged agent guide must exist in the CLI.
 
-Guards GAP-040. The guide (`modules/agents/infra/templates/skill.md`) is the one
+Guards issue-87a27629f6a6. The guide (`modules/agents/infra/templates/skill.md`) is the one
 artifact `docir agent install` copies into *other* repositories, so a wrong
 instruction there is distributed to every adopting project and is executed by an
 agent that has no way to know better. It told agents to run `docir reindex
@@ -155,7 +155,7 @@ INVOCATIONS = _invocations(GUIDE)
 @pytest.mark.parametrize(
     "expected",
     [
-        "docir reindex",  # the line GAP-040 was actually wrong on
+        "docir reindex",  # the line issue-87a27629f6a6 was actually wrong on
         "docir check --fix",
         "docir add --type decision",
         "docir tag rm auth",

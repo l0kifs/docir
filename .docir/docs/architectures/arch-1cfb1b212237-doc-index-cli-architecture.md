@@ -12,10 +12,8 @@ tags:
 - retrieval
 title: Doc-Index CLI — Architecture
 type: architecture
-updated: '2026-07-30'
+updated: '2026-08-05'
 ---
-
-# Doc-Index CLI — Architecture
 
 ## Principle
 
@@ -292,7 +290,7 @@ picking a profile rather than mutating the base schema. Because the merged resul
 — not the file — is what validation enforces, `docir schema show` prints it and
 `docir schema validate` checks an edit; both run in-process, since a schema too
 broken to build the container is exactly when they are needed. See
-ADR-0005/0006/0007/0010 for typed edges, staleness, profiles, and schema
+adr-599055502f0e/0006/0007/0010 for typed edges, staleness, profiles, and schema
 introspection respectively.
 
 ## Read path

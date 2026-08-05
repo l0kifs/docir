@@ -8,15 +8,14 @@ related:
 - kind: supersedes
   to: ref-9e4cce368b80
 - ref-32cb4f874fbe
+- issue-b928ad676595
 status: active
 tags:
 - docs
 title: Discovery frame — docir at 0.8.0+, run 2026-07-30
 type: reference
-updated: '2026-07-30'
+updated: '2026-08-05'
 ---
-
-# Discovery frame — docir at 0.8.0+, run 2026-07-30
 
 Run: 2026-07-30 · analyst: Claude (agent) · repo: `docir` @ `main` `869e618`
 Predecessor: the v0.2.1 frame, `ref-9e4cce368b80`. Read that one first — the business
@@ -43,7 +42,7 @@ relation edges · staleness · pagination.
 
 **Out:** re-deriving the 38 `assumed` rules. They are a separate exercise needing a human
 who can say what was intended, not another agent reading the same code (that is what
-archived issue GAP-002 recorded). Also out: the ranking algorithm's constants, which
+archived issue issue-b928ad676595 recorded). Also out: the ranking algorithm's constants, which
 `benchmarks/` measures rather than reasons about.
 
 ## Method
@@ -58,13 +57,13 @@ produced it.
 ## Budget and definition of done
 
 One round. Findings are written as `issue` documents (`docir add --type issue`), numbered
-GAP-052 onward to continue the register; questions Q-018 onward. Done when every area in
+issue-06f48d8f239f onward to continue the register; questions Q-018 onward. Done when every area in
 the priority list has either a finding, a confirmed rule, or an explicit line in the
 coverage log saying it was not reached.
 
 ## Decision owner
 
-The repo maintainer, for everything — unchanged, and still the finding recorded as GAP-002.
+The repo maintainer, for everything — unchanged, and still the finding recorded as issue-b928ad676595.
 
 ## Artifacts
 

@@ -90,7 +90,7 @@ def test_reindex_changed_only(dispatcher: Dispatcher, settings: Settings) -> Non
 
 
 class TestChangedReindexStillRemovesDeletions:
-    """`--changed` sweeps deleted files too (guards GAP-021).
+    """`--changed` sweeps deleted files too (guards issue-c33edcf431fa).
 
     The sweep was skipped under `--changed`, so the fast path had quietly
     different semantics: a document deleted from the filesystem stayed indexed
@@ -148,7 +148,7 @@ def test_reindex_skips_malformed_file(dispatcher: Dispatcher, settings: Settings
 def test_check_catches_tier0_violations_made_by_hand(
     dispatcher: Dispatcher, settings: Settings
 ) -> None:
-    """A hand-edit that parses but breaks Tier 0 is now visible (GAP-016 groundwork).
+    """A hand-edit that parses but breaks Tier 0 is now visible (issue-6817ed1851e2 groundwork).
 
     `check` caught `malformed`, `duplicate-id`, `dangling` and `unknown-type`,
     but a hand-edited tag or status parsed cleanly and passed silently — the
@@ -172,7 +172,7 @@ def test_check_catches_tier0_violations_made_by_hand(
 
 
 def test_a_healthy_corpus_reports_neither(dispatcher: Dispatcher) -> None:
-    # The GAP-006/GAP-008 guard: a new check must stay quiet on correct usage.
+    # The issue-9cb85759076d/issue-40d1792bc9f9 guard: a new check must stay quiet on correct usage.
     dispatcher.dispatch("tag_add", {"key": "auth", "description": "Auth."})
     dispatcher.dispatch(
         "add", {"type": "decision", "title": "A", "description": "d", "tags": ["auth"]}
@@ -200,7 +200,7 @@ def test_hand_edits_do_not_fail_the_ci_gate(dispatcher: Dispatcher, settings: Se
 
 
 class TestReindexReportsWhatItSkipped:
-    """A partial rebuild must not look like a complete one (guards GAP-022).
+    """A partial rebuild must not look like a complete one (guards issue-5f979576ef7d).
 
     `scan` is best-effort by design — one unparseable file must not abort the
     rebuild of the rest — but `reindex` reported only what succeeded. On a fresh
@@ -317,7 +317,7 @@ def test_recent_verification_clears_staleness(dispatcher: Dispatcher, settings: 
 
 # -- repair (`docir check --fix`) -------------------------------------------
 #
-# Guards GAP-012: `check` reported four kinds of corrupt state and nothing could
+# Guards issue-476b4e188fab: `check` reported four kinds of corrupt state and nothing could
 # fix any of them, while the product's own rule says agents never edit markdown
 # directly — so recovery required the one action the design forbids.
 
@@ -372,7 +372,7 @@ def test_repair_drops_dead_edges(
         {"type": "decision", "title": "Source", "description": "d", "related": ["adr-0001"]},
     )
     # A merge that removed the target's file — `delete --force` no longer leaves
-    # this state behind, since it strips the edges it breaks (GAP-007).
+    # this state behind, since it strips the edges it breaks (issue-fd547a293d01).
     drop_file_of("adr-0001")
     dispatcher.dispatch("reindex", {})
     assert any(i["kind"] == "dangling" for i in dispatcher.dispatch("check", {}))
@@ -431,7 +431,7 @@ def test_repair_on_a_healthy_corpus_changes_nothing(dispatcher: Dispatcher) -> N
     assert not [i for i in result["remaining"] if i["severity"] == "error"]
 
 
-# -- the staleness worklist (GAP-011) ---------------------------------------
+# -- the staleness worklist (issue-b4f441c7210f) ---------------------------------------
 #
 # Staleness was detected and never routed: `owner` was stored and interpolated
 # into one `check` message, and there was no way to ask "what do I own?" or
@@ -518,7 +518,7 @@ def test_no_filters_still_returns_everything(dispatcher: Dispatcher, settings: S
 
 
 class TestPagination:
-    """List paths window in the query, not after it (guards GAP-039).
+    """List paths window in the query, not after it (guards issue-f6a5d0b86806).
 
     `query` fetched every match and sliced in Python, `tag list` had no window
     at all, and nothing stated a corpus ceiling. That is fine at a hundred
@@ -576,7 +576,7 @@ class TestPagination:
 
         Overdue documents are interleaved with fresh ones here: a window applied
         in SQL would count rows scanned rather than stale documents, which is
-        the ordering bug GAP-011 already fixed once for `--limit`.
+        the ordering bug issue-b4f441c7210f already fixed once for `--limit`.
         """
         decisions = settings.docs_root / "decisions"
         decisions.mkdir(parents=True, exist_ok=True)
@@ -607,7 +607,7 @@ class TestPagination:
 
 
 def test_lint_does_not_flag_a_pair_that_is_related(dispatcher: Dispatcher) -> None:
-    """GAP-055, through the full stack: linking the pair clears the finding."""
+    """issue-08437ba704ff, through the full stack: linking the pair clears the finding."""
     ids = []
     for title in ("Auth tokens one", "Auth tokens two"):
         ids.append(

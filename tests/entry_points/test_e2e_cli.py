@@ -43,7 +43,7 @@ def _break_graph(doc_id: str) -> None:
     Simulates the merge that actually produces a dangling reference: one branch
     deleted the document, another linked to it. These tests used `delete
     --force` to get here, which no longer works — that command now strips the
-    edges it would break (GAP-007), so the only route to a dangling edge is from
+    edges it would break (issue-fd547a293d01), so the only route to a dangling edge is from
     outside the CLI.
     """
     for path in _ENV["settings"].docs_root.rglob(f"{doc_id}-*.md"):
@@ -203,7 +203,7 @@ class TestMaintenanceCommands:
         # A document with no relations is an `orphan` — the default state of a
         # newly created one. It must NOT fail the build: gating on it made the
         # advertised CI gate red on a healthy corpus (this test previously
-        # asserted the opposite, which is the behaviour GAP-006 reported).
+        # asserted the opposite, which is the behaviour issue-9cb85759076d reported).
         run("add", "--type", "decision", "--title", "Orphan", "--description", "d")
         assert run("check").exit_code == 0
         assert run("check", "--strict").exit_code == 0
@@ -289,7 +289,7 @@ class TestMaintenanceCommands:
 
 
 class TestIncludeInactiveFlag:
-    """`--include-inactive` replaces `--include-resolved` (guards GAP-033).
+    """`--include-inactive` replaces `--include-resolved` (guards issue-efc29234eb57).
 
     The flag controlled the schema's `inactive_statuses` — `rejected`/
     `superseded` for a decision, `deprecated` for architecture, `retired` for a
@@ -376,7 +376,7 @@ class TestBrokenSchemaIsReportedNotRaised:
 
 
 class TestWriteOutputNamesTheStore:
-    """Every write says which store it landed in (guards GAP-023).
+    """Every write says which store it landed in (guards issue-34b4f0ca1e13).
 
     `path` is relative to the store, so it read as repo-relative regardless of
     where the store actually was. Naming the store removes the ambiguity for

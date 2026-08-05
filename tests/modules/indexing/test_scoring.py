@@ -28,7 +28,7 @@ class TestHybridScorer:
 
 
 class TestSimilarityIsCarriedThrough:
-    """The raw cosine survives fusion (guards GAP-017).
+    """The raw cosine survives fusion (guards issue-93152f7b9213).
 
     RRF is rank-derived, so `score` says where a document placed and never how
     good the match was: against a store holding one unrelated document, a

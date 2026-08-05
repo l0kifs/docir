@@ -56,7 +56,7 @@ class DocumentView:
     section: str | None = None
     #: Set only when ``--override`` actually bypassed the transition rules, so
     #: the CLI can say which rule was broken. Deliberately not persisted to the
-    #: file: docir has no actors (ADR-0003), so "who overrode this" has no
+    #: file: docir has no actors (adr-90e994d931cc), so "who overrode this" has no
     #: answer worth storing, and git already records the status change itself.
     forced_transition: str | None = None
 

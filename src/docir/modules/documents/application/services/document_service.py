@@ -261,7 +261,7 @@ class DocumentService:
         this matches `check --fix` rather than `tag rm --force`: staleness
         records when a human last vouched for the content, and having a link
         removed from underneath you is not that (the tag path bumping it is
-        GAP-020, a separate open defect — do not copy it here).
+        issue-9ed4905e0db8, a separate open defect — do not copy it here).
         """
         with self._uow_factory() as uow:
             document = self._require(uow, doc_id)
@@ -356,7 +356,7 @@ class DocumentService:
         Staleness derives from the clock and the type's review cadence, neither
         of which the index stores, so it is filtered after the query — and a SQL
         window would then count *rows scanned* rather than stale documents,
-        which is the ordering bug GAP-011 already fixed once.
+        which is the ordering bug issue-b4f441c7210f already fixed once.
 
         So scan in pages and stop as soon as the window is filled: bounded by
         how far in you have to read, not by the corpus. A corpus with no stale
@@ -431,7 +431,7 @@ class DocumentService:
             # scorer keeps each document's best, so a long document is reachable
             # by any one of its sections — for a body over ~1,900 characters the
             # document vector covers only the head, and the rest of it is in the
-            # index only as chunks (ADR-0014).
+            # index only as chunks (adr-927aa43d9635).
             model_id = self._embedder.model_id
             semantic = self._scorer.semantic_ranking(
                 query_vector,
@@ -569,7 +569,7 @@ class DocumentService:
         *jump* between legal statuses. Passing it on a transition that was legal
         anyway is not an override and must not warn.
 
-        The result is not written to the file. docir has no actors (ADR-0003),
+        The result is not written to the file. docir has no actors (adr-90e994d931cc),
         so "who overrode this" has no answer worth storing, and git already
         records the status change; what was missing was only that the operator
         was told a rule had been bypassed, at the moment they bypassed it.

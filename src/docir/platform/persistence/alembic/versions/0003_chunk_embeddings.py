@@ -8,7 +8,7 @@ reads a fixed token window and silently ignores the rest — measured at roughly
 1,900 characters of prose for ``BAAI/bge-small-en-v1.5``, and 83 of the 103
 documents in docir's own store are longer than that. Their tails were not
 ranked badly, they were absent from the semantic index. One vector per section
-is what puts them in it (ADR-0014).
+is what puts them in it (adr-927aa43d9635).
 
 Every existing embedding row is marked dirty as part of the upgrade. Without
 that, a store whose vectors already match the current ``model_id`` is never

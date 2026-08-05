@@ -42,9 +42,10 @@ import html
 import json
 import math
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 
 from markdown_it import MarkdownIt
+from markdown_it.token import Token
 
 from docir.modules.publishing.domain.site import INBOUND_KIND, Edge, Site, SiteDocument
 from docir.modules.publishing.infra.branding import DOCIR_BRANDING, Branding, brand_html
@@ -346,6 +347,14 @@ border-bottom:1px solid var(--line-soft);letter-spacing:-.01em;scroll-margin-top
 .body li{margin:.4rem 0}
 .body code{background:var(--code);border:1px solid var(--line-soft);
 padding:.08rem .35rem;border-radius:6px;font-size:.85em}
+/* A cited docir id. Mono because it is an identifier, not prose, and the same
+   chip whether the source wrote it bare or in a code span — the reader should
+   not be able to tell which, since both mean the same document. */
+.body a.docref{font-family:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+font-size:.85em;background:var(--code);border:1px solid var(--line-soft);
+padding:.08rem .35rem;border-radius:6px;white-space:nowrap}
+.body a.docref code{background:none;border:0;padding:0;font-size:1em;color:inherit}
+.body a.docref:hover{border-color:var(--accent);text-decoration:none}
 /* ---- code blocks: a titled frame, not a grey rectangle ----
    The header carries the language and the copy button. Hanging the button
    inside the <pre> meant it overlapped the first line at narrow widths and
@@ -1118,10 +1127,17 @@ def _render_document(
     neighbors: tuple[SiteDocument | None, SiteDocument | None],
     branding: Branding,
 ) -> str:
-    body_html, headings = render_body(document.body, drop_title=document.title)
+    # Every published document except this one: a body that names its own id
+    # would otherwise get a link to the page it is already on, which reads as a
+    # live cross-reference and goes nowhere.
+    body_html, headings = render_body(
+        document.body,
+        drop_title=document.title,
+        known_ids=by_id.keys() - {document.id},
+    )
 
     # The breadcrumb's leaf is the docir id: it is the one index a document
-    # has. Sequence labels inside titles ("ADR-0016") are title text, never
+    # has. Sequence labels inside titles ("adr-a343140d72e2") are title text, never
     # identifiers — nothing here parses or displays them as identity. The
     # dates live in the trust panel, where they read as the signal they are
     # rather than a grey fragment under the title.
@@ -1499,7 +1515,12 @@ _HEADING_CLOSE = re.compile(r"</h([1-6])>")
 _ANCHOR_GLYPH = "¶"
 
 
-def render_body(text: str, *, drop_title: str = "") -> tuple[str, list[tuple[int, str, str]]]:
+def render_body(
+    text: str,
+    *,
+    drop_title: str = "",
+    known_ids: Collection[str] = (),
+) -> tuple[str, list[tuple[int, str, str]]]:
     """Render a body to HTML, id its headings, and report them.
 
     Ids come from the token stream rather than a regex over rendered HTML: the
@@ -1509,12 +1530,16 @@ def render_body(text: str, *, drop_title: str = "") -> tuple[str, list[tuple[int
     ``drop_title`` removes a leading level-1 heading that repeats the document
     title — docir's own convention restates it as the body's first line, which
     published the title twice with the second one larger.
+
+    ``known_ids`` are the documents this site publishes; a bare docir id in the
+    prose that names one of them becomes a link to its page.
     """
     parser = MarkdownIt("commonmark", {"linkify": False}).enable("table")
     # Both code token types, so an indented block is framed like a fenced one.
     parser.add_render_rule("fence", _render_fence)
     parser.add_render_rule("code_block", _render_fence)
     tokens = _drop_leading_title(parser.parse(text), drop_title)
+    _linkify_doc_ids(tokens, frozenset(known_ids))
 
     headings: list[tuple[int, str, str]] = []
     seen: dict[str, int] = {}
@@ -1528,6 +1553,90 @@ def render_body(text: str, *, drop_title: str = "") -> tuple[str, list[tuple[int
 
     rendered = parser.renderer.render(tokens, parser.options, {})
     return _inject_anchors(rendered, headings), headings
+
+
+#: Shape of a *candidate* docir id in prose. Deliberately loose — it only has to
+#: bracket something worth looking up, and every match is then checked against
+#: the ids the site actually publishes, so a false positive cannot survive. The
+#: alternative, a real id grammar, would have to be kept in step with whatever
+#: `id_style` mints (12 hex chars today, four digits in a sequential store) and
+#: would silently stop linking the day a third style is added.
+_DOC_ID_SHAPE = re.compile(r"\b[a-z][a-z0-9]*-[a-z0-9]{4,}\b")
+
+
+def _linkify_doc_ids(tokens: list, known: frozenset[str]) -> None:
+    """Turn bare docir ids in the prose into links to their pages, in place.
+
+    A body refers to another document by its id, which is the only identifier a
+    document has — sequence labels inside titles are title text. Written plain
+    that id publishes as an unlinked string of hex, so the one canonical way to
+    cite a document was also the one that gave the reader nothing to follow.
+
+    Operates on the token stream, not the rendered HTML, which is what keeps it
+    from linking ids inside fenced code, and — via ``depth`` — from nesting an
+    anchor inside a link whose text happens to be an id. A ``code_inline`` whose
+    whole content is an id is wrapped rather than rewritten, so the existing
+    ```id``` spelling keeps its mono styling and gains the link.
+    """
+    if not known:
+        return
+    for token in tokens:
+        if token.type != "inline" or not token.children:
+            continue
+        children, depth, changed = [], 0, False
+        for child in token.children:
+            if child.type == "link_open":
+                depth += 1
+            elif child.type == "link_close":
+                depth -= 1
+            if depth > 0:
+                children.append(child)
+                continue
+            if child.type == "code_inline" and child.content.strip() in known:
+                children.extend(_doc_link(child.content.strip(), child))
+                changed = True
+            elif child.type == "text" and (parts := _split_ids(child.content, known)):
+                children.extend(parts)
+                changed = True
+            else:
+                children.append(child)
+        if changed:
+            token.children = children
+
+
+def _split_ids(text: str, known: frozenset[str]) -> list | None:
+    """``text`` as tokens with every known id linked, or ``None`` if none is."""
+    out, cursor = [], 0
+    for match in _DOC_ID_SHAPE.finditer(text):
+        if match.group() not in known:
+            continue
+        if match.start() > cursor:
+            out.append(_text_token(text[cursor : match.start()]))
+        out.extend(_doc_link(match.group(), _code_token(match.group())))
+        cursor = match.end()
+    if not out:
+        return None
+    if cursor < len(text):
+        out.append(_text_token(text[cursor:]))
+    return out
+
+
+def _doc_link(doc_id: str, inner: Token) -> list[Token]:
+    open_token = Token("link_open", "a", 1)
+    open_token.attrs = {"class": "docref", "href": page_name(doc_id)}
+    return [open_token, inner, Token("link_close", "a", -1)]
+
+
+def _text_token(content: str) -> Token:
+    token = Token("text", "", 0)
+    token.content = content
+    return token
+
+
+def _code_token(content: str) -> Token:
+    token = Token("code_inline", "code", 0)
+    token.content = content
+    return token
 
 
 def _render_fence(_renderer: object, tokens: list, index: int, *_: object) -> str:

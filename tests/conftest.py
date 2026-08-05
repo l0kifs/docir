@@ -117,7 +117,7 @@ def drop_file_of(settings: Settings) -> Callable[[str], None]:
     document, another adds a link to it, and the merge produces a file
     referencing an id no file provides. Tests used to reach the same state with
     `delete --force`, which was a shortcut — that command now strips the edges
-    it would break (GAP-007), so a dangling edge is only reachable from outside
+    it would break (issue-fd547a293d01), so a dangling edge is only reachable from outside
     the CLI, which is where it always came from in practice.
 
     Callers must `reindex` afterwards, exactly as the agent guide instructs

@@ -62,7 +62,7 @@ class TestResolvePrecedence:
 
 
 class TestGlobalFallbackIsDistinguishable:
-    """A write must not land in the global store unannounced (guards GAP-023).
+    """A write must not land in the global store unannounced (guards issue-34b4f0ca1e13).
 
     `Settings.resolve` fell back to `~/.docir` with no signal, and the reported
     `path` is relative to the *store* — so in a repository nobody had run
@@ -116,7 +116,7 @@ class TestGlobalFallbackIsDistinguishable:
 
 
 class TestNewStoreHome:
-    """The `docir init` home rule lives beside `resolve` (guards GAP-047).
+    """The `docir init` home rule lives beside `resolve` (guards issue-638068ed09a6).
 
     `init` computed its home in the CLI layer and never consulted `--home`, so
     the store landed in whatever directory the shell was in. The two home

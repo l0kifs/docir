@@ -9,7 +9,7 @@ Tier 1/2, not here.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sized
 from pathlib import PurePosixPath
 
 from docir.modules.documents.domain.entities.document import Document
@@ -33,12 +33,20 @@ class Tier0Validator:
         self._schema = schema
 
     def validate_required_fields(self, document: Document) -> None:
-        """Ensure core and type-specific required fields are non-empty."""
+        """Ensure core and type-specific required fields are non-empty.
+
+        "Empty" covers an empty *collection*, not only an empty string. The
+        schema loader now guarantees a `required:` name is a real field
+        (issue-e3c4dfad4f7b), which made `required: [tags]` expressible — and
+        under a string-only test it was accepted and never enforced, since an
+        empty tuple is neither ``None`` nor a blank string. A rule that loads,
+        reads as enforced and enforces nothing is worse than one that is
+        refused.
+        """
         type_schema = self._schema.get(document.type)
         required = set(CORE_REQUIRED_FIELDS) | set(type_schema.required_fields)
         for name in sorted(required):
-            value = getattr(document, name, None)
-            if value is None or (isinstance(value, str) and not value.strip()):
+            if _is_absent(getattr(document, name, None)):
                 raise MissingRequiredFieldError(
                     f"required field {name!r} is missing or empty for type {document.type!r}"
                 )
@@ -157,3 +165,19 @@ class Tier0Validator:
                     f"type {source_type!r} may not declare a {ref.kind!r} relation "
                     f"to a {target_type!r} document ({ref.target!r})"
                 )
+
+
+def _is_absent(value: object) -> bool:
+    """Whether a field counts as missing for the required check.
+
+    ``None``, a blank string and an empty collection all mean "not provided".
+    A ``False`` boolean does not: it is a value, and ``archived: false`` is the
+    normal state of a document rather than the absence of one.
+    """
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    if isinstance(value, Sized):
+        return len(value) == 0
+    return False

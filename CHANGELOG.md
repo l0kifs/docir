@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A `required:` field name no document can carry is now refused when the schema loads.**
+  `required:` was checked only for being a list, while Tier 0 reads the field off the document —
+  so `required: [commit]` loaded happily and then rejected *every* write of that type, forever,
+  with a message naming the write rather than the schema and no flag able to satisfy it
+  (issue-e3c4dfad4f7b). The same class of defect as an undeclared status target, which this
+  loader already caught; it is now reported the same way, naming the fields that would have
+  worked. The allowed set is derived from the `Document` dataclass rather than written out, so it
+  cannot fall behind a new field, minus `path` — the file store assigns that *after* validation
+  runs, so requiring it would reject every create.
+
+  Fixing that surfaced the other half: with real field names now expressible, `required: [tags]`
+  was accepted and enforced nothing, because an empty tuple is neither `None` nor a blank string.
+  Emptiness now covers collections, so `required: [tags]` means "at least one tag". `False` is
+  still a value, not an absence — `archived: false` is the normal state of a document.
+
+  The shipped schema's own comment described `required` as "extra frontmatter fields", which is
+  what invited the unsatisfiable name; it now says it takes an existing document field and lists
+  them.
+
 ### Added
 
 - **A ranked hit says which section matched.** Every hit from `docir context` now carries

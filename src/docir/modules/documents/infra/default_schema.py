@@ -77,9 +77,15 @@ _SCHEMA_FOOTER = """
 #
 # Optional keys:
 #
-#   required            list - extra frontmatter fields this type must carry, on
-#                              top of the always-required id/title/description/
-#                              type/status/created/updated.
+#   required            list - fields this type must carry, on top of the
+#                              always-required id/title/description/type/status/
+#                              created/updated. Names an existing document field
+#                              -- `owner`, `verified`, `tags`, `related`, `body`,
+#                              `code` -- not an arbitrary frontmatter key: a name
+#                              no document can carry is refused when the schema
+#                              loads. An empty list or empty string counts as
+#                              missing, so `required: [tags]` means "at least one
+#                              tag".
 #   inactive_statuses   list - statuses treated as "closed" and hidden from the
 #                              default read path (widen back in with
 #                              `--include-inactive`).

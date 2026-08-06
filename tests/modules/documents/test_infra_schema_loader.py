@@ -522,3 +522,46 @@ class TestRelationKindMappingForm:
             "dependency": False,
             "successor": False,
         }
+
+
+class TestRequiredNamesRealFields:
+    """issue-e3c4dfad4f7b: `required:` accepted names nothing could satisfy.
+
+    The loader checked only that it was a list, while Tier 0 reads the field off
+    the document — so `required: [commit]` loaded fine and then rejected every
+    write of that type forever, with a message naming the write rather than the
+    schema. The same class of defect as an undeclared status target, which this
+    loader already catches, and fixed the same way: refuse at load, naming what
+    would have worked.
+    """
+
+    def _spec(self, required: list[str]) -> dict[str, object]:
+        return {
+            "types": {
+                "probe": {
+                    "prefix": "pr",
+                    "statuses": {"active": []},
+                    "default_status": "active",
+                    "required": required,
+                }
+            }
+        }
+
+    def test_a_field_no_document_can_carry_is_refused(self) -> None:
+        with pytest.raises(SchemaError) as exc:
+            parse_schema(self._spec(["commit"]))
+        message = str(exc.value)
+        assert "'commit'" in message
+        # And it names the ones that would have worked, so the fix needs no
+        # second round trip through the source.
+        assert "owner" in message and "tags" in message
+
+    def test_a_real_optional_field_is_accepted(self) -> None:
+        schema = parse_schema(self._spec(["owner"]))
+        assert schema.get("probe").required_fields == ("owner",)
+
+    def test_path_is_refused_because_it_is_assigned_after_validation(self) -> None:
+        # It *is* a Document field, and requiring it would reject every create:
+        # the file store assigns the path after Tier 0 has run.
+        with pytest.raises(SchemaError):
+            parse_schema(self._spec(["path"]))

@@ -226,6 +226,14 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   left to a human and returned in `RepairResult.remaining`. It reindexes first — id allocation
   consults the index for a free number — and does **not** advance `updated`, since a mechanical
   repair is not a human re-verification (that would launder the staleness clock).
+- **The schema loader also rejects a `required:` name no document can carry** — the allowed set is
+  `REQUIRABLE_FIELDS`, derived from the `Document` dataclass (minus `path`, which the file store
+  assigns *after* Tier 0 runs, so requiring it would reject every create). `required` is checked
+  with `getattr` on the entity, so an unsatisfiable name used to load fine and then fail every
+  write of that type forever, naming the write rather than the schema (issue-e3c4dfad4f7b). The
+  paired rule: "empty" in that check covers an empty **collection**, not only a blank string —
+  otherwise `required: [tags]` loads, reads as enforced and enforces nothing. `False` stays a
+  value, not an absence.
 - **The schema loader rejects a status name no type declares** — a transition target, an
   `inactive_statuses` entry, or `default_status`. Without it a typo loaded fine and failed much
   later as `invalid transition 'open' -> 'closed'`, naming a status that *is* declared and

@@ -73,6 +73,45 @@ class TestTier0Validator:
         with pytest.raises(MissingRequiredFieldError):
             validator.validate_required_fields(_doc("adr-0001", title="  "))
 
+    def test_an_empty_collection_counts_as_missing(self) -> None:
+        # Once the loader guaranteed a `required:` name is a real field
+        # (issue-e3c4dfad4f7b), `required: [tags]` became expressible — and a
+        # string-only emptiness test accepted a document with no tags at all,
+        # so the rule loaded, read as enforced, and enforced nothing.
+        schema = Schema(
+            types={
+                "decision": TypeSchema(
+                    "decision",
+                    "adr",
+                    ("tags",),
+                    ("proposed",),
+                    "proposed",
+                    {"proposed": frozenset()},
+                )
+            }
+        )
+        validator = Tier0Validator(schema)
+        with pytest.raises(MissingRequiredFieldError):
+            validator.validate_required_fields(_doc("adr-0001", tags=()))
+        validator.validate_required_fields(_doc("adr-0001", tags=("auth",)))
+
+    def test_a_false_boolean_is_a_value_not_an_absence(self) -> None:
+        # `archived: false` is the normal state of a document, not a missing
+        # field — falsiness alone would reject every unarchived document.
+        schema = Schema(
+            types={
+                "decision": TypeSchema(
+                    "decision",
+                    "adr",
+                    ("archived",),
+                    ("proposed",),
+                    "proposed",
+                    {"proposed": frozenset()},
+                )
+            }
+        )
+        Tier0Validator(schema).validate_required_fields(_doc("adr-0001", archived=False))
+
     def test_unknown_tag(self) -> None:
         validator = Tier0Validator(_schema())
         with pytest.raises(UnknownTagError):

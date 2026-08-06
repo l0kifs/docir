@@ -52,7 +52,9 @@ files and the derived index never disagree.
 - `MaintenanceService.lint_deep() -> [LintFinding]` — Tier 2 advisory findings
 - `MaintenanceService.reindex_embeddings()/flush_embeddings() -> int`
 - `load_schema(path) -> Schema` — load the per-type document schema. Rejects a status name no
-  type declares (transition target, `default_status`, `inactive_statuses` entry).
+  type declares (transition target, `default_status`, `inactive_statuses` entry), and a
+  `required:` entry naming a field no document can carry — both are unsatisfiable, and both are
+  reported at load naming what would have worked.
 - `describe_schema(Schema) -> dict` — the merged schema as plain data (`docir schema show`)
 - `MaintenanceService.repair() -> RepairResult` — fix the mechanically-fixable Tier 1 damage:
   re-issue duplicate ids (oldest file keeps the id) and drop dead `related` edges. `malformed`,

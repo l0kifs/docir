@@ -18,6 +18,7 @@ from docir.modules.documents.domain.schema import (
     DEFAULT_ID_STYLE,
     ID_STYLES,
     RELATION_KIND_PROPERTIES,
+    REQUIRABLE_FIELDS,
     RelationKindSchema,
     Schema,
     TypeSchema,
@@ -290,6 +291,19 @@ def _parse_type(name: str, spec: object, default_id_style: str) -> TypeSchema:
     required = spec.get("required", []) or []
     if not isinstance(required, list):
         raise SchemaError(f"type {name!r} 'required' must be a list")
+    # Every name must be a field a document can actually carry. Tier 0 reads a
+    # required field off the document, so a name that is not one is not an
+    # unknown key — it is unsatisfiable, and every write of the type fails
+    # forever with a message naming the write instead of the schema. The same
+    # class of defect as an undeclared status target above, and reported the
+    # same way: at load, naming what would have worked (issue-e3c4dfad4f7b).
+    unknown_required = sorted({str(f) for f in required} - REQUIRABLE_FIELDS)
+    if unknown_required:
+        known = ", ".join(sorted(REQUIRABLE_FIELDS))
+        raise SchemaError(
+            f"type {name!r} 'required' names field(s) no document can carry: "
+            f"{', '.join(repr(f) for f in unknown_required)}; a document's fields are: {known}"
+        )
 
     inactive = spec.get("inactive_statuses", []) or []
     if not isinstance(inactive, list):

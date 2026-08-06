@@ -9,8 +9,9 @@ questions the validator asks of it.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 
+from docir.modules.documents.domain.entities.document import Document
 from docir.platform.errors import (
     InvalidStatusError,
     InvalidStatusTransitionError,
@@ -29,6 +30,19 @@ CORE_REQUIRED_FIELDS: tuple[str, ...] = (
     "created",
     "updated",
 )
+
+#: Names a type's ``required:`` list may use — derived from the aggregate rather
+#: than written out, so it cannot fall behind a new field.
+#:
+#: Tier 0 checks a required field by reading it off the document
+#: (:meth:`Tier0Validator.validate_required_fields`), so a name that is not one
+#: of these is not "a frontmatter key we do not know" — it is a field no
+#: document can ever have, and every write of that type fails forever with a
+#: message pointing at the write rather than at the schema (issue-e3c4dfad4f7b).
+#:
+#: ``path`` is excluded on purpose: it is assigned by the file store *after*
+#: validation runs, so requiring it would reject every create.
+REQUIRABLE_FIELDS: frozenset[str] = frozenset(f.name for f in fields(Document)) - {"path"}
 
 #: How a type's ids are minted. ``sequential`` reads a per-prefix counter in the
 #: index (``adr-0007``): human-friendly, and unique only within one store, so two

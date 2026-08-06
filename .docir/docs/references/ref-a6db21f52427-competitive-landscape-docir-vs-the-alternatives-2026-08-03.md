@@ -101,7 +101,7 @@ same day's work then closed, so gap 2 has no residual left.
 | Search over the corpus | ✅ lexical + semantic | ❌ | ⚙️ site search | ❌ | ❌ |
 | Validation | ✅ schema, status, tags, edges | ❌ | ❌ | ✅ **code conformance** | ⚙️ structure |
 | Names the code a document governs | ✅ `code:` globs, Tier 0 shape check, `check` warns when one stops matching, `query --code <path>` asks in reverse (issue-90aea6d1b891) | ❌ | ❌ | ⚙️ implied by an executable rule, not declared as data | ❌ |
-| Enforce decisions against *code* | ❌ **open — gap 6, now unblocked** | ❌ | ❌ | ✅ `.rules.ts`, CI blocking | ❌ |
+| Enforce decisions against *code* | ❌ **by decision** — the rule is a test, and `--code` records which one (adr-b2cfed9d5888) | ❌ | ❌ | ✅ `.rules.ts`, CI blocking | ❌ |
 | Static site / human browsing | ✅ `docir build --out site/` — self-contained pages, both edge directions, constellation graph (adr-a343140d72e2, adr-307ba1f1a820) | ❌ | ✅ **publishes to Pages/S3** | ❌ | ❌ |
 | Timeline view / `serve` | ❌ | ❌ | ✅ | ❌ | ❌ |
 | Git-history metadata | ❌ **not built, deliberately** | ⚙️ | ✅ from git log | ❌ | ❌ |
@@ -111,8 +111,8 @@ same day's work then closed, so gap 2 has no residual left.
 
 Legend: ✅ yes · ⚙️ partial / different shape · ❌ no · `?` not documented
 
-Gap 6 is now the only cell in either table still worth building, and the row above it is why:
-a rule has something to bind to. `Git-history metadata` is a deliberate ❌ — deriving `commit`
+Neither remaining ❌ is now open work: gap 6 closed as a decision (the rule is a test), and
+`Git-history metadata` is a deliberate ❌ — deriving `commit`
 or `pr` from git log makes the index depend on repository history rather than on the files,
 which the "files are canonical, index is derived" thesis does not cover.
 
@@ -203,18 +203,24 @@ and no timeline view; the static artifact was chosen over a live UI because it i
 derived projection of the files, which is the architecture's own thesis, and because a
 URL can be linked in a pull request.
 
-### 6. No enforcement of decisions against the codebase *(archgate, trackfw)* — **open, and now unblocked**
-docir validates the *document graph*; archgate binds an ADR to an executable rule that fails CI
-when code violates it. That is the "why is this doc worth writing" argument, and docir still does
-not make it. Related: trackfw enforces ADR → requirement → roadmap traceability.
+### ~~6. No enforcement of decisions against the codebase~~ — **closed as a decision**
+archgate binds an ADR to an executable rule (`.rules.ts`) that fails CI when the code violates it;
+trackfw enforces ADR → requirement → roadmap traceability. docir will not: a decision that can be
+mechanically enforced is enforced by a **test**, in the project's own language and runner, and
+`--code tests/test_x.py` records which decision that test enforces (adr-b2cfed9d5888). `check`'s
+`unmatched-code` then covers the failure a rule file has too — the enforcement was deleted and
+nothing said so.
 
-What changed is that the binding site now exists (gap 7): a document names the code it governs,
-so `docir query --code $(git diff --name-only main)` already answers "which decisions does this
-branch have to be read against" — the question most of an executable-rule engine is wanted for,
-without one. What is still missing is a *rule*: something that fails CI when the code contradicts
-the decision, rather than merely listing the decisions that apply. That is a genuinely different
-thing to build, and the case for building it should be made against the query, which is cheap and
-already there.
+The review-time half is a notice, never a gate: CI prints the decisions a branch's changed files
+declare they govern (`query --code $(git diff --name-only origin/main...HEAD)`). Failing a build
+because you touched governed code punishes the ordinary case, and a check cleared by clicking is a
+ritual rather than a human reading a decision — the same argument that made staleness delivery a
+pull. What docir refuses to own: a rule DSL, a sandbox for user-supplied rules, and per-language
+static analysis; archgate is TypeScript-only for exactly that reason.
+
+So the cell stays ❌ against archgate's ✅ and that is honest — docir does not fail CI on a code
+violation. The gap is *answered*, not deferred, and the trigger for reopening it is evidence: a
+governed decision violated in a branch whose notice listed it. "A competitor has it" never was one.
 
 ### ~~7. No git/code linkage~~ — **closed for code, deliberately open for git history**
 `code:` frontmatter now names the code a document governs, in three steps that shipped together
@@ -262,17 +268,16 @@ non-answer for personal/cross-repo knowledge.
 
 ## Recommended reading of these gaps
 
-As of 2026-08-06, eleven of the twelve are settled: **1, 2, 4, 5 and 7 shipped** (2 in both halves); **3 and 8 closed
+As of 2026-08-06, all twelve are settled: **1, 2, 4, 5 and 7 shipped** (2 in both halves); **3, 6 and 8 closed
 as decisions** — built, measured or reasoned against, and removed rather than deferred; **9 and
 12 are correct omissions** given the "curated corpus, git canonical" thesis, so listing them is
-scope-awareness, not a to-do. What is left:
+scope-awareness, not a to-do. The two that were still open this morning closed during the day;
+what the list leaves behind is one standing constraint, not a backlog:
 
-1. **Gap 6 (enforcement against code) is the only open strategic gap, and it is no longer
-   blocked.** Gap 7 shipped the binding site — a document names the code it governs, and
-   `query --code` lists the decisions a branch has to be read against. The remaining piece is a
-   *rule* that fails CI when the code contradicts the decision, which is a different and much
-   larger thing than the query. Make the case for it against the query, not against the old
-   absence: most of what an executable-rule engine was wanted for is already answerable.
+1. ~~Gap 6 (enforcement against code)~~ — **answered** (adr-b2cfed9d5888). The binding site gap 7
+   shipped made the question live, and the answer is that the rule is a test docir points at,
+   plus a review-time notice. No engine. That leaves nothing in either table that is open work.
+
 2. ~~Gap 2's residual~~ — **done** (issue-afd25273ff1f): a hit now names the section that
    matched, and the name is what `get --section` takes. It was the last piece of retrieval
    parity, and it cost ~20 tokens per result set against a body fetch saved.

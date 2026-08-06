@@ -2,22 +2,24 @@
 code:
 - src/docir/modules/documents/application/services/maintenance_service.py
 - src/docir/modules/documents/domain/services/graph_checks.py
+- .github/workflows/ci.yml
 created: '2026-07-30'
 description: 'How the corpus stays consistent: reindex, check, repair, and the merge
   guard.'
 id: arch-0a3c2d6d54a6
 owner: maintainer
 related:
-- arch-1cfb1b212237
 - adr-bd7c4f3c5764
-- issue-9ed4905e0db8
+- arch-1cfb1b212237
 - issue-40d1792bc9f9
 - issue-476b4e188fab
 - issue-5f979576ef7d
 - issue-9cb85759076d
+- issue-9ed4905e0db8
 - issue-b4f441c7210f
 - issue-b7ddde3ce860
 - issue-c33edcf431fa
+- adr-b2cfed9d5888
 status: active
 tags:
 - integrity
@@ -29,12 +31,14 @@ updated: '2026-08-06'
 
 ## Backbone
 
-merge branches → rebuild index → check structure → review stale docs → re-verify → (repair?)
+list the decisions a branch touches → merge branches → rebuild index → check structure →
+review stale docs → re-verify → (repair?)
 
 ## Event timeline
 
 | # | Event | Actor | Trigger | Evidence |
 |---|-------|-------|---------|----------|
+| 0 | GoverningDecisionsListed | ACT-003 | `docir query --code <changed files>` on a pull request | .github/workflows/ci.yml:83-97 |
 | 1 | BranchesMerged | ACT-006 | `git merge` | tests/modules/documents/test_merge_safety.py |
 | 2 | IndexRebuilt | ACT-002 | `docir reindex [--changed]` | maintenance_service.py:58-69 |
 | 3 | StructureChecked | ACT-003 | `docir check [--strict]` | maintenance_service.py:84-100 |
@@ -43,6 +47,18 @@ merge branches → rebuild index → check structure → review stale docs → r
 | 6 | DocumentReVerified | ACT-007 | `docir update <id> --verified` | document_service.py:341-342 |
 | 7 | AdvisoryLinted | ACT-002 | `docir lint --deep` | maintenance_service.py:126-134 |
 | 8 | EmbeddingsRebuilt | ACT-002 | `docir reindex --embeddings` / `docir embed --flush` | maintenance_service.py:71-82 |
+| 9 | UnmatchedCodeFlagged | system | a governed `code:` glob matches nothing on disk | graph_checks.py:124-166, maintenance_service.py:159-169 |
+
+Event 0 is numbered from zero because it happens *before* the flow this document was written
+around: it is the only step that runs while the change is still a proposal, and it is a
+**notice, not a gate** (adr-b2cfed9d5888). Everything below it runs on a corpus that has already
+been changed; event 0 runs on the change itself, and the only thing it can do is tell a reviewer
+what to read.
+
+Event 9 is the code half of the same linkage. It reports a document whose governed code moved or
+was deleted — including a decision bound to the test that enforced it, which is how "the rule is
+a test" notices that the rule is gone. A `warning`, like staleness: the corpus is intact and a
+pattern is out of date.
 
 ## Hotspots
 

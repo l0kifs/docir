@@ -79,3 +79,20 @@ jobs:
             exit 0
           fi
           uv run docir --no-daemon check --strict
+
+      - name: Decisions this branch touches (notice, never a gate)
+        # The review-time half of code linkage (adr-b2cfed9d5888): print the
+        # decisions that declared they govern the files this PR changes, so a
+        # reviewer is told what to read against. Deliberately not a gate —
+        # failing because you touched governed code punishes the ordinary case,
+        # and a check cleared by clicking is a ritual, not a human reading a
+        # decision. `|| true` keeps a docir failure from failing the build for
+        # the same reason.
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ ! -d .docir/docs ]; then exit 0; fi
+          files=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" | head -100)
+          if [ -z "$files" ]; then exit 0; fi
+          args=()
+          while IFS= read -r file; do args+=(--code "$file"); done <<< "$files"
+          uv run docir --no-daemon --pretty query "${args[@]}" --limit 20 || true

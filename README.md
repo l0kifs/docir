@@ -197,6 +197,12 @@ forces the table, `--no-trim` keeps every field.*
   and `docir check` warns when a pattern stops matching anything, so a decision whose
   code moved is visible rather than quietly wrong. Ask it in reverse with
   `docir query --code src/auth/login.py`: which decisions govern the file I am editing.
+- **A decision that can be enforced is enforced by a test.** Point `code` at the test that
+  fails when the code contradicts the decision, and CI already enforces it — in your
+  language, with your fixtures. docir records the link and warns when that test disappears;
+  it ships no rule engine (adr-b2cfed9d5888). At review time,
+  `docir query --code $(git diff --name-only origin/main...HEAD)` lists what a branch
+  should be read against — a notice, not a gate.
 
 ### What you may edit by hand
 

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Enforcement of decisions against code closes as a decision, not a feature** (adr-b2cfed9d5888).
+  It was the last strategic gap in the competitive survey and the one docir had never answered:
+  archgate binds an ADR to an executable rule that fails CI. With `code:` shipped there was finally
+  something to bind *to*, so the question was live — and the answer is that a decision which can be
+  mechanically enforced is enforced by a **test**, in the project's own language and runner, with
+  `--code tests/test_x.py` recording which decision that test enforces. `check`'s `unmatched-code`
+  then covers the failure a rule file has too: the enforcement was deleted and nothing said so.
+
+  The review-time half is a **notice, never a gate**: docir's own CI now prints the decisions a pull
+  request's changed files declare they govern. Failing a build because you touched governed code
+  punishes the ordinary case, and a check cleared by clicking is a ritual rather than a human
+  reading a decision — the argument adr-bd7c4f3c5764 already made for staleness. What docir will not
+  own: a rule DSL, a sandbox for user-supplied rules, and per-language static analysis.
+
 ### Fixed
 
 - **A `required:` field name no document can carry is now refused when the schema loads.**

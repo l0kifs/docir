@@ -163,6 +163,10 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
   read view, so a later session can see which decisions concern the files it is
   editing, and `docir check` warns (`unmatched-code`) once a pattern stops
   matching — repoint it with `--set-code` when you move the code it names.
+- **If a test enforces the decision, govern that test.** docir has no rule
+  engine and will not gain one: the test already fails when the code
+  contradicts the decision, and `--code tests/test_x.py` records which decision
+  it enforces, so `check` notices when that test is deleted.
 - `delete` is blocked while another doc links to it. `--force` deletes anyway and
   **strips the edge from each referencing doc**, naming them in its output — so a
   forced delete never leaves a dangling link. Prefer `archive` when the document

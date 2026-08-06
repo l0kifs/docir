@@ -155,6 +155,8 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
 - Body edits, safest→riskiest: `--append-section` (default choice) →
   `--replace-section` → `--replace-body` (needs `--force`; fails "stale write"
   if the file changed on disk — `docir get` first).
+- Name a section by its **text alone** — `"Resolution"`, not `"## Resolution"`.
+  The `##` is written for you, and every section flag matches on the text.
 - When a body edit changes what the doc is about, update `--set-description`
   in the same call; it drives search quality.
 

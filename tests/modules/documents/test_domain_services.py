@@ -12,6 +12,7 @@ from docir.modules.documents.domain.schema import RelationKindSchema, Schema, Ty
 from docir.modules.documents.domain.services.graph_checks import GraphChecker
 from docir.modules.documents.domain.services.markdown_sections import (
     append_section,
+    extract_section,
     replace_section,
 )
 from docir.modules.documents.domain.services.similarity_lint import SimilarityLinter
@@ -475,3 +476,44 @@ class TestMarkdownSections:
     def test_replace_missing_section_raises(self) -> None:
         with pytest.raises(ValidationError):
             replace_section("## A\n\ntext", "Z", "new")
+
+
+class TestSectionHeadingsAreNamedByTextAlone:
+    """`--append-section "## X"` wrote `## ## X` and said nothing.
+
+    The flag takes the heading *text* and writes the `##` itself, so passing the
+    line as it appears in the file doubled it. Neither section-edit mode could
+    repair a heading line — `replace_section` keeps it by contract and appending
+    again adds a sibling — so the safest body edit reached a state only
+    `--replace-body --force` could leave (issue-d5f68b44b1d9).
+    """
+
+    def test_append_refuses_a_heading_carrying_its_own_markers(self) -> None:
+        with pytest.raises(ValidationError) as raised:
+            append_section("", "## Resolution", "Fixed it")
+        message = str(raised.value)
+        assert "'## Resolution'" in message
+        assert "'Resolution'" in message, "the error must name the argument that works"
+
+    @pytest.mark.parametrize("heading", ["# Top", "### Deep", "  ## Padded", "#NoSpace"])
+    def test_append_refuses_every_level_of_marker(self, heading: str) -> None:
+        with pytest.raises(ValidationError):
+            append_section("", heading, "x")
+
+    def test_a_hash_inside_the_text_is_still_a_heading(self) -> None:
+        # The guard is about a *leading* marker; "C# interop" is a real heading
+        # and rejecting it would trade one silent failure for a loud wrong one.
+        assert append_section("", "C# interop", "x").startswith("## C# interop\n")
+
+    def test_the_mirror_mistake_on_replace_names_the_real_headings(self) -> None:
+        # Passing "## A" to --replace-section answered "no matching heading
+        # found" and left the caller to guess which spelling was wanted.
+        with pytest.raises(ValidationError) as raised:
+            replace_section("## A\n\ntext", "## A", "new")
+        assert "'A'" in str(raised.value)
+
+    def test_a_hand_written_doubled_heading_stays_readable(self) -> None:
+        # Reading corrupts nothing and hand-editing markdown is permitted, so
+        # the guard must not lock someone out of the file they need to repair.
+        body = "## ## Resolution\n\nhello\n"
+        assert extract_section(body, "## Resolution").startswith("## ## Resolution")

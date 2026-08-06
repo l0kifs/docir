@@ -135,6 +135,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`--append-section "## X"` wrote `## ## X` and said nothing.** The flag names a heading by
+  its *text* and writes the `##` itself, so passing the line as it appears in the file doubled
+  it. Nothing could then repair it: `--replace-section` keeps the heading line by contract,
+  appending again adds a sibling, and `docir check` sees no problem — a doubled `#` is neither
+  malformed frontmatter nor a graph fault. The only way out was `--replace-body --force`, so
+  the *safest* body edit was the one that reached a state only the *riskiest* one could leave.
+  Found when an agent composed the argument from a heading it had just read in a body, where
+  it carries its `##`.
+
+  A heading argument beginning with `#` is now refused at Tier 0, with an error naming the
+  argument that works. Stripping the markers instead would look friendlier and be worse: it
+  makes `"### Notes"` silently mean level 2, guessing at an intent the caller stated. A `#`
+  *inside* the text still passes — `"C# interop"` is a real heading.
+
+  `--replace-section` and `get --section` deliberately keep no such guard. Both match on
+  heading text, so neither can corrupt — they fail rather than accept — and hand-editing
+  markdown is permitted, so a file that already carries a doubled marker must stay readable
+  or nobody can repair it. What they lacked was a message: `--replace-section` answered "no
+  matching heading found" and left the caller guessing, and now shares one miss error with
+  `get --section` that lists the real headings. The heading match and the section end boundary
+  are one shared pair as a result, which is what the module's contract — read the same span
+  you would overwrite — always claimed and two copies of a loop could not guarantee.
+
 - **The daemon kept serving the code it started with, so a fix silently did not take
   effect.** The daemon loads docir once and lives on (900s idle timeout). Nothing compared
   the running process against the installed one, so after `uv sync`, a `pip install -U`, or

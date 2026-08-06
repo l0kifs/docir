@@ -109,6 +109,42 @@ class TestCli:
         assert "ten months" in json.loads(result.stdout)["body"]
 
 
+class TestAppendSectionRejectsItsOwnMarkers:
+    """The corruption was silent, so the CLI must be where it is refused.
+
+    Filed after an agent wrote `--append-section "## Resolution"` — composing
+    the argument from the heading it had just read in a body, where it carries
+    its `##` (issue-d5f68b44b1d9).
+    """
+
+    def test_the_command_fails_and_names_the_argument_that_works(self, doc_id: str) -> None:
+        result = runner.invoke(
+            app,
+            ["--no-daemon", "update", doc_id, "--append-section", "## Resolution", "--body", "x"],
+        )
+        assert result.exit_code != 0
+        combined = result.output + str(result.stderr or "")
+        assert "Resolution" in combined
+
+    def test_the_body_is_untouched(self, doc_id: str) -> None:
+        runner.invoke(
+            app,
+            ["--no-daemon", "update", doc_id, "--append-section", "## Resolution", "--body", "x"],
+        )
+        body = json.loads(runner.invoke(app, ["--no-daemon", "get", doc_id]).stdout)["body"]
+        assert "## ## Resolution" not in body
+        assert "Resolution" not in body
+
+    def test_the_bare_heading_still_appends(self, doc_id: str) -> None:
+        result = runner.invoke(
+            app,
+            ["--no-daemon", "update", doc_id, "--append-section", "Resolution", "--body", "x"],
+        )
+        assert result.exit_code == 0, result.output
+        body = json.loads(runner.invoke(app, ["--no-daemon", "get", doc_id]).stdout)["body"]
+        assert body.rstrip().endswith("## Resolution\n\nx")
+
+
 class TestAgreesWithReplaceSection:
     def test_read_and_write_span_the_same_text(self, container: Container, doc_id: str) -> None:
         """The load-bearing property: one notion of where a section ends.

@@ -316,6 +316,10 @@ def add(
     ] = None,
     status: Annotated[str | None, typer.Option("--status")] = None,
     owner: Annotated[str | None, typer.Option("--owner", help="Steward for staleness.")] = None,
+    code: Annotated[
+        str | None,
+        typer.Option("--code", help="Comma-separated repo-relative globs this document governs."),
+    ] = None,
     id: Annotated[
         str | None,
         typer.Option(
@@ -335,6 +339,11 @@ def add(
     dropping `adr-0007` breaks every historical cross-reference. It is refused if
     the id is taken or its prefix does not match the type, and the next
     allocation still lands past it.
+
+    `--code` records the code this document governs, as repo-relative globs
+    (`src/docir/platform/persistence/**`). Only the shape is validated — a
+    pattern that matches nothing today is allowed, because a decision is often
+    written before the code it decides, or after that code moved.
     """
     payload: dict[str, object] = {
         "type": type,
@@ -344,6 +353,7 @@ def add(
         "related": _split_csv(related),
         "status": status,
         "owner": owner,
+        "code": _split_csv(code),
         "id": id,
         "body": resolve_body(body, body_file, stdin),
         "wait_embeddings": wait_embeddings,
@@ -364,6 +374,14 @@ def update(
         typer.Option("--set-related", help="Comma-separated <id> or <id>:<kind> typed edges."),
     ] = None,
     set_owner: Annotated[str | None, typer.Option("--set-owner", help="Staleness steward.")] = None,
+    set_code: Annotated[
+        str | None,
+        typer.Option(
+            "--set-code",
+            help="Comma-separated repo-relative globs this document governs "
+            '(pass "" to clear them).',
+        ),
+    ] = None,
     verified: Annotated[
         bool, typer.Option("--verified", help="Stamp today as the last-verified date.")
     ] = False,
@@ -393,6 +411,7 @@ def update(
         "set_tags": None if set_tags is None else _split_csv(set_tags),
         "set_related": None if set_related is None else _split_csv(set_related),
         "set_owner": set_owner,
+        "set_code": None if set_code is None else _split_csv(set_code),
         "mark_verified": verified,
         "append_section": [append_section, body_text] if append_section else None,
         "replace_section": [replace_section, body_text] if replace_section else None,
@@ -486,6 +505,10 @@ def query(
     stale: Annotated[
         bool, typer.Option("--stale", help="Only documents past their type's review cadence.")
     ] = False,
+    code: Annotated[
+        list[str] | None,
+        typer.Option("--code", help="Only documents governing this path (repeat for more)."),
+    ] = None,
     limit: Annotated[int, typer.Option("--limit")] = 50,
     offset: Annotated[int, typer.Option("--offset", help="Rows to skip; page with --limit.")] = 0,
 ) -> None:
@@ -499,6 +522,14 @@ def query(
     Staleness only says a document is past its type's review cadence — nobody
     has vouched for it recently. It is not a claim that the content is wrong.
     Confirm with `docir update <id> --verified` once you have re-read it.
+
+    `--code <path>` answers the other direction: which documents declared they
+    govern this file. Repeat it to ask about several paths at once — the answer
+    is any document matching any of them, which is what makes
+    `docir query --code $(git diff --name-only main | tr '\\n' ' ')` the set of
+    decisions a branch should be read against. The paths are matched against
+    the patterns as text, so a file the branch *deleted* still finds its
+    decisions. A document governing a directory governs what is in it.
     """
     payload: dict[str, object] = {
         "types": tuple(type or ()),
@@ -508,6 +539,7 @@ def query(
         "include_inactive": _include_inactive(include_inactive, include_resolved),
         "owner": owner,
         "stale": stale,
+        "code": tuple(code or ()),
         "limit": limit,
         "offset": offset,
     }
@@ -765,7 +797,9 @@ def check(
     Findings carry a severity. `error` means the corpus is broken — a duplicate
     id hiding a document, an edge pointing at nothing, a file that will not
     parse. `warning` describes shape or age: orphans, cycles, layering, staleness,
-    unknown types.
+    unknown types, and a `code` glob that no longer matches anything (checked
+    only when the store sits in a repository — there is nothing to resolve a
+    pattern against otherwise).
 
     Pass --strict to gate a pre-merge / CI job: it exits 1 on errors only, which
     is what catches the duplicate ids and dangling references a branch merge

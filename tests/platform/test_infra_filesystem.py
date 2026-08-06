@@ -70,6 +70,22 @@ class TestMarkdownStore:
         assert loaded.owner == "platform-team"
         assert loaded.verified == date(2026, 6, 1)
 
+    def test_code_globs_round_trip_and_are_absent_when_empty(self, tmp_path) -> None:
+        # The governed globs are frontmatter like any other field, and a
+        # document governing nothing carries no `code:` key at all — the same
+        # rule owner/verified follow, so files stay minimal (issue-90aea6d1b891).
+        store = MarkdownDocumentFileStore(tmp_path)
+        rel = store.write(_doc(code=("src/docir/platform/persistence/**", "docs/*.md")))
+        raw = (tmp_path / rel).read_text(encoding="utf-8")
+        assert "- src/docir/platform/persistence/**\n" in raw
+        loaded = store.read(rel)
+        # Author order, not sorted: the file is what the human wrote.
+        assert loaded.code == ("src/docir/platform/persistence/**", "docs/*.md")
+
+        bare = store.write(_doc(id="adr-0009", code=()))
+        assert "code:" not in (tmp_path / bare).read_text(encoding="utf-8")
+        assert store.read(bare).code == ()
+
     def test_archived_flag_persisted(self, tmp_path) -> None:
         store = MarkdownDocumentFileStore(tmp_path)
         rel = store.write(_doc(archived=True))

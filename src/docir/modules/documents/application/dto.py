@@ -47,6 +47,9 @@ class DocumentView:
     path: str | None
     owner: str = ""
     verified: str | None = None
+    #: Repo-relative globs naming the code this document governs. Empty (and so
+    #: dropped from the trimmed JSON) when it names none.
+    code: tuple[str, ...] = ()
     stale: bool = False
     score: float | None = None
     via_graph: bool = False
@@ -85,6 +88,7 @@ class DocumentView:
             path=document.path,
             owner=document.owner,
             verified=None if document.verified is None else document.verified.isoformat(),
+            code=document.code,
             stale=stale,
             score=score,
             via_graph=via_graph,
@@ -114,6 +118,10 @@ class DocumentSummary:
     archived: bool
     owner: str = ""
     verified: str | None = None
+    #: The governed globs ride along on the skeleton, like tags and edges: they
+    #: are a handful of tokens and they answer "does this document concern the
+    #: code I am about to change" without a second fetch.
+    code: tuple[str, ...] = ()
     stale: bool = False
     score: float | None = None
     #: Raw cosine similarity to the query — the only field with absolute
@@ -147,6 +155,7 @@ class DocumentSummary:
             archived=document.archived,
             owner=document.owner,
             verified=None if document.verified is None else document.verified.isoformat(),
+            code=document.code,
             stale=stale,
             score=score,
             similarity=similarity,
@@ -170,6 +179,8 @@ class AddDocumentRequest:
     body: str = ""
     status: str | None = None
     owner: str | None = None
+    #: Repo-relative globs naming the code this document governs.
+    code: tuple[str, ...] = ()
     #: Adopt an existing id instead of allocating one — for a repo migrating a
     #: numbered ADR corpus, where losing `adr-0007` breaks every historical
     #: cross-reference. It is *supplied*, never inferred, and validated against
@@ -194,6 +205,9 @@ class UpdateDocumentRequest:
     set_tags: tuple[str, ...] | None = None
     set_related: tuple[str, ...] | None = None
     set_owner: str | None = None
+    #: ``None`` leaves the governed globs unchanged; an empty tuple clears them,
+    #: the same convention ``set_tags`` / ``set_related`` follow.
+    set_code: tuple[str, ...] | None = None
     mark_verified: bool = False
     append_section: tuple[str, str] | None = None
     replace_section: tuple[str, str] | None = None
@@ -219,6 +233,10 @@ class QueryRequest:
     include_inactive: bool = False
     owner: str | None = None
     stale_only: bool = False
+    #: Paths to answer "which documents govern this?" for. Matched against each
+    #: document's ``code`` globs — like ``stale_only``, a predicate the index
+    #: cannot express, so it is applied after the query and before the limit.
+    code_paths: tuple[str, ...] = ()
     limit: int = 50
     #: Rows to skip. A short page means the end — there is no total in the
     #: response, which is a bare JSON array with nowhere to put one.

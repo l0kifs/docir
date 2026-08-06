@@ -113,6 +113,9 @@ def render_document(view: Mapping[str, object]) -> None:
         lines.append(f"[dim]tags:[/] {tags}")
     if related:
         lines.append(f"[dim]related:[/] {related}")
+    governs = _join(view.get("code"))
+    if governs:
+        lines.append(f"[dim]governs:[/] {governs}")
     if view.get("owner"):
         lines.append(f"[dim]owner:[/] {view['owner']}")
     if view.get("verified"):

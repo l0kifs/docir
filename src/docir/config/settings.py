@@ -230,6 +230,19 @@ class Settings(BaseSettings):
         return self.home / "docs"
 
     @property
+    def code_root(self) -> Path | None:
+        """The repository a document's ``code`` globs are relative to, if any.
+
+        The same walk `is_unintended_global_fallback` uses, started at the store
+        instead of the CWD: a project store lives at ``<repo>/.docir``, so the
+        repository above it is the tree the patterns were written against. A
+        store with no repository above it (the plain global ``~/.docir``) has
+        none, and ``None`` is what makes `check` skip the code finding there
+        rather than report every pattern as missing.
+        """
+        return enclosing_repository(self.home)
+
+    @property
     def db_path(self) -> Path:
         """The derived SQLite index file."""
         return self.home / "index.db"

@@ -471,6 +471,19 @@ class TestShell:
         map_part = page[page.index("Local map") :]
         assert 'href="adr-0002.html"' in map_part[: map_part.index("</svg>")]
 
+    def test_the_governed_globs_are_published_as_text_and_only_when_present(self) -> None:
+        """A document's `code` globs reach the page (they are part of what the
+        store knows), as plain patterns: the site has no repository to resolve
+        them against, so a link would be a guess at a forge URL. A document
+        that governs nothing gets no panel at all."""
+        governing = dict(_DOCS[0]) | {"code": ["src/auth/**", "src/api/routes.py"]}
+        page = render_site(build_site([governing]), title="Docs", version="1")["adr-0001.html"]
+        rail = page[page.index("Governs") :]
+        assert "<code>src/auth/**</code>" in rail[: rail.index("</ul>")]
+        assert 'href="src/auth' not in page
+
+        assert "Governs" not in _pages()["adr-0001.html"]
+
     def test_a_document_with_no_relations_still_links_to_the_graph(self) -> None:
         """The local map renders only with neighbours; the graph deep-link
         must not disappear with it."""

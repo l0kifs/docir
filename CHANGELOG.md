@@ -9,6 +9,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A document can name the code it governs.** `docir add --code "src/auth/**"` (and
+  `docir update <id> --set-code ...`) records repo-relative globs in frontmatter, and they
+  ride on every read view — `get`, and the skeletons `query`/`search`/`context` return — so
+  "does this decision concern the files I am about to change" no longer requires reading
+  bodies and guessing.
+
+  docir validated the document graph against itself and nothing else: an ADR could say "SQLite
+  is the derived index" with nothing tying it to `platform/persistence/`. That is the
+  "why is this document worth writing" argument the tool did not make, and it also blocked the
+  AST-anchored staleness signal adr-bd7c4f3c5764 defers — there was no anchor to hang it on
+  (issue-90aea6d1b891).
+
+  The schema *appeared* to offer a way in and did not: `required:` is documented as "extra
+  frontmatter fields this type must carry", but it is checked with `getattr` on the entity, so
+  a name that is not already a field rejects every write of that type forever, with no flag
+  able to satisfy it (filed as issue-e3c4dfad4f7b). Hence a real field: on `Document`, in the
+  markdown frontmatter, and in the index (`document_code`, migration `0004`, a child table
+  like `document_tags` because the value is a set and the question asked of it reads the
+  patterns).
+
+  **Tier 0 checks the shape and nothing else.** An absolute path, a `..` segment, a backslash
+  separator and an empty entry are refused — each is a pattern that can never match anything.
+  A well-formed pattern matching nothing *today* is accepted, deliberately: a decision is
+  routinely written before the code it decides, and code moves without the decision becoming
+  false. Making that a write error would teach authors to omit the field, which is the state
+  this exists to leave; it is a Tier 1 question, and the `check` finding for it is not built
+  yet (step 2 of issue-90aea6d1b891).
+
+  **`docir query --code <path>` asks the question in the other direction** — which documents
+  declared they govern this file. Repeat the flag for several paths (any match counts), which
+  makes `docir query --code $(git diff --name-only main)` the set of decisions a branch should
+  be read against. Like `--stale`, it is a predicate SQL cannot express, so it is applied after
+  the query and **before the limit**: `--code x --limit 1` means one governing document, not
+  "the governing ones among the first document".
+
+  Matching is **textual, not a filesystem walk**, and that is the load-bearing choice: the
+  branch that *deletes* a file is exactly when the decisions governing it must be re-read, and
+  resolving through the working tree would answer "nothing" for precisely that case. The
+  grammar is `pathlib`'s (`**` crosses separators, `*`/`?` do not, `[...]` is a class), so a
+  pattern means the same thing to `check` and to `query`. A document governing a directory
+  governs what is in it — `src/auth` answers for `src/auth/login.py` — because a miss here
+  costs a decision nobody read, and a false hit costs a glance.
+
+  **`docir check` reports a glob that matches nothing** (`unmatched-code`, a warning). The
+  write path accepts a pattern naming code that does not exist, so the "does it still match"
+  question has to be asked later, by the command that reports shape and age — and asked as a
+  warning, because the corpus is intact: a pattern is out of date, not broken. `check --fix`
+  deliberately leaves it, like `malformed` and `unknown-type`: only a human knows whether the
+  glob is stale or the document is.
+
+  The check is **skipped entirely when the store has no repository above it**
+  (`Settings.code_root`, the `.git` walk `is_unintended_global_fallback` already uses, started
+  at the store). A global `~/.docir` has no tree to resolve a repo-relative pattern against, and
+  reporting every pattern in it as missing is the "warning that fires on correct usage" failure
+  the cycle and layering checks were each fixed for. A pattern absent from the resolved map is
+  likewise *unresolved*, not missing — the rule `similarity` follows, where absent means "not
+  scored" and never "scored zero".
+
+  `content_hash` sorts the globs, for the reason it already sorts tags: the file keeps the
+  author's order and the index returns them sorted, and without the sort a reindexed document
+  read as hand-edited — which would make `--replace-body`, the one mode the divergence guard
+  blocks, refuse a write that loses nothing. The published site grows a **Governs** panel
+  listing the patterns as text, never as links: the store knows the globs but not the
+  repository they resolve against, so a link would be a guess at a forge URL.
+
 - **Relation kinds can declare what they mean.** `relation_types:` now also takes a mapping
   of kind to properties, beside the list form it has always accepted:
 

@@ -9,6 +9,7 @@ import pytest
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.entities.relation import Relation
 from docir.modules.documents.domain.schema import RelationKindSchema, Schema, TypeSchema
+from docir.modules.documents.domain.services import code_globs
 from docir.modules.documents.domain.services.graph_checks import GraphChecker
 from docir.modules.documents.domain.services.markdown_sections import (
     append_section,
@@ -393,6 +394,83 @@ class TestStalenessCheck:
         doc = _doc("adr-0001", updated=date(2026, 1, 1))
         issues = GraphChecker(_stale_schema()).check([doc], [])
         assert not any(i.kind == "stale" for i in issues)
+
+
+class TestCodeCheck:
+    """The Tier 1 half of code linkage: a governed glob that matches nothing."""
+
+    def test_a_code_glob_matching_nothing_is_a_warning_naming_the_pattern(self) -> None:
+        doc = _doc("adr-0001", code=("src/gone/**", "src/here/*.py"))
+        issues = GraphChecker(_schema()).check(
+            [doc], [], code_matches={"src/gone/**": False, "src/here/*.py": True}
+        )
+        found = [i for i in issues if i.kind == "unmatched-code"]
+        assert len(found) == 1
+        # The message names the pattern that missed and not the one that hit —
+        # a finding that says only "a glob is stale" costs a second lookup.
+        assert "'src/gone/**'" in found[0].message
+        assert "src/here" not in found[0].message
+        assert found[0].severity == "warning"  # the code moved; nothing is broken
+
+    def test_no_resolution_skips_the_code_check(self) -> None:
+        # ``None`` is "there is no repository to ask", which is the global
+        # store. Treating it as "matched nothing" would report every pattern.
+        doc = _doc("adr-0001", code=("src/gone/**",))
+        assert not any(i.kind == "unmatched-code" for i in GraphChecker(_schema()).check([doc], []))
+
+    def test_a_pattern_nobody_resolved_is_not_reported(self) -> None:
+        # Absent from the map is *unresolved*, not *missing* — the rule
+        # `similarity` follows on the read paths. Defaulting the other way
+        # invents a finding for a question that was never asked.
+        doc = _doc("adr-0001", code=("src/unknown/**",))
+        issues = GraphChecker(_schema()).check([doc], [], code_matches={"src/other/**": False})
+        assert not any(i.kind == "unmatched-code" for i in issues)
+
+    def test_an_archived_document_is_not_reported(self) -> None:
+        doc = _doc("adr-0001", code=("src/gone/**",), archived=True)
+        issues = GraphChecker(_schema()).check([doc], [], code_matches={"src/gone/**": False})
+        assert not any(i.kind == "unmatched-code" for i in issues)
+
+
+class TestCodeGlobs:
+    """The pattern grammar `code` uses, matched against a path as text.
+
+    Deliberately not a filesystem walk: `query --code` has to answer for a file
+    a branch just deleted, which is when its decisions most need re-reading.
+    """
+
+    @pytest.mark.parametrize(
+        ("pattern", "path", "expected"),
+        [
+            ("src/auth/**", "src/auth/login.py", True),
+            ("src/auth/**", "src/auth/deep/nested.py", True),
+            ("src/auth/**", "src/auth", True),  # the directory itself
+            ("src/auth/**", "src/authorize.py", False),  # not a segment prefix
+            ("src/*.py", "src/a.py", True),
+            ("src/*.py", "src/sub/a.py", False),  # `*` never crosses a separator
+            ("**/*.py", "a/b/c.py", True),
+            ("**/*.py", "c.py", True),  # `**` matches zero segments
+            ("**", "anything/at/all.py", True),
+            ("src/[ab]*.py", "src/apple.py", True),
+            ("src/[!ab]*.py", "src/apple.py", False),
+            ("src/a?.py", "src/ab.py", True),
+            ("src/a?.py", "src/abc.py", False),
+            ("src/auth", "src/auth/login.py", True),  # a directory governs its files
+            ("src/auth", "src/auth", True),
+            ("src/auth", "src/other.py", False),
+            ("src/auth/**", "./src/auth/login.py", True),  # a `./` prefix is noise
+            ("src/[unclosed", "src/[unclosed", True),  # a bad class is a literal
+            ("src/**", "", False),
+        ],
+    )
+    def test_grammar(self, pattern: str, path: str, expected: bool) -> None:
+        assert code_globs.matches(pattern, path) is expected
+
+    def test_governs_any_is_any_pattern_against_any_path(self) -> None:
+        patterns = ("src/auth/**", "docs/*.md")
+        assert code_globs.governs_any(patterns, ("README.md", "docs/guide.md"))
+        assert not code_globs.governs_any(patterns, ("README.md", "src/api/routes.py"))
+        assert not code_globs.governs_any((), ("src/auth/login.py",))
 
 
 class TestSimilarityLinter:

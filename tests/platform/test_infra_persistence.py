@@ -81,9 +81,35 @@ class TestDocumentRepository:
                 "supersedes",
             )
 
+    def test_code_patterns_round_trip_and_are_replaced_wholesale(
+        self, uow_factory: Factory
+    ) -> None:
+        with uow_factory() as uow:
+            uow.documents.save(_doc("adr-0001", code=("src/b/**", "src/a/*.py")))
+            uow.commit()
+        with uow_factory() as uow:
+            # Sorted, like tags: the child table has no ordinal, and
+            # ``content_hash`` sorts so this is not a divergence from the file.
+            assert uow.documents.get("adr-0001").code == ("src/a/*.py", "src/b/**")
+            uow.documents.save(_doc("adr-0001", code=("docs/**",)))
+            uow.commit()
+        with uow_factory() as uow:
+            assert uow.documents.get("adr-0001").code == ("docs/**",)
+            # The bulk read path hydrates the same field as the single get.
+            assert uow.documents.all()[0].code == ("docs/**",)
+
+    def test_repeated_code_pattern_does_not_break_the_write(self, uow_factory: Factory) -> None:
+        # ``pattern`` is half the primary key, so a duplicate would fail the
+        # insert; the write dedupes rather than rejecting a harmless repeat.
+        with uow_factory() as uow:
+            uow.documents.save(_doc("adr-0001", code=("src/**", "src/**")))
+            uow.commit()
+        with uow_factory() as uow:
+            assert uow.documents.get("adr-0001").code == ("src/**",)
+
     def test_delete_cascades(self, uow_factory: Factory) -> None:
         with uow_factory() as uow:
-            uow.documents.save(_doc("adr-0001", tags=("auth",)))
+            uow.documents.save(_doc("adr-0001", tags=("auth",), code=("src/**",)))
             uow.embeddings.mark_dirty("adr-0001")
             uow.commit()
         with uow_factory() as uow:
@@ -92,6 +118,12 @@ class TestDocumentRepository:
         with uow_factory() as uow:
             assert uow.documents.get("adr-0001") is None
             assert uow.embeddings.get_vector("adr-0001") is None
+            # The code rows go with it (ON DELETE CASCADE + the per-connection
+            # foreign_keys pragma); re-creating the id must not resurrect them.
+            uow.documents.save(_doc("adr-0001"))
+            uow.commit()
+        with uow_factory() as uow:
+            assert uow.documents.get("adr-0001").code == ()
 
     def test_query_filters(self, uow_factory: Factory) -> None:
         with uow_factory() as uow:

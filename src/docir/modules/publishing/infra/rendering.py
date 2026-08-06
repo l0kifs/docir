@@ -1172,6 +1172,7 @@ def _render_document(
     rail = (
         _render_toc(headings)
         + _render_trust(document)
+        + _render_governs(document)
         + _render_local_map(document, by_id)
         + _render_relations(document, by_id)
     )
@@ -1275,6 +1276,21 @@ def _render_trust(document: SiteDocument) -> str:
     )
     flag = '<div class="trow stale-note">⚠ past its review cadence</div>' if document.stale else ""
     return f'<div class="railgrp"><h2>Trust</h2><div class="trust">{body}{flag}</div></div>'
+
+
+def _render_governs(document: SiteDocument) -> str:
+    """The code the document claims to govern, or nothing at all.
+
+    Rendered as plain patterns and never as links: the site is a static
+    projection of the store, which knows the globs but not the repository they
+    resolve against — a link would be a guess at a forge URL, and a "3 files"
+    count would be a guess at a working tree. Absent for the documents that
+    declare none, like every other optional panel here.
+    """
+    if not document.code:
+        return ""
+    items = "".join(f"<li><code>{html.escape(pattern)}</code></li>" for pattern in document.code)
+    return f'<div class="railgrp"><h2>Governs</h2><ul>{items}</ul></div>'
 
 
 def _render_local_map(document: SiteDocument, by_id: Mapping[str, SiteDocument]) -> str:

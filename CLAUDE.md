@@ -164,12 +164,31 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   guard; `docir check --strict` exits 1 for CI.
 - **Tier 1 findings carry a severity, and `--strict` gates on `error` only.** `ERROR_KINDS`
   (`graph_checks.py`) is `duplicate-id`/`dangling`/`malformed` — the corpus is *broken*.
-  Everything else (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`) is a `warning` about
-  shape or age. This is load-bearing: `orphan` fires for every document with no relations — the
+  Everything else (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`, `unmatched-code`) is
+  a `warning` about shape or age. This is load-bearing: `orphan` fires for every document with no relations — the
   default state of a new one — so a fail-on-any-finding gate went red on a healthy corpus, and the
   only way to keep CI green was to drop the gate, which also dropped duplicate-id detection.
   `CheckIssue` derives `severity` from `kind` in `__post_init__`, so a new check classifies itself
   by being added to `ERROR_KINDS` or not. `--strict-all` restores fail-on-anything.
+- **A document's `code` globs are validated for shape on write and for reality only in Tier 1.**
+  Optional `code:` frontmatter names the code a document governs (issue-90aea6d1b891). Tier 0
+  refuses an absolute path, a `..` segment, a backslash separator and an empty entry — patterns
+  that can never match — but *accepts* one that matches nothing today, because a decision is
+  routinely written before the code it decides. `docir check` then reports `unmatched-code` as a
+  warning, and only when `Settings.code_root` finds a `.git` above the store: a global
+  `~/.docir` has no tree to resolve a repo-relative pattern against, and an unresolved pattern
+  (absent from the map handed to `GraphChecker`) means *unknown*, not missing — the same rule
+  `similarity` follows. `content_hash` sorts the globs, like tags: the file keeps the author's
+  order and the index returns them sorted, and without the sort every reindexed document read as
+  hand-edited and `--replace-body` refused a write that loses nothing.
+  **`query --code <path>` matches the patterns as text** (`domain/services/code_globs.py`), not
+  by walking the tree — the branch that *deletes* a file is exactly when its decisions must be
+  re-read, and a filesystem match answers "nothing" there. It is a post-SQL predicate applied
+  **before the limit**, sharing one scan loop with `--stale` (`_post_sql_predicate` /
+  `_scanned_page`); a document governing a directory governs the files in it, since a miss costs
+  an unread decision and a false hit costs a glance. The forward check (`RepositoryCodeMatcher`,
+  "does this pattern still name anything") stays `Path.glob`; the two answer different questions
+  and only their *grammar* has to agree.
 - **The stale-write guard covers `--replace-body` only, and that is the rule, not an
   oversight.** `update` computes `disk_diverged` (index `content_hash` vs the file's) and
   consults it in one branch. Every edit is applied to the document *as it is on disk*, so a

@@ -189,6 +189,7 @@ def build_mcp_server(
         tags: list[str] | None = None,
         owner: str | None = None,
         stale: bool = False,
+        code: list[str] | None = None,
         include_archived: bool = False,
         include_inactive: bool = False,
         limit: int = 50,
@@ -201,12 +202,18 @@ def build_mcp_server(
         applied before `limit`, so `stale=True, limit=10` means ten stale
         documents, not the stale ones among the first ten.
 
+        `code` is the question in the other direction — which documents claim to
+        govern the files you are about to change. Pass the paths you are
+        editing; a path that no longer exists still finds its documents, which
+        is the case that matters when a change deletes code.
+
         Args:
             types: Document types to include (e.g. ["decision", "issue"]).
             statuses: Statuses to include.
             tags: Registered tag keys — a document must carry all of them.
             owner: The staleness steward to filter by.
             stale: Only documents past their type's review cadence.
+            code: Paths to find governing documents for; any match counts.
             include_archived: Also return archived documents.
             include_inactive: Also return documents in an inactive status.
             limit: Page size.
@@ -220,6 +227,7 @@ def build_mcp_server(
                 "tags": tags or [],
                 "owner": owner,
                 "stale": stale,
+                "code": code or [],
                 "include_archived": include_archived,
                 "include_inactive": include_inactive,
                 "limit": limit,
@@ -282,6 +290,7 @@ def build_mcp_server(
         related: list[str] | None = None,
         status: str | None = None,
         owner: str | None = None,
+        code: list[str] | None = None,
         wait_embeddings: bool = False,
     ) -> dict[str, Any]:
         """Create a document. The single write path — never write the file yourself.
@@ -301,6 +310,9 @@ def build_mcp_server(
                 "adr-3f9a2b1c7d4e:supersedes"). A bare id means `relates_to`.
             status: Initial status; omit for the type's default.
             owner: Who vouches for this document staying true.
+            code: Repo-relative globs naming the code this document governs
+                (e.g. "src/docir/platform/persistence/**"). Only the shape is
+                checked: a pattern may name code that does not exist yet.
             wait_embeddings: Block until the vector is computed. Only needed
                 when the very next call is a `docir_context` that must find it.
         """
@@ -315,6 +327,7 @@ def build_mcp_server(
                 "related": related or [],
                 "status": status,
                 "owner": owner,
+                "code": code or [],
                 "wait_embeddings": wait_embeddings,
             },
         )
@@ -328,6 +341,7 @@ def build_mcp_server(
         set_tags: list[str] | None = None,
         set_related: list[str] | None = None,
         set_owner: str | None = None,
+        set_code: list[str] | None = None,
         verified: bool = False,
         append_section: str | None = None,
         replace_section: str | None = None,
@@ -355,6 +369,8 @@ def build_mcp_server(
             set_related: Replace the edges wholesale, each "<id>" or
                 "<id>:<kind>".
             set_owner: Replace the staleness steward.
+            set_code: Replace the governed globs wholesale (not a merge); an
+                empty list clears them.
             verified: Stamp today as the last-verified date. Assert this only
                 when a human has actually re-read the document — it is the one
                 trust signal docir offers.
@@ -375,6 +391,7 @@ def build_mcp_server(
             "set_tags": set_tags,
             "set_related": set_related,
             "set_owner": set_owner,
+            "set_code": set_code,
             "mark_verified": verified,
             "replace_body": replace_body,
             "force": force,

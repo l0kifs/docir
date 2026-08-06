@@ -83,6 +83,7 @@ case. Run `docir init` first.
 | `docir get <id> --section "<heading>"` | Just that heading and the text under it. Architecture docs here run to tens of thousands of characters and docir ranks a document on its best-matching *section*, so this is usually the part that answered you. An unknown heading errors listing the real ones. |
 | `docir search "<text>"` | Full-text over **title, description and body only** — *not* tags. `docir search auth` will not find a doc merely tagged `auth`; use `docir query --tag auth`. Supports `--limit`/`--offset`. |
 | `docir query --type decision --status accepted --tag auth` | Structured filter; repeatable `--type/--status/--tag`. Pages with `--limit`/`--offset` — a page shorter than `--limit` means the end. |
+| `docir query --code src/auth/login.py` | Which docs declared they govern this file. Repeat `--code` for several paths (any match counts) — run it over the files you are about to change, *before* changing them. A deleted path still finds its docs. |
 
 **Two-tier read (skeleton → body).** `context` / `query` / `search` return
 *skeletons* — id, title, description, tags, typed `related`, `owner`,
@@ -133,12 +134,14 @@ against your task (0.0-1.0) and is the number that means something.
 ```
 docir add --type decision --title "..." --description "..." \
   [--tags auth,api] [--related adr-0001,arch-0002:implements] [--status ...] \
-  [--owner platform-team] (--stdin | --body "..." | --body-file f.md)
+  [--owner platform-team] [--code "src/auth/**,src/api/routes.py"] \
+  (--stdin | --body "..." | --body-file f.md)
 
 docir update <id> --status resolved             # metadata patch
 docir update <id> --set-description "..."        # keep summary current on edits
 docir update <id> --set-related adr-0001:supersedes   # replace typed edges
 docir update <id> --set-owner platform-team     # assign a steward
+docir update <id> --set-code "src/auth/**"      # what code this doc governs
 docir update <id> --verified                     # stamp today as last-verified
 docir update <id> --append-section "Resolution" --body "Fixed in PR 42"
 docir update <id> --replace-section "Context" --body "..."
@@ -148,6 +151,12 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
 ```
 
 - Prefer `--stdin` for multi-line markdown bodies (no shell-escaping).
+- `--code` records the code a document governs, as repo-relative globs. Set it
+  when you know which files a decision is about; only the shape is checked on
+  write, so a pattern may name code that does not exist yet. It rides on every
+  read view, so a later session can see which decisions concern the files it is
+  editing, and `docir check` warns (`unmatched-code`) once a pattern stops
+  matching — repoint it with `--set-code` when you move the code it names.
 - `delete` is blocked while another doc links to it. `--force` deletes anyway and
   **strips the edge from each referencing doc**, naming them in its output — so a
   forced delete never leaves a dangling link. Prefer `archive` when the document

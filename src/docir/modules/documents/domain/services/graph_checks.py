@@ -11,6 +11,7 @@ warnings rather than failing an agent mid-task:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
 
@@ -42,8 +43,8 @@ _WHITE, _GREY, _BLACK = 0, 1, 2
 ERROR_KINDS: frozenset[str] = frozenset({"duplicate-id", "dangling", "malformed"})
 
 #: Everything else (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`,
-#: `unknown-status`, `unknown-tag`, `tag-key-format`) describes shape or
-#: classification, not
+#: `unknown-status`, `unknown-tag`, `tag-key-format`, `unmatched-code`)
+#: describes shape or classification, not
 #: damage. `orphan` in particular fires for any document with no relations — the
 #: default state of a new one — so treating these as build failures made the gate
 #: unusable on a healthy corpus.
@@ -94,11 +95,15 @@ class GraphChecker:
         relations: list[Relation],
         today: date | None = None,
         known_tags: frozenset[str] | None = None,
+        code_matches: Mapping[str, bool] | None = None,
     ) -> list[CheckIssue]:
         """Run every Tier 1 check over the indexed corpus.
 
         ``known_tags`` is the tag registry; ``None`` skips the tag check, the
         same permissive-when-absent convention the relation-kind registry uses.
+        ``code_matches`` says which ``code`` globs still name something on disk
+        and is ``None`` when there is no repository to ask — a global store
+        would otherwise report every pattern in it as missing.
         """
         issues: list[CheckIssue] = []
         issues.extend(self._find_unknown_type(documents))
@@ -112,6 +117,53 @@ class GraphChecker:
         issues.extend(self._find_layering_violations(documents, relations))
         if today is not None:
             issues.extend(self._find_stale(documents, today))
+        if code_matches is not None:
+            issues.extend(self._find_unmatched_code(documents, code_matches))
+        return issues
+
+    def _find_unmatched_code(
+        self, documents: list[Document], code_matches: Mapping[str, bool]
+    ) -> list[CheckIssue]:
+        """Flag ``code`` globs that no longer name anything in the repository.
+
+        The Tier 1 half of the code linkage: the write path deliberately accepts
+        a pattern that matches nothing, because a decision is often written
+        before the code it decides — so the question "does it match *now*" has
+        to be asked later, by the command that reports shape and age, and as a
+        warning. It is not damage: the document is intact, the graph resolves,
+        and the honest reading is "the code moved, or was never written, and
+        somebody should look".
+
+        Nothing repairs it either, which is why it stays out of ``check --fix``:
+        only a human knows whether the glob is stale or the document is.
+
+        ``code_matches`` is the resolved answer per pattern, computed against
+        the working tree by the caller — the domain stays pure and testable
+        without a repository. A pattern *absent* from the map is unresolved
+        rather than missing, and is not reported: the same rule ``similarity``
+        follows on the read paths, where absent means "not scored" and never
+        "scored zero". A finding invented for a question nobody answered is the
+        failure mode this whole check has to avoid.
+        """
+        issues: list[CheckIssue] = []
+        for doc in documents:
+            if doc.archived:
+                continue
+            missing = [pattern for pattern in doc.code if not code_matches.get(pattern, True)]
+            if not missing:
+                continue
+            joined = ", ".join(repr(pattern) for pattern in missing)
+            issues.append(
+                CheckIssue(
+                    kind="unmatched-code",
+                    message=(
+                        f"{doc.id!r} governs {joined}, which matches nothing in the "
+                        f"repository; update the pattern with `docir update {doc.id} "
+                        f"--set-code ...` or re-verify the document"
+                    ),
+                    doc_ids=(doc.id,),
+                )
+            )
         return issues
 
     def _find_unknown_status(self, documents: list[Document]) -> list[CheckIssue]:

@@ -33,6 +33,7 @@ from docir.platform.clock import Clock, SystemClock
 from docir.platform.embedding import Embedder
 from docir.platform.embedding.deterministic import DeterministicEmbedder
 from docir.platform.errors import DocirError, SchemaError
+from docir.platform.filesystem.code_matcher import RepositoryCodeMatcher
 from docir.platform.filesystem.markdown_store import MarkdownDocumentFileStore
 from docir.platform.filesystem.tag_store import YamlTagFileStore
 from docir.platform.persistence.engine import (
@@ -152,11 +153,16 @@ def build_container(
     file_store = MarkdownDocumentFileStore(settings.docs_root)
     tag_file_store = YamlTagFileStore(settings.tags_path)
     clock = clock or SystemClock()
+    # No repository above the store means no tree to resolve a `code` glob
+    # against; the check that reads this is skipped rather than reporting every
+    # pattern in a global store as missing.
+    code_root = settings.code_root
+    code_matcher = None if code_root is None else RepositoryCodeMatcher(code_root)
 
     document_service = DocumentService(uow_factory, file_store, scheduler, embedder, clock, schema)
     tag_service = TagService(uow_factory, tag_file_store, file_store)
     maintenance_service = MaintenanceService(
-        uow_factory, file_store, tag_file_store, scheduler, embedder, schema, clock
+        uow_factory, file_store, tag_file_store, scheduler, embedder, schema, clock, code_matcher
     )
     dispatcher = Dispatcher(document_service, tag_service, maintenance_service)
     return Container(

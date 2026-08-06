@@ -83,6 +83,7 @@ class Dispatcher:
             body=_str(payload, "body", default=""),
             status=_opt_str(payload, "status"),
             owner=_opt_str(payload, "owner"),
+            code=_tuple(payload, "code"),
             doc_id=_opt_str(payload, "id"),
             wait_embeddings=_bool(payload, "wait_embeddings"),
         )
@@ -97,6 +98,7 @@ class Dispatcher:
             set_tags=_opt_tuple(payload, "set_tags"),
             set_related=_opt_tuple(payload, "set_related"),
             set_owner=_opt_str(payload, "set_owner"),
+            set_code=_opt_tuple(payload, "set_code"),
             mark_verified=_bool(payload, "mark_verified"),
             append_section=_opt_pair(payload, "append_section"),
             replace_section=_opt_pair(payload, "replace_section"),
@@ -120,6 +122,7 @@ class Dispatcher:
             include_inactive=_bool(payload, "include_inactive"),
             owner=_opt_str(payload, "owner"),
             stale_only=_bool(payload, "stale"),
+            code_paths=_tuple(payload, "code"),
             limit=_int(payload, "limit", default=50),
             offset=_int(payload, "offset", default=0),
         )

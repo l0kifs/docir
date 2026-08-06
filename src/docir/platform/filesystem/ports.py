@@ -53,6 +53,21 @@ class DocumentFileStore(ABC):
         return []
 
 
+class CodeMatcher(ABC):
+    """Resolves a document's ``code`` globs against a working tree.
+
+    A port of its own rather than a method on the document store: the globs are
+    written against the *repository*, which is the store's parent, and a store
+    with no repository above it (the global ``~/.docir``) has nothing to resolve
+    them against — the composition root then supplies no matcher at all, and the
+    check that reads one is skipped rather than reporting every pattern missing.
+    """
+
+    @abstractmethod
+    def matches(self, pattern: str) -> bool:
+        """Whether ``pattern`` matches at least one path in the tree."""
+
+
 class TagFileStore(ABC):
     """Reads and writes the canonical ``tags.yaml`` registry file."""
 

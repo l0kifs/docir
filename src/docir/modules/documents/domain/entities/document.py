@@ -37,6 +37,11 @@ class Document:
     # ``verified`` is the date a human last re-confirmed the doc is still true.
     owner: str = ""
     verified: date | None = None
+    #: Repo-relative globs naming the code this document governs
+    #: (issue-90aea6d1b891). Held as written, in the author's order: the
+    #: patterns are matched against a working tree that is not this module's to
+    #: read, so the entity carries them and judges nothing about them.
+    code: tuple[str, ...] = ()
 
     def embedding_text(self) -> str:
         """The text embedded for semantic search: title + description + body.
@@ -78,6 +83,10 @@ class Document:
             # hash — only genuine content changes do.
             ",".join(sorted(self.tags)),
             ",".join(sorted(f"{ref.kind}:{ref.target}" for ref in self.related)),
+            # Sorted for the same reason tags are: the file keeps the author's
+            # order and the index returns them sorted, and a document that
+            # round-tripped through the index must not read as diverged.
+            ",".join(sorted(self.code)),
             str(self.archived),
             self.owner,
             "" if self.verified is None else self.verified.isoformat(),

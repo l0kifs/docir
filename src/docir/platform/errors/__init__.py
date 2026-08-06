@@ -73,6 +73,14 @@ class DisallowedRelationError(ValidationError):
     """A relation kind (or its target type) is not permitted by the source type."""
 
 
+class InvalidCodeReferenceError(ValidationError):
+    """A ``code`` entry is not a usable repo-relative glob.
+
+    Shape only — that a pattern currently matches nothing is a Tier 1 warning,
+    not a write-blocking error: a decision may land before the code it governs.
+    """
+
+
 # --- Lookups ---------------------------------------------------------------
 
 

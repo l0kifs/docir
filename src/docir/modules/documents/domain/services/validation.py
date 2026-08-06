@@ -10,12 +10,14 @@ Tier 1/2, not here.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from pathlib import PurePosixPath
 
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.schema import CORE_REQUIRED_FIELDS, Schema
 from docir.modules.documents.domain.value_objects.relations import RelatedRef
 from docir.platform.errors import (
     DisallowedRelationError,
+    InvalidCodeReferenceError,
     MissingRequiredFieldError,
     UnknownRelatedError,
     UnknownRelationKindError,
@@ -39,6 +41,40 @@ class Tier0Validator:
             if value is None or (isinstance(value, str) and not value.strip()):
                 raise MissingRequiredFieldError(
                     f"required field {name!r} is missing or empty for type {document.type!r}"
+                )
+
+    def validate_code(self, patterns: Iterable[str]) -> None:
+        """Ensure every ``code`` entry is a usable repo-relative glob.
+
+        Shape only, and deliberately so: whether a pattern matches anything
+        today is a property of the working tree, not of the document, and a
+        decision is often written before the code it governs exists (or after
+        it moved). That question is Tier 1's — a `check` warning — so this
+        rejects only patterns that can never mean anything.
+
+        The three rejections are the three ways an entry silently matches
+        nothing forever: an absolute path (the globs are resolved against the
+        repository root, so a leading ``/`` addresses a machine, not a repo), a
+        ``..`` segment (which escapes the repo the store belongs to), and a
+        Windows separator (``src\\docir`` is one literal filename to every glob
+        implementation docir would use).
+        """
+        for pattern in patterns:
+            if not pattern.strip():
+                raise InvalidCodeReferenceError("a `code` entry is empty")
+            if pattern.startswith("/"):
+                raise InvalidCodeReferenceError(
+                    f"code pattern {pattern!r} is absolute; use a path relative to the "
+                    f"repository root (e.g. {pattern.lstrip('/')!r})"
+                )
+            if "\\" in pattern:
+                raise InvalidCodeReferenceError(
+                    f"code pattern {pattern!r} uses '\\'; separate path segments with '/'"
+                )
+            if ".." in PurePosixPath(pattern).parts:
+                raise InvalidCodeReferenceError(
+                    f"code pattern {pattern!r} escapes the repository with '..'; "
+                    f"a document governs code in its own repository"
                 )
 
     def validate_status(self, doc_type: str, status: str) -> None:

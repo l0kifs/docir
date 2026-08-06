@@ -76,6 +76,10 @@ class SiteDocument:
     verified: str | None = None
     stale: bool = False
     archived: bool = False
+    #: Repo-relative globs the document declares it governs. Published as text:
+    #: the site has no repository to resolve them against, so it shows what the
+    #: document claims and never whether the claim still holds.
+    code: tuple[str, ...] = ()
 
     @property
     def successors(self) -> tuple[Edge, ...]:
@@ -110,6 +114,7 @@ class SiteDocument:
             verified=_optional_text(view, "verified"),
             stale=bool(view.get("stale", False)),
             archived=bool(view.get("archived", False)),
+            code=_texts(view, "code"),
         )
 
 
@@ -244,6 +249,7 @@ def _replace_edges(
         verified=document.verified,
         stale=document.stale,
         archived=document.archived,
+        code=document.code,
     )
 
 

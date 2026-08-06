@@ -21,7 +21,7 @@ from docir.modules.indexing.api import EmbeddingScheduler
 from docir.platform.clock import Clock
 from docir.platform.embedding import Embedder
 from docir.platform.errors import ValidationError
-from docir.platform.filesystem.ports import DocumentFileStore, TagFileStore
+from docir.platform.filesystem.ports import CodeMatcher, DocumentFileStore, TagFileStore
 from docir.platform.persistence.unit_of_work import UnitOfWork
 
 UnitOfWorkFactory = Callable[[], UnitOfWork]
@@ -78,6 +78,7 @@ class MaintenanceService:
         embedder: Embedder,
         schema: Schema,
         clock: Clock,
+        code_matcher: CodeMatcher | None = None,
     ) -> None:
         self._uow_factory = uow_factory
         self._file_store = file_store
@@ -86,6 +87,10 @@ class MaintenanceService:
         self._embedder = embedder
         self._schema = schema
         self._clock = clock
+        #: ``None`` when the store has no repository above it: there is then
+        #: nothing to resolve a ``code`` glob against, and the finding is
+        #: skipped rather than reported against a tree that does not exist.
+        self._code_matcher = code_matcher
         self._graph_checker = GraphChecker(schema)
         self._linter = SimilarityLinter()
 
@@ -141,11 +146,27 @@ class MaintenanceService:
             relations = uow.documents.relations()
             known_tags = frozenset(tag.key for tag in uow.tags.all())
         issues = self._graph_checker.check(
-            documents, relations, self._clock.today(), known_tags=known_tags
+            documents,
+            relations,
+            self._clock.today(),
+            known_tags=known_tags,
+            code_matches=self._resolve_code(documents),
         )
         issues.extend(self._find_duplicate_ids())
         issues.extend(self._find_malformed())
         return issues
+
+    def _resolve_code(self, documents: list[Document]) -> dict[str, bool] | None:
+        """Which declared ``code`` globs still match something on disk.
+
+        Resolved once per distinct pattern rather than once per document: a
+        pattern shared by five decisions is one walk of the tree, and the
+        matcher stops at the first hit either way.
+        """
+        if self._code_matcher is None:
+            return None
+        patterns = {pattern for document in documents for pattern in document.code}
+        return {pattern: self._code_matcher.matches(pattern) for pattern in sorted(patterns)}
 
     def _find_malformed(self) -> list[CheckIssue]:
         """Report source files that do not parse (skipped by reindex/scan)."""

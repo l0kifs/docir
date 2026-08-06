@@ -17,7 +17,10 @@ files and the derived index never disagree.
 - `DocumentService.get(id) -> DocumentView` — one document in full (with body)
 - `DocumentService.query(QueryRequest) -> [DocumentSummary]` — structured filtering (skeleton, no body).
   Pages with `limit`/`offset`, applied as a SQL window so the cost of a page does not grow with the
-  corpus. `owner` filters in SQL; `stale_only` is derived from the clock and the type's review
+  corpus. `code_paths` answers "which documents govern this file": each path is matched against
+  the documents' `code` globs as **text**, so a path the caller just deleted still resolves;
+  like `stale_only` it is applied after the query and before the limit. `owner` filters in SQL;
+  `stale_only` is derived from the clock and the type's review
   cadence, so it is applied in the service, which means its window is a scan over the filtered set
   rather than a SQL `OFFSET` (the limit counts stale documents, not rows scanned).
 - `DocumentService.search(SearchRequest) -> [DocumentSummary]` — full-text search over title,
@@ -42,15 +45,19 @@ files and the derived index never disagree.
 - `MaintenanceService.check() -> [CheckIssue]` — Tier 1 structural findings (incl. staleness,
   and `unknown-type`/`unknown-status`/`unknown-tag`, the three Tier 0 rules a hand-edit can
   bypass, plus `tag-key-format` for a registered key outside the shared grammar). All
-  warnings: the document stays readable and its edges resolve.
+  warnings: the document stays readable and its edges resolve. Also `unmatched-code` — a
+  governed glob that matches nothing — when the service was given a `CodeMatcher`; without one
+  (no repository above the store) the finding is skipped rather than reported against a tree
+  that does not exist.
 - `MaintenanceService.lint_deep() -> [LintFinding]` — Tier 2 advisory findings
 - `MaintenanceService.reindex_embeddings()/flush_embeddings() -> int`
 - `load_schema(path) -> Schema` — load the per-type document schema. Rejects a status name no
   type declares (transition target, `default_status`, `inactive_statuses` entry).
 - `describe_schema(Schema) -> dict` — the merged schema as plain data (`docir schema show`)
 - `MaintenanceService.repair() -> RepairResult` — fix the mechanically-fixable Tier 1 damage:
-  re-issue duplicate ids (oldest file keeps the id) and drop dead `related` edges. `malformed`
-  and `unknown-type` need a human and come back in `RepairResult.remaining`. Does not advance
+  re-issue duplicate ids (oldest file keeps the id) and drop dead `related` edges. `malformed`,
+  `unknown-type` and `unmatched-code` need a human — only they know whether the glob is stale
+  or the document is — and come back in `RepairResult.remaining`. Does not advance
   `updated` — a repair is not a re-verification.
 - `render_schema_yaml(profiles, id_style) -> str` — a `docs-schema.yaml` body selecting
   `profiles` and a schema-wide `id_style` (`ID_STYLES`: `sequential` | `random`). A type
@@ -72,6 +79,14 @@ which returns the full `DocumentView`. A `related` entry is a typed edge
 `UpdateDocumentRequest` also carries `set_owner` and `mark_verified` (stamp the
 review clock). `MaintenanceService` requires a `Clock` (staleness needs "today").
 
+`code` is the repo-relative globs a document declares it governs
+(issue-90aea6d1b891). It is carried by both read shapes, set by
+`AddDocumentRequest.code` and replaced wholesale by
+`UpdateDocumentRequest.set_code` (`None` leaves it, an empty tuple clears it).
+Tier 0 validates the **shape only** — absolute paths, `..` segments, backslash
+separators and empty entries are refused; a pattern that currently matches
+nothing is accepted, because a decision may precede the code it governs.
+
 ## Events published
 - none (no event bus; see adr-d3e3616400bf)
 
@@ -79,7 +94,8 @@ review clock). `MaintenanceService` requires a `Clock` (staleness needs "today")
 - none
 
 ## Owns
-- data: document metadata (including `owner`/`verified` stewardship fields), the
+- data: document metadata (including `owner`/`verified` stewardship fields and the
+  `code` globs a document governs), the
   typed relation graph (each edge carries a `kind`), and the canonical markdown
   files. Physically these live in the shared index/filesystem owned by `platform`
   (grandfathered; see adr-d3e3616400bf).

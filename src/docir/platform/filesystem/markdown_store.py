@@ -133,6 +133,10 @@ class MarkdownDocumentFileStore(DocumentFileStore):
             metadata["owner"] = document.owner
         if document.verified is not None:
             metadata["verified"] = document.verified.isoformat()
+        # Same rule as the stewardship keys: absent rather than an empty list,
+        # so a document that governs no code carries no `code:` line at all.
+        if document.code:
+            metadata["code"] = list(document.code)
         post = frontmatter.Post(content=document.body)
         post.metadata.update(metadata)
         return frontmatter.dumps(post) + "\n"
@@ -155,6 +159,7 @@ class MarkdownDocumentFileStore(DocumentFileStore):
                 path=path,
                 owner=str(metadata.get("owner", "")),
                 verified=None if verified_raw is None else _as_date(verified_raw),
+                code=_as_str_tuple(metadata.get("code")),
             )
         except (KeyError, ValueError) as exc:
             # KeyError: a required field is absent. ValueError: a field is present

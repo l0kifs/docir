@@ -23,6 +23,7 @@ from docir.modules.tags.domain.entities.tag import Tag
 from docir.platform.embedding.vector import Embedding
 from docir.platform.persistence.models import (
     ChunkEmbeddingRow,
+    DocumentCodeRow,
     DocumentRow,
     DocumentTagRow,
     EmbeddingRow,
@@ -96,9 +97,14 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
 
         self._session.execute(delete(DocumentTagRow).where(DocumentTagRow.doc_id == document.id))
         self._session.execute(delete(RelationRow).where(RelationRow.source == document.id))
+        self._session.execute(delete(DocumentCodeRow).where(DocumentCodeRow.doc_id == document.id))
         self._session.flush()
         for key in document.tags:
             self._session.add(DocumentTagRow(doc_id=document.id, tag_key=key))
+        # Deduped: the pattern is half the primary key, so a document listing
+        # one glob twice would otherwise fail the insert rather than the write.
+        for pattern in dict.fromkeys(document.code):
+            self._session.add(DocumentCodeRow(doc_id=document.id, pattern=pattern))
         # At most one edge per ordered pair (kind is not in the primary key);
         # if the source lists a target twice, the last kind wins.
         edges: dict[str, str] = {ref.target: ref.kind for ref in document.related}
@@ -112,7 +118,7 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
             return None
         tags = self._tags_for(doc_id)
         related = self._related_for(doc_id)
-        return _to_document(row, tags, related)
+        return _to_document(row, tags, related, self._code_for(doc_id))
 
     def exists(self, doc_id: str) -> bool:
         return self._session.get(DocumentRow, doc_id) is not None
@@ -180,6 +186,14 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
         )
         return tuple(self._session.scalars(stmt).all())
 
+    def _code_for(self, doc_id: str) -> tuple[str, ...]:
+        stmt = (
+            select(DocumentCodeRow.pattern)
+            .where(DocumentCodeRow.doc_id == doc_id)
+            .order_by(DocumentCodeRow.pattern)
+        )
+        return tuple(self._session.scalars(stmt).all())
+
     def _outgoing_for(self, doc_id: str) -> list[str]:
         stmt = (
             select(RelationRow.target)
@@ -204,6 +218,7 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
         ids = [row.id for row in rows]
         tag_map: dict[str, list[str]] = {row.id: [] for row in rows}
         rel_map: dict[str, list[RelatedRef]] = {row.id: [] for row in rows}
+        code_map: dict[str, list[str]] = {row.id: [] for row in rows}
         for doc_id, key in self._session.execute(
             select(DocumentTagRow.doc_id, DocumentTagRow.tag_key)
             .where(DocumentTagRow.doc_id.in_(ids))
@@ -216,7 +231,16 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
             .order_by(RelationRow.target)
         ).all():
             rel_map[source].append(RelatedRef(target=target, kind=kind))
-        return [_to_document(row, tuple(tag_map[row.id]), rel_map[row.id]) for row in rows]
+        for doc_id, pattern in self._session.execute(
+            select(DocumentCodeRow.doc_id, DocumentCodeRow.pattern)
+            .where(DocumentCodeRow.doc_id.in_(ids))
+            .order_by(DocumentCodeRow.pattern)
+        ).all():
+            code_map[doc_id].append(pattern)
+        return [
+            _to_document(row, tuple(tag_map[row.id]), rel_map[row.id], tuple(code_map[row.id]))
+            for row in rows
+        ]
 
 
 class SqlAlchemyTagRepository(TagRepository):
@@ -430,7 +454,12 @@ class SqlAlchemyChunkEmbeddingRepository(ChunkEmbeddingRepository):
 # -- module helpers ---------------------------------------------------------
 
 
-def _to_document(row: DocumentRow, tags: tuple[str, ...], related: list[RelatedRef]) -> Document:
+def _to_document(
+    row: DocumentRow,
+    tags: tuple[str, ...],
+    related: list[RelatedRef],
+    code: tuple[str, ...] = (),
+) -> Document:
     return Document(
         id=row.id,
         title=row.title,
@@ -446,6 +475,7 @@ def _to_document(row: DocumentRow, tags: tuple[str, ...], related: list[RelatedR
         path=row.path,
         owner=row.owner,
         verified=None if row.verified is None else date.fromisoformat(row.verified),
+        code=code,
     )
 
 

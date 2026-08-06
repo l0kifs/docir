@@ -23,6 +23,7 @@ from docir.modules.documents.application.dto import (
 from docir.modules.documents.application.services.id_generator import IdGenerator
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.schema import SEQUENTIAL_ID_STYLE, Schema
+from docir.modules.documents.domain.services.code_globs import governs_any
 from docir.modules.documents.domain.services.markdown_sections import (
     append_section,
     extract_section,
@@ -68,10 +69,10 @@ def _parse_refs(tokens: tuple[str, ...]) -> tuple[RelatedRef, ...]:
     return tuple(RelatedRef.parse(token) for token in tokens if token.strip())
 
 
-#: Rows per scan when `--stale` forces post-filtering. Large enough that a
-#: normal corpus resolves in one round trip, small enough that a page of a huge
-#: one does not pull it all into memory.
-_STALE_SCAN_PAGE = 500
+#: Rows per scan when `--stale` or `--code` forces post-filtering. Large enough
+#: that a normal corpus resolves in one round trip, small enough that a page of
+#: a huge one does not pull it all into memory.
+_SCAN_PAGE = 500
 
 
 def _require_non_negative_offset(offset: int) -> None:
@@ -132,6 +133,7 @@ class DocumentService:
                 [ref.target for ref in refs], id_to_type, source_id=request.doc_id
             )
             self._validator.validate_relation_kinds(request.type, refs, id_to_type)
+            self._validator.validate_code(request.code)
             doc_id = self._allocate_id(request, uow)
             document = Document(
                 id=str(doc_id),
@@ -146,6 +148,7 @@ class DocumentService:
                 archived=False,
                 body=request.body,
                 owner=request.owner or "",
+                code=tuple(request.code),
             )
             self._validator.validate_required_fields(document)
             path = self._file_store.write(document, create=True)
@@ -313,10 +316,14 @@ class DocumentService:
     def query(self, request: QueryRequest) -> list[DocumentSummary]:
         """Structured metadata filtering (``docs query``) — skeleton results.
 
-        ``stale_only`` is applied here rather than in SQL: staleness is derived
-        from the clock and the type's review cadence, neither of which the index
-        stores. It is also applied *before* the limit, so ``--stale --limit 10``
-        means "ten stale documents", not "the stale ones among the first ten".
+        Two predicates are applied here rather than in SQL, and both *before*
+        the limit, so ``--stale --limit 10`` means "ten stale documents" rather
+        than "the stale ones among the first ten":
+
+        * ``stale_only`` — staleness derives from the clock and the type's
+          review cadence, neither of which the index stores.
+        * ``code_paths`` — "which documents govern this file" is a glob match
+          against each document's patterns, which SQL cannot express either.
         """
         _require_positive_limit(request.limit)
         _require_non_negative_offset(request.offset)
@@ -334,42 +341,63 @@ class DocumentService:
                 offset=offset,
             )
 
+        predicate = self._post_sql_predicate(request)
         with self._uow_factory() as uow:
-            if not request.stale_only:
+            if predicate is None:
                 # The common path: the window is a LIMIT/OFFSET, so the cost of
                 # a page does not grow with the corpus behind it.
                 documents = uow.documents.query(spec(limit=request.limit, offset=request.offset))
             else:
-                documents = self._stale_page(uow, spec, request)
+                documents = self._scanned_page(uow, spec, request, predicate)
         return [self._summary(doc) for doc in documents]
 
-    def _stale_page(
+    def _post_sql_predicate(self, request: QueryRequest) -> Callable[[Document], bool] | None:
+        """The filters the index cannot express, as one test, or ``None``.
+
+        Combined into a single predicate so the paging scan below stays one
+        loop: two post-SQL filters that each walked the corpus their own way
+        would give ``--owner X --stale --code src/a.py`` a different window
+        depending on which ran first.
+        """
+        tests: list[Callable[[Document], bool]] = []
+        if request.stale_only:
+            tests.append(self._is_stale)
+        if request.code_paths:
+            paths = request.code_paths
+            tests.append(lambda document: governs_any(document.code, paths))
+        if not tests:
+            return None
+        return lambda document: all(test(document) for test in tests)
+
+    def _scanned_page(
         self,
         uow: UnitOfWork,
         spec: Callable[..., DocumentFilter],
         request: QueryRequest,
+        predicate: Callable[[Document], bool],
     ) -> list[Document]:
-        """The `--stale` window, which SQL cannot express.
+        """The window for a predicate SQL cannot express (`--stale`, `--code`).
 
-        Staleness derives from the clock and the type's review cadence, neither
-        of which the index stores, so it is filtered after the query — and a SQL
-        window would then count *rows scanned* rather than stale documents,
-        which is the ordering bug issue-b4f441c7210f already fixed once.
+        Staleness derives from the clock and the type's review cadence, and
+        governance from a glob match — none of which the index stores, so both
+        are filtered after the query. A SQL window would then count *rows
+        scanned* rather than matching documents, which is the ordering bug
+        issue-b4f441c7210f already fixed once.
 
         So scan in pages and stop as soon as the window is filled: bounded by
-        how far in you have to read, not by the corpus. A corpus with no stale
-        documents still walks it once, which is the honest cost of a predicate
+        how far in you have to read, not by the corpus. A corpus with no
+        matches still walks it once, which is the honest cost of a predicate
         the database cannot see.
         """
         wanted = request.offset + request.limit
         matched: list[Document] = []
         scanned = 0
         while len(matched) < wanted:
-            page = uow.documents.query(spec(limit=_STALE_SCAN_PAGE, offset=scanned))
+            page = uow.documents.query(spec(limit=_SCAN_PAGE, offset=scanned))
             if not page:
                 break
             scanned += len(page)
-            matched.extend(doc for doc in page if self._is_stale(doc))
+            matched.extend(doc for doc in page if predicate(doc))
         return matched[request.offset : request.offset + request.limit]
 
     def search(self, request: SearchRequest) -> list[DocumentSummary]:
@@ -691,6 +719,9 @@ class DocumentService:
             changes["related"] = refs
         if request.set_owner is not None:
             changes["owner"] = request.set_owner
+        if request.set_code is not None:
+            self._validator.validate_code(request.set_code)
+            changes["code"] = tuple(request.set_code)
         if request.mark_verified:
             changes["verified"] = self._clock.today()
         return content_changed

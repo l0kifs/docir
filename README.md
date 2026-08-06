@@ -190,6 +190,12 @@ forces the table, `--no-trim` keeps every field.*
   cleared a document at a time with `docir update <id> --verified`.
 - **Relations are typed.** A `related` edge carries a *kind* (`supersedes`, `depends_on`,
   `implements`, …) — a real graph, not a bag of links.
+- **A document can name the code it governs.** Optional `code` globs
+  (`docir add --code "src/auth/**"`) record which files a decision is about. Only the
+  shape is validated on write — a decision may be written before the code it decides —
+  and `docir check` warns when a pattern stops matching anything, so a decision whose
+  code moved is visible rather than quietly wrong. Ask it in reverse with
+  `docir query --code src/auth/login.py`: which decisions govern the file I am editing.
 
 ### What you may edit by hand
 
@@ -201,6 +207,7 @@ outside change — so hand-editing is supported, but not on every field:
 | document **body** | ✅ | — |
 | `docs-schema.yaml`, `docs/tags.yaml` | ✅ | no CLI write path for the schema |
 | `tags`, `status`, `related`, `type` | ❌ | `docir update --set-tags / --status / --set-related` |
+| `code` | ❌ | `docir update <id> --set-code "src/auth/**"` |
 | `id` | ❌ never | it is the primary key; changing it orphans every inbound link |
 | `verified` | ❌ never | `docir update <id> --verified` — it asserts a human re-read the doc |
 
@@ -223,7 +230,7 @@ can verify, which is exactly why it should not be written by hand.
 | `docir add` | Create a document — the single write path |
 | `docir update` | Edit content, metadata, or relations of an existing document |
 | `docir context <query>` | Ranked relevant set (skeletons) — full-text + vector, fused (`--min-score` to filter noise) |
-| `docir search` / `query` | Full-text search (title/description/body — **not tags**) / structured filter. Both page with `--limit`/`--offset`; `query --owner X --stale` is a review queue |
+| `docir search` / `query` | Full-text search (title/description/body — **not tags**) / structured filter. Both page with `--limit`/`--offset`; `query --owner X --stale` is a review queue, `query --code <path>` the decisions governing a file |
 | `docir get <id>` | Full document with body — or one section with `--section "<heading>"` |
 | `docir check` | Structural findings — duplicate ids, dangling edges, staleness (`--strict` gates CI on errors, `--fix` repairs them) |
 | `docir agent install` | Teach this repo's AI agent to drive docir |

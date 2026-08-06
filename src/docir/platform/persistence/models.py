@@ -78,6 +78,22 @@ class DocumentTagRow(Base):
     tag_key: Mapped[str] = mapped_column(String, primary_key=True, index=True)
 
 
+class DocumentCodeRow(Base):
+    """One repo-relative glob a document governs. See issue-90aea6d1b891.
+
+    A child table rather than a column, following ``document_tags``: the value
+    is a set of patterns, and the question asked of it — "which documents
+    govern this path?" — reads the patterns, not the document.
+    """
+
+    __tablename__ = "document_code"
+
+    doc_id: Mapped[str] = mapped_column(
+        String, ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True
+    )
+    pattern: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+
+
 class EmbeddingRow(Base):
     __tablename__ = "embeddings"
 

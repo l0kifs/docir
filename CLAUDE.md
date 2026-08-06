@@ -341,6 +341,18 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   self-shuts-down after an idle timeout. It is spawned as a detached `python -m docir daemon serve`,
   so `src/docir/__main__.py → entry_points.cli.app:main` and the hidden `daemon serve` command must
   keep working. `daemon serve` builds a container with `background_embeddings=True`.
+- **The pid file records a code stamp, and a daemon that does not match is replaced.** A
+  daemon loads docir once and lives on, so after an upgrade or an edit to `src/` it kept
+  answering from the old code — and a stale answer imitates a correct one (`docir check`
+  reported 117 cycles while `--no-daemon` reported 0). `CodeStamp` is `__version__` **plus the
+  newest mtime across the package's `.py` files**; the version alone cannot see a source edit,
+  since nothing bumps it between commits. `ensure_running` stops and respawns on a mismatch.
+  Two details are load-bearing: `current_stamp()` is `@cache`d, because the daemon must report
+  the build it *started with*, not what is on disk now; and `stop()` waits for the process to
+  exit, because its teardown clears the pid file and unlinks the socket, which a
+  freshly-spawned replacement would otherwise lose. A bare-integer pid file (written before
+  the stamp existed) reads as an unknown build, which never matches — correctly, that daemon
+  predates the check.
 - **`init --force` treats the two files it writes as unequal.** The `.gitignore` is a constant
   `composition.py` generates, so regenerating it costs nothing; `docs-schema.yaml` holds every
   type, status and cadence a person decided on and **cannot be rebuilt from the documents**.

@@ -35,14 +35,16 @@ def start() -> None:
 
 @daemon_app.command("status")
 def status() -> None:
-    """Show whether the daemon is running."""
+    """Show whether the daemon is running, and which build it is serving."""
     snapshot = lifecycle.status(get_state().settings)
-    if snapshot.running:
-        rendering.render_message(
-            f"[green]running[/] (pid {snapshot.pid}) at {snapshot.socket_path}"
-        )
-    else:
+    if not snapshot.running:
         rendering.render_message("[dim]not running[/]")
+        return
+    served = snapshot.version or "an unknown build"
+    note = " [yellow](stale code — the next command replaces it)[/]" if snapshot.stale_code else ""
+    rendering.render_message(
+        f"[green]running[/] (pid {snapshot.pid}) at {snapshot.socket_path} · serving {served}{note}"
+    )
 
 
 @daemon_app.command("stop")

@@ -7,13 +7,18 @@ detached daemon spawned as a subprocess and driven over the Unix socket.
 from __future__ import annotations
 
 import contextlib
+import json
+import os
 import socket
 import threading
 import time
+from collections import Counter
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 
+from docir import __version__
 from docir.config.settings import DEFAULT_REQUEST_TIMEOUT, Settings
 from docir.entry_points.composition import Container, InProcessExecutor
 from docir.entry_points.daemon import lifecycle, socket_executor
@@ -255,9 +260,29 @@ class TestLifecycleHelpers:
         lifecycle.clear_pid(settings)
         assert lifecycle.read_pid(settings) is None
 
-    def test_process_alive(self) -> None:
-        import os
+    def test_pid_file_carries_the_build_being_served(self, settings: Settings) -> None:
+        settings.ensure_directories()
+        lifecycle.write_pid(settings)
+        record = lifecycle.read_pid_record(settings)
+        assert record is not None
+        assert record.pid == os.getpid()
+        assert record.stamp == lifecycle.current_stamp()
 
+    def test_bare_integer_pid_file_still_reads(self, settings: Settings) -> None:
+        # Written by a docir that predates the stamp: the pid is usable, the
+        # build is unknown.
+        settings.ensure_directories()
+        settings.pid_path.write_text("4242", encoding="utf-8")
+        assert lifecycle.read_pid_record(settings) == lifecycle.PidRecord(pid=4242, stamp=None)
+
+    @pytest.mark.parametrize("content", ["", "  ", '{"pid": "nope"}', "[1, 2]", "{}"])
+    def test_unusable_pid_file_reads_as_absent(self, settings: Settings, content: str) -> None:
+        settings.ensure_directories()
+        settings.pid_path.write_text(content, encoding="utf-8")
+        assert lifecycle.read_pid_record(settings) is None
+        assert lifecycle.read_pid(settings) is None
+
+    def test_process_alive(self) -> None:
         assert lifecycle.process_alive(os.getpid()) is True
         assert lifecycle.process_alive(999999) is False
 
@@ -266,6 +291,181 @@ class TestLifecycleHelpers:
 
     def test_stop_when_not_running(self, settings: Settings) -> None:
         assert lifecycle.stop(settings) is False
+
+
+class TestCodeStamp:
+    def test_the_stamp_moves_when_a_source_file_changes(self, tmp_path: Path) -> None:
+        # The version half cannot see this: nothing bumps `__version__`
+        # between commits, so an edit to `src/` during development is visible
+        # only through the mtime.
+        root = tmp_path / "pkg"
+        (root / "sub").mkdir(parents=True)
+        (root / "sub" / "a.py").write_text("x = 1", encoding="utf-8")
+        before = lifecycle._newest_source_mtime(root)
+        assert before > 0
+
+        edited = root / "sub" / "a.py"
+        edited.write_text("x = 2", encoding="utf-8")
+        os.utime(edited, ns=(before + 10**9, before + 10**9))
+        assert lifecycle._newest_source_mtime(root) > before
+
+    def test_a_tree_with_no_sources_stamps_zero(self, tmp_path: Path) -> None:
+        assert lifecycle._newest_source_mtime(tmp_path) == 0
+
+    def test_current_stamp_describes_the_installed_package(self) -> None:
+        stamp = lifecycle.current_stamp()
+        assert stamp.version == __version__
+        assert stamp.source_mtime_ns > 0
+
+
+def _stamp_pid_file(settings: Settings, *, pid: int, version: str, mtime_ns: int) -> None:
+    settings.pid_path.write_text(
+        json.dumps({"pid": pid, "version": version, "source_mtime_ns": mtime_ns}),
+        encoding="utf-8",
+    )
+
+
+class TestDaemonOnOtherCodeIsReplaced:
+    """A daemon serves the code it loaded, and a stale answer looks correct.
+
+    OBSERVED during the fix for issue-44875a5a6ca6: `docir check` reported 117
+    cycle findings and `docir --no-daemon check` reported 0, because a daemon
+    started before the edit was still answering. Nothing in either output said
+    which code produced it (issue-aaa512e9c58f).
+    """
+
+    @pytest.fixture
+    def spy(self, monkeypatch: pytest.MonkeyPatch, settings: Settings) -> Counter[str]:
+        calls: Counter[str] = Counter()
+
+        def spawn(_: Settings) -> int:
+            calls["spawn"] += 1
+            return 4242
+
+        def stop(_: Settings) -> bool:
+            calls["stop"] += 1
+            return True
+
+        settings.ensure_directories()
+        monkeypatch.setattr(lifecycle, "is_running", lambda _: True)
+        monkeypatch.setattr(lifecycle, "spawn", spawn)
+        monkeypatch.setattr(lifecycle, "stop", stop)
+        monkeypatch.setattr(lifecycle, "wait_until_ready", lambda _, timeout=0.0: True)
+        return calls
+
+    def test_a_daemon_on_this_build_is_left_alone(
+        self, settings: Settings, spy: Counter[str]
+    ) -> None:
+        lifecycle.write_pid(settings)
+        lifecycle.ensure_running(settings)
+        assert spy == Counter()
+
+    def test_an_upgraded_version_replaces_it(self, settings: Settings, spy: Counter[str]) -> None:
+        stamp = lifecycle.current_stamp()
+        _stamp_pid_file(settings, pid=os.getpid(), version="0.0.1", mtime_ns=stamp.source_mtime_ns)
+        lifecycle.ensure_running(settings)
+        assert spy == Counter(stop=1, spawn=1)
+
+    def test_an_edited_source_tree_replaces_it(self, settings: Settings, spy: Counter[str]) -> None:
+        stamp = lifecycle.current_stamp()
+        _stamp_pid_file(
+            settings,
+            pid=os.getpid(),
+            version=stamp.version,
+            mtime_ns=stamp.source_mtime_ns - 1,
+        )
+        lifecycle.ensure_running(settings)
+        assert spy == Counter(stop=1, spawn=1)
+
+    def test_an_unstamped_daemon_replaces_it(self, settings: Settings, spy: Counter[str]) -> None:
+        settings.pid_path.write_text(str(os.getpid()), encoding="utf-8")
+        lifecycle.ensure_running(settings)
+        assert spy == Counter(stop=1, spawn=1)
+
+    def test_an_absent_daemon_is_started_without_a_stop(
+        self, settings: Settings, spy: Counter[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Nothing is serving, so there is nothing to shut down first.
+        monkeypatch.setattr(lifecycle, "is_running", lambda _: False)
+        lifecycle.ensure_running(settings)
+        assert spy == Counter(spawn=1)
+
+
+class TestStatusReportsTheServedBuild:
+    @pytest.fixture
+    def running(self, monkeypatch: pytest.MonkeyPatch, settings: Settings) -> Settings:
+        settings.ensure_directories()
+        monkeypatch.setattr(lifecycle, "is_running", lambda _: True)
+        return settings
+
+    def test_current_daemon_reports_its_version(self, running: Settings) -> None:
+        lifecycle.write_pid(running)
+        snapshot = lifecycle.status(running)
+        assert snapshot.version == __version__
+        assert snapshot.stale_code is False
+
+    def test_stale_daemon_reports_the_version_it_still_serves(self, running: Settings) -> None:
+        _stamp_pid_file(running, pid=os.getpid(), version="0.0.1", mtime_ns=1)
+        snapshot = lifecycle.status(running)
+        assert snapshot.version == "0.0.1"
+        assert snapshot.stale_code is True
+
+    def test_unstamped_daemon_has_no_version_and_is_stale(self, running: Settings) -> None:
+        running.pid_path.write_text(str(os.getpid()), encoding="utf-8")
+        snapshot = lifecycle.status(running)
+        assert snapshot.version is None
+        assert snapshot.stale_code is True
+
+    def test_a_stopped_daemon_reports_no_build(self, settings: Settings) -> None:
+        snapshot = lifecycle.status(settings)
+        assert snapshot.version is None
+        assert snapshot.stale_code is False
+
+
+class TestDaemonStatusOutput:
+    """`daemon status` printed the socket and nothing about the code served."""
+
+    def _render(self, monkeypatch: pytest.MonkeyPatch, snapshot: lifecycle.DaemonStatus) -> str:
+        from typer.testing import CliRunner
+
+        from docir.entry_points.cli.app import app
+
+        monkeypatch.setenv("COLUMNS", "200")
+        monkeypatch.setattr(lifecycle, "status", lambda _: snapshot)
+        result = CliRunner().invoke(app, ["daemon", "status"])
+        assert result.exit_code == 0
+        return result.stdout
+
+    def test_the_served_version_is_printed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        output = self._render(
+            monkeypatch,
+            lifecycle.DaemonStatus(
+                running=True, pid=7, socket_path="/tmp/s.sock", version="0.9.0", stale_code=False
+            ),
+        )
+        assert "0.9.0" in output
+        assert "stale" not in output
+
+    def test_a_stale_daemon_says_so(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        output = self._render(
+            monkeypatch,
+            lifecycle.DaemonStatus(
+                running=True, pid=7, socket_path="/tmp/s.sock", version="0.8.0", stale_code=True
+            ),
+        )
+        assert "0.8.0" in output
+        assert "stale code" in output
+
+    def test_an_unstamped_daemon_says_the_build_is_unknown(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        output = self._render(
+            monkeypatch,
+            lifecycle.DaemonStatus(
+                running=True, pid=7, socket_path="/tmp/s.sock", version=None, stale_code=True
+            ),
+        )
+        assert "unknown build" in output
 
 
 @pytest.mark.slow
@@ -307,3 +507,29 @@ class TestRealDaemon:
             was_running = lifecycle.stop(daemon_settings)
             assert was_running
         assert not lifecycle.is_running(daemon_settings)
+
+    def test_a_live_daemon_on_other_code_is_replaced(self, settings: Settings) -> None:
+        daemon_settings = Settings.resolve(settings.home, use_daemon=True)
+        try:
+            lifecycle.ensure_running(daemon_settings)
+            first = lifecycle.read_pid(daemon_settings)
+            assert first is not None
+
+            # Stand in for "the code changed under it": the daemon is healthy
+            # and answering, it is simply not running this build any more.
+            stamp = lifecycle.current_stamp()
+            _stamp_pid_file(
+                daemon_settings,
+                pid=first,
+                version=stamp.version,
+                mtime_ns=stamp.source_mtime_ns - 1,
+            )
+            assert not lifecycle.serves_current_code(daemon_settings)
+
+            assert SocketExecutor(daemon_settings).execute(Request(command="ping")).ok
+
+            second = lifecycle.read_pid(daemon_settings)
+            assert second is not None and second != first
+            assert lifecycle.serves_current_code(daemon_settings)
+        finally:
+            lifecycle.stop(daemon_settings)

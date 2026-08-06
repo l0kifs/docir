@@ -135,6 +135,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The daemon kept serving the code it started with, so a fix silently did not take
+  effect.** The daemon loads docir once and lives on (900s idle timeout). Nothing compared
+  the running process against the installed one, so after `uv sync`, a `pip install -U`, or
+  any edit to `src/`, every command was answered by the old code — and the answer looked
+  entirely normal. OBSERVED while fixing the cycle check above: `docir check` reported 117
+  cycle findings and `docir --no-daemon check` reported 0, the difference being a daemon
+  started before the edit. The plausible reading of 117 findings is that the fix is wrong.
+
+  The pid file now records a **code stamp** — `__version__` plus the newest mtime across the
+  package's sources — and `ensure_running` stops and replaces a daemon whose stamp is not the
+  client's. The mtime half is what catches development: nothing bumps `__version__` between
+  commits, so a source edit is invisible to a version comparison. An installed wheel stamps
+  its files at install time, so the same pair moves on an upgrade. Recovery is automatic
+  rather than something you have to suspect and fix with `docir daemon stop`.
+
+  The stamp is computed once per process and frozen, which is what makes the daemon's answer
+  honest: it reports the build it started with, not what is on disk now. `docir daemon
+  status` prints that build (`serving 0.9.0`) and flags a stale one, so the state is
+  inspectable rather than only inferable from an answer that looks wrong. A pid file written
+  by an older docir holds a bare integer; its build is unknown, which never matches — that
+  daemon is exactly the process the check exists to replace.
+
+  `stop()` now waits for the process to actually exit. Its teardown clears the pid file and
+  unlinks the socket, so a replacement spawned while it was winding down could have both
+  removed out from under it, leaving a healthy daemon no client could find.
+
 - **A mutually-referencing pair was reported as a cycle, permanently.** `check`'s cycle
   detection built its graph from every relation. `relates_to` — the default kind, and what a
   bare id in `related:` means — is symmetric: "A relates to B" and "B relates to A" are one

@@ -8,14 +8,14 @@ owner: maintainer
 related:
 - arch-0a3c2d6d54a6
 - issue-44875a5a6ca6
-status: open
+status: resolved
 tags:
 - daemon
 - material
 title: The daemon keeps serving the code it started with, so a fix silently does not
   take effect
 type: issue
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 **Class:** missing · **Severity:** material
@@ -55,3 +55,41 @@ loaded package) into the pid file at startup. The client already respawns on a r
 connect; have it also treat a version mismatch as a reason to stop and respawn, which
 makes the recovery automatic rather than a thing you have to know. Failing that, print the
 served version in `docir daemon status` so the state is at least visible.
+
+## Resolution
+
+FIXED. The pid file now carries a **code stamp** — `docir.__version__` plus the
+newest mtime across the package's `.py` sources — and `ensure_running` stops and
+replaces a live daemon whose stamp is not the client's. Recovery is automatic
+rather than a thing you have to suspect and then fix with `docir daemon stop`.
+
+The mtime half is not decoration: nothing bumps `__version__` between commits, so
+a source edit during development — the case that produced the 117 cycles above —
+is invisible to a version comparison. An installed wheel stamps its files at
+install time, so the same pair also moves on `uv sync` / `pip install -U`; one
+mechanism covers both. The walk costs ~10ms against a ~800ms CLI startup.
+
+`current_stamp()` is cached per process, and that is what makes the daemon's
+answer honest: it must report the build it *started with*, not whatever is on
+disk when someone asks. A pid file written before the stamp existed holds a bare
+integer — an unknown build, which never matches. That is correct rather than
+lenient: such a daemon predates the check and is exactly what it exists to
+replace.
+
+`docir daemon status` now prints the served build (`serving 0.9.0`) and marks a
+stale one, so the state is inspectable after the fact instead of only inferable
+from an answer that looks wrong.
+
+One thing the fix needed that the proposed direction did not name: `stop()` had
+to start waiting for the process to actually exit. Its teardown clears the pid
+file and unlinks the socket, so a replacement spawned while it was still winding
+down could have both removed out from under it — a healthy daemon that no client
+can find. Stop-then-immediately-spawn is a much tighter race than the paths that
+existed before.
+
+Verified by injecting the bug: reverting `ensure_running` to its old body fails
+four tests, including `TestRealDaemon::test_a_live_daemon_on_other_code_is_replaced`,
+which spawns a real detached daemon, doctors its recorded stamp and asserts the
+next command answers from a different pid. Also confirmed by hand: start a daemon,
+`touch src/docir/entry_points/cli/app.py`, and `daemon status` reports stale code,
+after which any command replaces the process.

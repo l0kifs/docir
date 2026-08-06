@@ -9,6 +9,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Relation kinds can declare what they mean.** `relation_types:` now also takes a mapping
+  of kind to properties, beside the list form it has always accepted:
+
+  ```yaml
+  relation_types:
+    governs:     {dependency: true}
+    duplicates:  {symmetric: true}
+    replaced_by: {successor: true}
+    blocks:      {}                  # registered, all defaults
+  ```
+
+  `symmetric` means both directions are one statement, so a mutually-referencing pair is not
+  a `cycle` finding. `dependency` means the source relies on the target — the only claim the
+  Tier 1 `layering` check reads. `successor` means the *incoming* direction answers "is this
+  still current?", so `docir context` follows it backwards.
+
+  Those three questions were previously answered by three hardcoded name sets in three
+  modules, and a kind registered by a custom schema could join none of them. It was a
+  first-class Tier 0 citizen — validated, constrained by `allowed_relations`, round-tripped
+  on disk — and silently exempt from every structural check that reads meaning. `replaced_by`
+  could not be followed backwards at any price.
+
+  Defaults are asymmetric on purpose: `symmetric` is false, so a custom kind is still
+  cycle-checked and keeps the coverage it had before kinds were distinguished at all, while
+  `dependency` and `successor` are false so it adds no warning and changes no traversal until
+  asked. The core six carry their properties in code rather than in the core schema file — an
+  inline-only schema never merges that file, and a non-symmetric `relates_to` there would
+  reintroduce the bug below. The list form still parses and still means defaults; nothing to
+  migrate. `docir schema show` reports the resolved properties of every kind.
+
+- **The published site links a document id written in prose.** A body cites another document
+  by its id, which is the only identifier a document has — and written plain it published as
+  an unlinked string of hex, so the one canonical way to cite a document was also the one that
+  gave the reader nothing to follow. Ids are linked from the markdown token stream rather than
+  by rewriting the HTML, which is what keeps the pass out of fenced code, out of text that is
+  already a link, and off a document's own id.
+
+
 - **`docir build --out site/` — the store as a static site.** docir was CLI-only, which
   quietly assumed the people who must approve a decision are the people who run commands.
   They are not: a PR reviewer, a new hire and a manager all read decisions and none of them
@@ -97,6 +135,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A mutually-referencing pair was reported as a cycle, permanently.** `check`'s cycle
+  detection built its graph from every relation. `relates_to` — the default kind, and what a
+  bare id in `related:` means — is symmetric: "A relates to B" and "B relates to A" are one
+  statement written twice, so two documents that name each other are modelled correctly, not
+  cyclically. `contradicts` is symmetric for the same reason.
+
+  Measured on docir's own store: converting the corpus's prose cross-references into typed
+  edges proposed 260 `relates_to` edges and took `docir check` from 0 findings to **127
+  cycles**, none of them wrong. Keeping `check` readable meant dropping 120 correct edges
+  instead. This is the defect the layering check's kind allowlist was introduced to end, one
+  check over — a warning that fires on correct usage teaches people to ignore `check`, which
+  is where the duplicate-id detection lives.
+
+  A self-edge stays a cycle whatever its kind: symmetry is what makes a mutual pair legitimate
+  and exactly what makes "A relates to A" empty, and `check` is the only thing that sees a
+  self-edge a merge or a hand-edit wrote.
+
+
 - **Most of a long document was not in the semantic index at all.** `bge-small-en-v1.5` reads
   about 512 tokens and silently ignores the rest — appending a sentence past that point
   returns a bit-identical vector, cosine 1.000000. Measured on real prose the window is
@@ -150,6 +206,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   imports the server lazily, so only `docir mcp serve` pays fastmcp's ~0.3s import.
 
 ### Changed
+
+- **docir's own documents no longer carry sequence labels.** Every document had two
+  identifiers: its docir id, and a label in the title (`ADR-0015`, `GAP-056`, `FLOW-003`).
+  Only the id addresses anything, so each prose citation of a label was a pointer both the
+  reader and the tooling had to resolve by hand. 481 references across 94 documents became
+  ids, 96 titles lost their label, and 97 files were renamed to match. Forty-nine of those
+  titles were not names at all — they were the opening clause of the finding, cut at ~90
+  characters, with the label doing the naming work — so each was rewritten. The provenance
+  lines ("Migrated from the discovery gap register (GAP-0NN)") keep their labels: those record
+  what a document used to be called, which is history rather than an address.
+
 
 - **The `embeddings` extra is gone.** It was kept as a no-op alias after fastembed became a
   hard dependency in 0.8.0; `pip install docir[embeddings]` now warns about an unknown extra

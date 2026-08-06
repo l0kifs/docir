@@ -11,7 +11,7 @@ related:
 - issue-90aea6d1b891
 - adr-2a3f625bb2f8
 - ref-a6db21f52427
-status: open
+status: resolved
 tags:
 - material
 - schema
@@ -65,6 +65,32 @@ satisfied should not load.
 Deliberately not proposed: making `required` accept arbitrary frontmatter keys. That is a
 different feature (arbitrary per-type metadata), it is what issue-90aea6d1b891 needs for `code:`
 specifically, and it should be decided there rather than smuggled in as a loosened validation.
+
+## Resolution
+
+FIXED 2026-08-06, as proposed. `_parse_type` now checks every `required:` entry against
+`REQUIRABLE_FIELDS` and raises `SchemaError` naming the fields that would have worked — the same
+shape as the undeclared-status check beside it, and for the same reason: a schema that cannot be
+satisfied should not load.
+
+The allowed set is *derived* from the `Document` dataclass rather than written out, so it cannot
+fall behind a new field — `code` landed the same day and needed no edit here. `path` is excluded:
+it is a real field, and the file store assigns it *after* Tier 0 runs, so requiring it would
+reject every create.
+
+**The fix surfaced its own second half.** With real field names now expressible,
+`required: [tags]` was accepted and enforced nothing: `validate_required_fields` treated only
+`None` and a blank string as missing, and an empty tuple is neither. A rule that loads, reads as
+enforced and enforces nothing is worse than one that is refused — so emptiness now covers
+collections, and `required: [tags]` means "at least one tag". `False` stays a value rather than
+an absence: `archived: false` is the normal state of a document, and plain falsiness would have
+rejected every unarchived one.
+
+Also rewritten: the comment in the shipped `docs-schema.yaml` that described `required` as "extra
+frontmatter fields this type must carry". That phrasing is what invited a name no document could
+carry; it now says the entry names an existing document field and lists them.
+
+Both halves were confirmed by injecting the bug each claims to catch.
 
 ## Actors affected
 

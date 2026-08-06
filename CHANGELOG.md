@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-08-06
+
+The release that made docir answer for the code. A document can name the code it governs, a
+ranked hit names the section that matched, and the corpus reaches humans as a site and agents as
+MCP tools — with the daemon keeping the index in step with hand edits along the way.
+
+### Upgrade notes
+
+- **Migrations `0003` and `0004` run on first use** (per-section vectors, `document_code`). Both
+  are additive; `0003` marks every embedding dirty, so the first read after upgrading has no
+  semantic signal until the next write or `docir embed --flush`. Chunk vectors are ~7× more rows
+  than document vectors, and `context` loads every active vector per call, so the practical
+  corpus ceiling drops by about that factor.
+- **A `docs-schema.yaml` whose `required:` names something no document can carry now fails to
+  load.** Such a schema already rejected every write of that type, so nothing that worked stops
+  working — but the error moves from the write to the load, which is where it belongs. If you
+  have one, the message names the fields that would have worked.
+- **`required:` is now enforced for collections.** `required: [tags]` used to load and check
+  nothing; it now means "at least one tag", so a document written without one is refused. Only
+  affects schemas that already listed a collection field.
+- **The daemon watches `docs/` and reindexes what changes** — on by default. `DOCIR_WATCH=0`
+  opts out; `--no-daemon` runs never watch, so CI still runs `docir reindex` explicitly.
+- **`fastmcp` and `watchfiles` are default dependencies**, not extras. An agent that only speaks
+  MCP cannot install an extra it has not been told about.
+
 ### Changed
 
 - **Enforcement of decisions against code closes as a decision, not a feature** (adr-b2cfed9d5888).
@@ -1049,7 +1074,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/l0kifs/docir/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/l0kifs/docir/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/l0kifs/docir/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/l0kifs/docir/compare/v0.7.0...v0.7.1

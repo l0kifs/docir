@@ -428,9 +428,9 @@ class SqlAlchemyChunkEmbeddingRepository(ChunkEmbeddingRepository):
         self._session.execute(delete(ChunkEmbeddingRow).where(ChunkEmbeddingRow.doc_id == doc_id))
         self._session.flush()
 
-    def active_vectors(self, model_id: str) -> list[tuple[str, Embedding]]:
+    def active_vectors(self, model_id: str) -> list[tuple[str, str, Embedding]]:
         stmt = (
-            select(ChunkEmbeddingRow.doc_id, ChunkEmbeddingRow.vector)
+            select(ChunkEmbeddingRow.doc_id, ChunkEmbeddingRow.heading, ChunkEmbeddingRow.vector)
             .join(DocumentRow, DocumentRow.id == ChunkEmbeddingRow.doc_id)
             .where(DocumentRow.archived.is_(False))
             .where(ChunkEmbeddingRow.vector.is_not(None))
@@ -438,8 +438,8 @@ class SqlAlchemyChunkEmbeddingRepository(ChunkEmbeddingRepository):
             .order_by(ChunkEmbeddingRow.doc_id, ChunkEmbeddingRow.ordinal)
         )
         return [
-            (doc_id, Embedding.from_bytes(blob))
-            for doc_id, blob in self._session.execute(stmt).all()
+            (doc_id, heading, Embedding.from_bytes(blob))
+            for doc_id, heading, blob in self._session.execute(stmt).all()
         ]
 
     def headings(self, doc_id: str) -> list[str]:

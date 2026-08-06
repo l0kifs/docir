@@ -6,10 +6,19 @@ It fuses lexical and semantic signals for context retrieval and manages when
 document embeddings are (re)computed.
 
 ## Public operations
-- `HybridScorer.semantic_ranking(query, vectors) -> [(id, score)]` — cosine ranking
+- `HybridScorer.semantic_ranking(query, candidates) -> [SemanticHit]` — cosine ranking,
+  collapsing a document's candidates to its best one
 - `HybridScorer.fuse(lexical, semantic) -> [FusedScore]` — reciprocal-rank fusion
-- `FusedScore` — one fused ranking (`doc_id`, `score`, `lexical`, `semantic`). Exported as a
-  type so consumers can hold a ranked list before resolving it to documents.
+- `VectorCandidate(doc_id, vector, section=None)` — one vector to rank. `section` is the
+  heading it came from; `None` means the vector describes the whole document, or the chunk
+  has no addressable heading (a preamble, or a continuation of an over-long section).
+- `SemanticHit(doc_id, similarity, section=None)` — a document's best cosine and *where* in
+  it that was found. The winning candidate is kept, not just its score: the section that
+  earned a document its rank is what `get --section` should be asked for next
+  (issue-afd25273ff1f).
+- `FusedScore` — one fused ranking (`doc_id`, `score`, `lexical`, `semantic`, `similarity`,
+  `section`). Exported as a type so consumers can hold a ranked list before resolving it to
+  documents.
 - `build_scheduler(uow_factory, embedder, *, background) -> EmbeddingScheduler`
   — construct the deferred embedding-recompute scheduler for one process
 - `EmbeddingScheduler.schedule(id) / flush()` — queue and drain recomputes

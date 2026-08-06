@@ -92,7 +92,8 @@ docir's own store: **44% → 100%**. On the same corpus, `context` recall@5 hold
 and measures the window empirically, so it stays honest if the model changes.
 
 Reading follows ranking: if `context` surfaced a document for one of its
-sections, read that section rather than the whole file.
+sections, the hit says which — `matched_section` carries that heading, ready to
+read back.
 
 ```bash
 docir get arch-1cfb1b212237 --section "Daemon process"

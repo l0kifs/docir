@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A ranked hit says which section matched.** Every hit from `docir context` now carries
+  `matched_section` — the heading of the section whose vector earned the document its rank —
+  and it is exactly the string `docir get <id> --section "<heading>"` takes.
+
+  Chunked embedding (adr-927aa43d9635) made a long document reachable by any of its sections and
+  then reported only the document: the winning vector was known inside `semantic_ranking` and
+  discarded one line later. An agent was left with the two moves the section read was built to
+  remove — pull the whole body, or discover the headings in a second round trip, since an
+  unknown heading errors *listing* the real ones (issue-afd25273ff1f).
+
+  The collapse to one score per document now keeps the winning *candidate* rather than just its
+  score: `VectorCandidate` and `SemanticHit` carry the heading through `HybridScorer` into
+  `FusedScore` and out onto the skeleton. Absent means the match is not addressable as a
+  section — the document's own vector won, the hit was lexical or graph-reached, or the winning
+  chunk is a preamble or the continuation of an over-long section, neither of which has a name
+  `--section` would accept. It is the "absent means unknown, never zero" rule `similarity`
+  already follows.
+
+  It is `matched_section`, not `section`: `DocumentView.section` already means "the body was
+  narrowed to this one", a different claim on a sibling DTO, and one word meaning two things is
+  how `stale` came to name three concepts (issue-d8295c5c76d1).
+
+  Costs ~20 tokens per `context` result set on the benchmark corpus (484 vs 464) and saves a
+  body fetch whenever a hit is a long document. Ranking is unchanged: recall@5 0.97, MRR 0.97.
+
 - **A document can name the code it governs.** `docir add --code "src/auth/**"` (and
   `docir update <id> --set-code ...`) records repo-relative globs in frontmatter, and they
   ride on every read view — `get`, and the skeletons `query`/`search`/`context` return — so

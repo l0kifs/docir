@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from docir.modules.indexing.domain.results import SearchHit
-from docir.modules.indexing.domain.scoring import HybridScorer
+from docir.modules.indexing.domain.results import SearchHit, VectorCandidate
+from docir.modules.indexing.domain.scoring import HybridScorer, SemanticHit
 from docir.platform.embedding.vector import Embedding
 
 
@@ -11,14 +11,17 @@ class TestHybridScorer:
     def test_semantic_ranking_orders_by_similarity(self) -> None:
         scorer = HybridScorer()
         query = Embedding((1.0, 0.0))
-        vectors = [("a", Embedding((0.0, 1.0))), ("b", Embedding((1.0, 0.0)))]
+        vectors = [
+            VectorCandidate("a", Embedding((0.0, 1.0))),
+            VectorCandidate("b", Embedding((1.0, 0.0))),
+        ]
         ranked = scorer.semantic_ranking(query, vectors)
-        assert ranked[0][0] == "b"
+        assert ranked[0].doc_id == "b"
 
     def test_fuse_combines_both_sources(self) -> None:
         scorer = HybridScorer(rrf_k=1)
         lexical = [SearchHit("a", 1.0), SearchHit("b", 2.0)]
-        semantic = [("b", 0.9), ("c", 0.5)]
+        semantic = [SemanticHit("b", 0.9), SemanticHit("c", 0.5)]
         fused = scorer.fuse(lexical, semantic)
         ids = [f.doc_id for f in fused]
         assert set(ids) == {"a", "b", "c"}
@@ -39,7 +42,7 @@ class TestSimilarityIsCarriedThrough:
 
     def test_similarity_is_the_raw_cosine_not_the_rrf_component(self) -> None:
         scorer = HybridScorer(rrf_k=1)
-        fused = scorer.fuse([], [("a", 0.9), ("b", 0.5)])
+        fused = scorer.fuse([], [SemanticHit("a", 0.9), SemanticHit("b", 0.5)])
         by_id = {f.doc_id: f for f in fused}
         assert by_id["a"].similarity == 0.9
         assert by_id["b"].similarity == 0.5
@@ -55,5 +58,5 @@ class TestSimilarityIsCarriedThrough:
 
     def test_a_genuine_zero_similarity_is_not_none(self) -> None:
         scorer = HybridScorer(rrf_k=1)
-        fused = scorer.fuse([], [("a", 0.0)])
+        fused = scorer.fuse([], [SemanticHit("a", 0.0)])
         assert fused[0].similarity == 0.0

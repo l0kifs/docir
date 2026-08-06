@@ -220,12 +220,17 @@ class ChunkEmbeddingRepository(ABC):
         """Drop every chunk for a document."""
 
     @abstractmethod
-    def active_vectors(self, model_id: str) -> list[tuple[str, Embedding]]:
-        """``(doc_id, vector)`` for every chunk of an active document.
+    def active_vectors(self, model_id: str) -> list[tuple[str, str, Embedding]]:
+        """``(doc_id, heading, vector)`` for every chunk of an active document.
 
         Returns one entry per *chunk*, so a document appears many times; pooling
         to a per-document score is the caller's job (adr-927aa43d9635 keeps that in the
         scorer, where the ranking rule lives).
+
+        The heading rides along because the ranking is where the winning chunk
+        is known, and it is what ``docir get --section`` needs next
+        (issue-afd25273ff1f). A chunk with no heading — a preamble, or the
+        continuation of an over-long section — carries the empty string.
         """
 
     @abstractmethod

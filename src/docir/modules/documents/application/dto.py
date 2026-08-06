@@ -130,6 +130,17 @@ class DocumentSummary:
     #: document had no current vector, or arrived via the graph rather than
     #: the ranking; that is *unknown*, not zero.
     similarity: float | None = None
+    #: The heading of the section whose vector produced ``similarity`` — what to
+    #: pass to ``get --section`` next. ``None`` when the document's own vector
+    #: won, when the hit was lexical or graph-reached, or when the winning chunk
+    #: has no heading: the match is real but not addressable as a section, which
+    #: is *unknown*, not "nothing matched".
+    #:
+    #: Deliberately not called ``section``: ``DocumentView.section`` already
+    #: means "the body was narrowed to this one", a different claim on a sibling
+    #: DTO, and one word meaning two things is how `stale` came to name three
+    #: concepts (issue-d8295c5c76d1).
+    matched_section: str | None = None
     via_graph: bool = False
 
     @classmethod
@@ -140,6 +151,7 @@ class DocumentSummary:
         stale: bool = False,
         score: float | None = None,
         similarity: float | None = None,
+        matched_section: str | None = None,
         via_graph: bool = False,
     ) -> DocumentSummary:
         return cls(
@@ -159,6 +171,7 @@ class DocumentSummary:
             stale=stale,
             score=score,
             similarity=similarity,
+            matched_section=matched_section,
             via_graph=via_graph,
         )
 

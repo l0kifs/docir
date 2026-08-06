@@ -93,6 +93,12 @@ never dump every body. On a long document prefer `--section`: each `##` section
 is embedded separately, so a hit often means one section matched, and that
 section is a fraction of the file.
 
+**A hit that matched through a section names it.** `matched_section` on a
+`context` result is the heading whose vector earned the rank — pass it straight
+to `docir get <id> --section "<heading>"` instead of pulling the body. Absent
+means the match is not addressable as a section (the document's own vector, a
+full-text hit, a graph neighbour), not that nothing matched.
+
 Default read path **hides** closed and archived docs. "Closed" means the type's
 *inactive* statuses — `superseded`/`rejected` for a decision, `resolved` for an
 issue, `deprecated` for architecture. Add `--include-inactive`

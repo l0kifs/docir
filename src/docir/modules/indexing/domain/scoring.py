@@ -8,13 +8,29 @@ problem of BM25 scores and cosine scores living on incomparable numeric ranges.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
-from docir.modules.indexing.domain.results import SearchHit
+from docir.modules.indexing.domain.results import SearchHit, VectorCandidate
 from docir.platform.embedding.vector import Embedding
 
 # RRF dampening constant; 60 is the value from the original RRF paper.
 DEFAULT_RRF_K = 60
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticHit:
+    """One document's best cosine similarity, and where in it that was found.
+
+    ``section`` is the heading of the winning chunk, or ``None`` when the
+    document's own vector won (or the winning chunk has no heading). Absent
+    means "the match is not addressable as a section", never "no section
+    matched".
+    """
+
+    doc_id: str
+    similarity: float
+    section: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +52,10 @@ class FusedScore:
     lexical: float
     semantic: float
     similarity: float | None = None
+    #: The heading of the section whose vector produced ``similarity``, when one
+    #: did. ``None`` for a lexical-only hit, and for a document matched by its
+    #: own vector — in both cases the match is not addressable as a section.
+    section: str | None = None
 
 
 class HybridScorer:
@@ -45,8 +65,8 @@ class HybridScorer:
         self._k = rrf_k
 
     def semantic_ranking(
-        self, query: Embedding, vectors: list[tuple[str, Embedding]]
-    ) -> list[tuple[str, float]]:
+        self, query: Embedding, candidates: Sequence[VectorCandidate]
+    ) -> list[SemanticHit]:
         """Rank candidate vectors by cosine similarity to the query, desc.
 
         Accepts repeated ``doc_id`` entries and keeps each document's **best**
@@ -59,19 +79,29 @@ class HybridScorer:
         is precisely the dilution chunking exists to undo. The consequence,
         recorded rather than hidden, is that more sections mean more chances to
         score — which is why the benchmark gates on no recall regression.
+
+        The collapse keeps the *winning candidate*, not just its score, so the
+        section that earned a document its rank survives into the result. It was
+        discarded here for as long as chunking existed, which left an agent told
+        which document matched and guessing which section to read back
+        (issue-afd25273ff1f).
         """
-        best: dict[str, float] = {}
-        for doc_id, vector in vectors:
-            similarity = query.cosine_similarity(vector)
-            if similarity > best.get(doc_id, float("-inf")):
-                best[doc_id] = similarity
-        scored = sorted(best.items(), key=lambda pair: (pair[1], pair[0]), reverse=True)
-        return scored
+        best: dict[str, SemanticHit] = {}
+        for candidate in candidates:
+            similarity = query.cosine_similarity(candidate.vector)
+            current = best.get(candidate.doc_id)
+            if current is None or similarity > current.similarity:
+                best[candidate.doc_id] = SemanticHit(
+                    doc_id=candidate.doc_id,
+                    similarity=similarity,
+                    section=candidate.section,
+                )
+        return sorted(best.values(), key=lambda hit: (hit.similarity, hit.doc_id), reverse=True)
 
     def fuse(
         self,
         lexical: list[SearchHit],
-        semantic: list[tuple[str, float]],
+        semantic: list[SemanticHit],
     ) -> list[FusedScore]:
         """Fuse two ranked lists into a single descending ranking.
 
@@ -84,9 +114,11 @@ class HybridScorer:
 
         semantic_component: dict[str, float] = {}
         similarity: dict[str, float] = {}
-        for rank, (doc_id, sim) in enumerate(semantic):
-            semantic_component[doc_id] = 1.0 / (self._k + rank + 1)
-            similarity[doc_id] = sim
+        section: dict[str, str | None] = {}
+        for rank, semantic_hit in enumerate(semantic):
+            semantic_component[semantic_hit.doc_id] = 1.0 / (self._k + rank + 1)
+            similarity[semantic_hit.doc_id] = semantic_hit.similarity
+            section[semantic_hit.doc_id] = semantic_hit.section
 
         all_ids = set(lexical_component) | set(semantic_component)
         fused = [
@@ -96,6 +128,7 @@ class HybridScorer:
                 lexical=lexical_component.get(doc_id, 0.0),
                 semantic=semantic_component.get(doc_id, 0.0),
                 similarity=similarity.get(doc_id),
+                section=section.get(doc_id),
             )
             for doc_id in all_ids
         ]

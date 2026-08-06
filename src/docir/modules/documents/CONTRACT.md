@@ -73,7 +73,12 @@ files and the derived index never disagree.
 
 The read paths return `DocumentSummary` (frontmatter, tags, typed `related`,
 `owner`/`verified`/`stale` — but **no body**); fetch bodies by id with `get`,
-which returns the full `DocumentView`. A `related` entry is a typed edge
+which returns the full `DocumentView`. A ranked hit also carries
+`matched_section`: the heading whose vector produced `similarity`, ready to pass
+to `get --section`. It is absent for a lexical or graph-reached hit, and for a
+document matched by its own vector — the match is real but not addressable as a
+section. (Distinct from `DocumentView.section`, which says the body *was*
+narrowed to one.) A `related` entry is a typed edge
 (`RelatedView{target, kind}`); `AddDocumentRequest.related` /
 `UpdateDocumentRequest.set_related` accept `<id>` / `<id>:<kind>` tokens.
 `UpdateDocumentRequest` also carries `set_owner` and `mark_verified` (stamp the

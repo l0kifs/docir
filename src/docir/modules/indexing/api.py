@@ -11,7 +11,8 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from docir.modules.indexing.application.ports.scheduler import EmbeddingScheduler
-from docir.modules.indexing.domain.scoring import FusedScore, HybridScorer
+from docir.modules.indexing.domain.results import VectorCandidate
+from docir.modules.indexing.domain.scoring import FusedScore, HybridScorer, SemanticHit
 from docir.modules.indexing.infra.scheduler import (
     InlineEmbeddingScheduler,
     ThreadedEmbeddingScheduler,
@@ -41,4 +42,11 @@ def build_scheduler(
     return InlineEmbeddingScheduler(uow_factory, embedder)
 
 
-__all__ = ["EmbeddingScheduler", "FusedScore", "HybridScorer", "build_scheduler"]
+__all__ = [
+    "EmbeddingScheduler",
+    "FusedScore",
+    "HybridScorer",
+    "SemanticHit",
+    "VectorCandidate",
+    "build_scheduler",
+]

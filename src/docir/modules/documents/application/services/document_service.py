@@ -33,7 +33,12 @@ from docir.modules.documents.domain.services.validation import Tier0Validator
 from docir.modules.documents.domain.value_objects.identifiers import DocId
 from docir.modules.documents.domain.value_objects.queries import DocumentFilter
 from docir.modules.documents.domain.value_objects.relations import RelatedRef
-from docir.modules.indexing.api import EmbeddingScheduler, FusedScore, HybridScorer
+from docir.modules.indexing.api import (
+    EmbeddingScheduler,
+    FusedScore,
+    HybridScorer,
+    VectorCandidate,
+)
 from docir.platform.clock import Clock
 from docir.platform.embedding import Embedder
 from docir.platform.errors import (
@@ -459,10 +464,18 @@ class DocumentService:
             # document vector covers only the head, and the rest of it is in the
             # index only as chunks (adr-927aa43d9635).
             model_id = self._embedder.model_id
-            semantic = self._scorer.semantic_ranking(
-                query_vector,
-                uow.embeddings.active_vectors(model_id) + uow.chunks.active_vectors(model_id),
-            )
+            candidates = [
+                VectorCandidate(doc_id=doc_id, vector=vector)
+                for doc_id, vector in uow.embeddings.active_vectors(model_id)
+            ]
+            candidates += [
+                # An empty heading is a preamble or a continuation piece: it
+                # ranks like any other chunk and simply cannot be named, so it
+                # arrives as "no addressable section" rather than as "".
+                VectorCandidate(doc_id=doc_id, vector=vector, section=heading or None)
+                for doc_id, heading, vector in uow.chunks.active_vectors(model_id)
+            ]
+            semantic = self._scorer.semantic_ranking(query_vector, candidates)
             fused = self._scorer.fuse(hits, semantic)
 
             # Rank order, visible only, capped at what could ever be returned.
@@ -470,20 +483,18 @@ class DocumentService:
 
             seed_budget = request.limit - expand
             selected: dict[str, DocumentSummary] = {
-                document.id: self._summary(document, score=score, similarity=similarity)
-                for document, score, similarity in ranked[:seed_budget]
+                document.id: self._ranked_summary(document, fscore)
+                for document, fscore in ranked[:seed_budget]
             }
             if expand:
                 self._augment_with_related(
                     uow, selected, budget=expand, include_inactive=request.include_inactive
                 )
             # Give back neighbour slots the graph did not use.
-            for document, score, similarity in ranked[seed_budget:]:
+            for document, fscore in ranked[seed_budget:]:
                 if len(selected) >= request.limit:
                     break
-                selected.setdefault(
-                    document.id, self._summary(document, score=score, similarity=similarity)
-                )
+                selected.setdefault(document.id, self._ranked_summary(document, fscore))
 
         return list(selected.values())
 
@@ -494,8 +505,13 @@ class DocumentService:
         request: ContextRequest,
         *,
         limit: int,
-    ) -> list[tuple[Document, float, float | None]]:
+    ) -> list[tuple[Document, FusedScore]]:
         """Resolve fused scores to visible documents, best first, at most ``limit``.
+
+        The whole :class:`FusedScore` travels with its document rather than the
+        two numbers the summary used to take: the ranking also knows *which
+        section* matched, and threading each new field through as another tuple
+        slot is how that kind of thing gets dropped.
 
         ``min_score`` is applied here, against the raw cosine rather than the
         fused score, and only where a cosine exists: a document with no current
@@ -503,7 +519,7 @@ class DocumentService:
         an *unknown* similarity would filter on staleness of the embedding
         queue rather than on relevance. `docir embed --flush` closes that gap.
         """
-        resolved: list[tuple[Document, float, float | None]] = []
+        resolved: list[tuple[Document, FusedScore]] = []
         for fscore in fused:
             if len(resolved) >= limit:
                 break
@@ -518,7 +534,7 @@ class DocumentService:
                 continue
             if not self._is_visible(document, include_inactive=request.include_inactive):
                 continue
-            resolved.append((document, fscore.score, fscore.similarity))
+            resolved.append((document, fscore))
         return resolved
 
     # -- helpers ------------------------------------------------------------
@@ -529,6 +545,7 @@ class DocumentService:
         *,
         score: float | None = None,
         similarity: float | None = None,
+        matched_section: str | None = None,
         via_graph: bool = False,
     ) -> DocumentSummary:
         return DocumentSummary.from_document(
@@ -536,7 +553,17 @@ class DocumentService:
             stale=self._is_stale(document),
             score=score,
             similarity=similarity,
+            matched_section=matched_section,
             via_graph=via_graph,
+        )
+
+    def _ranked_summary(self, document: Document, fscore: FusedScore) -> DocumentSummary:
+        """The skeleton for a ranked hit, carrying everything the ranking knew."""
+        return self._summary(
+            document,
+            score=fscore.score,
+            similarity=fscore.similarity,
+            matched_section=fscore.section,
         )
 
     def _allocate_id(self, request: AddDocumentRequest, uow: UnitOfWork) -> DocId:

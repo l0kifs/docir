@@ -284,7 +284,14 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   whole body. `drain_dirty` now writes a document vector **and** one vector per `##` section
   (`chunk_embeddings`, keyed `(doc_id, ordinal)`, migration `0003`), and
   `HybridScorer.semantic_ranking` accepts repeated ids and keeps each document's **best** — RRF
-  fuses rankings *of documents*, so the collapse happens before fusion, not after. Load-bearing
+  fuses rankings *of documents*, so the collapse happens before fusion, not after. The collapse
+  keeps the winning **candidate**, not just its score: `VectorCandidate` -> `SemanticHit` ->
+  `FusedScore.section` -> `DocumentSummary.matched_section` is what tells an agent which heading
+  to pass to `get --section` (issue-afd25273ff1f). Absent means *not addressable as a section* —
+  the document vector won, the hit was lexical or graph-reached, or the chunk is a preamble or an
+  over-long section's continuation — never "nothing matched"; and the field is **not** called
+  `section`, because `DocumentView.section` already means "the body was narrowed to this".
+  Load-bearing
   details: `MAX_CHUNK_CHARS` (1200) is *derived* from the measured window, not chosen — a chunk that
   overflows it reintroduces the bug one level down, and each chunk carries the title prefix that eats
   into the budget; the splitter tracks fenced code blocks, because a `##` comment inside one is not a

@@ -132,6 +132,12 @@ def build_mcp_server(
         so a replaced decision arrives with its replacement. Returns skeletons
         (no body); fetch a body with `docir_get`.
 
+        A hit that matched through one of its sections carries
+        `matched_section` — pass that heading straight to `docir_get(section=)`
+        rather than pulling the whole body. Absent means the match was not
+        addressable as a section (the document's own vector, a full-text hit, or
+        a graph neighbour), not that nothing matched.
+
         Args:
             task: What you are about to do, in your own words.
             limit: Maximum documents to return — a token budget, not a page.

@@ -147,6 +147,12 @@ def render_document_list(views: Sequence[Mapping[str, object]]) -> None:
     has_similarity = any(view.get("similarity") is not None for view in views)
     if has_similarity:
         table.add_column("sim", justify="right")
+    # Only when some hit matched through a section: on a corpus of short
+    # documents the column would be empty in every row, and a column of dashes
+    # reads as a missing feature rather than as "nothing matched that way".
+    has_section = any(view.get("matched_section") for view in views)
+    if has_section:
+        table.add_column("matched section", overflow="fold")
     for view in views:
         marker = " ↗" if view.get("via_graph") else ""
         marker += " ⚠" if view.get("stale") else ""
@@ -163,6 +169,8 @@ def render_document_list(views: Sequence[Mapping[str, object]]) -> None:
         if has_similarity:
             similarity = view.get("similarity")
             row.append(f"{similarity:.3f}" if isinstance(similarity, int | float) else "-")
+        if has_section:
+            row.append(str(view.get("matched_section") or "-"))
         table.add_row(*row)
     console.print(table)
 

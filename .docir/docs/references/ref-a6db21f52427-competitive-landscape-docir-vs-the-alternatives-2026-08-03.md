@@ -69,7 +69,7 @@ validation gate none of them have.
 | Fusion | ✅ RRF | ✅ hybrid | ✅ RRF | ⚙️ weighted blend |
 | Reranking | ❌ **built, measured worse than fusion, rejected** (adr-d657a09b8c4a) | ✅ cross-encoder / LiteLLM | ✅ local LLM rerank | ❌ |
 | Retrieval unit | ✅ document **+ every `##` section** embedded (adr-927aa43d9635); reads are skeletons, `get --section` returns one span | note | **chunk** (heading/para) w/ citation | **chunk**, markdown-aware |
-| Passage citation in a result | ❌ a hit names the document, not the section that matched — the best chunk is collapsed before fusion | ❌ | ✅ passage + location | ⚙️ |
+| Passage citation in a result | ✅ `matched_section` names the heading that matched, and `get --section` takes it verbatim (issue-afd25273ff1f) | ❌ | ✅ passage + location | ⚙️ |
 | Graph / relations | ✅ **typed** edges (`supersedes`, `depends_on`, …), bidirectional expansion | ✅ untyped-ish wikilinks + observations | ❌ | ❌ |
 | Frontmatter schema enforced at write | ✅ **hard Tier-0 gate** | ⚙️ `schema_infer` / `schema_validate` (advisory) | ❌ | ❌ |
 | Status grammar / transitions | ✅ per type | ❌ | ❌ | ❌ |
@@ -86,8 +86,8 @@ validation gate none of them have.
 | Published retrieval benchmark | ✅ `benchmarks/` (recall@5 0.96, MRR 0.95) | ❌ | ❌ | ❌ |
 
 Five docir cells moved between the 2026-08-03 compile and the 2026-08-06 re-verification:
-reranking, retrieval unit, file watching, import, and the new passage-citation row that
-records what chunked retrieval did *not* close.
+reranking, retrieval unit, file watching, import, and a new passage-citation row — which the
+same day's work then closed, so gap 2 has no residual left.
 
 ## Table B — decision-record & governance tooling
 
@@ -153,19 +153,19 @@ is, and requests go through the daemon by default, so the embedding model stays 
 calls. Kept in the list because the gap analysis is what produced it. The remaining
 distinction against Basic Memory is coverage of *clients*, not of protocol — see gap 11.
 
-### ~~2. Document-level retrieval only~~ — **closed in 0.10.0, one residual open**
+### ~~2. Document-level retrieval only~~ — **closed in 0.10.0, both halves**
 docir embedded whole documents, and the model reads ~512 tokens, so 84 of its own 103
 documents were partly absent from the semantic index while FTS5 hid it. It now embeds
 **every `##` section beside the document** (adr-927aa43d9635) and `docir get --section
 "<heading>"` returns exactly one span — the passage read, instead of a 4,000-line body.
 Coverage on docir's own store went 44% → 100%; MRR 0.94 → 0.97 with recall@5 held at 0.97.
 
-The **citation half is still open**: `HybridScorer` keeps a document's best chunk and
-collapses it before fusion, and `DocumentSummary` carries no heading, so a hit says *which
-document* matched and never *which section*. The agent then names a section it has not been
-told about. qmd returns the passage and its location in one step. This is small and additive —
-carry the winning ordinal through fusion into the summary — and it is the only piece of the
-retrieval-parity story still missing.
+The citation half closed the same day (issue-afd25273ff1f): the collapse to one score per
+document keeps the winning *candidate*, not just its score, so a hit carries
+`matched_section` — the heading that matched, and exactly what `get --section` takes. Absent
+still means "not addressable as a section" (the document vector won, or the hit was lexical or
+graph-reached), never "nothing matched". qmd returns the passage itself; docir returns its
+name and lets you ask, which is the skeleton contract holding.
 
 ### 3. No reranking *(Basic Memory: cross-encoder; qmd: local LLM rerank)*
 
@@ -262,7 +262,7 @@ non-answer for personal/cross-repo knowledge.
 
 ## Recommended reading of these gaps
 
-As of 2026-08-06, ten of the twelve are settled: **1, 2, 4, 5 and 7 shipped**; **3 and 8 closed
+As of 2026-08-06, eleven of the twelve are settled: **1, 2, 4, 5 and 7 shipped** (2 in both halves); **3 and 8 closed
 as decisions** — built, measured or reasoned against, and removed rather than deferred; **9 and
 12 are correct omissions** given the "curated corpus, git canonical" thesis, so listing them is
 scope-awareness, not a to-do. What is left:
@@ -273,9 +273,9 @@ scope-awareness, not a to-do. What is left:
    *rule* that fails CI when the code contradicts the decision, which is a different and much
    larger thing than the query. Make the case for it against the query, not against the old
    absence: most of what an executable-rule engine was wanted for is already answerable.
-2. **Gap 2's residual — carry the matching section's ordinal through fusion into the summary**
-   (issue-afd25273ff1f). Small, additive, and it finishes the chunked-retrieval story: today an
-   agent is told which document matched and must guess which section to read back.
+2. ~~Gap 2's residual~~ — **done** (issue-afd25273ff1f): a hit now names the section that
+   matched, and the name is what `get --section` takes. It was the last piece of retrieval
+   parity, and it cost ~20 tokens per result set against a body fetch saved.
 3. **Gap 10 is packaging, not a feature.** `fastembed`/`onnxruntime` is the weight, and the
    documented escape hatch ranks *below* plain full-text search (`benchmarks/` §1), so "make it
    lighter" and "keep it good" are the same decision, not two.

@@ -11,7 +11,7 @@ related:
 - ref-a6db21f52427
 - adr-927aa43d9635
 - arch-f220a644d654
-status: open
+status: resolved
 tags:
 - material
 - retrieval
@@ -62,6 +62,39 @@ Two constraints hold it in shape:
   carries its passage is a list path with a body in it, which is the thing the contract forbids.
 - `indexing` may not import `documents`, so the ordinal travels as data across the existing seam,
   the way `Document.embedding_chunks()` already hands `(ordinal, heading, text)` out.
+
+## Resolution
+
+FIXED 2026-08-06, as proposed, with one deliberate departure: the field is `matched_section`, not
+`section`. `DocumentView.section` already means "the body was narrowed to this one" — a different
+claim on a sibling DTO — and one word meaning two things is how `stale` came to name three
+concepts (issue-d8295c5c76d1).
+
+The collapse in `HybridScorer.semantic_ranking` now keeps the winning *candidate* rather than
+just its score: `VectorCandidate(doc_id, vector, section)` in, `SemanticHit(doc_id, similarity,
+section)` out, through `FusedScore.section` onto `DocumentSummary.matched_section`. The heading
+was already stored (`chunk_embeddings.heading`), so nothing was recomputed or migrated; the
+chunk repository's `active_vectors` widened to `(doc_id, heading, vector)` and the seam stayed
+where it was — `indexing` still imports nothing from `documents`.
+
+Absent keeps meaning *not addressable as a section*: the document's own vector won, the hit was
+lexical or graph-reached, or the winning chunk has no heading (a preamble, or the continuation of
+an over-long section, which `--section` could not accept anyway). Never "nothing matched" — the
+rule `similarity` already follows.
+
+`_visible_ranked` now carries the whole `FusedScore` alongside its document instead of a tuple of
+the two numbers the summary happened to need. Threading each new field through as another tuple
+slot is precisely how this one was dropped for as long as chunking existed.
+
+Verified the way the issue frames the problem — not that a string is present, but that it
+dereferences: the round-trip test feeds `matched_section` straight back into
+`get --section` and asserts the body that comes out. Two more pin the absent cases (a preamble
+match, a graph-reached neighbour), and each was confirmed by injecting the bug it claims to
+catch. On docir's own corpus, "how does the daemon keep the embedding model warm" now returns
+`arch-1cfb1b212237` with `matched_section: Daemon process`.
+
+Cost: ~20 tokens per `context` result set on the benchmark corpus (484 vs 464), against a body
+fetch saved whenever a hit is a long document. Ranking is untouched — recall@5 0.97, MRR 0.97.
 
 ## Actors affected
 

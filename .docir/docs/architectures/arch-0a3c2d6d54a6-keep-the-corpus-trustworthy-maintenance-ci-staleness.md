@@ -1,4 +1,7 @@
 ---
+code:
+- src/docir/modules/documents/application/services/maintenance_service.py
+- src/docir/modules/documents/domain/services/graph_checks.py
 created: '2026-07-30'
 description: 'How the corpus stays consistent: reindex, check, repair, and the merge
   guard.'
@@ -21,7 +24,7 @@ tags:
 - persistence
 title: Keep the corpus trustworthy (maintenance, CI, staleness)
 type: architecture
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 ## Backbone

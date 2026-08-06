@@ -1,4 +1,6 @@
 ---
+code:
+- src/docir/modules/publishing/infra/rendering.py
 created: '2026-08-05'
 description: Why the published index shows applied filters as removable chips, accepts
   tracker-style tokens (type:x, is:stale, -status:y), records each facet step in history,
@@ -15,7 +17,7 @@ tags:
 - docs
 title: The index filter is chip-displayed state with a token grammar
 type: decision
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 ## Context

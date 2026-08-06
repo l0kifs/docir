@@ -1,4 +1,7 @@
 ---
+code:
+- tach.toml
+- scripts/check_contract_sync.py
 created: '2026-07-30'
 description: The MUST/SHOULD module rules this codebase is held to, and how CI proves
   them.
@@ -11,7 +14,7 @@ tags:
 - testing
 title: Architecture Rules — Modular DDD
 type: architecture
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 Audience: AI coding agent creating and maintaining this project.

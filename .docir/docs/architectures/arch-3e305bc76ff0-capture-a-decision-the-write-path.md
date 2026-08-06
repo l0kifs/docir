@@ -1,4 +1,6 @@
 ---
+code:
+- src/docir/modules/documents/application/services/document_service.py
 created: '2026-07-30'
 description: 'How a decision is captured: validate, allocate an id, write the file,
   project the index.'
@@ -24,7 +26,7 @@ tags:
 - integrity
 title: Capture a decision (the write path)
 type: architecture
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 ## Backbone

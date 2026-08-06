@@ -1,4 +1,6 @@
 ---
+code:
+- src/docir/modules/agents/**
 created: '2026-07-24'
 description: Why agent-instruction scaffolding is a self-contained module that bypasses
   the daemon.
@@ -14,7 +16,7 @@ tags:
 - architecture
 title: Agent-instruction scaffolding as a self-contained module
 type: decision
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 ## Context

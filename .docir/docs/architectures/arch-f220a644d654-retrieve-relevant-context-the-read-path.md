@@ -1,4 +1,6 @@
 ---
+code:
+- src/docir/modules/indexing/**
 created: '2026-07-30'
 description: 'How a task turns into a ranked document set: hybrid fusion plus graph
   expansion.'
@@ -18,7 +20,7 @@ tags:
 - embeddings
 title: Retrieve relevant context (the read path)
 type: architecture
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 ## Backbone

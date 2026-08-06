@@ -1,4 +1,6 @@
 ---
+code:
+- src/docir/config/settings.py
 created: '2026-07-24'
 description: Why a project-local .docir store is discovered the way git finds .git.
 id: adr-20eec6e2e2ca
@@ -12,7 +14,7 @@ tags:
 - persistence
 title: Per-project store discovery + docir init
 type: decision
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 ## Context

@@ -1,4 +1,6 @@
 ---
+code:
+- src/docir/platform/naming/**
 created: '2026-07-30'
 description: Why the tag-key grammar lives in platform rather than being written twice
   or crossing a module boundary.
@@ -15,7 +17,7 @@ tags:
 - tags
 title: A platform.naming leaf for shared name grammars
 type: decision
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 ## Context

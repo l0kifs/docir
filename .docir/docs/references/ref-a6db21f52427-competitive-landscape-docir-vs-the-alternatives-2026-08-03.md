@@ -6,9 +6,14 @@ id: ref-a6db21f52427
 owner: maintainer
 related:
 - adr-354a4270ecd8
-- arch-1cfb1b212237
 - adr-a343140d72e2
 - adr-d657a09b8c4a
+- arch-1cfb1b212237
+- adr-927aa43d9635
+- adr-307ba1f1a820
+- issue-20933967697b
+- issue-90aea6d1b891
+- issue-afd25273ff1f
 status: active
 tags:
 - docs
@@ -16,7 +21,8 @@ tags:
 - agents
 title: Competitive landscape — docir vs. the alternatives (2026-08-03)
 type: reference
-updated: '2026-08-05'
+updated: '2026-08-06'
+verified: '2026-08-06'
 ---
 
 # Competitive landscape — docir vs. the alternatives
@@ -27,6 +33,12 @@ docs on that date, not hands-on testing. Where a source was silent, the cell rea
 than `no`.*
 
 ## Who is actually competing
+
+*Re-verified 2026-08-06 against docir 0.10.0-dev (the `Unreleased` changelog section): seven of
+the twelve gaps below are closed — five shipped, and two closed as **decisions** rather than as
+features. Gap 7 closed on that date, in the work this re-verification produced. Only docir's own
+cells were re-checked — nothing about a competitor was re-verified, so their columns still date
+from 2026-08-03.*
 
 docir sits at the intersection of three markets that mostly do not overlap with each other:
 
@@ -55,8 +67,9 @@ validation gate none of them have.
 | Lexical search | ✅ FTS5 | ✅ | ✅ BM25 | ✅ FTS5 |
 | Semantic search | ✅ local ONNX (`bge-small-en-v1.5`) | ✅ FastEmbed | ✅ local GGUF via node-llama-cpp | ✅ vector cosine |
 | Fusion | ✅ RRF | ✅ hybrid | ✅ RRF | ⚙️ weighted blend |
-| Reranking | ❌ | ✅ cross-encoder / LiteLLM | ✅ local LLM rerank | ❌ |
-| Retrieval unit | **whole document** (skeleton) | note | **chunk** (heading/para) w/ citation | **chunk**, markdown-aware |
+| Reranking | ❌ **built, measured worse than fusion, rejected** (adr-d657a09b8c4a) | ✅ cross-encoder / LiteLLM | ✅ local LLM rerank | ❌ |
+| Retrieval unit | ✅ document **+ every `##` section** embedded (adr-927aa43d9635); reads are skeletons, `get --section` returns one span | note | **chunk** (heading/para) w/ citation | **chunk**, markdown-aware |
+| Passage citation in a result | ❌ a hit names the document, not the section that matched — the best chunk is collapsed before fusion | ❌ | ✅ passage + location | ⚙️ |
 | Graph / relations | ✅ **typed** edges (`supersedes`, `depends_on`, …), bidirectional expansion | ✅ untyped-ish wikilinks + observations | ❌ | ❌ |
 | Frontmatter schema enforced at write | ✅ **hard Tier-0 gate** | ⚙️ `schema_infer` / `schema_validate` (advisory) | ❌ | ❌ |
 | Status grammar / transitions | ✅ per type | ❌ | ❌ | ❌ |
@@ -65,12 +78,16 @@ validation gate none of them have.
 | Auto-repair | ✅ `check --fix` | ❌ | ❌ | ❌ |
 | Collision-free id allocation | ✅ DB counter + random ids | permalinks | n/a | n/a |
 | **MCP server** | ✅ `docir mcp serve`, 19 tools | ✅ 20+ tools | ✅ | ✅ |
-| File watching / auto-sync | ❌ manual `reindex` | ✅ | ✅ | ✅ `watch` |
+| File watching / auto-sync | ✅ daemon watches `docs/`, debounced `reindex --changed` (`DOCIR_WATCH=0` opts out) | ✅ | ✅ | ✅ `watch` |
 | Warm daemon | ✅ | server process | — | — |
 | Token-aware output | ✅ skeletons + trimmed JSON when piped | ⚙️ | ⚙️ | ⚙️ |
-| Import from existing docs | ❌ | ✅ Claude/ChatGPT/Obsidian importers | ✅ collections | ✅ add files |
+| Import from existing docs | ❌ **by decision, not by omission** (issue-20933967697b) | ✅ Claude/ChatGPT/Obsidian importers | ✅ collections | ✅ add files |
 | Team / device sync | git only | ✅ Cloud, $15/mo | ❌ | ✅ CRDT sync |
 | Published retrieval benchmark | ✅ `benchmarks/` (recall@5 0.96, MRR 0.95) | ❌ | ❌ | ❌ |
+
+Five docir cells moved between the 2026-08-03 compile and the 2026-08-06 re-verification:
+reranking, retrieval unit, file watching, import, and the new passage-citation row that
+records what chunked retrieval did *not* close.
 
 ## Table B — decision-record & governance tooling
 
@@ -83,14 +100,21 @@ validation gate none of them have.
 | Supersede / link decisions | ✅ typed graph | ✅ text link | ✅ status only | ❌ | ⚙️ |
 | Search over the corpus | ✅ lexical + semantic | ❌ | ⚙️ site search | ❌ | ❌ |
 | Validation | ✅ schema, status, tags, edges | ❌ | ❌ | ✅ **code conformance** | ⚙️ structure |
-| Enforce decisions against *code* | ❌ | ❌ | ❌ | ✅ `.rules.ts`, CI blocking | ❌ |
-| Static site / human browsing | ❌ | ❌ | ✅ **publishes to Pages/S3** | ❌ | ❌ |
-| Git-history metadata | ❌ | ⚙️ | ✅ from git log | ❌ | ❌ |
+| Names the code a document governs | ✅ `code:` globs, Tier 0 shape check, `check` warns when one stops matching, `query --code <path>` asks in reverse (issue-90aea6d1b891) | ❌ | ❌ | ⚙️ implied by an executable rule, not declared as data | ❌ |
+| Enforce decisions against *code* | ❌ **open — gap 6, now unblocked** | ❌ | ❌ | ✅ `.rules.ts`, CI blocking | ❌ |
+| Static site / human browsing | ✅ `docir build --out site/` — self-contained pages, both edge directions, constellation graph (adr-a343140d72e2, adr-307ba1f1a820) | ❌ | ✅ **publishes to Pages/S3** | ❌ | ❌ |
+| Timeline view / `serve` | ❌ | ❌ | ✅ | ❌ | ❌ |
+| Git-history metadata | ❌ **not built, deliberately** | ⚙️ | ✅ from git log | ❌ | ❌ |
 | Agent onboarding | ✅ `agent install` (skill/AGENTS.md) | ❌ | ❌ | ✅ | ✅ 20+ assistants |
 | Workflow phases | ❌ | ❌ | ❌ | ❌ | ✅ propose→spec→task→archive |
 | Multi-doc types beyond ADR | ✅ 15 types, 5 profiles | ❌ | ❌ | ❌ | ⚙️ specs/tasks |
 
 Legend: ✅ yes · ⚙️ partial / different shape · ❌ no · `?` not documented
+
+Gap 6 is now the only cell in either table still worth building, and the row above it is why:
+a rule has something to bind to. `Git-history metadata` is a deliberate ❌ — deriving `commit`
+or `pr` from git log makes the index depend on repository history rather than on the files,
+which the "files are canonical, index is derived" thesis does not cover.
 
 ---
 
@@ -118,7 +142,8 @@ These are defensible, not cosmetic — no competitor in either table offers them
 
 ## Gaps — features competitors have that docir does not
 
-Ranked by how much they cost docir in adoption, highest first.
+Ranked by how much they cost docir in adoption, highest first. Numbering is stable: a gap that
+closes is struck through and kept, because the analysis is what produced the work.
 
 ### ~~1. No MCP server~~ — **closed in 0.10.0**
 `docir mcp serve` (FastMCP, shipped by default) exposes 19 tools over stdio or HTTP,
@@ -128,11 +153,19 @@ is, and requests go through the daemon by default, so the embedding model stays 
 calls. Kept in the list because the gap analysis is what produced it. The remaining
 distinction against Basic Memory is coverage of *clients*, not of protocol — see gap 11.
 
-### 2. Document-level retrieval only; no chunking or passage citation *(qmd, sqlite-memory)*
-docir embeds and ranks whole documents. qmd and sqlite-memory chunk on heading/paragraph
-boundaries and return the passage plus its location, so an agent reads 40 lines instead of a
-4,000-line architecture doc. docir's answer is `get <id>` — the whole body. For a long
-architecture document that is a large token cost the skeleton contract was meant to avoid.
+### ~~2. Document-level retrieval only~~ — **closed in 0.10.0, one residual open**
+docir embedded whole documents, and the model reads ~512 tokens, so 84 of its own 103
+documents were partly absent from the semantic index while FTS5 hid it. It now embeds
+**every `##` section beside the document** (adr-927aa43d9635) and `docir get --section
+"<heading>"` returns exactly one span — the passage read, instead of a 4,000-line body.
+Coverage on docir's own store went 44% → 100%; MRR 0.94 → 0.97 with recall@5 held at 0.97.
+
+The **citation half is still open**: `HybridScorer` keeps a document's best chunk and
+collapses it before fusion, and `DocumentSummary` carries no heading, so a hit says *which
+document* matched and never *which section*. The agent then names a section it has not been
+told about. qmd returns the passage and its location in one step. This is small and additive —
+carry the winning ordinal through fusion into the summary — and it is the only piece of the
+retrieval-parity story still missing.
 
 ### 3. No reranking *(Basic Memory: cross-encoder; qmd: local LLM rerank)*
 
@@ -148,41 +181,64 @@ noise. The gap is real — docir has no reranker — but "docir should add one" 
 now measured false for the off-the-shelf option. An LLM reranker (what qmd
 does) is a different cost class and remains untested.
 
-### 4. No file watching / auto-reindex *(all three retrieval competitors)*
+### ~~4. No file watching / auto-reindex~~ — **closed in 0.10.0**
 
 Hand-edit a body and the index was stale until someone ran `reindex`; competitors
-watch the directory. **Closed in 0.10.0**: the daemon now watches `docs/` and runs
-a debounced `reindex --changed` within about a second of an edit. Automating it is
-safe because the files are canonical and the index is derived — a reindex can only
-make the two agree, and writes no markdown — so it is on by default (`DOCIR_WATCH=0`
-opts out). `--no-daemon` runs still never watch, so CI runs the command explicitly.
+watch the directory. The daemon now watches `docs/` and runs a debounced `reindex
+--changed` within about a second of an edit. Automating it is safe because the files
+are canonical and the index is derived — a reindex can only make the two agree, and
+writes no markdown — so it is on by default (`DOCIR_WATCH=0` opts out). `--no-daemon`
+runs still never watch, so CI runs the command explicitly.
 
-### 5. No human-browsable output *(Log4brains)*
+### ~~5. No human-browsable output~~ — **closed in 0.10.0**
 
 Log4brains' pitch is a published, timeline-browsable ADR site on GitHub Pages.
-**Closed in 0.10.0** by `docir build --out site/` (adr-a343140d72e2, `adr-a343140d72e2`):
-one self-contained HTML page per document plus a filterable index, no external
-requests, publishable to Pages or S3 unchanged. It renders what Log4brains
-cannot — the typed relation graph **in both directions**, with an inbound
-`supersedes` surfaced as a banner above the body rather than a line in a list,
-plus staleness, owner and tags. docir still has no `serve` command and no
-timeline view; the static artifact was chosen over a live UI because it is a
-derived projection of the files, which is the architecture's own thesis, and
-because a URL can be linked in a pull request.
+Closed by `docir build --out site/` (adr-a343140d72e2): one self-contained HTML page
+per document plus a filterable index, no external requests, publishable to Pages or S3
+unchanged. It renders what Log4brains cannot — the typed relation graph **in both
+directions**, with an inbound `supersedes` surfaced as a banner above the body rather
+than a line in a list, plus staleness, owner and tags; the graph also has its own
+interactive constellation page (adr-307ba1f1a820). docir still has no `serve` command
+and no timeline view; the static artifact was chosen over a live UI because it is a
+derived projection of the files, which is the architecture's own thesis, and because a
+URL can be linked in a pull request.
 
-### 6. No enforcement of decisions against the codebase *(archgate, trackfw)*
+### 6. No enforcement of decisions against the codebase *(archgate, trackfw)* — **open, and now unblocked**
 docir validates the *document graph*; archgate binds an ADR to an executable rule that fails CI
-when code violates it. That is the "why is this doc worth writing" argument, and docir doesn't
-make it. Related: trackfw enforces ADR → requirement → roadmap traceability.
+when code violates it. That is the "why is this doc worth writing" argument, and docir still does
+not make it. Related: trackfw enforces ADR → requirement → roadmap traceability.
 
-### 7. No git/code linkage *(Log4brains, adrkit, scholia)*
-No `commit`, `pr`, or `path` field; nothing connects a decision to the code it governs, and
-nothing derives metadata from git log. This also blocks the natural AST-anchored staleness
-signal already noted as deferred.
+What changed is that the binding site now exists (gap 7): a document names the code it governs,
+so `docir query --code $(git diff --name-only main)` already answers "which decisions does this
+branch have to be read against" — the question most of an executable-rule engine is wanted for,
+without one. What is still missing is a *rule*: something that fails CI when the code contradicts
+the decision, rather than merely listing the decisions that apply. That is a genuinely different
+thing to build, and the case for building it should be made against the query, which is cheap and
+already there.
 
-### 8. No import path for existing docs *(Basic Memory, qmd)*
-A repo with 40 ADRs in `docs/adr/` has no `docir import`. `add --id` adopts one id at a time.
-Adoption friction on exactly the brownfield repos most likely to want this.
+### ~~7. No git/code linkage~~ — **closed for code, deliberately open for git history**
+`code:` frontmatter now names the code a document governs, in three steps that shipped together
+(issue-90aea6d1b891): the data (Tier 0 validates the *shape*, so a decision may precede the code
+it decides), a Tier 1 `unmatched-code` warning once a pattern stops matching, and
+`docir query --code <path>` for the reverse question. Matching is textual rather than a
+filesystem walk, because the branch that *deletes* a file is exactly when its decisions must be
+re-read. Backfilled across docir's own corpus on 2026-08-06: 28 documents, `check` clean.
+
+Two halves stay open, and only one of them is wanted. **Git-history metadata** — deriving
+`commit`/`pr` from git log, as Log4brains does — is a deliberate no: it would make the index
+depend on repository history rather than on the files, which the "files are canonical, index is
+derived" thesis does not cover, and a shallow clone would rebuild a different index from the same
+documents. **AST-anchored staleness** (adr-bd7c4f3c5764) is still deferred, but it is no longer
+blocked: it now has an anchor to hang on.
+
+### ~~8. No import path for existing docs~~ — **closed as a decision, not a command**
+`docir import` was built on 2026-07-27 and removed the same day, before committing
+(issue-20933967697b). With random ids the default, the one thing import could do that `add`
+cannot — preserve the number a filename implies — went away, and what remained was inference:
+title, description and status guessed from prose. Every guess is one the agent must verify, and
+verifying a guess is not cheaper than making the judgement, because the guess must first be
+noticed as wrong. The agent reads every source file either way. The sanctioned path is `add`
+per document, with `--id` where a historical number must survive its cross-references.
 
 ### 9. No conversation/session capture *(mem0ry4ai, agentmemory, projectmem)*
 Competitors index past agent transcripts and warn when an agent repeats a failed approach.
@@ -196,7 +252,8 @@ docir to teams that tolerate a Python tool; the default fastembed install is hea
 
 ### 11. No wikilink compatibility / editor integration
 Basic Memory's `[[Target]]` links render in Obsidian, so a human gets a graph view for free.
-docir's `related:` frontmatter is invisible to every markdown editor.
+docir's `related:` frontmatter is invisible to every markdown editor. Less pressing since 0.10.0:
+the published site renders the graph both ways, so the human reader has somewhere to go.
 
 ### 12. No team/multi-device sync story beyond git
 Basic Memory Cloud (paid) and sqlite-memory (CRDT) both sell shared knowledge across agents and
@@ -205,10 +262,34 @@ non-answer for personal/cross-repo knowledge.
 
 ## Recommended reading of these gaps
 
-Gaps 1, 2, 3 and 4 are *table stakes* against the retrieval competitors and are all small next
-to what already exists. Gaps 5, 6 and 7 are *strategic* — they change what docir is for. Gaps 9
-and 12 are arguably **correct omissions** given the "curated corpus, git canonical" thesis;
-listing them here is scope-awareness, not a to-do.
+As of 2026-08-06, ten of the twelve are settled: **1, 2, 4, 5 and 7 shipped**; **3 and 8 closed
+as decisions** — built, measured or reasoned against, and removed rather than deferred; **9 and
+12 are correct omissions** given the "curated corpus, git canonical" thesis, so listing them is
+scope-awareness, not a to-do. What is left:
+
+1. **Gap 6 (enforcement against code) is the only open strategic gap, and it is no longer
+   blocked.** Gap 7 shipped the binding site — a document names the code it governs, and
+   `query --code` lists the decisions a branch has to be read against. The remaining piece is a
+   *rule* that fails CI when the code contradicts the decision, which is a different and much
+   larger thing than the query. Make the case for it against the query, not against the old
+   absence: most of what an executable-rule engine was wanted for is already answerable.
+2. **Gap 2's residual — carry the matching section's ordinal through fusion into the summary**
+   (issue-afd25273ff1f). Small, additive, and it finishes the chunked-retrieval story: today an
+   agent is told which document matched and must guess which section to read back.
+3. **Gap 10 is packaging, not a feature.** `fastembed`/`onnxruntime` is the weight, and the
+   documented escape hatch ranks *below* plain full-text search (`benchmarks/` §1), so "make it
+   lighter" and "keep it good" are the same decision, not two.
+
+**Gap 11 is not worth building.** It buys a graph view in a human's editor, and 0.10.0 already
+publishes the graph both ways in the site — for docir's actual reader, an agent, `related:`
+frontmatter is the better-typed form and `[[wikilinks]]` would be a second, weaker one to keep in
+sync.
+
+One thing the backfill taught that no table row would have: a document that governs everything
+answers every question. `arch-1cfb1b212237` carries `src/docir/**` and so appears in every
+`--code` result. That is *true* and still costs the reader something, which is the tension to
+watch as more documents adopt the field — not a reason to write a narrower pattern than the
+document means.
 
 ## Sources
 

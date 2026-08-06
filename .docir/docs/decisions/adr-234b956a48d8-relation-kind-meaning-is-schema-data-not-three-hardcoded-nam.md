@@ -1,4 +1,6 @@
 ---
+code:
+- src/docir/modules/documents/domain/schema.py
 created: '2026-08-05'
 description: Custom relation kinds could join none of the sets that decide cycles,
   layering and successor traversal, so they were silently exempt from all three; symmetric/dependency/successor
@@ -18,7 +20,7 @@ tags:
 - integrity
 title: Relation-kind meaning is schema data, not three hardcoded name sets
 type: decision
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 ## Context

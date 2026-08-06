@@ -1,4 +1,7 @@
 ---
+code:
+- tach.toml
+- scripts/check_contract_sync.py
 created: '2026-07-22'
 description: Why the codebase is vertical bounded-context modules with tach proving
   the boundaries in CI.
@@ -13,7 +16,7 @@ tags:
 - testing
 title: Adopt Modular DDD enforced by tach
 type: decision
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 ## Context

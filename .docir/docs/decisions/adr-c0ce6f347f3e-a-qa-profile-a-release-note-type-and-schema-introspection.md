@@ -1,4 +1,6 @@
 ---
+code:
+- src/docir/modules/documents/infra/profiles.py
 created: '2026-07-26'
 description: Why a qa profile, a release_note type and schema introspection were added.
 id: adr-c0ce6f347f3e
@@ -14,7 +16,7 @@ tags:
 - cli
 title: A qa profile, a release_note type, and schema introspection
 type: decision
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 ## Context

@@ -1,4 +1,7 @@
 ---
+code:
+- src/docir/entry_points/composition.py
+- src/docir/modules/agents/**
 created: '2026-07-30'
 description: How a repository gets a store and an agent learns to drive it.
 id: arch-90c90751344f
@@ -20,7 +23,7 @@ tags:
 - agents
 title: Adopt docir in a repository (bootstrap, schema, agent onboarding)
 type: architecture
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 ## Backbone

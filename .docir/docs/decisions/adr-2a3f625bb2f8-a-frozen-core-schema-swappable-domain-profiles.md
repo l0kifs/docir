@@ -1,4 +1,7 @@
 ---
+code:
+- src/docir/modules/documents/infra/profiles.py
+- src/docir/modules/documents/infra/schema_loader.py
 created: '2026-07-23'
 description: Why the schema is a frozen domain-agnostic core plus swappable domain
   profiles.
@@ -12,7 +15,7 @@ tags:
 - schema
 title: A frozen core schema + swappable domain profiles
 type: decision
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 ## Context

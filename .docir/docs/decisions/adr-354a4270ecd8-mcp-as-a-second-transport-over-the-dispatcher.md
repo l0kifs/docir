@@ -1,4 +1,6 @@
 ---
+code:
+- src/docir/entry_points/mcp/**
 created: '2026-08-03'
 description: Why docir mcp serve is a third client of the dispatcher rather than a
   second implementation.
@@ -15,7 +17,7 @@ tags:
 - agents
 title: MCP as a second transport over the dispatcher
 type: decision
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 ## Context

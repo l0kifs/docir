@@ -1,4 +1,6 @@
 ---
+code:
+- src/docir/**
 created: '2026-07-30'
 description: 'The design rationale: git as source of truth, the SQLite index as a
   derived projection.'
@@ -13,7 +15,7 @@ tags:
 - retrieval
 title: Doc-Index CLI — Architecture
 type: architecture
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 ## Principle

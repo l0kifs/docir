@@ -1,4 +1,7 @@
 ---
+code:
+- pyproject.toml
+- .github/workflows/**
 created: '2026-07-30'
 description: How to publish docir to PyPI with uv and GitHub Actions trusted publishing.
 id: run-30aceb4eacc6
@@ -10,7 +13,7 @@ tags:
 - release
 title: Publishing to PyPI
 type: runbook
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 This project uses [UV](https://docs.astral.sh/uv/) as the package manager and GitHub Actions for automated publishing to PyPI.

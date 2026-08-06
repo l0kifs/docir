@@ -1,4 +1,6 @@
 ---
+code:
+- tests/**
 created: '2026-07-22'
 description: Why tests live in a central tree mirroring the modules instead of beside
   them.
@@ -13,7 +15,7 @@ tags:
 - architecture
 title: Keep a central test tree, organized per module
 type: decision
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 ## Context

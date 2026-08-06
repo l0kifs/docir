@@ -1,4 +1,6 @@
 ---
+code:
+- src/docir/modules/documents/domain/value_objects/relations.py
 created: '2026-07-23'
 description: Why relation edges carry a kind, and how the on-disk form stays backward
   compatible.
@@ -13,7 +15,7 @@ tags:
 - persistence
 title: Typed relation edges + per-type allowed relations
 type: decision
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 ## Context

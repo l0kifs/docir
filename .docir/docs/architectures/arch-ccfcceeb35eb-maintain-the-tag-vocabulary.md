@@ -1,4 +1,6 @@
 ---
+code:
+- src/docir/modules/tags/**
 created: '2026-07-30'
 description: How the controlled vocabulary is registered, renamed and retired.
 id: arch-ccfcceeb35eb
@@ -19,7 +21,7 @@ tags:
 - schema
 title: Maintain the tag vocabulary
 type: architecture
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 ## Backbone

@@ -1,4 +1,6 @@
 ---
+code:
+- src/docir/platform/embedding/**
 created: '2026-07-27'
 description: Why a real embedding model is the default and the hashing embedder only
   the fallback.
@@ -13,7 +15,7 @@ tags:
 - retrieval
 title: Semantic embeddings on by default
 type: decision
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 ## Context

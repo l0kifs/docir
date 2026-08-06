@@ -1,4 +1,7 @@
 ---
+code:
+- src/docir/modules/documents/domain/services/chunking.py
+- src/docir/modules/indexing/domain/scoring.py
 created: '2026-08-03'
 description: 'Why per-section vectors exist: 56% of the corpus was outside the model''s
   token window and absent from the semantic index.'
@@ -15,7 +18,7 @@ tags:
 - retrieval
 title: Embed each section, because the model never read the rest
 type: decision
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 ## Context

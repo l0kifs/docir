@@ -1,4 +1,6 @@
 ---
+code:
+- src/docir/modules/publishing/**
 created: '2026-08-03'
 description: Why docir build renders a static site, and why the module takes JSON
   rather than a DocumentService.
@@ -16,7 +18,7 @@ tags:
 - docs
 title: A publishing module that takes documents as data
 type: decision
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 ## Context

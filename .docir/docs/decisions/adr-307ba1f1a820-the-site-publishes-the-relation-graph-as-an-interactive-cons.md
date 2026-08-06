@@ -1,4 +1,6 @@
 ---
+code:
+- src/docir/modules/publishing/infra/graph.py
 created: '2026-08-04'
 description: Why docir build emits graph.html — a deterministic per-type constellation
   map of the corpus — plus a landing-page index, and why the graph is a domain projection
@@ -14,7 +16,7 @@ tags:
 - docs
 title: The site publishes the relation graph as an interactive constellation page
 type: decision
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 ## Context

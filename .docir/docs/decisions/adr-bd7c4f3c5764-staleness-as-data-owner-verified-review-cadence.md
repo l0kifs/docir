@@ -1,4 +1,6 @@
 ---
+code:
+- src/docir/modules/documents/domain/services/graph_checks.py
 created: '2026-07-23'
 description: Why staleness is owner + verified + review cadence data rather than a
   heuristic.
@@ -13,7 +15,7 @@ tags:
 - schema
 title: Staleness as data (owner + verified + review cadence)
 type: decision
-updated: '2026-08-05'
+updated: '2026-08-06'
 ---
 
 ## Context

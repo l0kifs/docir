@@ -448,3 +448,56 @@ class TestErrorHandling:
         result = run("daemon", "status")
         assert result.exit_code == 0
         assert "not running" in result.stdout.lower()
+
+
+class TestTheOptionalSchemaDriftNotice:
+    """`DOCIR_SCHEMA_NOTICE=1` prints drift on stderr after every command.
+
+    Off by default: `docir check` already reports the same change as a finding,
+    and a notice on every command repeats until someone reindexes, which is how
+    a warning stops being read. It exists for the case the finding cannot cover
+    — a change nobody will run `check` to discover.
+    """
+
+    @staticmethod
+    def _drift(settings: Settings) -> None:
+        assert run("add", "--type", "decision", "--title", "A", "--description", "d").exit_code == 0
+        assert run("reindex").exit_code == 0
+        settings.schema_path.write_text(
+            "types:\n"
+            "  decision:\n"
+            "    prefix: dec\n"
+            "    default_status: proposed\n"
+            "    statuses:\n"
+            "      proposed: [accepted]\n"
+            "      accepted: []\n",
+            encoding="utf-8",
+        )
+
+    def test_it_is_silent_by_default(self, settings: Settings) -> None:
+        self._drift(settings)
+        result = run("query")
+        assert result.exit_code == 0
+        assert "prefix" not in (result.stderr or "")
+
+    def test_it_reports_on_an_unrelated_command_when_enabled(
+        self, settings: Settings, monkeypatch
+    ) -> None:
+        self._drift(settings)
+        monkeypatch.setenv("DOCIR_SCHEMA_NOTICE", "1")
+        _ENV["settings"] = Settings.resolve()
+        result = run("query")
+        assert result.exit_code == 0
+        assert "prefix 'adr' -> 'dec'" in result.stderr
+
+    def test_the_command_still_succeeds_and_its_stdout_stays_clean(
+        self, settings: Settings, monkeypatch
+    ) -> None:
+        # The notice is about something *else* being wrong; it must not corrupt
+        # the JSON an agent parses, nor change the exit code.
+        self._drift(settings)
+        monkeypatch.setenv("DOCIR_SCHEMA_NOTICE", "1")
+        _ENV["settings"] = Settings.resolve()
+        result = run("query")
+        assert result.exit_code == 0
+        assert isinstance(json.loads(result.stdout), list)

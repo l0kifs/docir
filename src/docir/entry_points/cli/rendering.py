@@ -91,6 +91,20 @@ def render_error(error: Mapping[str, object]) -> None:
     error_console.print(f"[bold red]error:[/] {message}")
 
 
+def render_schema_drift(lines: Sequence[str]) -> None:
+    """Print the schema-drift notice to stderr (``DOCIR_SCHEMA_NOTICE=1``).
+
+    One line per change, because the lines *are* the report: the schema moved
+    without a diff to read, and this is that diff.
+    """
+    error_console.print(
+        "[yellow]warning:[/] the active schema differs from the one the index was built against:"
+    )
+    for line in lines:
+        error_console.print(f"  {line}")
+    error_console.print("  run `docir reindex` once you have dealt with it.")
+
+
 def render_warning(message: str) -> None:
     """Print a non-fatal notice to stderr.
 

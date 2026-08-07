@@ -51,6 +51,7 @@ COMMAND_TOOLS = {
     "tag_remove": "docir_tag_remove",
     "reindex": "docir_reindex",
     "check": "docir_check",
+    "schema_drift": "docir_schema_drift",
     "repair": "docir_check_fix",
     "lint": "docir_lint",
     "embed_flush": "docir_embed_flush",
@@ -132,6 +133,7 @@ def test_read_tools_are_annotated_read_only(server) -> None:
         "docir_schema",
         "docir_tag_list",
         "docir_check",
+        "docir_schema_drift",
         "docir_lint",
     }
     assert hinted("destructiveHint") == {"docir_delete", "docir_tag_remove"}

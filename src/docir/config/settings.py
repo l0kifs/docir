@@ -163,6 +163,12 @@ class Settings(BaseSettings):
     #: automatic reindex can only make the two agree and can never lose work.
     #: ``DOCIR_WATCH=0`` opts out.
     watch: bool = True
+    #: Whether every command prints schema drift to stderr after it runs.
+    #: Off by default: `docir check` reports the same thing as a finding, and a
+    #: notice on *every* command repeats until someone reindexes, which is how a
+    #: warning stops being read. ``DOCIR_SCHEMA_NOTICE=1`` opts in, for the case
+    #: the finding cannot cover — a change nobody will run `check` to discover.
+    schema_notice: bool = False
     #: How ``home`` was chosen: ``flag`` | ``env`` | ``project`` | ``global``.
     #: Carried so callers can tell a deliberate store from a fallback — a write
     #: that lands in the global store because someone forgot ``docir init`` is

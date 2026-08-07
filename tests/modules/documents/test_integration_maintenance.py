@@ -178,6 +178,99 @@ def test_check_catches_tier0_violations_made_by_hand(
     assert "unknown-status" in kinds
 
 
+class TestTheSchemaChangingUnderTheStore:
+    """`check` reports that the *rule* moved, not only its consequences (issue-d891ab5501e6).
+
+    The schema's types and cadences come from the installed docir as much as
+    from `docs-schema.yaml`, so an upgrade can change what a store enforces with
+    no local edit and nothing in `git diff` to read. The baseline is the index's
+    record of what it was built against; the diff against it is the review that
+    was never possible.
+    """
+
+    @staticmethod
+    def _rewrite_schema(settings: Settings, *, prefix: str = "adr") -> None:
+        settings.schema_path.write_text(
+            "types:\n"
+            "  decision:\n"
+            f"    prefix: {prefix}\n"
+            "    required: [owner]\n"
+            "    default_status: proposed\n"
+            "    statuses:\n"
+            "      proposed: [accepted]\n"
+            "      accepted: []\n",
+            encoding="utf-8",
+        )
+
+    def test_a_store_with_no_baseline_reports_nothing(self, dispatcher: Dispatcher) -> None:
+        # Absent means unknown, not unchanged. A store predating the baseline
+        # table has nothing to compare against, and an empty baseline would
+        # report the whole schema as newly added, once, on every store.
+        dispatcher.dispatch("add", {"type": "decision", "title": "A", "description": "d"})
+        assert dispatcher.dispatch("schema_drift", {})["drift"] == []
+
+    def test_reindex_records_the_baseline_and_check_stays_quiet(
+        self, dispatcher: Dispatcher
+    ) -> None:
+        dispatcher.dispatch("add", {"type": "decision", "title": "A", "description": "d"})
+        dispatcher.dispatch("reindex", {})
+        assert dispatcher.dispatch("schema_drift", {})["drift"] == []
+        kinds = {i["kind"] for i in dispatcher.dispatch("check", {})}
+        assert "schema-drift" not in kinds
+
+    def test_check_names_what_moved(self, dispatcher: Dispatcher, settings: Settings) -> None:
+        dispatcher.dispatch("add", {"type": "decision", "title": "A", "description": "d"})
+        dispatcher.dispatch("reindex", {})
+        self._rewrite_schema(settings, prefix="dec")
+
+        with closing(build_container(settings, background_embeddings=False)) as after:
+            issues = after.dispatcher.dispatch("check", {})
+
+        messages = [i["message"] for i in issues if i["kind"] == "schema-drift"]
+        assert any("required [] -> ['owner']" in m for m in messages)
+        assert any("prefix 'adr' -> 'dec'" in m for m in messages)
+
+    def test_drift_is_a_warning_and_does_not_fail_the_ci_gate(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        # The change ships in the package, so `--strict` going red would fail
+        # every repo on the release that made it — the corpus is untouched and
+        # it is the rule that moved.
+        dispatcher.dispatch("add", {"type": "decision", "title": "A", "description": "d"})
+        dispatcher.dispatch("reindex", {})
+        self._rewrite_schema(settings)
+
+        with closing(build_container(settings, background_embeddings=False)) as after:
+            issues = after.dispatcher.dispatch("check", {})
+        drift = [i for i in issues if i["kind"] == "schema-drift"]
+        assert drift and all(i["severity"] == "warning" for i in drift)
+
+    def test_reindex_clears_it(self, dispatcher: Dispatcher, settings: Settings) -> None:
+        # The baseline advances on `reindex` and nowhere else: the existing
+        # "resync derived state" verb, not a new acknowledgement ritual.
+        dispatcher.dispatch("add", {"type": "decision", "title": "A", "description": "d"})
+        dispatcher.dispatch("reindex", {})
+        self._rewrite_schema(settings)
+
+        with closing(build_container(settings, background_embeddings=False)) as after:
+            assert after.dispatcher.dispatch("schema_drift", {})["drift"]
+            after.dispatcher.dispatch("reindex", {})
+            assert after.dispatcher.dispatch("schema_drift", {})["drift"] == []
+
+    def test_the_drift_explains_the_findings_beside_it(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        # The point of the cause being reported: `missing-required` on a
+        # document nobody edited stops looking like it came from nowhere.
+        dispatcher.dispatch("add", {"type": "decision", "title": "A", "description": "d"})
+        dispatcher.dispatch("reindex", {})
+        self._rewrite_schema(settings)
+
+        with closing(build_container(settings, background_embeddings=False)) as after:
+            kinds = {i["kind"] for i in after.dispatcher.dispatch("check", {})}
+        assert {"schema-drift", "missing-required"} <= kinds
+
+
 class TestAnEdgeWhoseKindTheRegistryStoppedListing:
     """`check` now reports it; before, only rewriting it was refused (issue-0e3d1d9c81d3).
 

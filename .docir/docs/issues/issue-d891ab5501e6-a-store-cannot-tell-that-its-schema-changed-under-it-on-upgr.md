@@ -1,8 +1,9 @@
 ---
 code:
-- src/docir/modules/documents/infra/schema_loader.py
-- src/docir/modules/documents/infra/profiles.py
-- src/docir/entry_points/composition.py
+- src/docir/modules/documents/domain/services/schema_shape.py
+- src/docir/modules/documents/application/services/maintenance_service.py
+- src/docir/platform/persistence/alembic/versions/0005_schema_baseline.py
+- tests/modules/documents/test_schema_shape.py
 created: '2026-08-07'
 description: docs-schema.yaml has no version and the index records nothing about the
   schema it was built against, so a release editing the core or a profile changes
@@ -12,7 +13,7 @@ owner: maintainer
 related:
 - issue-8f6576cd7bc9
 - adr-2a3f625bb2f8
-status: open
+status: resolved
 tags:
 - material
 - schema
@@ -103,3 +104,37 @@ Deliberately not proposed:
 - `src/docir/entry_points/composition.py:313` — `--force` refreshes only a byte-identical file
 - `src/docir/platform/persistence/alembic/versions/` — migrations `0001`–`0004` cover the index only
 - `CHANGELOG.md:16` — "Upgrade notes" as the only migration channel
+
+## Resolution
+
+FIXED 2026-08-07, as proposed. The index records the resolved schema it was last rebuilt against
+(`schema_baseline`, migration `0005`, one row) and `check` reports the difference as
+`schema-drift` — one finding per change, in the terms of the file: `+type test_plan`,
+`type decision: required [] -> ['owner']`, `type issue: prefix 'issue' -> 'bug'`.
+
+Three scoping decisions:
+
+- **Reported by `check` by default**, with `DOCIR_SCHEMA_NOTICE=1` additionally printing the
+  drift on stderr after every command. Off by default because a notice that repeats on every
+  command until someone reindexes is how a warning stops being read; on for the change nobody
+  will run `check` to discover. The notice is emitted **client-side**, as one more request
+  through the same `RequestExecutor` — with the daemon, the process that first loads a changed
+  schema is the daemon, whose stderr is a log nobody reads.
+- **The full rendering is stored, not a hash**, which is what makes a diff possible at all. A
+  hash could only say that something moved.
+- **`reindex` is the only writer of the baseline** — already the "make derived state agree with
+  the sources" command. A `schema accept` verb was rejected: its only effect is to silence a
+  report, which is the ritual adr-bd7c4f3c5764 argued against for staleness.
+
+A store with no baseline reports nothing: absent means unknown, not unchanged, so an upgrade does
+not report the whole schema as newly added. A baseline that will not parse reads the same way —
+it is derived state, and `reindex` overwrites it.
+
+One structural consequence worth recording: `describe_schema` moved from `infra` into
+`domain/services/schema_shape.py`, with the infra name delegating. The drift check lives in
+`application`, which the module rules forbid from importing `infra`, and a second renderer for
+the second caller would have meant a baseline written in one shape and compared in another.
+`docir schema show` and the `docir_schema` MCP tool are unchanged.
+
+Verified by injecting three bugs: making the notice unconditional, treating an absent baseline as
+empty, and stopping `reindex` from recording it. Each was caught by a different test.

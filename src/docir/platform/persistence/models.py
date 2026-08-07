@@ -129,3 +129,12 @@ class SequenceRow(Base):
 
     prefix: Mapped[str] = mapped_column(String, primary_key=True)
     next_value: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+
+class SchemaBaselineRow(Base):
+    """The resolved schema the index was last rebuilt against (one row)."""
+
+    __tablename__ = "schema_baseline"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    payload: Mapped[str] = mapped_column(Text, nullable=False)

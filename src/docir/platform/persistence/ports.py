@@ -29,6 +29,31 @@ class StoredChunk:
     vector: Embedding
 
 
+class SchemaBaselineRepository(ABC):
+    """Stores the resolved schema the index was last rebuilt against.
+
+    Deliberately untyped in the domain's terms — a JSON-safe mapping in, the
+    same mapping out. The shape is the rendering the documents module already
+    publishes (`docir schema show`), and giving this port a schema type would
+    add a `platform -> modules.domain` edge to a baseline that is only allowed
+    to shrink (adr-d3e3616400bf), for no gain: nothing here reads a field.
+    """
+
+    @abstractmethod
+    def get(self) -> dict[str, object] | None:
+        """The recorded baseline, or ``None`` if the store has never had one.
+
+        ``None`` means *unknown*, not *unchanged*: a store predating the table,
+        or one that has not been reindexed since, has nothing to compare
+        against, and inventing an empty baseline would report every type in the
+        schema as newly added.
+        """
+
+    @abstractmethod
+    def set(self, payload: dict[str, object]) -> None:
+        """Replace the baseline with ``payload``."""
+
+
 class DocumentRepository(ABC):
     """Stores document metadata and the relation graph derived from it."""
 

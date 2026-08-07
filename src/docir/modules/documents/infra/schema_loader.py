@@ -23,6 +23,7 @@ from docir.modules.documents.domain.schema import (
     Schema,
     TypeSchema,
 )
+from docir.modules.documents.domain.services import schema_shape
 from docir.modules.documents.infra.default_schema import DEFAULT_SCHEMA_YAML
 from docir.modules.documents.infra.profiles import (
     CORE_SCHEMA_YAML,
@@ -60,45 +61,14 @@ def describe_schema(schema: Schema) -> dict[str, object]:
 
     Reports the *merged* result (core + profiles + inline overrides), which is
     what validation actually enforces — the raw file only shows the ingredients.
+
+    The rendering itself lives in ``domain.services.schema_shape``, because the
+    drift check needs the identical payload and sits in ``application``, which
+    may not import ``infra``. This stays the public name: it is what ``api``
+    exports and what ``docir schema show`` and the ``docir_schema`` MCP tool
+    call.
     """
-    return {
-        "relation_types": sorted(schema.relation_types),
-        # The resolved properties, not the declared ones: what a kind *means* is
-        # the thing a reader cannot work out from the file, since an undeclared
-        # core kind still carries the core's flags.
-        "relation_kinds": [
-            {
-                "name": kind,
-                **{
-                    prop: getattr(schema.relation_kind(kind), prop)
-                    for prop in RELATION_KIND_PROPERTIES
-                },
-            }
-            for kind in sorted(schema.relation_types or CORE_RELATION_KINDS)
-        ],
-        "types": [
-            {
-                "name": type_schema.name,
-                "prefix": type_schema.prefix,
-                "default_status": type_schema.default_status,
-                "statuses": list(type_schema.statuses),
-                "transitions": {
-                    status: sorted(targets) for status, targets in type_schema.transitions.items()
-                },
-                "inactive_statuses": list(type_schema.inactive_statuses),
-                "required": list(type_schema.required_fields),
-                "level": type_schema.level,
-                "review_days": type_schema.review_days,
-                "max_body_chars": type_schema.max_body_chars,
-                "id_style": type_schema.id_style,
-                "allowed_relations": {
-                    kind: list(targets)
-                    for kind, targets in sorted(type_schema.allowed_relations.items())
-                },
-            }
-            for _, type_schema in sorted(schema.types.items())
-        ],
-    }
+    return schema_shape.describe(schema)
 
 
 def parse_schema(raw: object) -> Schema:

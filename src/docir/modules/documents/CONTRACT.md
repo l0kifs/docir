@@ -48,11 +48,17 @@ files and the derived index never disagree.
   `missing-required` — a field the type requires that the document does not carry, which the
   schema can start demanding of documents written before it, so no hand-edit need be involved —
   and `unknown-relation-kind`, an edge whose kind the registry no longer lists (permissive when
-  the registry is empty, as it is for any schema predating typed edges).
+  the registry is empty, as it is for any schema predating typed edges), and `schema-drift` —
+  how the active schema differs from the one the index was last rebuilt against, one finding per
+  change.
   All warnings: the document stays readable and its edges resolve. Also `unmatched-code` — a
   governed glob that matches nothing — when the service was given a `CodeMatcher`; without one
   (no repository above the store) the finding is skipped rather than reported against a tree
   that does not exist.
+- `MaintenanceService.schema_drift() -> [str]` — the same difference as plain lines, for the
+  opt-in `DOCIR_SCHEMA_NOTICE` stderr notice and the `docir_schema_drift` MCP tool. Empty when
+  nothing moved *or* when the store has no baseline: absent means unknown, not unchanged.
+  `reindex` is the only writer of that baseline.
 - `MaintenanceService.lint_deep() -> [LintFinding]` — Tier 2 advisory findings
 - `MaintenanceService.reindex_embeddings()/flush_embeddings() -> int`
 - `load_schema(path) -> Schema` — load the per-type document schema. Rejects a status name no

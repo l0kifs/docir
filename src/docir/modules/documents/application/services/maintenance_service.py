@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from docir.modules.documents.application.services.id_generator import IdGenerator
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.schema import SEQUENTIAL_ID_STYLE, Schema
+from docir.modules.documents.domain.services import schema_shape
 from docir.modules.documents.domain.services.graph_checks import CheckIssue, GraphChecker
 from docir.modules.documents.domain.services.similarity_lint import LintFinding, SimilarityLinter
 from docir.modules.documents.domain.value_objects.identifiers import DocId
@@ -104,6 +105,13 @@ class MaintenanceService:
         with self._uow_factory() as uow:
             tags_indexed = self._reindex_tags(uow)
             indexed, removed = self._reindex_documents(uow, changed_only=changed_only)
+            # The schema baseline advances here and nowhere else. `reindex` is
+            # already the "make the derived state agree with the sources"
+            # command, and the baseline is derived state; giving drift its own
+            # acknowledge verb would add a ritual whose only effect is to
+            # silence a report (the argument adr-bd7c4f3c5764 makes about
+            # staleness). Until it is run, `check` keeps naming the change.
+            uow.schema_baseline.set(schema_shape.describe(self._schema))
             uow.commit()
         self._scheduler.flush()
         return ReindexResult(
@@ -154,7 +162,50 @@ class MaintenanceService:
         )
         issues.extend(self._find_duplicate_ids())
         issues.extend(self._find_malformed())
+        issues.extend(self._drift_issues())
         return issues
+
+    def schema_drift(self) -> list[str]:
+        """How the active schema differs from the one the index was built against.
+
+        Empty means "nothing moved" *or* "nothing to compare against": a store
+        that has never been reindexed since the baseline table arrived has no
+        prior value, and absent means unknown rather than unchanged. Reporting
+        an empty baseline as a wholesale addition would fire the loudest
+        possible finding on every store, once, for no reason.
+
+        Returned as lines rather than a structure because the report *is* the
+        product: the change arrived without a diff to read, and this is the diff
+        (issue-d891ab5501e6).
+        """
+        with self._uow_factory() as uow:
+            baseline = uow.schema_baseline.get()
+        if baseline is None:
+            return []
+        return schema_shape.diff(baseline, schema_shape.describe(self._schema))
+
+    def _drift_issues(self) -> list[CheckIssue]:
+        """The drift, as Tier 1 findings — one per change, so each is greppable.
+
+        A warning, and the argument is the one every classification finding
+        here makes, at its strongest: the change ships in the *package*, so a
+        corpus that passed yesterday can fail today with no commit to point at.
+        It also does not describe damage — the documents are untouched and it is
+        the *rule* that moved. What it does is make the rest of `check`
+        legible: `unknown-type` and `missing-required` become consequences with
+        a stated cause instead of findings that appeared from nowhere.
+        """
+        return [
+            CheckIssue(
+                kind="schema-drift",
+                message=(
+                    f"the active schema differs from the one the index was built "
+                    f"against: {line} (run `docir reindex` once you have dealt with it)"
+                ),
+                doc_ids=(),
+            )
+            for line in self.schema_drift()
+        ]
 
     def _resolve_code(self, documents: list[Document]) -> dict[str, bool] | None:
         """Which declared ``code`` globs still match something on disk.

@@ -100,10 +100,40 @@ def execute(command: str, payload: dict[str, object]) -> object:
     executor, closer = run_local(lambda: _build_executor(state.settings))
     try:
         response = run_local(lambda: executor.execute(Request(command=command, payload=payload)))
+        if state.settings.schema_notice and command != "check":
+            _warn_about_schema_drift(executor)
     finally:
         if closer is not None:
             closer.close()
     return _unwrap(response)
+
+
+def _warn_about_schema_drift(executor: RequestExecutor) -> None:
+    """Print schema drift to stderr after a command (``DOCIR_SCHEMA_NOTICE=1``).
+
+    Client-side, and it has to be: with the daemon, the process that first loads
+    a changed schema is the daemon, whose stderr is a log file nobody is reading.
+    So this is one more request through the same executor rather than a print
+    from wherever the schema happened to be parsed — the boundary every other
+    command crosses, which is also why it works identically in both modes.
+
+    Skipped for ``check``, which already reports the drift as a finding; two
+    reports of one change in one command's output is how a warning becomes
+    scenery.
+
+    Failures are swallowed. This is a notice about something *else* being wrong;
+    letting it turn a working command into a failing one would be the worst
+    possible trade, and the drift is still reported by `check` either way.
+    """
+    try:
+        response = executor.execute(Request(command="schema_drift", payload={}))
+    except DocirError:
+        return
+    if not response.ok or not isinstance(response.data, dict):
+        return
+    lines = response.data.get("drift")
+    if isinstance(lines, list) and lines:
+        rendering.render_schema_drift([str(line) for line in lines])
 
 
 def run_local[T](action: Callable[[], T]) -> T:

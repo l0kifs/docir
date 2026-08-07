@@ -494,6 +494,18 @@ def build_mcp_server(
         """
         return run.many("check", {})
 
+    @mcp.tool(annotations=_READ_ONLY)
+    def docir_schema_drift() -> dict[str, Any]:
+        """How the active schema differs from the one the index was built against.
+
+        One line per change (`+type test_plan`, `type decision: required [] ->
+        ['owner']`). The types and cadences come from the installed docir as
+        much as from `docs-schema.yaml`, so an upgrade can move them with no
+        edit to the file and nothing in `git diff` to read — this is that diff.
+        Empty means nothing moved, or that the store has no baseline yet.
+        """
+        return run.one("schema_drift", {})
+
     @mcp.tool
     def docir_check_fix() -> dict[str, Any]:
         """Repair what needs no guess: duplicate ids and dangling edges.

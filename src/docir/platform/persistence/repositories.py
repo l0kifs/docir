@@ -6,6 +6,7 @@ the unit of work) and translates between ORM rows and domain entities.
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Collection, Sequence
 from datetime import date
@@ -28,12 +29,14 @@ from docir.platform.persistence.models import (
     DocumentTagRow,
     EmbeddingRow,
     RelationRow,
+    SchemaBaselineRow,
     TagRow,
 )
 from docir.platform.persistence.ports import (
     ChunkEmbeddingRepository,
     DocumentRepository,
     EmbeddingRepository,
+    SchemaBaselineRepository,
     SearchIndex,
     StoredChunk,
     TagRepository,
@@ -490,3 +493,40 @@ def _to_match_query(raw: str) -> str:
 def count_documents(session: Session) -> int:
     """Convenience count used by health checks and tests."""
     return session.scalar(select(func.count()).select_from(DocumentRow)) or 0
+
+
+class SqlAlchemySchemaBaselineRepository(SchemaBaselineRepository):
+    """The single-row schema baseline, stored as JSON text.
+
+    JSON rather than a column per field: the payload is the documents module's
+    own rendering of a schema, so anything structural here would be a second
+    definition of that shape — kept in a table, migrated separately, and free to
+    fall behind. The drift check compares two payloads and never reads a field,
+    which is exactly the access pattern a blob suits.
+    """
+
+    _ROW_ID = 1
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def get(self) -> dict[str, object] | None:
+        row = self._session.get(SchemaBaselineRow, self._ROW_ID)
+        if row is None:
+            return None
+        try:
+            payload = json.loads(row.payload)
+        except json.JSONDecodeError:
+            # Derived state: an unreadable baseline is a baseline we do not
+            # have. Raising here would break `check` over a row nothing but
+            # `reindex` can repair — and `reindex` overwrites it anyway.
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    def set(self, payload: dict[str, object]) -> None:
+        encoded = json.dumps(payload, sort_keys=True)
+        row = self._session.get(SchemaBaselineRow, self._ROW_ID)
+        if row is None:
+            self._session.add(SchemaBaselineRow(id=self._ROW_ID, payload=encoded))
+        else:
+            row.payload = encoded

@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`docir check` reports that the schema itself changed, as `schema-drift`.** A store's types,
+  statuses and cadences come from the installed docir as much as from `docs-schema.yaml` — the
+  core and the profiles are compiled into the package and re-merged on every command — so an
+  upgrade could change what an untouched store enforces with no local edit and nothing in
+  `git diff` to review. Every consequence was reported (`unknown-type`, `unknown-status`, the new
+  `missing-required`) and the cause was not, so the findings appeared to come from nowhere
+  (issue-d891ab5501e6).
+
+  The index now records the resolved schema it was last rebuilt against (migration `0005`,
+  one row, derived like every other table), and `check` reports the difference one line per
+  change: `+type test_plan`, `type decision: required [] -> ['owner']`, `prefix 'issue' -> 'bug'`.
+  **`reindex` is the only writer of that baseline** — it is already the "make derived state agree
+  with the sources" command, and giving drift its own acknowledgement verb would add a ritual
+  whose only effect is to silence a report. Until you run it, `check` keeps naming the change.
+
+  A warning, so `--strict` stays green: the corpus is untouched and it is the *rule* that moved.
+  A store with no baseline reports nothing — absent means unknown, not unchanged, so an upgrade
+  does not report the whole schema as new. `DOCIR_SCHEMA_NOTICE=1` additionally prints the drift
+  on stderr after **every** command, for the change nobody will run `check` to discover; it is
+  off by default because a notice that repeats on every command until someone reindexes is how a
+  warning stops being read. Also exposed as the `docir_schema_drift` MCP tool.
+
 - **`docir check` reports a new warning kind, `unknown-relation-kind`**: an edge whose kind the
   relation registry no longer lists. It completes the hand-edit family — a tag the registry does
   not know and a status the type does not declare were both reported, while an unregistered

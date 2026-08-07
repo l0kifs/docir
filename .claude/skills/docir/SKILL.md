@@ -421,8 +421,8 @@ to leave alone.
 
 ## Checks & maintenance (non-blocking)
 
-- `docir check` — Tier 1 warnings: cycles, orphans, layering, **dangling** `related` links, **duplicate ids**, **stale** docs (past their review cadence), **unknown type/status/tag** (a `type` not in the active schema, a `status` the type doesn't declare, a tag not in the registry — all three mean a file was edited outside the CLI), **missing-required** (a field the type requires that the document lacks), and **unknown-relation-kind** (an edge whose kind the schema no longer registers). Run before finishing.
-- `docir check --strict` — exits nonzero on **error**-severity findings only (`duplicate-id`, `dangling`, `malformed` — the corpus is broken). Use as a **CI / pre-merge gate**. Warnings (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`, `unknown-status`, `unknown-tag`, `missing-required`, `unknown-relation-kind`) are reported but never fail the build; `--strict-all` makes them fatal too.
+- `docir check` — Tier 1 warnings: cycles, orphans, layering, **dangling** `related` links, **duplicate ids**, **stale** docs (past their review cadence), **unknown type/status/tag** (a `type` not in the active schema, a `status` the type doesn't declare, a tag not in the registry — all three mean a file was edited outside the CLI), **missing-required** (a field the type requires that the document lacks), **unknown-relation-kind** (an edge whose kind the schema no longer registers), and **schema-drift** (the schema itself changed since the index was built). Run before finishing.
+- `docir check --strict` — exits nonzero on **error**-severity findings only (`duplicate-id`, `dangling`, `malformed` — the corpus is broken). Use as a **CI / pre-merge gate**. Warnings (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`, `unknown-status`, `unknown-tag`, `missing-required`, `unknown-relation-kind`, `schema-drift`) are reported but never fail the build; `--strict-all` makes them fatal too.
 - **Recovering from `missing-required`**: the schema now requires a field the document was
   written without — usually because `docs-schema.yaml` gained a `required:` entry, or an upgrade
   brought one in through a profile. Supply it (`docir update <id> --set-owner ...`) or drop the
@@ -434,6 +434,13 @@ to leave alone.
   not guess which you meant. Until it is resolved the doc cannot be validated, is never
   reported stale, and is skipped by the layering check.
 - `docir check --fix` — repair what can be repaired without guessing: re-issue duplicate ids (the oldest file keeps the id, so existing links stay valid) and drop `related` edges pointing at nothing. It reports every change, then lists what it could not fix. `malformed` and `unknown-type` are left alone — those need you to decide what the file or the schema should say. **This is the supported way to recover; do not hand-edit markdown to fix these.**
+- **Recovering from `schema-drift`**: the active schema differs from the one the index was built
+  against — usually an upgrade, since the types, statuses and cadences come from the installed
+  docir as much as from `docs-schema.yaml`. Each finding names one change (`+type test_plan`,
+  `type decision: required [] -> ['owner']`). Deal with the consequences it explains — the
+  `unknown-type`, `unknown-status` and `missing-required` findings beside it — then `docir
+  reindex`, which is what records the new baseline. Set `DOCIR_SCHEMA_NOTICE=1` to have every
+  command print the drift on stderr instead of waiting for a `check`.
 - `docir lint --deep` — Tier 2 advisories (duplicate content, oversized docs).
 - `docir reindex [--changed]` — after a doc file was hand-edited, merged, or freshly cloned.
   `--changed` only skips re-saving files whose content is unchanged; deleted files are swept

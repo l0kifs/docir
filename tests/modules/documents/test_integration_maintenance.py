@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import closing
 
 import pytest
 
 from docir.config.settings import Settings
+from docir.entry_points.composition import build_container
 from docir.entry_points.dispatch import Dispatcher
-from docir.platform.errors import DocumentNotFoundError, ValidationError
+from docir.platform.errors import (
+    DocumentNotFoundError,
+    MissingRequiredFieldError,
+    ValidationError,
+)
 
 # Valid YAML, but `created`/`updated` are not ISO dates — a hand-edit/foreign file.
 _MALFORMED_FILE = (
@@ -169,6 +175,94 @@ def test_check_catches_tier0_violations_made_by_hand(
     kinds = {i["kind"] for i in dispatcher.dispatch("check", {})}
     assert "unknown-tag" in kinds
     assert "unknown-status" in kinds
+
+
+class TestASchemaChangeThatMakesAFieldRequired:
+    """The upgrade case: the rule changes, the documents do not (issue-8f6576cd7bc9).
+
+    Every other Tier 1 classification finding needs a hand-edit or a merge to
+    occur. This one does not: core and profile types are compiled into the
+    package and re-merged on every command, so a release that adds a `required:`
+    entry changes what an untouched store enforces. Before the check existed the
+    corpus was silently non-conforming and the first report was a write being
+    refused — `--set-title` failing on a field the caller never mentioned.
+
+    Both halves are exercised against a real store: the schema is rewritten
+    under documents that already exist, then a *new* container reads it, which
+    is what an upgrade looks like from the store's side.
+    """
+
+    @staticmethod
+    def _require_owner(settings: Settings) -> None:
+        settings.schema_path.write_text(
+            "types:\n"
+            "  decision:\n"
+            "    prefix: adr\n"
+            "    required: [owner]\n"
+            "    default_status: proposed\n"
+            "    statuses:\n"
+            "      proposed: [accepted]\n"
+            "      accepted: []\n",
+            encoding="utf-8",
+        )
+
+    def test_check_names_the_documents_the_new_rule_breaks(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        dispatcher.dispatch("add", {"type": "decision", "title": "Before", "description": "d"})
+        self._require_owner(settings)
+
+        with closing(build_container(settings, background_embeddings=False)) as after:
+            issues = after.dispatcher.dispatch("check", {})
+
+        found = [i for i in issues if i["kind"] == "missing-required"]
+        assert [tuple(i["doc_ids"]) for i in found] == [("adr-0001",)]
+        assert "'owner'" in found[0]["message"]
+
+    def test_it_reports_exactly_what_the_next_write_would_refuse(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        # The claim the finding makes has to be the truth: the same document,
+        # the same field, and a write that really is refused. If `check` and
+        # Tier 0 ever disagree about "empty", this is what catches it.
+        dispatcher.dispatch("add", {"type": "decision", "title": "Before", "description": "d"})
+        self._require_owner(settings)
+
+        with closing(build_container(settings, background_embeddings=False)) as after:
+            reported = {
+                i["doc_ids"][0]
+                for i in after.dispatcher.dispatch("check", {})
+                if i["kind"] == "missing-required"
+            }
+            with pytest.raises(MissingRequiredFieldError):
+                after.dispatcher.dispatch("update", {"doc_id": "adr-0001", "set_title": "Renamed"})
+            assert reported == {"adr-0001"}
+
+    def test_supplying_the_field_clears_the_finding(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        # The recovery the message names, end to end — and the guard that the
+        # check goes quiet again, rather than reporting a document forever.
+        dispatcher.dispatch("add", {"type": "decision", "title": "Before", "description": "d"})
+        self._require_owner(settings)
+
+        with closing(build_container(settings, background_embeddings=False)) as after:
+            after.dispatcher.dispatch(
+                "update", {"doc_id": "adr-0001", "set_owner": "platform-team"}
+            )
+            kinds = {i["kind"] for i in after.dispatcher.dispatch("check", {})}
+        assert "missing-required" not in kinds
+
+    def test_it_does_not_fail_the_ci_gate(self, dispatcher: Dispatcher, settings: Settings) -> None:
+        # A warning, not an error. The change ships in the package, so `--strict`
+        # would go red on a corpus nobody touched — how the gate became unusable
+        # the first time.
+        dispatcher.dispatch("add", {"type": "decision", "title": "Before", "description": "d"})
+        self._require_owner(settings)
+
+        with closing(build_container(settings, background_embeddings=False)) as after:
+            issues = after.dispatcher.dispatch("check", {})
+        assert all(i["severity"] == "warning" for i in issues if i["kind"] == "missing-required")
 
 
 def test_a_healthy_corpus_reports_neither(dispatcher: Dispatcher) -> None:

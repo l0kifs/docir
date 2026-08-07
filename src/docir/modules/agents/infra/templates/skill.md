@@ -411,7 +411,8 @@ hand-edited corpus, this is the contract:
 **After any hand-edit: `docir reindex` then `docir check`.** Reindex reports
 `documents_skipped` for files whose frontmatter will not parse — those are
 *absent from every read path*, not merely flagged. `check` then catches
-`unknown-tag`, `unknown-status`, `unknown-type`, `dangling` and `duplicate-id`.
+`unknown-tag`, `unknown-status`, `unknown-type`, `missing-required`, `dangling` and
+`duplicate-id`.
 
 It cannot catch everything: a plausible-but-wrong `verified` date, or edited
 `created`/`updated`, are indistinguishable from real ones. Those are the fields
@@ -419,8 +420,13 @@ to leave alone.
 
 ## Checks & maintenance (non-blocking)
 
-- `docir check` — Tier 1 warnings: cycles, orphans, layering, **dangling** `related` links, **duplicate ids**, **stale** docs (past their review cadence), **unknown type/status/tag** (a `type` not in the active schema, a `status` the type doesn't declare, a tag not in the registry — all three mean a file was edited outside the CLI). Run before finishing.
-- `docir check --strict` — exits nonzero on **error**-severity findings only (`duplicate-id`, `dangling`, `malformed` — the corpus is broken). Use as a **CI / pre-merge gate**. Warnings (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`, `unknown-status`, `unknown-tag`) are reported but never fail the build; `--strict-all` makes them fatal too.
+- `docir check` — Tier 1 warnings: cycles, orphans, layering, **dangling** `related` links, **duplicate ids**, **stale** docs (past their review cadence), **unknown type/status/tag** (a `type` not in the active schema, a `status` the type doesn't declare, a tag not in the registry — all three mean a file was edited outside the CLI), and **missing-required** (a field the type requires that the document lacks). Run before finishing.
+- `docir check --strict` — exits nonzero on **error**-severity findings only (`duplicate-id`, `dangling`, `malformed` — the corpus is broken). Use as a **CI / pre-merge gate**. Warnings (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`, `unknown-status`, `unknown-tag`, `missing-required`) are reported but never fail the build; `--strict-all` makes them fatal too.
+- **Recovering from `missing-required`**: the schema now requires a field the document was
+  written without — usually because `docs-schema.yaml` gained a `required:` entry, or an upgrade
+  brought one in through a profile. Supply it (`docir update <id> --set-owner ...`) or drop the
+  requirement from the schema. Until then **every** write to that document is refused, including
+  one that touches nothing else — so fix these before editing an old document.
 - **Recovering from `unknown-type`** (a doc whose `type` isn't in the active schema, usually
   because a profile was disabled): re-enable the profile in `docs-schema.yaml`, or change the
   doc's `type` to one the schema knows — then `docir reindex`. `check --fix` deliberately will

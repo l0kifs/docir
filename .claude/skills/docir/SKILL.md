@@ -2,7 +2,7 @@
 name: docir
 description: Use docir to read and write this project's git-backed design docs — decisions/ADRs, issues, architecture notes — instead of editing markdown by hand. Trigger whenever the repo uses docir (a `docir` command is available, a `.docir/` store exists in the repo or `~/.docir`, or docs carry docir frontmatter) and you are about to implement a feature (pull relevant decisions first), record or resolve a decision/issue/ADR, search project knowledge, or restructure/migrate existing markdown docs into docir. Covers the read path (`docir context/get/search/query`) and the write path (`docir init/add/update/archive`) — every doc write MUST go through the CLI.
 ---
-<!-- docir:v0.9.0 — generated file, do not edit by hand; refresh with `docir agent update` after upgrading docir -->
+<!-- docir:v0.10.0 — generated file, do not edit by hand; refresh with `docir agent update` after upgrading docir -->
 
 # docir — Agent Guide
 
@@ -84,6 +84,7 @@ case. Run `docir init` first.
 | `docir get <id> --section "<heading>"` | Just that heading and the text under it. Architecture docs here run to tens of thousands of characters and docir ranks a document on its best-matching *section*, so this is usually the part that answered you. An unknown heading errors listing the real ones. |
 | `docir search "<text>"` | Full-text over **title, description and body only** — *not* tags. `docir search auth` will not find a doc merely tagged `auth`; use `docir query --tag auth`. Supports `--limit`/`--offset`. |
 | `docir query --type decision --status accepted --tag auth` | Structured filter; repeatable `--type/--status/--tag`. Pages with `--limit`/`--offset` — a page shorter than `--limit` means the end. |
+| `docir query --code src/auth/login.py` | Which docs declared they govern this file. Repeat `--code` for several paths (any match counts) — run it over the files you are about to change, *before* changing them. A deleted path still finds its docs. |
 
 **Two-tier read (skeleton → body).** `context` / `query` / `search` return
 *skeletons* — id, title, description, tags, typed `related`, `owner`,
@@ -92,6 +93,12 @@ pull only the bodies you need with `docir get <id>`. This is the cheap path;
 never dump every body. On a long document prefer `--section`: each `##` section
 is embedded separately, so a hit often means one section matched, and that
 section is a fraction of the file.
+
+**A hit that matched through a section names it.** `matched_section` on a
+`context` result is the heading whose vector earned the rank — pass it straight
+to `docir get <id> --section "<heading>"` instead of pulling the body. Absent
+means the match is not addressable as a section (the document's own vector, a
+full-text hit, a graph neighbour), not that nothing matched.
 
 Default read path **hides** closed and archived docs. "Closed" means the type's
 *inactive* statuses — `superseded`/`rejected` for a decision, `resolved` for an
@@ -134,12 +141,14 @@ against your task (0.0-1.0) and is the number that means something.
 ```
 docir add --type decision --title "..." --description "..." \
   [--tags auth,api] [--related adr-0001,arch-0002:implements] [--status ...] \
-  [--owner platform-team] (--stdin | --body "..." | --body-file f.md)
+  [--owner platform-team] [--code "src/auth/**,src/api/routes.py"] \
+  (--stdin | --body "..." | --body-file f.md)
 
 docir update <id> --status resolved             # metadata patch
 docir update <id> --set-description "..."        # keep summary current on edits
 docir update <id> --set-related adr-0001:supersedes   # replace typed edges
 docir update <id> --set-owner platform-team     # assign a steward
+docir update <id> --set-code "src/auth/**"      # what code this doc governs
 docir update <id> --verified                     # stamp today as last-verified
 docir update <id> --append-section "Resolution" --body "Fixed in PR 42"
 docir update <id> --replace-section "Context" --body "..."
@@ -149,6 +158,16 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
 ```
 
 - Prefer `--stdin` for multi-line markdown bodies (no shell-escaping).
+- `--code` records the code a document governs, as repo-relative globs. Set it
+  when you know which files a decision is about; only the shape is checked on
+  write, so a pattern may name code that does not exist yet. It rides on every
+  read view, so a later session can see which decisions concern the files it is
+  editing, and `docir check` warns (`unmatched-code`) once a pattern stops
+  matching — repoint it with `--set-code` when you move the code it names.
+- **If a test enforces the decision, govern that test.** docir has no rule
+  engine and will not gain one: the test already fails when the code
+  contradicts the decision, and `--code tests/test_x.py` records which decision
+  it enforces, so `check` notices when that test is deleted.
 - `delete` is blocked while another doc links to it. `--force` deletes anyway and
   **strips the edge from each referencing doc**, naming them in its output — so a
   forced delete never leaves a dangling link. Prefer `archive` when the document
@@ -393,7 +412,8 @@ hand-edited corpus, this is the contract:
 **After any hand-edit: `docir reindex` then `docir check`.** Reindex reports
 `documents_skipped` for files whose frontmatter will not parse — those are
 *absent from every read path*, not merely flagged. `check` then catches
-`unknown-tag`, `unknown-status`, `unknown-type`, `dangling` and `duplicate-id`.
+`unknown-tag`, `unknown-status`, `unknown-type`, `missing-required`, `dangling` and
+`duplicate-id`.
 
 It cannot catch everything: a plausible-but-wrong `verified` date, or edited
 `created`/`updated`, are indistinguishable from real ones. Those are the fields
@@ -401,8 +421,13 @@ to leave alone.
 
 ## Checks & maintenance (non-blocking)
 
-- `docir check` — Tier 1 warnings: cycles, orphans, layering, **dangling** `related` links, **duplicate ids**, **stale** docs (past their review cadence), **unknown type/status/tag** (a `type` not in the active schema, a `status` the type doesn't declare, a tag not in the registry — all three mean a file was edited outside the CLI). Run before finishing.
-- `docir check --strict` — exits nonzero on **error**-severity findings only (`duplicate-id`, `dangling`, `malformed` — the corpus is broken). Use as a **CI / pre-merge gate**. Warnings (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`, `unknown-status`, `unknown-tag`) are reported but never fail the build; `--strict-all` makes them fatal too.
+- `docir check` — Tier 1 warnings: cycles, orphans, layering, **dangling** `related` links, **duplicate ids**, **stale** docs (past their review cadence), **unknown type/status/tag** (a `type` not in the active schema, a `status` the type doesn't declare, a tag not in the registry — all three mean a file was edited outside the CLI), and **missing-required** (a field the type requires that the document lacks). Run before finishing.
+- `docir check --strict` — exits nonzero on **error**-severity findings only (`duplicate-id`, `dangling`, `malformed` — the corpus is broken). Use as a **CI / pre-merge gate**. Warnings (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`, `unknown-status`, `unknown-tag`, `missing-required`) are reported but never fail the build; `--strict-all` makes them fatal too.
+- **Recovering from `missing-required`**: the schema now requires a field the document was
+  written without — usually because `docs-schema.yaml` gained a `required:` entry, or an upgrade
+  brought one in through a profile. Supply it (`docir update <id> --set-owner ...`) or drop the
+  requirement from the schema. Until then **every** write to that document is refused, including
+  one that touches nothing else — so fix these before editing an old document.
 - **Recovering from `unknown-type`** (a doc whose `type` isn't in the active schema, usually
   because a profile was disabled): re-enable the profile in `docs-schema.yaml`, or change the
   doc's `type` to one the schema knows — then `docir reindex`. `check --fix` deliberately will

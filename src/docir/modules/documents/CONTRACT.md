@@ -44,8 +44,10 @@ files and the derived index never disagree.
   best-effort, so a partial rebuild must say so rather than look complete.
 - `MaintenanceService.check() -> [CheckIssue]` — Tier 1 structural findings (incl. staleness,
   and `unknown-type`/`unknown-status`/`unknown-tag`, the three Tier 0 rules a hand-edit can
-  bypass, plus `tag-key-format` for a registered key outside the shared grammar). All
-  warnings: the document stays readable and its edges resolve. Also `unmatched-code` — a
+  bypass, plus `tag-key-format` for a registered key outside the shared grammar). Also
+  `missing-required` — a field the type requires that the document does not carry, which the
+  schema can start demanding of documents written before it, so no hand-edit need be involved.
+  All warnings: the document stays readable and its edges resolve. Also `unmatched-code` — a
   governed glob that matches nothing — when the service was given a `CodeMatcher`; without one
   (no repository above the store) the finding is skipped rather than reported against a tree
   that does not exist.

@@ -46,7 +46,7 @@ class Tier0Validator:
         type_schema = self._schema.get(document.type)
         required = set(CORE_REQUIRED_FIELDS) | set(type_schema.required_fields)
         for name in sorted(required):
-            if _is_absent(getattr(document, name, None)):
+            if is_absent(getattr(document, name, None)):
                 raise MissingRequiredFieldError(
                     f"required field {name!r} is missing or empty for type {document.type!r}"
                 )
@@ -167,12 +167,18 @@ class Tier0Validator:
                 )
 
 
-def _is_absent(value: object) -> bool:
+def is_absent(value: object) -> bool:
     """Whether a field counts as missing for the required check.
 
     ``None``, a blank string and an empty collection all mean "not provided".
     A ``False`` boolean does not: it is a value, and ``archived: false`` is the
     normal state of a document rather than the absence of one.
+
+    Public because Tier 1 asks the same question of the same fields
+    (``graph_checks._find_missing_required``). Two copies of "empty" would be
+    two rules waiting to disagree, and the disagreement is the worst possible
+    one: ``check`` reporting a document as conforming that the next write
+    refuses, or the reverse.
     """
     if value is None:
         return True

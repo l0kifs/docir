@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 
 import pytest
@@ -53,6 +54,13 @@ def _schema() -> Schema:
             ),
         }
     )
+
+
+def _schema_requiring(*fields: str) -> Schema:
+    """`_schema()`, with the `decision` type declaring `fields` as required."""
+    types = dict(_schema().types)
+    types["decision"] = replace(types["decision"], required_fields=fields)
+    return Schema(types=types)
 
 
 def _doc(doc_id: str, doc_type: str = "decision", **kw: object) -> Document:
@@ -358,6 +366,64 @@ class TestGraphChecker:
         kinds = {i.kind for i in GraphChecker(_schema()).check(docs, [])}
         assert "unknown-type" in kinds
         assert "unknown-status" not in kinds
+
+    def test_missing_required_field_flagged(self) -> None:
+        # The upgrade case (issue-8f6576cd7bc9): the type starts requiring a
+        # field that documents written before it never carried. No hand-edit is
+        # involved, and until this check existed nothing reported it — the first
+        # report was an unrelated `update` being refused.
+        issues = GraphChecker(_schema_requiring("owner")).check([_doc("adr-0001")], [])
+        found = [i for i in issues if i.kind == "missing-required"]
+        assert [i.doc_ids for i in found] == [("adr-0001",)]
+        assert "'owner'" in found[0].message
+
+    def test_missing_required_names_every_absent_field_in_one_finding(self) -> None:
+        # One finding per document, not per field: a schema requiring three
+        # fields must not triple the output on a corpus that predates them.
+        issues = GraphChecker(_schema_requiring("owner", "tags")).check([_doc("adr-0001")], [])
+        found = [i for i in issues if i.kind == "missing-required"]
+        assert len(found) == 1
+        assert "'owner'" in found[0].message
+        assert "'tags'" in found[0].message
+
+    def test_missing_required_uses_the_same_emptiness_rule_as_tier_0(self) -> None:
+        # `is_absent` is shared with the validator on purpose. An empty
+        # collection counts as missing (so `required: [tags]` means "at least
+        # one"), and `False` is a value rather than an absence. A second
+        # definition here would let `check` call a document conforming that the
+        # next write refuses.
+        empty = _doc("adr-0001", tags=())
+        assert any(
+            i.kind == "missing-required"
+            for i in GraphChecker(_schema_requiring("tags")).check([empty], [])
+        )
+        unarchived = _doc("adr-0002", archived=False)
+        assert not any(
+            i.kind == "missing-required"
+            for i in GraphChecker(_schema_requiring("archived")).check([unarchived], [])
+        )
+
+    def test_missing_required_is_quiet_when_the_field_is_present(self) -> None:
+        # The guard every new check needs: silent on correct usage, or it
+        # teaches people to ignore the whole of `check` (issue-9cb85759076d).
+        docs = [_doc("adr-0001", owner="platform-team")]
+        issues = GraphChecker(_schema_requiring("owner")).check(docs, [])
+        assert not any(i.kind == "missing-required" for i in issues)
+
+    def test_missing_required_is_not_reported_for_an_unknown_type(self) -> None:
+        # Same rule as `unknown-status`: there is no type schema to read a
+        # `required` list from, and the cause is already reported once.
+        docs = [_doc("hyp-0001", "hypothesis")]
+        kinds = {i.kind for i in GraphChecker(_schema_requiring("owner")).check(docs, [])}
+        assert "unknown-type" in kinds
+        assert "missing-required" not in kinds
+
+    def test_missing_required_is_a_warning(self) -> None:
+        # A schema change ships in the package, so a corpus that passed
+        # yesterday can fail today with no commit to point at. An error kind
+        # would red-build every repo on that release.
+        issues = GraphChecker(_schema_requiring("owner")).check([_doc("adr-0001")], [])
+        assert all(i.severity == "warning" for i in issues if i.kind == "missing-required")
 
     def test_unknown_tag_flagged_against_the_registry(self) -> None:
         docs = [_doc("adr-0001", "decision", tags=("ghost",))]

@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`docir check` reports a new warning kind, `missing-required`**: a document that does not
+  carry a field its type declares as `required`. Every other classification finding needs a
+  hand-edit or a merge to occur; this one does not. Core and profile types are compiled into the
+  package and re-merged on every command, so a release that adds a `required:` entry changes what
+  an untouched store enforces — no local edit, nothing in `git diff` to review. Until now the
+  corpus was silently non-conforming and the first report was a *write* being refused:
+  `docir update <id> --set-title` failing on a field the caller never mentioned, one document at
+  a time (issue-8f6576cd7bc9).
+
+  It is a **warning**, and `--strict` stays green — for the reason `unknown-type` is one,
+  sharpened: the rule change ships in the package, so an error kind would red-build every repo on
+  the release that added the field, which is exactly how the `--strict` gate became unusable the
+  first time. `--strict-all` still covers anyone who wants it fatal.
+
+  Type-declared fields only — a core required field is what makes a document parse at all, so an
+  absent one is already `malformed`. One finding per document naming every field it lacks, rather
+  than one per field, so a schema requiring three of them does not triple the output on a corpus
+  that predates them. `check --fix` deliberately does not touch it: an owner or a tag is a
+  decision, and there is no value to fill in. The emptiness rule is now *shared* with Tier 0
+  (`validation.is_absent`) rather than restated, so `check` cannot call a document conforming
+  that the next write refuses.
+
 ## [0.10.0] - 2026-08-06
 
 The release that made docir answer for the code. A document can name the code it governs, a

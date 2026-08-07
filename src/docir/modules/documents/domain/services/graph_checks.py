@@ -18,6 +18,7 @@ from datetime import date
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.entities.relation import Relation
 from docir.modules.documents.domain.schema import Schema
+from docir.modules.documents.domain.services.validation import is_absent
 from docir.platform.naming import TAG_KEY_RULE, is_valid_tag_key
 
 # DFS coloring states for cycle detection.
@@ -43,7 +44,8 @@ _WHITE, _GREY, _BLACK = 0, 1, 2
 ERROR_KINDS: frozenset[str] = frozenset({"duplicate-id", "dangling", "malformed"})
 
 #: Everything else (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`,
-#: `unknown-status`, `unknown-tag`, `tag-key-format`, `unmatched-code`)
+#: `unknown-status`, `unknown-tag`, `tag-key-format`, `unmatched-code`,
+#: `missing-required`)
 #: describes shape or classification, not
 #: damage. `orphan` in particular fires for any document with no relations — the
 #: default state of a new one — so treating these as build failures made the gate
@@ -55,6 +57,12 @@ ERROR_KINDS: frozenset[str] = frozenset({"duplicate-id", "dangling", "malformed"
 #: would also fail CI for any repo that already carries a hand-edited tag —
 #: the exact way the `--strict` gate became unusable before. `--strict-all`
 #: covers anyone who does want hand-edits to block a merge.
+#:
+#: `missing-required` is a warning on the same argument, sharpened: the schema
+#: change that creates it arrives *from the package*, so a corpus that passed
+#: yesterday can fail today with no commit to point at. An error there would
+#: red-build every repo on the release that added the field, which is precisely
+#: the failure the two rules above were written to avoid.
 ERROR = "error"
 WARNING = "warning"
 
@@ -108,6 +116,7 @@ class GraphChecker:
         issues: list[CheckIssue] = []
         issues.extend(self._find_unknown_type(documents))
         issues.extend(self._find_unknown_status(documents))
+        issues.extend(self._find_missing_required(documents))
         if known_tags is not None:
             issues.extend(self._find_unknown_tag(documents, known_tags))
             issues.extend(self._find_tag_key_format(known_tags))
@@ -190,6 +199,54 @@ class GraphChecker:
                     message=(
                         f"{doc.id!r} has status {doc.status!r}, which type "
                         f"{doc.type!r} does not declare; declared: {known}"
+                    ),
+                    doc_ids=(doc.id,),
+                )
+            )
+        return issues
+
+    def _find_missing_required(self, documents: list[Document]) -> list[CheckIssue]:
+        """Flag documents missing a field their type declares as ``required``.
+
+        Unlike its neighbours this does not need a hand-edit to occur: the
+        schema can start requiring a field that documents written before it
+        never carried. Core and profile types are compiled into the package and
+        re-merged on every command, so that change arrives on *upgrade*, with no
+        local edit and nothing in `git diff` to review (issue-8f6576cd7bc9).
+
+        Until this existed the corpus was silently non-conforming and the first
+        report was a write being refused — `docir update --set-title` failing on
+        a field the caller was not touching, one document at a time. The finding
+        answers the question that had no answer: which documents does the new
+        rule break, before anyone runs into them.
+
+        Type-declared fields only. :data:`CORE_REQUIRED_FIELDS` are the ones a
+        document cannot parse without, so an absent one is already `malformed`
+        and reporting it twice would only make the healthy case noisier.
+
+        Archived documents are included, matching `unknown-status` rather than
+        `unmatched-code`: this reports a rule the document does not satisfy, and
+        unarchiving is a write like any other, so the finding has to survive
+        being archived.
+        """
+        issues: list[CheckIssue] = []
+        for doc in documents:
+            type_schema = self._schema.types.get(doc.type)
+            if type_schema is None:
+                continue  # already reported as unknown-type
+            missing = [
+                name for name in type_schema.required_fields if is_absent(getattr(doc, name, None))
+            ]
+            if not missing:
+                continue
+            joined = ", ".join(repr(name) for name in missing)
+            issues.append(
+                CheckIssue(
+                    kind="missing-required",
+                    message=(
+                        f"{doc.id!r} is missing {joined}, which type {doc.type!r} "
+                        f"requires; the next write to it will be refused until "
+                        f"`docir update {doc.id}` supplies it"
                     ),
                     doc_ids=(doc.id,),
                 )

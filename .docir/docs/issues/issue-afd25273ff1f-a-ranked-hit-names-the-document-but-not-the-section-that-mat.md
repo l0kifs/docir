@@ -19,7 +19,7 @@ tags:
 title: A ranked hit names the document but not the section that matched, so the paired
   section read is a guess
 type: issue
-updated: '2026-08-06'
+updated: '2026-08-07'
 ---
 
 **Class:** missing · **Severity:** material
@@ -93,8 +93,11 @@ match, a graph-reached neighbour), and each was confirmed by injecting the bug i
 catch. On docir's own corpus, "how does the daemon keep the embedding model warm" now returns
 `arch-1cfb1b212237` with `matched_section: Daemon process`.
 
-Cost: ~20 tokens per `context` result set on the benchmark corpus (484 vs 464), against a body
-fetch saved whenever a hit is a long document. Ranking is untouched — recall@5 0.97, MRR 0.97.
+Cost: **12 tokens** per `context` result set on the benchmark corpus, against a body fetch saved
+whenever a hit is a long document. Measured by suppressing the field and re-running on the same
+corpus (484 vs 472) — the first figure recorded here compared 484 against the 464 printed before
+the corpus was re-based, which reads a change of denominator as a feature's cost. Ranking is
+bit-identical with and without the field: recall@5 0.97, MRR 0.97.
 
 ## Actors affected
 

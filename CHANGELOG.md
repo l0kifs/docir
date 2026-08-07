@@ -93,8 +93,10 @@ MCP tools — with the daemon keeping the index in step with hand edits along th
   narrowed to this one", a different claim on a sibling DTO, and one word meaning two things is
   how `stale` came to name three concepts (issue-d8295c5c76d1).
 
-  Costs ~20 tokens per `context` result set on the benchmark corpus (484 vs 464) and saves a
-  body fetch whenever a hit is a long document. Ranking is unchanged: recall@5 0.97, MRR 0.97.
+  Costs **12 tokens** per `context` result set on the benchmark corpus — measured by suppressing
+  the field and re-running (484 vs 472), not by comparing against a figure from a smaller corpus —
+  and saves a body fetch whenever a hit is a long document. Ranking is bit-identical with and
+  without it: recall@5 0.97, MRR 0.97.
 
 - **A document can name the code it governs.** `docir add --code "src/auth/**"` (and
   `docir update <id> --set-code ...`) records repo-relative globs in frontmatter, and they

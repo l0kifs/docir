@@ -11,8 +11,8 @@ uv run python benchmarks/run.py                                  # default: the 
 DOCIR_EMBEDDER=deterministic uv run python benchmarks/run.py     # model-free fallback
 ```
 
-It builds a throwaway store from `corpus.yaml` (23 documents from a plausible payments
-service), runs the 14 tasks in `tasks.yaml` through each retrieval strategy, and reports
+It builds a throwaway store from `corpus.yaml` (26 documents from a plausible payments
+service), runs the 20 tasks in `tasks.yaml` through each retrieval strategy, and reports
 recall, precision, MRR and the size of the payload an agent receives.
 
 **It is a measurement, not a test.** It prints numbers and exits 0. Do not wire a
@@ -20,23 +20,32 @@ threshold around it until the numbers below are understood and stable.
 
 ## Results
 
-`recall@5`, 23 documents, 14 tasks. Quality figures last confirmed 2026-07-29 and
-unchanged since the 2026-07-27 re-base; the token figures below moved on 2026-07-30 (§3).
+`recall@5`, 26 documents, 20 tasks. Confirmed 2026-08-06 on docir 0.10.0.
 
 | strategy | `deterministic` fallback | default (`fastembed`) |
 |---|---|---|
-| `context` | 0.93 (MRR 0.80) | **0.96 (MRR 0.95)** |
-| `context --expand 0` | 0.80 | 0.87 |
-| `search` (lexical only) | 0.83 (MRR 0.82) | 0.83 (MRR 0.82) |
+| `context` | 0.80 (MRR 0.76) | **0.97 (MRR 0.97)** |
+| `context --expand 0` | 0.78 | 0.88 |
+| `search` (lexical only) | 0.86 (MRR 0.79) | 0.86 (MRR 0.79) |
 
 Split by how the task is worded — the "paraphrased" tasks deliberately share **no
 vocabulary** with the documents they need:
 
 | strategy | same words | paraphrased |
 |---|---|---|
-| `context`, `deterministic` fallback | 0.93 | 0.93 |
-| `context`, default (`fastembed`) | 1.00 | **0.93** |
-| `search` | 0.88 | 0.79 |
+| `context`, `deterministic` fallback | 0.95 | 0.65 |
+| `context`, default (`fastembed`) | 1.00 | **0.95** |
+| `search` | 0.92 | 0.80 |
+
+> **Re-based 2026-08-03 — do not compare against figures printed between 2026-07-27 and
+> that date.** The corpus grew to 26 documents and 20 tasks when per-section embedding
+> landed: the old one had almost nothing longer than the model's window, so the change it
+> was written to measure was invisible in it. The previous baseline (23 documents, 14
+> tasks) read `context` 0.96 / `search` 0.83. Not wrong — a different denominator.
+>
+> The paraphrased column moved most, and that is the point of the growth: the fallback
+> drops to **0.65** there against the model's 0.95, where the old corpus had them at 0.93
+> apiece. A corpus where the two embedders tie on paraphrase was not testing paraphrase.
 
 > **Re-based 2026-07-27 — do not compare against figures printed before this date.**
 > The corpus gained a superseded decision pair and a closed issue (23 documents, 14
@@ -53,10 +62,10 @@ vocabulary** with the documents they need:
 
 Compare at `--expand 0`, which removes graph expansion and leaves only the ranking:
 
-| `context --expand 0` vs `search` (0.83 recall, 0.82 MRR) | recall@5 | verdict |
+| `context --expand 0` vs `search` (0.86 recall, 0.79 MRR) | recall@5 | verdict |
 |---|---|---|
-| `deterministic` fallback | 0.80 | **worse than plain full-text search** |
-| default (`fastembed`) | 0.87 | +0.04 |
+| `deterministic` fallback | 0.78 | **worse than plain full-text search** |
+| default (`fastembed`) | 0.88 | +0.02 |
 
 The fallback does not merely fail to add meaning — it ranks *below* the lexical index it
 is supposed to be complementing, because it is measuring the same signal with less
@@ -64,8 +73,10 @@ precision. That is what moved `fastembed` from an optional extra to a hard depen
 the hashing embedder remains available as `DOCIR_EMBEDDER=deterministic` for installs
 that cannot carry ~240 MB of dependencies and a ~64 MB model.
 
-Full `context` numbers (0.96 vs 0.93) understate this, because graph expansion lifts both
-embedders. Quote the `--expand 0` row when the question is about embedders.
+Full `context` numbers understate this, because graph expansion lifts both embedders —
+quote the `--expand 0` row when the question is about embedders. On the current corpus it
+no longer matters which row you quote: the fallback's full `context` (0.80) is *below*
+plain `search` (0.86), so expansion is not enough to rescue it.
 
 That is not a surprise once you read `DeterministicEmbedder`: it is signed feature
 hashing over tokens, so it scores similarity by *shared vocabulary*. Two sentences that
@@ -81,11 +92,17 @@ signal — which is what the README used to promise as "retrieval by meaning".
 
 ### 2. Graph expansion earns its place — and it is why the corpus was re-based
 
-`context` beats `context --expand 0` by **+0.09** recall under `fastembed` and **+0.13**
-under the fallback, for essentially no extra tokens (464 vs 479). The relation graph is
-doing real work, and the default `--expand 2` looks about right.
+`context` beats `context --expand 0` by **+0.09** recall under `fastembed` and **+0.02**
+under the fallback, and it costs *fewer* tokens than expanding nothing (484 vs 512), since
+a neighbour that fills a slot is a skeleton like any other. The relation graph is doing
+real work, and the default `--expand 2` looks about right.
 
-Those margins were +0.07 on the old corpus, and the increase is the point. The corpus had
+The fallback's margin is the one that moved — +0.13 before the 2026-08-03 re-base, +0.02
+after. Expansion can only reach a document from a hit, and on a corpus with real
+paraphrase the fallback produces too few hits to expand from. Graph traversal amplifies
+ranking; it does not substitute for it.
+
+The margins were +0.07 on the corpus before that, and the increase is the point. It had
 **no `supersedes` edge and no document in an inactive status**, so the two behaviours
 `context` depends on most were invisible here: a change to either moved no number at all.
 Two graph fixes landed on 2026-07-27 — graph-reached neighbours now obey the same
@@ -93,10 +110,14 @@ closed-work filter as ranked hits, and expansion follows `supersedes`/`contradic
 *backwards* so a hit carries the decision that replaces it — and against the old corpus
 both were unmeasurable. Against this one:
 
-| `context` recall@5 | before the fixes | after |
+| `context` recall@5 (23-document corpus, 2026-07-27) | before the fixes | after |
 |---|---|---|
 | default (`fastembed`) | 0.93 (prec 0.37) | **0.96 (prec 0.39)** |
 | `deterministic` fallback | 0.89 (prec 0.36) | **0.93 (prec 0.37)** |
+
+Those two rows are kept at their original denominator on purpose: they measure a change
+that was made and verified against that corpus, and re-running them here would compare a
+fix to a corpus it never saw.
 
 Recall *and* precision move together, which is what you would expect: the successor
 arrives (recall) and the resolved issue stops taking a slot (precision).
@@ -112,12 +133,19 @@ Mean payload an agent reads, per task (~4 chars/token):
 
 | what the agent does | ~tokens | vs `context` |
 |---|---|---|
-| `docir context` | **464** | 1× |
-| `docir query` (all skeletons) | 1 913 | 4.1× |
-| read every document body | 3 854 | 8.3× |
+| `docir context` | **484** | 1× |
+| `docir query` (all skeletons) | 2 199 | 4.5× |
+| read every document body | 6 625 | 13.7× |
 
-On a 23-document corpus. The ratio grows with corpus size, since `context` is bounded by
-`--limit` and the others are not.
+On a 26-document corpus. The ratio grows with corpus size, since `context` is bounded by
+`--limit` and the others are not — it went from 8.3× to 13.7× when the corpus gained three
+long documents, which is the shape of the claim rather than a number to quote absolutely.
+
+Of that, **12 tokens are `matched_section`** — measured by suppressing the field and
+re-running on this same corpus (484 vs 472), not by comparing against the 464 printed
+before the re-base, which would be reading a corpus change as a feature's cost. Recall,
+precision and MRR are bit-identical with and without it, which is what you want from a
+field that only names where the match was: a heading, against a body fetch saved.
 
 > **Re-based 2026-07-30 — the token column only.** The harness used to build its store with
 > the bare schema default (`sequential`, `adr-0007`), while `docir init` gives every real
@@ -133,9 +161,9 @@ chosen by default rather than deliberately. Both halves are now measured.
 
 | what the agent does | ~tokens | id chars | share | as `adr-0007` | saving |
 |---|---|---|---|---|---|
-| `docir context` | 464 | 131 | 7.1% | 68 | 3.4% |
-| `docir search` | 457 | 138 | 7.6% | 72 | 3.7% |
-| `docir query` (all skeletons) | 1 913 | 596 | 7.8% | 308 | 3.8% |
+| `docir context` | 484 | 137 | 7.1% | 72 | 3.4% |
+| `docir search` | 462 | 142 | 7.7% | 74 | 3.7% |
+| `docir query` (all skeletons) | 2 199 | 698 | 7.9% | 362 | 3.8% |
 
 Odds that any two ids collide, by suffix length:
 
@@ -172,13 +200,13 @@ the field costs.
   considers relevant — weaker than judgments from someone who did not write the corpus.
 - **Both rows come from the same corpus and judgments**, so they compare embedders, not
   absolute quality.
-- **23 documents is small.** Differences of ±0.05 across 14 tasks are not significant.
+- **26 documents is small.** Differences of ±0.05 across 20 tasks are not significant.
   Treat the ordering as the signal, not the decimals.
 - **The corpus is synthetic and coherent.** A real repository has half-written documents,
   duplicated decisions and inconsistent vocabulary. Expect worse numbers.
 - **Stem overlap leaks into the "paraphrased" set.** FTS5 uses a Porter tokenizer, so
   `paying`/`payment` still match. The paraphrased tasks are harder for a lexical matcher,
-  not impossible for it — which is why `search` scores 0.79 there rather than 0.
+  not impossible for it — which is why `search` scores 0.80 there rather than 0.
 - **Nothing here measures whether retrieved context changed what an agent did.** That is
   the outcome the product actually exists for, and it needs a different instrument.
 

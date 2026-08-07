@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-08-07
+
+The release that made a schema change visible. docir's types and cadences ship in the package as
+much as in your `docs-schema.yaml`, so an upgrade could quietly change what a store enforces —
+and every consequence was reported while the cause was not. Now `check` names the change, and
+names the documents it breaks.
+
+### Upgrade notes
+
+- **Migration `0005` runs on first use** (`schema_baseline`, one row). Additive, with no
+  backfill: your store has no baseline until its next `docir reindex`, and until then
+  `schema-drift` reports nothing. Absent means *unknown*, not unchanged — an upgrade must not
+  report your whole schema as newly added.
+- **Run `docir reindex` once after upgrading.** It records the baseline, so the next schema
+  change is the one you get told about.
+- **`docir check` may report findings on a corpus that was clean yesterday**, all of them
+  warnings: `missing-required` for a document lacking a field its type requires, and
+  `unknown-relation-kind` for an edge whose kind your schema does not register. Neither fails
+  `--strict`. They describe rules your documents no longer satisfy — nothing about the documents
+  changed.
+- **`DOCIR_SCHEMA_NOTICE=1`** is new and off by default: it prints schema drift on stderr after
+  every command, for the change nobody will run `check` to discover.
+
 ### Added
 
 - **`docir check` reports that the schema itself changed, as `schema-drift`.** A store's types,
@@ -1136,7 +1159,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/l0kifs/docir/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/l0kifs/docir/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/l0kifs/docir/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/l0kifs/docir/compare/v0.7.1...v0.8.0

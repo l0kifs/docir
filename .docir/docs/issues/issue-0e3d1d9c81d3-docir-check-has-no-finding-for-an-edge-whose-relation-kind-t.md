@@ -1,7 +1,8 @@
 ---
 code:
 - src/docir/modules/documents/domain/services/graph_checks.py
-- src/docir/modules/documents/domain/schema.py
+- tests/modules/documents/test_domain_services.py
+- tests/modules/documents/test_integration_maintenance.py
 created: '2026-08-07'
 description: unknown-tag and unknown-status are reported, but an edge carrying an
   unregistered kind is served by get, traversed by context and flagged by nothing;
@@ -11,7 +12,7 @@ owner: maintainer
 related:
 - issue-8f6576cd7bc9
 - adr-599055502f0e
-status: open
+status: resolved
 tags:
 - cosmetic
 - schema
@@ -93,3 +94,26 @@ reads, which is a guess about meaning, not a mechanical repair.
 - `src/docir/modules/documents/domain/services/graph_checks.py:169,199` — the two sibling findings
 - `src/docir/modules/documents/domain/schema.py:211,215` — `is_known_relation_kind`, and the core fallback
 - `src/docir/modules/documents/infra/schema_loader.py:152` — `relation_types` merges as a union
+
+## Resolution
+
+FIXED 2026-08-07, as proposed. `GraphChecker._find_unknown_relation_kind` reports an
+`unknown-relation-kind` warning naming the source, the target and the kind, wired into `check`
+beside `missing-required`.
+
+One finding per distinct `(source, target, kind)`: the edge is the thing that is misclassified,
+and a document is free to have one bad edge and five good ones.
+
+The permissive-when-empty rule is the load-bearing part, and it is not a special case here — the
+check asks `Schema.is_known_relation_kind`, the same question Tier 0 asks, which answers *true*
+for every kind when the registry is empty. That is every schema predating typed edges, and a
+literal membership test would have fired on all of them.
+
+Not repaired by `check --fix`, as proposed: rewriting `depends_on` to `relates_to` would silently
+drop a dependency claim the layering check reads — a guess about meaning, not a mechanical repair.
+
+Verified by injecting three bugs, each caught by a different test: unwiring the check, replacing
+`is_known_relation_kind` with a literal membership test (which breaks the permissive case), and
+promoting the kind to error severity. The integration test also pins the asymmetry that made this
+worth fixing: the same edge is still served by `get` while `--set-related` on it raises
+`UnknownRelationKindError`.

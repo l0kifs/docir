@@ -63,6 +63,11 @@ def _schema_requiring(*fields: str) -> Schema:
     return Schema(types=types)
 
 
+def _schema_registering(*kinds: str) -> Schema:
+    """`_schema()`, with a relation registry that lists exactly `kinds`."""
+    return Schema(types=dict(_schema().types), relation_types=frozenset(kinds))
+
+
 def _doc(doc_id: str, doc_type: str = "decision", **kw: object) -> Document:
     defaults: dict[str, object] = {
         "title": "T",
@@ -366,6 +371,42 @@ class TestGraphChecker:
         kinds = {i.kind for i in GraphChecker(_schema()).check(docs, [])}
         assert "unknown-type" in kinds
         assert "unknown-status" not in kinds
+
+    def test_unknown_relation_kind_flagged(self) -> None:
+        # The third hand-edit rule (issue-0e3d1d9c81d3). Tier 0 refuses to write
+        # the kind while the corpus keeps holding it, and `check` was the one
+        # command that should have said so and did not.
+        docs = [_doc("adr-0001"), _doc("issue-0001", "issue", status="open")]
+        rels = [Relation("issue-0001", "adr-0001", "governs")]
+        issues = GraphChecker(_schema_registering("relates_to")).check(docs, rels)
+        found = [i for i in issues if i.kind == "unknown-relation-kind"]
+        assert len(found) == 1
+        assert found[0].doc_ids == ("issue-0001", "adr-0001")
+        assert "'governs'" in found[0].message
+
+    def test_a_registry_that_registers_nothing_is_permissive(self) -> None:
+        # An empty `relation_types` means unconstrained — the backward-compatible
+        # default for a schema predating typed edges. Reporting there would fire
+        # on every edge in every such corpus.
+        docs = [_doc("adr-0001"), _doc("issue-0001", "issue", status="open")]
+        rels = [Relation("issue-0001", "adr-0001", "anything")]
+        issues = GraphChecker(_schema()).check(docs, rels)
+        assert not any(i.kind == "unknown-relation-kind" for i in issues)
+
+    def test_a_registered_kind_is_not_flagged(self) -> None:
+        # The quiet-on-correct-usage guard.
+        docs = [_doc("adr-0001"), _doc("issue-0001", "issue", status="open")]
+        rels = [Relation("issue-0001", "adr-0001", "depends_on")]
+        issues = GraphChecker(_schema_registering("relates_to", "depends_on")).check(docs, rels)
+        assert not any(i.kind == "unknown-relation-kind" for i in issues)
+
+    def test_unknown_relation_kind_is_a_warning(self) -> None:
+        # The edge still resolves and still behaves — core properties resolve for
+        # a kind the registry has stopped listing — so nothing is broken.
+        docs = [_doc("adr-0001"), _doc("issue-0001", "issue", status="open")]
+        rels = [Relation("issue-0001", "adr-0001", "governs")]
+        issues = GraphChecker(_schema_registering("relates_to")).check(docs, rels)
+        assert all(i.severity == "warning" for i in issues if i.kind == "unknown-relation-kind")
 
     def test_missing_required_field_flagged(self) -> None:
         # The upgrade case (issue-8f6576cd7bc9): the type starts requiring a

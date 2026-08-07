@@ -46,7 +46,9 @@ files and the derived index never disagree.
   and `unknown-type`/`unknown-status`/`unknown-tag`, the three Tier 0 rules a hand-edit can
   bypass, plus `tag-key-format` for a registered key outside the shared grammar). Also
   `missing-required` — a field the type requires that the document does not carry, which the
-  schema can start demanding of documents written before it, so no hand-edit need be involved.
+  schema can start demanding of documents written before it, so no hand-edit need be involved —
+  and `unknown-relation-kind`, an edge whose kind the registry no longer lists (permissive when
+  the registry is empty, as it is for any schema predating typed edges).
   All warnings: the document stays readable and its edges resolve. Also `unmatched-code` — a
   governed glob that matches nothing — when the service was given a `CodeMatcher`; without one
   (no repository above the store) the finding is skipped rather than reported against a tree

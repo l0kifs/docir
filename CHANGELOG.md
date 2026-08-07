@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`docir check` reports a new warning kind, `unknown-relation-kind`**: an edge whose kind the
+  relation registry no longer lists. It completes the hand-edit family — a tag the registry does
+  not know and a status the type does not declare were both reported, while an unregistered
+  *kind* was served by `get`, traversed by `context`, and flagged by nothing; only rewriting the
+  edge was refused, by Tier 0 (issue-0e3d1d9c81d3).
+
+  A warning, and on stronger grounds than its siblings: the edge keeps working.
+  `Schema.relation_kind` falls back to the core properties, so a kind the registry has stopped
+  listing is still cycle-checked and still read as a dependency by the layering check. What is
+  lost is the report, not the behaviour. A registry that registers *nothing* stays permissive —
+  that is every schema predating typed edges, and reporting there would fire on all of them.
+  `check --fix` does not touch it: rewriting `depends_on` to `relates_to` would silently drop a
+  dependency claim, which is a guess about meaning rather than a mechanical repair.
+
 - **`docir check` reports a new warning kind, `missing-required`**: a document that does not
   carry a field its type declares as `required`. Every other classification finding needs a
   hand-edit or a merge to occur; this one does not. Core and profile types are compiled into the

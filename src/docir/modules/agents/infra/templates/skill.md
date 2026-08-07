@@ -402,7 +402,7 @@ hand-edited corpus, this is the contract:
 | `title` / `description` | ⚠️ prefer CLI | Works, but they drive retrieval — `--set-description` also re-embeds. |
 | `tags` | ❌ use `docir update --set-tags` | An unregistered tag is a Tier 0 error the CLI would catch; by hand it silently isn't (`check` reports `unknown-tag`). |
 | `status` | ❌ use `docir update --status` | Bypasses the transition rules; a status the type doesn't declare leaves the doc with no legal exit (`check` reports `unknown-status`). |
-| `related` | ❌ use `docir update --set-related` | Targets must exist and kinds must be registered; by hand you get `dangling` instead. |
+| `related` | ❌ use `docir update --set-related` | Targets must exist and kinds must be registered; by hand you get `dangling` or `unknown-relation-kind` instead. |
 | `type` | ❌ | Must be in the schema, and the id prefix already encodes it (`check` reports `unknown-type`). |
 | `id` | ❌ **never** | It is the primary key. Changing it orphans every inbound link and can duplicate a live id. |
 | `created` / `updated` | ❌ | `updated` is the staleness clock's fallback. |
@@ -411,8 +411,8 @@ hand-edited corpus, this is the contract:
 **After any hand-edit: `docir reindex` then `docir check`.** Reindex reports
 `documents_skipped` for files whose frontmatter will not parse — those are
 *absent from every read path*, not merely flagged. `check` then catches
-`unknown-tag`, `unknown-status`, `unknown-type`, `missing-required`, `dangling` and
-`duplicate-id`.
+`unknown-tag`, `unknown-status`, `unknown-type`, `unknown-relation-kind`,
+`missing-required`, `dangling` and `duplicate-id`.
 
 It cannot catch everything: a plausible-but-wrong `verified` date, or edited
 `created`/`updated`, are indistinguishable from real ones. Those are the fields
@@ -420,8 +420,8 @@ to leave alone.
 
 ## Checks & maintenance (non-blocking)
 
-- `docir check` — Tier 1 warnings: cycles, orphans, layering, **dangling** `related` links, **duplicate ids**, **stale** docs (past their review cadence), **unknown type/status/tag** (a `type` not in the active schema, a `status` the type doesn't declare, a tag not in the registry — all three mean a file was edited outside the CLI), and **missing-required** (a field the type requires that the document lacks). Run before finishing.
-- `docir check --strict` — exits nonzero on **error**-severity findings only (`duplicate-id`, `dangling`, `malformed` — the corpus is broken). Use as a **CI / pre-merge gate**. Warnings (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`, `unknown-status`, `unknown-tag`, `missing-required`) are reported but never fail the build; `--strict-all` makes them fatal too.
+- `docir check` — Tier 1 warnings: cycles, orphans, layering, **dangling** `related` links, **duplicate ids**, **stale** docs (past their review cadence), **unknown type/status/tag** (a `type` not in the active schema, a `status` the type doesn't declare, a tag not in the registry — all three mean a file was edited outside the CLI), **missing-required** (a field the type requires that the document lacks), and **unknown-relation-kind** (an edge whose kind the schema no longer registers). Run before finishing.
+- `docir check --strict` — exits nonzero on **error**-severity findings only (`duplicate-id`, `dangling`, `malformed` — the corpus is broken). Use as a **CI / pre-merge gate**. Warnings (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`, `unknown-status`, `unknown-tag`, `missing-required`, `unknown-relation-kind`) are reported but never fail the build; `--strict-all` makes them fatal too.
 - **Recovering from `missing-required`**: the schema now requires a field the document was
   written without — usually because `docs-schema.yaml` gained a `required:` entry, or an upgrade
   brought one in through a profile. Supply it (`docir update <id> --set-owner ...`) or drop the

@@ -45,11 +45,16 @@ ERROR_KINDS: frozenset[str] = frozenset({"duplicate-id", "dangling", "malformed"
 
 #: Everything else (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`,
 #: `unknown-status`, `unknown-tag`, `tag-key-format`, `unmatched-code`,
-#: `missing-required`)
+#: `missing-required`, `unknown-relation-kind`)
 #: describes shape or classification, not
 #: damage. `orphan` in particular fires for any document with no relations — the
 #: default state of a new one — so treating these as build failures made the gate
 #: unusable on a healthy corpus.
+#:
+#: `unknown-relation-kind` joins them on the same grounds and one more: the edge
+#: keeps working. `Schema.relation_kind` falls back to the core properties, so a
+#: kind the registry has stopped listing is still cycle-checked and still read as
+#: a dependency — the corpus is intact and only the registry has fallen behind it.
 #:
 #: `unknown-status`/`unknown-tag` are warnings for the same reason as
 #: `unknown-type`: the document is still readable and every edge still resolves,
@@ -117,6 +122,7 @@ class GraphChecker:
         issues.extend(self._find_unknown_type(documents))
         issues.extend(self._find_unknown_status(documents))
         issues.extend(self._find_missing_required(documents))
+        issues.extend(self._find_unknown_relation_kind(relations))
         if known_tags is not None:
             issues.extend(self._find_unknown_tag(documents, known_tags))
             issues.extend(self._find_tag_key_format(known_tags))
@@ -201,6 +207,49 @@ class GraphChecker:
                         f"{doc.type!r} does not declare; declared: {known}"
                     ),
                     doc_ids=(doc.id,),
+                )
+            )
+        return issues
+
+    def _find_unknown_relation_kind(self, relations: list[Relation]) -> list[CheckIssue]:
+        """Flag edges whose ``kind`` the relation registry no longer knows.
+
+        The third member of the hand-edit family, and the one that was missing:
+        `check` reported a tag the registry does not know and a status the type
+        does not declare, while an edge carrying an unregistered kind was served
+        by `get`, traversed by `context`, and flagged by nothing — only
+        *rewriting* it was refused, by Tier 0 (issue-0e3d1d9c81d3).
+
+        Nothing about the edge misbehaves, which is why this is a warning and
+        why it is worth reporting anyway. :meth:`Schema.relation_kind` falls
+        back to :data:`CORE_RELATION_KINDS`, so a dropped `depends_on` is still
+        cycle-checked and still read as a dependency by the layering check. What
+        is lost is the report: the registry has stopped describing the corpus.
+
+        A schema that registers *nothing* is permissive by construction —
+        `is_known_relation_kind` answers true for every kind — so a corpus that
+        predates typed edges reports nothing here, exactly as it should.
+
+        One finding per distinct ``(source, target, kind)``: the edge is the
+        thing that is misclassified, and a document is free to have one bad edge
+        and five good ones.
+        """
+        issues: list[CheckIssue] = []
+        seen: set[tuple[str, str, str]] = set()
+        for rel in relations:
+            edge = (rel.source, rel.target, rel.kind)
+            if self._schema.is_known_relation_kind(rel.kind) or edge in seen:
+                continue
+            seen.add(edge)
+            known = ", ".join(sorted(self._schema.relation_types))
+            issues.append(
+                CheckIssue(
+                    kind="unknown-relation-kind",
+                    message=(
+                        f"{rel.source!r} links {rel.target!r} with kind {rel.kind!r}, "
+                        f"which the schema does not register; registered: {known}"
+                    ),
+                    doc_ids=(rel.source, rel.target),
                 )
             )
         return issues

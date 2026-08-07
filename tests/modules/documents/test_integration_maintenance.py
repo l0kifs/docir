@@ -13,6 +13,7 @@ from docir.entry_points.dispatch import Dispatcher
 from docir.platform.errors import (
     DocumentNotFoundError,
     MissingRequiredFieldError,
+    UnknownRelationKindError,
     ValidationError,
 )
 
@@ -175,6 +176,94 @@ def test_check_catches_tier0_violations_made_by_hand(
     kinds = {i["kind"] for i in dispatcher.dispatch("check", {})}
     assert "unknown-tag" in kinds
     assert "unknown-status" in kinds
+
+
+class TestAnEdgeWhoseKindTheRegistryStoppedListing:
+    """`check` now reports it; before, only rewriting it was refused (issue-0e3d1d9c81d3).
+
+    The asymmetry is what made this worth fixing: Tier 0 refuses to *write* the
+    kind while every read path keeps serving it, so the corpus held a
+    classification the schema had disowned and the one command that exists to
+    find that was silent.
+    """
+
+    @staticmethod
+    def _narrow_the_registry(settings: Settings) -> None:
+        settings.schema_path.write_text(
+            "relation_types: [relates_to, supersedes]\n"
+            "types:\n"
+            "  decision:\n"
+            "    prefix: adr\n"
+            "    default_status: proposed\n"
+            "    statuses:\n"
+            "      proposed: [accepted]\n"
+            "      accepted: []\n"
+            "  issue:\n"
+            "    prefix: issue\n"
+            "    default_status: open\n"
+            "    statuses:\n"
+            "      open: [resolved]\n"
+            "      resolved: []\n",
+            encoding="utf-8",
+        )
+
+    @staticmethod
+    def _linked_pair(dispatcher: Dispatcher) -> None:
+        dispatcher.dispatch("add", {"type": "decision", "title": "Target", "description": "d"})
+        dispatcher.dispatch(
+            "add",
+            {
+                "type": "issue",
+                "title": "Source",
+                "description": "d",
+                "related": ["adr-0001:depends_on"],
+            },
+        )
+
+    def test_check_names_the_edge(self, dispatcher: Dispatcher, settings: Settings) -> None:
+        self._linked_pair(dispatcher)
+        self._narrow_the_registry(settings)
+
+        with closing(build_container(settings, background_embeddings=False)) as after:
+            issues = after.dispatcher.dispatch("check", {})
+
+        found = [i for i in issues if i["kind"] == "unknown-relation-kind"]
+        assert [tuple(i["doc_ids"]) for i in found] == [("issue-0001", "adr-0001")]
+        assert "'depends_on'" in found[0]["message"]
+
+    def test_the_edge_still_reads_while_rewriting_it_is_refused(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        # Both halves of the asymmetry, in one test: this is the state `check`
+        # had no way to describe.
+        self._linked_pair(dispatcher)
+        self._narrow_the_registry(settings)
+
+        with closing(build_container(settings, background_embeddings=False)) as after:
+            view = after.dispatcher.dispatch("get", {"doc_id": "issue-0001"})
+            assert [r["kind"] for r in view["related"]] == ["depends_on"]
+            with pytest.raises(UnknownRelationKindError):
+                after.dispatcher.dispatch(
+                    "update", {"doc_id": "issue-0001", "set_related": ["adr-0001:depends_on"]}
+                )
+
+    def test_a_permissive_registry_reports_nothing(self, dispatcher: Dispatcher) -> None:
+        # The shipped schema registers the core six, so the healthy corpus must
+        # stay quiet — and a schema registering nothing at all is unconstrained
+        # by construction, which is every schema predating typed edges.
+        self._linked_pair(dispatcher)
+        kinds = {i["kind"] for i in dispatcher.dispatch("check", {})}
+        assert "unknown-relation-kind" not in kinds
+
+    def test_it_does_not_fail_the_ci_gate(self, dispatcher: Dispatcher, settings: Settings) -> None:
+        self._linked_pair(dispatcher)
+        self._narrow_the_registry(settings)
+
+        with closing(build_container(settings, background_embeddings=False)) as after:
+            issues = after.dispatcher.dispatch("check", {})
+        assert all(
+            i["severity"] == "warning" for i in issues if i["kind"] == "unknown-relation-kind"
+        )
 
 
 class TestASchemaChangeThatMakesAFieldRequired:

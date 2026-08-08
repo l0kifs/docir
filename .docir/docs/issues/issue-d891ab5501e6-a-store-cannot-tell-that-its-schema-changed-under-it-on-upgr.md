@@ -12,6 +12,8 @@ id: issue-d891ab5501e6
 owner: maintainer
 related:
 - issue-8f6576cd7bc9
+- issue-0e3d1d9c81d3
+- issue-3678c897295f
 - adr-2a3f625bb2f8
 status: resolved
 tags:
@@ -19,7 +21,7 @@ tags:
 - schema
 title: A store cannot tell that its schema changed under it on upgrade
 type: issue
-updated: '2026-08-07'
+updated: '2026-08-08'
 ---
 
 **Class:** missing · **Severity:** material

@@ -11,10 +11,11 @@ description: docs-schema.yaml has no version and the index records nothing about
 id: issue-d891ab5501e6
 owner: maintainer
 related:
-- issue-8f6576cd7bc9
+- adr-2a3f625bb2f8
 - issue-0e3d1d9c81d3
 - issue-3678c897295f
-- adr-2a3f625bb2f8
+- issue-8f6576cd7bc9
+- adr-bd3a820cc57a
 status: resolved
 tags:
 - material

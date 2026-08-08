@@ -9,8 +9,9 @@ description: schema-drift reports a schema change after the fact; nothing render
 id: issue-3678c897295f
 owner: maintainer
 related:
-- issue-d891ab5501e6
 - adr-2a3f625bb2f8
+- issue-d891ab5501e6
+- adr-bd3a820cc57a
 status: open
 tags:
 - cosmetic

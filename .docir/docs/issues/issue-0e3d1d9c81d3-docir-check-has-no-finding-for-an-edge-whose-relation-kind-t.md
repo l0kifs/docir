@@ -10,8 +10,9 @@ description: unknown-tag and unknown-status are reported, but an edge carrying a
 id: issue-0e3d1d9c81d3
 owner: maintainer
 related:
-- issue-8f6576cd7bc9
 - adr-599055502f0e
+- issue-8f6576cd7bc9
+- adr-bd3a820cc57a
 status: resolved
 tags:
 - cosmetic
@@ -19,7 +20,7 @@ tags:
 title: docir check has no finding for an edge whose relation kind the registry no
   longer knows
 type: issue
-updated: '2026-08-07'
+updated: '2026-08-08'
 ---
 
 **Class:** missing · **Severity:** cosmetic

@@ -11,10 +11,11 @@ description: Adding 'required:' to a live type leaves every existing document in
 id: issue-8f6576cd7bc9
 owner: maintainer
 related:
-- issue-e3c4dfad4f7b
 - adr-2a3f625bb2f8
-- issue-d891ab5501e6
 - issue-0e3d1d9c81d3
+- issue-d891ab5501e6
+- issue-e3c4dfad4f7b
+- adr-bd3a820cc57a
 status: resolved
 tags:
 - material
@@ -22,7 +23,7 @@ tags:
 title: A newly-required field is invisible to docir check, and surfaces one write
   at a time
 type: issue
-updated: '2026-08-07'
+updated: '2026-08-08'
 ---
 
 **Class:** missing · **Severity:** material

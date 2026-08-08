@@ -38,7 +38,7 @@ uv run ty check                                        # type check (Astral ty)
 uv run vulture                                         # dead-code scan
 uv run tach check                                      # module boundaries (§8)
 uv run python scripts/check_contract_sync.py           # api.py <-> CONTRACT.md (§8.6)
-uv run pytest --cov=docir --cov-fail-under=90          # tests + coverage (currently 96%)
+uv run pytest --cov=docir --cov-fail-under=90          # tests + coverage (currently 95%)
 ```
 
 - **`tach check` exits 0 even though it prints `[WARN] ... deprecated` lines.** Those warnings are
@@ -164,12 +164,19 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   guard; `docir check --strict` exits 1 for CI.
 - **Tier 1 findings carry a severity, and `--strict` gates on `error` only.** `ERROR_KINDS`
   (`graph_checks.py`) is `duplicate-id`/`dangling`/`malformed` — the corpus is *broken*.
-  Everything else (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`, `unmatched-code`) is
+  Everything else (`orphan`, `cycle`, `layering`, `stale`, `unmatched-code`, `tag-key-format`,
+  the three `unknown-type`/`unknown-status`/`unknown-tag`, plus `unknown-relation-kind`,
+  `missing-required` and `schema-drift`) is
   a `warning` about shape or age. This is load-bearing: `orphan` fires for every document with no relations — the
   default state of a new one — so a fail-on-any-finding gate went red on a healthy corpus, and the
   only way to keep CI green was to drop the gate, which also dropped duplicate-id detection.
   `CheckIssue` derives `severity` from `kind` in `__post_init__`, so a new check classifies itself
   by being added to `ERROR_KINDS` or not. `--strict-all` restores fail-on-anything.
+  **The last three carry a sharper version of the same argument and must not be promoted**: the
+  schema they measure against ships in the *package* (the core and the profiles are merged in on
+  every command), so a corpus that passed yesterday can fail today with no commit to point at.
+  An error kind there red-builds every repo on the release that moved the rule, and nothing about
+  the documents changed.
 - **A document's `code` globs are validated for shape on write and for reality only in Tier 1.**
   Optional `code:` frontmatter names the code a document governs (issue-90aea6d1b891). Tier 0
   refuses an absolute path, a `..` segment, a backslash separator and an empty entry — patterns
@@ -246,8 +253,33 @@ means per-module storage plus an event bus, which is a rewrite the project delib
 - **Validation is three tiers and mixing them is the documented overengineering trap.** Tier 0 is a
   hard, synchronous compiler-style gate (missing field, bad status/transition, unknown tag/related,
   unknown/disallowed relation kind); Tier 1 (`docir check`) is non-blocking structural graph warnings
-  (incl. **staleness** and **unknown-type**); Tier 2 (`docir lint --deep`) is advisory heuristics (embedding similarity,
+  (incl. **staleness**, **unknown-type** and **schema drift**); Tier 2 (`docir lint --deep`) is advisory heuristics (embedding similarity,
   scope creep). Never promote a heuristic to a hard error.
+- **The schema can change without anyone editing it, and Tier 1 says so (issue-d891ab5501e6).**
+  The core and the bundled profiles are YAML strings compiled into `infra/profiles.py` and
+  re-merged by `_merge_profiled` on *every* command, so upgrading docir can add a type, make a
+  field `required:`, or change a prefix in a store whose `docs-schema.yaml` nobody touched —
+  nothing in `git diff` to review. The index therefore records the resolved schema it was last
+  rebuilt against (`schema_baseline`, migration `0005`, one row) and `check` reports the
+  difference as `schema-drift`, one finding per change. Three rules hold it up:
+  **`reindex` is the only writer of that baseline** (it is already the "make derived state agree
+  with the sources" verb; an `accept` command would be a ritual whose only effect is silencing a
+  report — the argument adr-bd7c4f3c5764 makes about staleness); **absent means unknown, not
+  unchanged**, so a store with no baseline reports nothing rather than reporting its whole schema
+  as new (an unparseable one reads the same way, since `reindex` overwrites it); and the payload
+  is rendered by `domain/services/schema_shape.describe`, which `infra`'s `describe_schema`
+  delegates to — the drift check lives in `application`, which may not import `infra`, and a
+  second renderer would mean a baseline written in one shape and compared in another.
+  `DOCIR_SCHEMA_NOTICE=1` additionally prints the drift on stderr after every command; it is
+  emitted **client-side** through the same `RequestExecutor`, because with the daemon the process
+  that first loads a changed schema is the daemon, whose stderr is a log nobody reads.
+- **`missing-required` is the one Tier 1 finding a hand-edit is not needed to produce.** Its
+  siblings (`unknown-type`/`unknown-status`/`unknown-tag`/`unknown-relation-kind`) all mean a file
+  was written outside the CLI; this one means the *rule* moved under documents that were valid
+  when written. It reads only the type's declared `required_fields` — a core required field is
+  what makes a document parse, so an absent one is already `malformed` — and it shares
+  `validation.is_absent` with Tier 0 rather than restating "empty", because the two disagreeing
+  would let `check` call a document conforming that the next write refuses.
 - **Relation edges are typed (adr-599055502f0e).** `related` entries carry a `kind` (`RelatedRef{target,
   kind}`); the on-disk form is a bare id for the default `relates_to` (so pre-typed files round-trip
   unchanged) or a `{to, kind}` mapping. `relations.kind` is a **non-key** column — one kind per
@@ -331,7 +363,10 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   `profiles: [software]`, which resolves to exactly `decision`/`issue`/`architecture`. The core is
   always merged when a `profiles:` key is present (you can't disable it that way); disabling a
   profile after its docs exist leaves them with a type the schema no longer knows — `docir check`
-  flags those as `unknown-type` (schema resolution does not re-key or migrate existing files).
+  flags those as `unknown-type`, beside the `schema-drift` finding naming the cause (schema
+  resolution does not re-key or migrate existing files — there is no document migration and
+  deliberately so: every change class needs a human decision, which is what `check --fix`
+  already refuses to guess at).
 - **Alembic owns the schema and must sit beside the engine.** `run_migrations`
   (`platform/persistence/engine.py`) resolves the migration dir via `Path(__file__).parent /
   "alembic"`; moving `engine.py` without the `alembic/` folder silently breaks migrations. The FTS5

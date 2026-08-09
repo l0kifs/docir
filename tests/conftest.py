@@ -14,6 +14,7 @@ from datetime import date
 import pytest
 
 from docir.config.settings import Settings
+from docir.entry_points.cli import rendering
 from docir.entry_points.composition import Container, build_container
 from docir.entry_points.dispatch import Dispatcher
 from docir.platform.clock import Clock
@@ -46,6 +47,17 @@ def settings(tmp_path, monkeypatch) -> Settings:
     # Pin the hashing embedder: the real default downloads a model, which would
     # make the suite slow and network-dependent.
     monkeypatch.setenv("DOCIR_EMBEDDER", "deterministic")
+    # Pin the render width. rich wraps at the console width, which under
+    # `CliRunner` is 80, so a notice carrying a tmp path broke wherever that
+    # path's length put it and an assertion for a phrase in it held or failed on
+    # the directory name pytest chose (issue-7f2f73d6941c). It has to be set on
+    # the console objects: rich reads `COLUMNS` in `Console.__init__`, and these
+    # two are constructed when `rendering` is imported, long before any fixture
+    # could export the variable. Wide enough that a notice does not wrap at all —
+    # a width merely *larger* than 80 only moves the break, and the phrase this
+    # first broke on splits at 19 of the widths between 50 and 205.
+    for pinned in (rendering.console, rendering.error_console):
+        monkeypatch.setattr(pinned, "width", 500)
     return Settings.resolve()
 
 

@@ -214,6 +214,37 @@ depends_on = [
     "docir.modules.agents.infra",
 ]
 
+# -- release -----------------------------------------------------------------
+# A third self-contained bounded context, like `agents`: it looks at the docir
+# *installation* (how it was installed, whether a newer one is published) and
+# owns no index/DB state. `platform.clock` is the one shared primitive it needs —
+# the release check is "at most once a day", and a second time source would be a
+# second answer to what today is.
+[[modules]]
+path = "docir.modules.release"
+depends_on = []
+
+[[modules]]
+path = "docir.modules.release.domain"
+depends_on = []
+
+[[modules]]
+path = "docir.modules.release.application"
+depends_on = ["docir.modules.release.domain", "docir.platform.clock"]
+
+[[modules]]
+path = "docir.modules.release.infra"
+depends_on = ["docir.modules.release.application", "docir.modules.release.domain"]
+
+[[modules]]
+path = "docir.modules.release.api"
+depends_on = [
+    "docir.modules.release.application",
+    "docir.modules.release.domain",
+    "docir.modules.release.infra",
+    "docir.platform.clock",
+]
+
 # -- publishing --------------------------------------------------------------
 # A second self-contained bounded context, like `agents`: it renders a corpus to
 # static HTML and owns no index/DB state. It takes documents as *data* (the
@@ -264,6 +295,7 @@ depends_on = [
     "docir.modules.documents.api",
     "docir.modules.indexing.api",
     "docir.modules.publishing.api",
+    "docir.modules.release.api",
     "docir.modules.tags.api",
     "docir.platform.clock",
     "docir.platform.embedding",

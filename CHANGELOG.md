@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`docir self upgrade` installs the new docir too, then re-executes as it.** The package
+  step runs first and hands off with `os.execv`, because the process running the installer is
+  the code being replaced: everything after that call would otherwise be the old build's work,
+  starting with the stamp recording which version built the index. A hidden `--upgraded-from`
+  carries the outgoing version into the new process, so the report still names it, and doubles
+  as the loop guard.
+
+  **An installer runs only where docir owns its environment** — a `uv tool` install, a pipx
+  install, a virtualenv. A checkout or path install belongs to a project whose lockfile decides
+  its version; an ephemeral `uvx` environment has nothing to upgrade; an unrecognised layout
+  gets no guess at all, because running the wrong installer against the wrong environment is
+  worse than doing nothing. Each of those says why and resyncs the store anyway. `--no-package`
+  skips the install (adr-a555ee6bc484).
+
+- **`docir self status` — what is installed, how, and whether anything newer exists.** A file
+  read: it reports the last cached answer, and an absent `latest` means *nobody has checked*,
+  never "up to date". `--refresh` asks PyPI — docir's only network call — and skips even that
+  when the answer is already from today.
+
+  **`DOCIR_UPDATE_CHECK=1`** makes it ambient: the daemon refreshes the answer in the
+  background and every command names a newer release on stderr. Off by default, on the argument
+  `DOCIR_SCHEMA_NOTICE` already makes about a notice that repeats until someone acts on it —
+  and because a documentation tool that phones home unasked is not one people keep installed.
+
 - **`docir self upgrade` — the steps that follow a new docir release, as one command.** It
   reindexes, refreshes any installed agent instruction file to the running version, then
   reports what `check` still finds, in that order: the rebuild first because the index is

@@ -13,9 +13,11 @@ from dataclasses import dataclass
 
 import typer
 
+from docir import __version__
 from docir.config.settings import Settings
 from docir.entry_points.cli import rendering
 from docir.entry_points.composition import Container, build_in_process_executor
+from docir.modules.release.api import build_release_service
 from docir.platform.errors import DocirError
 from docir.platform.transport.messages import Request, RequestExecutor, Response
 
@@ -105,7 +107,25 @@ def execute(command: str, payload: dict[str, object]) -> object:
     finally:
         if closer is not None:
             closer.close()
+    warn_about_a_newer_release(state.settings)
     return _unwrap(response)
+
+
+def warn_about_a_newer_release(settings: Settings) -> None:
+    """Say on stderr that a newer docir exists (``DOCIR_UPDATE_CHECK=1``).
+
+    Reads the cached answer and never the network: the fetch is the daemon's
+    job, once a day, so the notice costs one file read and a command still works
+    offline. Absent or unreadable means *unknown*, and unknown says nothing.
+    """
+    if not settings.update_check:
+        return
+    status = build_release_service(__version__, settings.release_cache_path).status()
+    if status.update_available:
+        rendering.render_warning(
+            f"docir {status.latest} is available (this is {status.installed}) — "
+            "run `docir self upgrade`"
+        )
 
 
 def _warn_about_schema_drift(executor: RequestExecutor) -> None:

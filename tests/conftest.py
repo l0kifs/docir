@@ -47,6 +47,8 @@ def settings(tmp_path, monkeypatch) -> Settings:
     # Pin the hashing embedder: the real default downloads a model, which would
     # make the suite slow and network-dependent.
     monkeypatch.setenv("DOCIR_EMBEDDER", "deterministic")
+    # Never let a developer's exported opt-in make the suite reach PyPI.
+    monkeypatch.setenv("DOCIR_UPDATE_CHECK", "0")
     # Pin the render width. rich wraps at the console width, which under
     # `CliRunner` is 80, so a notice carrying a tmp path broke wherever that
     # path's length put it and an assertion for a phrase in it held or failed on

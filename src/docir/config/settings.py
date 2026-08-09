@@ -169,6 +169,14 @@ class Settings(BaseSettings):
     #: warning stops being read. ``DOCIR_SCHEMA_NOTICE=1`` opts in, for the case
     #: the finding cannot cover — a change nobody will run `check` to discover.
     schema_notice: bool = False
+    #: Whether to check PyPI for a newer docir and say so on stderr.
+    #: ``DOCIR_UPDATE_CHECK=1`` opts in. Off by default for two reasons that
+    #: point the same way: it is the only network call docir makes, and a notice
+    #: that repeats on every command until someone upgrades stops being read —
+    #: the argument ``schema_notice`` above already makes. When it is on the
+    #: daemon does the fetching, at most once a day, and the CLI only reads the
+    #: answer it left behind.
+    update_check: bool = False
     #: How ``home`` was chosen: ``flag`` | ``env`` | ``project`` | ``global``.
     #: Carried so callers can tell a deliberate store from a fallback — a write
     #: that lands in the global store because someone forgot ``docir init`` is
@@ -274,6 +282,15 @@ class Settings(BaseSettings):
         """
         digest = hashlib.sha1(str(self.home).encode("utf-8")).hexdigest()[:12]
         return Path(tempfile.gettempdir()) / f"docir-{digest}.sock"
+
+    @property
+    def release_cache_path(self) -> Path:
+        """Where the last "is there a newer docir" answer is remembered.
+
+        In the store rather than the index: it is a fact about the installation,
+        not about the documents, and `reindex` must not be able to lose it.
+        """
+        return self.home / "release-check.json"
 
     @property
     def pid_path(self) -> Path:

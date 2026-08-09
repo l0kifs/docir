@@ -308,6 +308,10 @@ class UpgradeResult:
     reindex: dict[str, object]
     agents: tuple[InstalledFile, ...]
     findings: tuple[dict[str, object], ...]
+    #: The version that ran the package step, when one ran and handed off to
+    #: this process. ``None`` means the package was left alone — a store-only
+    #: resync, or an environment docir does not own.
+    upgraded_from: str | None = None
 
 
 def upgrade_store(
@@ -315,6 +319,7 @@ def upgrade_store(
     *,
     project_root: Path,
     version: str = __version__,
+    upgraded_from: str | None = None,
 ) -> UpgradeResult:
     """Bring one store and its generated files in line with the running docir.
 
@@ -330,10 +335,11 @@ def upgrade_store(
     * ``check`` — **last**, so its findings describe the state the upgrade left
       behind rather than the one it started from.
 
-    It deliberately does not upgrade the *package*. This process is running the
-    code that would be replaced, so every step after that call would still be
-    the old build's work — including the rebuild that records which version
-    built the index, which would then record the wrong one (adr-31aa7aa60d11).
+    The *package* is upgraded before any of this, by a process that then hands
+    off to the one it installed: everything here has to be the new build's work,
+    starting with the rebuild that records which version built the index
+    (adr-31aa7aa60d11). ``upgraded_from`` is what that handoff carries, and is
+    ``None`` when no install happened.
     """
     reindex = run("reindex", {})
     setup = build_agent_service(version).update(
@@ -347,6 +353,7 @@ def upgrade_store(
         findings=tuple(
             _as_mapping(item) for item in (findings if isinstance(findings, list) else [])
         ),
+        upgraded_from=upgraded_from,
     )
 
 

@@ -8,6 +8,7 @@ from docir.config.settings import Settings
 from docir.entry_points.cli import rendering
 from docir.entry_points.cli.runner import get_state
 from docir.entry_points.daemon import lifecycle
+from docir.entry_points.daemon.release_watch import ReleaseWatcher
 from docir.entry_points.daemon.watcher import DocsWatcher
 from docir.platform.transport.messages import SerializingExecutor
 from docir.platform.transport.server import DaemonServer
@@ -65,13 +66,20 @@ def _run_server(settings: Settings) -> None:
     # watcher is a second writer on another thread, and SQLite has one.
     executor = SerializingExecutor(InProcessExecutor(container.dispatcher))
     watcher = DocsWatcher(settings, executor) if settings.watch else None
+    # Opt-in, and only here: the CLI reads the answer this leaves behind rather
+    # than making a network call of its own (DOCIR_UPDATE_CHECK=1).
+    releases = ReleaseWatcher(settings) if settings.update_check else None
     server = DaemonServer(settings.socket_path, executor, idle_timeout=settings.idle_timeout)
     try:
         if watcher is not None:
             watcher.start()
+        if releases is not None:
+            releases.start()
         server.serve_forever()
     finally:
         if watcher is not None:
             watcher.stop()
+        if releases is not None:
+            releases.stop()
         container.close()
         lifecycle.clear_pid(settings)

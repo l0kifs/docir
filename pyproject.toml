@@ -45,6 +45,11 @@ dependencies = [
     # Markdown -> HTML for `docir build`. Already arrived transitively via rich;
     # declared for the same reason watchfiles is.
     "markdown-it-py>=3.0",
+    # PEP 440 version ordering for the release check. Hand-rolling it is how you
+    # decide 0.9.0 is newer than 0.10.0; it already arrives transitively, and
+    # depending on someone else's transitive dependency is depending on their
+    # next release notes.
+    "packaging>=24.0",
 ]
 
 [project.scripts]

@@ -441,15 +441,22 @@ to leave alone.
   `unknown-type`, `unknown-status` and `missing-required` findings beside it — then `docir
   reindex`, which is what records the new baseline. Set `DOCIR_SCHEMA_NOTICE=1` to have every
   command print the drift on stderr instead of waiting for a `check`.
-- **After the docir package itself is upgraded: `docir self upgrade`.** One command for the
-  three steps that have to follow a new version — it reindexes (the index is derived and
+- **`docir self upgrade` — upgrade docir and resync this store, in one command.** It
+  installs the newest docir where docir owns its environment (a uv tool, a pipx install, a
+  virtualenv), re-executes as the new build, then reindexes (the index is derived and
   gitignored, and a rebuild is what records the schema baseline *and* the version that built
-  it), refreshes any installed agent instruction file to the running version, then reports
-  what `check` still finds. **`stale-index-build`** is the finding that asks for it: the index
-  was built by a docir that is no longer installed. It is a warning, never a `--strict`
-  failure — every store is in that state between an upgrade and the next rebuild. The command
-  does not install docir; upgrade the package the way it was installed (`uv tool upgrade
-  docir`) and then run it.
+  it), refreshes any installed agent instruction file, and reports what `check` still finds.
+  Where docir does *not* own its environment — a checkout, a project whose lockfile pins it,
+  an ephemeral `uvx` run — it says so on stderr and does the rest; the package is that
+  project's to upgrade. Pass `--no-package` to skip the install and only resync the store.
+  **`stale-index-build`** is the finding that asks for this: the index was built by a docir
+  that is no longer installed. A warning, never a `--strict` failure — every store is in that
+  state between an upgrade and the next rebuild.
+- `docir self status` — what is installed, how, and whether a newer release exists. A file
+  read: it reports the answer the daemon last cached, and an absent `latest` means *nobody
+  has checked*, not "up to date". `--refresh` asks PyPI now (docir's only network call, and
+  it is skipped if the answer is already from today). Set `DOCIR_UPDATE_CHECK=1` to have the
+  daemon keep it fresh and every command say on stderr when a newer docir is out.
 - `docir lint --deep` — Tier 2 advisories (duplicate content, oversized docs).
 - `docir reindex [--changed]` — after a doc file was hand-edited, merged, or freshly cloned.
   `--changed` only skips re-saving files whose content is unchanged; deleted files are swept

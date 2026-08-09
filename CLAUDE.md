@@ -89,14 +89,16 @@ src/docir/
 │   ├── tags/        api.py + CONTRACT.md + domain/application          (the tag registry)
 │   ├── indexing/    api.py + CONTRACT.md + domain/application/infra    (hybrid ranking + the embedding scheduler)
 │   ├── agents/      api.py + CONTRACT.md + domain/application/infra    (installs AI-assistant instructions; adr-3a2d5ee7bc84)
-│   └── publishing/  api.py + CONTRACT.md + domain/application/infra    (renders the corpus as a static site; adr-a343140d72e2)
+│   ├── publishing/  api.py + CONTRACT.md + domain/application/infra    (renders the corpus as a static site; adr-a343140d72e2)
+│   └── release/     api.py + CONTRACT.md + domain/application/infra    (how docir was installed + is it current; adr-a555ee6bc484)
 └── entry_points/  cli · daemon · mcp · composition · dispatch          (wiring only, no business logic)
 ```
 
 Dependencies flow **`entry_points → modules → platform → config`**, and between modules only
 **`tags → documents → indexing`**. There are no cycles, and tach fails the build if you introduce one.
-`agents` and `publishing` are self-contained leaves (depending only on `platform.errors`); they own
-no index/DB state, so they have no shared-index baseline edges. **`publishing` takes documents as
+`agents`, `publishing` and `release` are self-contained leaves (depending only on
+`platform.errors`, and `release` on `platform.clock`); they own no index/DB state, so they have no
+shared-index baseline edges. **`publishing` takes documents as
 data — the `docir get` JSON shape — rather than importing `documents.api`**, which is what keeps it
 a leaf: the site is a projection of the public contract, not a second reader of the aggregate. Do
 not "simplify" it by handing it a `DocumentService`.
@@ -295,6 +297,20 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   would be replaced, so the rebuild after it would stamp the version on its way out. It is a
   `self` group because `docir update <id>` already means "edit a document", and it is not an
   MCP tool — the halves it orchestrates already are.
+- **The package half of `self upgrade` re-execs, and refuses to guess (adr-a555ee6bc484).**
+  The installer runs only where docir owns its environment — a `uv tool` receipt, pipx
+  metadata, a `pyvenv.cfg` — and then `os.execv`s `python -m docir` with a hidden
+  `--upgraded-from` (which is also the loop guard), because the process that ran the installer
+  is the old build and the reindex after it must not be. A checkout or path install
+  (PEP 610 `direct_url.json`), an ephemeral `uvx` env, or anything unrecognised gets no
+  command and a reason; the store is still resynced. **The test suite is structurally safe
+  because it runs from an editable checkout, which detects as `project`** —
+  `test_installation.py` asserts exactly that, and it is the guard that keeps a test from
+  replacing the environment it runs in. The release check is opt-in
+  (`DOCIR_UPDATE_CHECK=1`), fetched by the daemon at most once a day and *only* read by the
+  CLI, so no command ever blocks on the network; `latest` absent means nobody has checked,
+  never "up to date"; ordering is `packaging`'s PEP 440, since a hand-rolled compare makes
+  0.9.0 newer than 0.10.0.
 - **Relation edges are typed (adr-599055502f0e).** `related` entries carry a `kind` (`RelatedRef{target,
   kind}`); the on-disk form is a bare id for the default `relates_to` (so pre-typed files round-trip
   unchanged) or a `{to, kind}` mapping. `relations.kind` is a **non-key** column — one kind per

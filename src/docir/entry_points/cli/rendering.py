@@ -18,6 +18,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from docir import __version__
 from docir.entry_points.payload import trim as trim_payload
 
 console = Console()
@@ -368,17 +369,47 @@ def render_setup(files: Sequence[Mapping[str, object]]) -> None:
         console.print(f"[{color}]{action:<9}[/] {file.get('path')}  [dim]{version}[/]{suffix}")
 
 
+def render_release_status(status: Mapping[str, object]) -> None:
+    """Render ``docir self status``: what is installed, and whether it is current."""
+    installed = status.get("installed")
+    latest = status.get("latest")
+    if latest is None:
+        line = f"[cyan]docir {installed}[/]  [dim]newest release unknown — nothing checked yet[/]"
+    elif status.get("update_available"):
+        line = f"[cyan]docir {installed}[/]  [yellow]{latest} is available[/]"
+    else:
+        line = f"[cyan]docir {installed}[/]  [green]up to date[/]"
+    checked = status.get("checked_on")
+    console.print(line + (f"  [dim](checked {checked})[/]" if checked else ""))
+    command = status.get("upgrade_command")
+    if isinstance(command, Sequence) and not isinstance(command, str) and command:
+        rendered = " ".join(str(part) for part in command)
+        console.print(f"[dim]{status.get('method')}:[/] `{rendered}`")
+    else:
+        console.print(f"[dim]{status.get('method')}: {status.get('explanation')}[/]")
+
+
 def render_upgrade(
     reindex: Mapping[str, object],
     agents: Sequence[Mapping[str, object]],
     findings: Sequence[Mapping[str, object]],
+    upgraded_from: str | None = None,
 ) -> None:
     """Render the outcome of ``docir self upgrade``, step by step.
 
     Each line names the command it stands in for, because that is what the user
-    would otherwise have run — and still can, when only one of the three is what
-    they need.
+    would otherwise have run — and still can, when only one of them is what they
+    need.
     """
+    if upgraded_from is not None:
+        # Equal means the installer had nothing to do — worth saying, because
+        # "package 0.11.0 → 0.11.0" reads like a failed upgrade.
+        moved = upgraded_from != __version__
+        console.print(
+            f"[cyan]package[/]   {upgraded_from} → {__version__}"
+            if moved
+            else f"[cyan]package[/]   {__version__} [dim](already the newest build)[/]"
+        )
     skipped = reindex.get("documents_skipped")
     console.print(
         f"[cyan]reindex[/]   {reindex.get('documents_indexed', 0)} documents, "

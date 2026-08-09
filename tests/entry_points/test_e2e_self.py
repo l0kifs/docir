@@ -31,9 +31,42 @@ def _add() -> None:
 
 
 def _upgrade(project_root: str):
-    result = runner.invoke(app, ["--no-daemon", "self", "upgrade", project_root])
+    result = runner.invoke(app, ["--no-daemon", "self", "upgrade", project_root, "--no-package"])
     assert result.exit_code == 0, result.output
     return json.loads(result.stdout)
+
+
+def test_status_reports_the_installation_without_touching_the_network(
+    settings: Settings, tmp_path
+) -> None:
+    # No cached answer and no --refresh: `latest` is absent, which means
+    # *unknown*. If this ever fetched, the suite would need to be online.
+    result = runner.invoke(app, ["--no-daemon", "self", "status"])
+    assert result.exit_code == 0, result.output
+    status = json.loads(result.stdout)
+    assert status["installed"] == __version__
+    assert "latest" not in status, "trimmed away: unknown, not up to date"
+    # The suite runs from a checkout, so docir must refuse to upgrade itself.
+    assert status["method"] == "project" and "upgrade_command" not in status
+
+
+def test_status_reads_the_answer_the_daemon_left(settings: Settings) -> None:
+    settings.ensure_directories()
+    settings.release_cache_path.write_text(
+        json.dumps({"latest": "99.0.0", "checked_on": "2026-07-07"}), encoding="utf-8"
+    )
+    status = json.loads(runner.invoke(app, ["--no-daemon", "self", "status"]).stdout)
+    assert (status["latest"], status["update_available"]) == ("99.0.0", True)
+    assert status["checked_on"] == "2026-07-07"
+
+
+def test_upgrade_does_not_install_a_package_it_does_not_own(settings: Settings, tmp_path) -> None:
+    """The safety net: in a checkout, the package step says why and does nothing."""
+    result = runner.invoke(app, ["--no-daemon", "self", "upgrade", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert "package not upgraded" in result.stderr
+    assert "uv lock --upgrade-package docir" in result.stderr
+    assert json.loads(result.stdout)["reindex"]["documents_indexed"] == 0
 
 
 def test_it_reindexes_checks_and_refreshes_in_one_command(settings: Settings, tmp_path) -> None:

@@ -46,13 +46,18 @@ daemon and its own schema baseline.
 ## What you have to run
 
 ```bash
-uv tool upgrade docir     # or: pipx upgrade docir, uv lock --upgrade-package docir
-docir self upgrade        # once per store: reindex, refresh the agent files, check
+docir self upgrade        # install the new docir, then resync this store
 ```
 
-`docir self upgrade` is the three commands below in the order they have to run,
-and it reports each one. They are still worth understanding, because when only
-one of them is what you need, that one is still a command.
+That is the whole procedure where docir owns its environment (a uv tool, a pipx
+install, a virtualenv): it runs the installer, re-executes as the build it just
+installed, and then does the three steps below in order, reporting each. Where
+docir does *not* own its environment — a checkout, a project whose lockfile pins
+it, an ephemeral `uvx` run — it says so and does the rest anyway; upgrade the
+package where it is pinned. `docir self status` says which case you are in.
+
+The steps are still worth understanding, because when only one of them is what
+you need, that one is still a command.
 
 ```bash
 docir reindex             # once per store
@@ -110,8 +115,27 @@ are behind: `check` covers the corpus, not the generated instructions. docir
 - **MCP clients** hold a long-lived server process: restart the client so it
   re-execs the new binary. One spawned as `uvx docir mcp serve` resolves from
   uv's cache, so name the version (`uvx docir@0.11.0 mcp serve`) when it matters.
+  `docir self upgrade` will not touch a uvx environment — there is nothing there
+  to upgrade, since it is resolved per run and thrown away.
 - **CI** installs docir on its own; pin the version there and bump it in the
   same commit, or the gate runs a different docir from the one you tested with.
+
+## Knowing an upgrade is due
+
+`docir self status` answers it without a network call: it reports the newest
+release *as last checked*, and an absent `latest` means nobody has checked, not
+"up to date". `--refresh` asks PyPI — docir's only network call, skipped when the
+answer is already from today.
+
+`DOCIR_UPDATE_CHECK=1` turns it into a background fact: the daemon refreshes the
+answer, and every command mentions a newer release on stderr. Off by default,
+because a notice that repeats on every command until you act on it stops being
+read — and because a documentation tool that phones home unasked is not one
+people keep.
+
+`docir check` covers the other direction, the one that needs no network at all:
+`stale-index-build` says the index was built by a docir that is no longer
+installed.
 
 ## Verify
 

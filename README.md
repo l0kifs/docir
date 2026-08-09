@@ -241,7 +241,7 @@ can verify, which is exactly why it should not be written by hand.
 | `docir get <id>` | Full document with body — or one section with `--section "<heading>"` |
 | `docir check` | Structural findings — duplicate ids, dangling edges, staleness (`--strict` gates CI on errors, `--fix` repairs them) |
 | `docir agent install` | Teach this repo's AI agent to drive docir |
-| `docir self upgrade` | After upgrading the package: reindex, refresh the agent files, report what `check` finds |
+| `docir self upgrade` | Upgrade docir, then resync this store: reindex, refresh the agent files, report what `check` finds |
 | `docir build --out site/` | Render the store as a self-contained static site for humans |
 | `docir mcp serve` | Serve the same commands as MCP tools, for a client that speaks MCP |
 
@@ -253,7 +253,7 @@ get · query · search · context · build
 tag {add, list, rename, rm}
 agent {install, update}
 schema {show, validate}
-self upgrade
+self {status, upgrade}
 check [--fix] · lint · reindex · embed · version
 daemon serve · mcp serve
 ```
@@ -334,24 +334,35 @@ The schema, the agent instructions and the site templates ship *inside the packa
 release can change what a store enforces and what an agent reads with nothing in your
 `git diff` to review. Migrations, a daemon serving old code (it records the build it
 loaded and is respawned once that stops matching) and vectors from a superseded model all
-sort themselves out on the next command. What is left is two:
+sort themselves out on the next command. What is left is one command:
 
 ```bash
-uv tool upgrade docir     # or: pipx upgrade docir
-docir self upgrade        # per store: reindex + refresh the agent files + check
+docir self upgrade        # install the new docir, then resync this store
+docir self status         # what is installed, and whether anything newer exists
 ```
 
-`docir self upgrade` is the three commands you would otherwise run in order, and the
-order matters: the rebuild comes first because the index is derived and gitignored and is
-the only place the schema baseline and the version that built it are recorded, and `check`
-comes last so its findings describe the state you are left in. It does not install docir —
-this process is the code that would be replaced, so everything after that call would still
-be the old build's work, starting with the stamp saying which version built the index.
+`self upgrade` installs the newest docir **where docir owns its environment** — a uv tool,
+a pipx install, a virtualenv — then re-executes as the build it just installed and does the
+rest: rebuild the index (derived and gitignored, and the only place the schema baseline and
+the version that built it are recorded), refresh any installed agent instruction file, and
+report what `check` still finds, in that order. Where docir does *not* own its environment
+— a checkout, a project whose lockfile pins it, an ephemeral `uvx` run — it says so and
+resyncs the store anyway: that package belongs to the project, not to you. `--no-package`
+skips the install.
+
+The re-exec is the point of the ordering: the process that runs the installer is the code
+being replaced, so everything after it has to be the new build's work — starting with the
+stamp that records which version built the index.
 
 Until a store is rebuilt it reports neither `schema-drift` nor `stale-index-build`: absent
 means *unknown*, not unchanged. That is also what a fresh clone needs — the index is
 gitignored, so a clone has none, and an empty index answers `no structural issues` exactly
 like a healthy one.
+
+docir makes exactly one network call in its life, and only if you ask: `self status
+--refresh` looks up the newest release, at most once a day. `DOCIR_UPDATE_CHECK=1` has the
+daemon keep that answer fresh and every command mention a newer release on stderr; it is
+off by default, because a notice that repeats until you act on it stops being read.
 
 The rest of the procedure — `docir init --force`, MCP clients, pinning the version CI
 installs — is [a runbook in docir's own store](https://l0kifs.github.io/docir/run-f4a756206fe0.html).

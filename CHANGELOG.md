@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-08-09
+
+The release that made upgrading docir a docir command. An upgrade used to be three steps a
+user had to know about and run in order, documented in one release's notes — and two of the
+things that needed doing were invisible from inside the store. `docir self upgrade` is all of
+it: install the new docir, re-execute as it, rebuild the index, refresh the agent instructions,
+report what is left.
+
+### Upgrade notes
+
+- **Migration `0006` runs on first use** (`index_build`, one row). Additive, no backfill: the
+  store does not know which docir built its index until the next rebuild, and until then
+  `stale-index-build` reports nothing. Absent means *unknown*, not stale.
+- **Run `docir self upgrade` once per store after upgrading.** It is `reindex` + `agent update`
+  + `check`, in the order they have to run, and from this release on it also installs the new
+  docir where docir owns its environment.
+- **`docir check` may report `stale-index-build`** on a store that was clean yesterday: the
+  index was built by a docir that is no longer installed. A warning, never a `--strict`
+  failure — every store is in that state between an upgrade and its next rebuild.
+- **`DOCIR_UPDATE_CHECK=1`** is new and off by default: the daemon then checks PyPI once a day
+  and every command names a newer release on stderr. Nothing reaches the network without it.
+
 ### Added
 
 - **`docir self upgrade` installs the new docir too, then re-executes as it.** The package
@@ -1225,7 +1247,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/l0kifs/docir/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/l0kifs/docir/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/l0kifs/docir/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/l0kifs/docir/compare/v0.8.0...v0.9.0

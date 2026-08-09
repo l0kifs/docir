@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- **An "Upgrading" section in the README, and `run-f4a756206fe0` in the store**: what to run
+  after a new release, per store. The upgrade path existed only as one release's "Upgrade
+  notes" — a section nobody reads twice — while the things that need doing are the same every
+  time and two of them are invisible. `reindex` is the only writer of the schema baseline, so
+  a store that has not been reindexed reports no `schema-drift` at all; and nothing detects a
+  stale `<!-- docir:vX -->` stamp, so an agent can keep reading a guide for a version that is
+  no longer installed. 0.11.0 shipped with docir's own skill file claiming v0.10.0, which is
+  the case in point.
+
+- **`docir agent update` is now step 3 of the release runbook** (`run-30aceb4eacc6`), between
+  the version bump and the commit — the stamp is rendered from the running `__version__`, so
+  any other order stamps the previous release.
+
 ## [0.11.0] - 2026-08-07
 
 The release that made a schema change visible. docir's types and cadences ship in the package as

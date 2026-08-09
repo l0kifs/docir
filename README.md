@@ -9,7 +9,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/docir)](https://pypi.org/project/docir/) [![Python](https://img.shields.io/pypi/pyversions/docir)](https://pypi.org/project/docir/) [![CI](https://img.shields.io/github/actions/workflow/status/l0kifs/docir/ci.yml?branch=main)](https://github.com/l0kifs/docir/actions) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-[The idea](#the-idea) · [Quickstart](#quickstart) · [Why not just…](#why-not-just) · [Commands](#commands) · [Docs](docs/) · [Live site](https://l0kifs.github.io/docir/index.html)
+[The idea](#the-idea) · [Quickstart](#quickstart) · [Why not just…](#why-not-just) · [Commands](#commands) · [Upgrading](#upgrading) · [Docs](docs/) · [Live site](https://l0kifs.github.io/docir/index.html)
 
 </div>
 
@@ -325,6 +325,29 @@ stateless client that spawns and respawns it transparently. Embeddings are the o
 deferred, eventually-consistent piece — a content change flags the vector dirty and returns;
 everything else (file, metadata, FTS, relations) is synchronous. Force a flush with
 `--wait-embeddings`, `docir embed --flush`, or `docir reindex --embeddings`.
+
+## Upgrading
+
+The schema, the agent instructions and the site templates ship *inside the package*, so a
+release can change what a store enforces and what an agent reads with nothing in your
+`git diff` to review. Migrations, a daemon serving old code (it records the build it
+loaded and is respawned once that stops matching) and vectors from a superseded model all
+sort themselves out on the next command. What is left is four:
+
+```bash
+uv tool upgrade docir     # or: pipx upgrade docir
+docir reindex             # once per store — the only mandatory step
+docir check               # new warnings are expected; --strict stays green
+docir agent update        # refresh the stamped instruction files, then commit them
+```
+
+`reindex` is the only writer of the schema baseline that `check` compares against, so
+until it runs `schema-drift` reports nothing — absent means *unknown*, not unchanged. It
+is also what a fresh clone needs: the index is gitignored, so a clone has none, and an
+empty index answers `no structural issues` exactly like a healthy one.
+
+The rest of the procedure — `docir init --force`, MCP clients, pinning the version CI
+installs — is [a runbook in docir's own store](https://l0kifs.github.io/docir/run-f4a756206fe0.html).
 
 ## Schema: core + profiles
 

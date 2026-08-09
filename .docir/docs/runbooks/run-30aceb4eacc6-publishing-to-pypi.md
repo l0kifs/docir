@@ -13,7 +13,7 @@ tags:
 - release
 title: Publishing to PyPI
 type: runbook
-updated: '2026-08-06'
+updated: '2026-08-09'
 ---
 
 This project uses [UV](https://docs.astral.sh/uv/) as the package manager and GitHub Actions for automated publishing to PyPI.
@@ -45,14 +45,23 @@ gh release list --limit 10 2>&1 | cat
 
 2. **Update CHANGELOG.md** (required): move entries from `[Unreleased]` into a new version section and update the compare links at the bottom.
 
-3. **Commit and push** your changes:
+3. **Refresh the generated agent instructions** (required): `docir agent update`
+   stamps the files from the *running* `__version__`, so it has to run after the bump
+   in step 1 and before the commit in step 4. Nothing detects a stale stamp later —
+   0.11.0 shipped with docir's own `.claude/skills/docir/SKILL.md` still claiming
+   v0.10.0. See run-f4a756206fe0 for what a *consumer* of the release then has to run.
    ```bash
-   git add pyproject.toml
+   uv run docir agent update   # the workspace build, not the installed tool
+   ```
+
+4. **Commit and push** your changes:
+   ```bash
+   git add pyproject.toml CHANGELOG.md .claude/skills/docir/SKILL.md
    git commit -m "Bump version to 0.2.0"
    git push
    ```
 
-4. **Create a GitHub release**:
+5. **Create a GitHub release**:
 
    Using GitHub CLI with inline notes:
    ```bash
@@ -84,7 +93,7 @@ gh release list --limit 10 2>&1 | cat
    gh release view v0.2.0
    ```
 
-5. **GitHub Actions will automatically**:
+6. **GitHub Actions will automatically**:
    - Build the package using UV
    - Publish to PyPI using trusted publishing
    - You can monitor the progress in the Actions tab

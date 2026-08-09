@@ -16,6 +16,7 @@ from docir.platform.persistence.ports import (
     ChunkEmbeddingRepository,
     DocumentRepository,
     EmbeddingRepository,
+    IndexBuildRepository,
     SchemaBaselineRepository,
     SearchIndex,
     TagRepository,
@@ -31,6 +32,7 @@ class UnitOfWork(ABC):
     embeddings: EmbeddingRepository
     chunks: ChunkEmbeddingRepository
     schema_baseline: SchemaBaselineRepository
+    index_build: IndexBuildRepository
 
     def __enter__(self) -> UnitOfWork:
         return self

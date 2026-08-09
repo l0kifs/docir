@@ -17,6 +17,7 @@ from docir.platform.persistence.repositories import (
     SqlAlchemyChunkEmbeddingRepository,
     SqlAlchemyDocumentRepository,
     SqlAlchemyEmbeddingRepository,
+    SqlAlchemyIndexBuildRepository,
     SqlAlchemySchemaBaselineRepository,
     SqlAlchemySearchIndex,
     SqlAlchemyTagRepository,
@@ -40,6 +41,7 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         self.embeddings = SqlAlchemyEmbeddingRepository(session)
         self.chunks = SqlAlchemyChunkEmbeddingRepository(session)
         self.schema_baseline = SqlAlchemySchemaBaselineRepository(session)
+        self.index_build = SqlAlchemyIndexBuildRepository(session)
         return self
 
     def __exit__(

@@ -79,6 +79,7 @@ class MaintenanceService:
         embedder: Embedder,
         schema: Schema,
         clock: Clock,
+        version: str,
         code_matcher: CodeMatcher | None = None,
     ) -> None:
         self._uow_factory = uow_factory
@@ -88,6 +89,10 @@ class MaintenanceService:
         self._embedder = embedder
         self._schema = schema
         self._clock = clock
+        #: The docir version this process is running. Stamped into the index on
+        #: every rebuild, so a later run can say the derived state was produced
+        #: by code that is no longer installed.
+        self._version = version
         #: ``None`` when the store has no repository above it: there is then
         #: nothing to resolve a ``code`` glob against, and the finding is
         #: skipped rather than reported against a tree that does not exist.
@@ -112,6 +117,10 @@ class MaintenanceService:
             # silence a report (the argument adr-bd7c4f3c5764 makes about
             # staleness). Until it is run, `check` keeps naming the change.
             uow.schema_baseline.set(schema_shape.describe(self._schema))
+            # Same writer, same argument, a different question: the baseline
+            # compares schemas and so cannot see a release that changed how
+            # documents are read rather than what they must contain.
+            uow.index_build.set(self._version)
             uow.commit()
         self._scheduler.flush()
         return ReindexResult(
@@ -163,7 +172,47 @@ class MaintenanceService:
         issues.extend(self._find_duplicate_ids())
         issues.extend(self._find_malformed())
         issues.extend(self._drift_issues())
+        issues.extend(self._build_issues())
         return issues
+
+    def stale_index_build(self) -> str | None:
+        """The version that built this index, when it is not the running one.
+
+        ``None`` covers both "built by this docir" and "never recorded" — absent
+        means unknown, the rule the schema baseline follows. A store that has
+        not been rebuilt since the table arrived reports nothing rather than
+        reporting itself as stale, which would fire on every store exactly once
+        for no reason anyone could act on differently.
+        """
+        with self._uow_factory() as uow:
+            recorded = uow.index_build.get()
+        return None if recorded is None or recorded == self._version else recorded
+
+    def _build_issues(self) -> list[CheckIssue]:
+        """The index-was-built-by-other-code finding.
+
+        Inequality, not "older than": a downgrade needs the same rebuild, and
+        ordering two version strings is a question this does not have to answer
+        to give the right advice.
+
+        A warning, and for a stronger reason than schema drift: nothing is
+        wrong with the documents *or* the rules — only the derived state was
+        produced by code that is no longer installed, which is the ordinary
+        state of every store between an upgrade and the next `reindex`.
+        """
+        recorded = self.stale_index_build()
+        if recorded is None:
+            return []
+        return [
+            CheckIssue(
+                kind="stale-index-build",
+                message=(
+                    f"the index was built by docir {recorded}, this is {self._version} — "
+                    f"run `docir self upgrade` (or `docir reindex`) to rebuild it"
+                ),
+                doc_ids=(),
+            )
+        ]
 
     def schema_drift(self) -> list[str]:
         """How the active schema differs from the one the index was built against.

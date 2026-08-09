@@ -136,6 +136,30 @@ def _warn_about_schema_drift(executor: RequestExecutor) -> None:
         rendering.render_schema_drift([str(line) for line in lines])
 
 
+def with_executor[T](action: Callable[[RequestExecutor], T]) -> T:
+    """Run an action that issues several requests over one executor.
+
+    :func:`execute` builds an executor and tears it down per call, which is
+    right for a command that sends one request. A command that sends several —
+    ``self upgrade`` reindexes and then checks — would otherwise build the whole
+    in-process container once per step, parsing the schema and loading the
+    embedding model each time.
+    """
+    state = get_state()
+    executor, closer = run_local(lambda: _build_executor(state.settings))
+    try:
+        return run_local(lambda: action(executor))
+    finally:
+        if closer is not None:
+            closer.close()
+
+
+def execute_with(executor: RequestExecutor, command: str, payload: dict[str, object]) -> object:
+    """Run one request on an existing executor, unwrapping errors as :func:`execute` does."""
+    response = executor.execute(Request(command=command, payload=payload))
+    return _unwrap(response)
+
+
 def run_local[T](action: Callable[[], T]) -> T:
     """Run an in-process action, mapping a domain error onto the exit code.
 

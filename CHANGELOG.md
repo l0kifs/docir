@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`docir self upgrade` — the steps that follow a new docir release, as one command.** It
+  reindexes, refreshes any installed agent instruction file to the running version, then
+  reports what `check` still finds, in that order: the rebuild first because the index is
+  derived and gitignored and is the only place the schema baseline and the build version are
+  recorded, `check` last so its findings describe the state you are left in.
+
+  It does **not** install docir. This process is the code that would be replaced, so
+  everything after that call would still be the old build's work — starting with the rebuild
+  that stamps which version built the index, which would then record the version on its way
+  out. Upgrade the package the way you installed it (`uv tool upgrade docir`), then run this.
+  A `self` group rather than a top-level verb, because `docir update <id>` already means
+  "edit a document" (adr-31aa7aa60d11).
+
+- **`docir check` reports `stale-index-build`**: the index was built by a docir that is no
+  longer installed. The schema baseline cannot see this — it compares *schemas*, so it is
+  silent for a release that changes how documents are read rather than what they must
+  contain, and chunked embeddings rewrote every vector in the index without touching a type,
+  a status or a cadence. Migration `0006` adds the one-row `index_build` table; `reindex` is
+  its only writer, as it is the baseline's.
+
+  A warning, on inequality rather than "older than": a downgrade needs the same rebuild, and
+  every store is in this state between an upgrade and the next rebuild, so an error kind
+  would red-light every repository on release day. A store not rebuilt since the table
+  arrived reports nothing — absent means unknown, not stale.
+
 ### Documentation
 
 - **An "Upgrading" section in the README, and `run-f4a756206fe0` in the store**: what to run

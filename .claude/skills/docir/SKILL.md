@@ -421,8 +421,8 @@ to leave alone.
 
 ## Checks & maintenance (non-blocking)
 
-- `docir check` — Tier 1 warnings: cycles, orphans, layering, **dangling** `related` links, **duplicate ids**, **stale** docs (past their review cadence), **unknown type/status/tag** (a `type` not in the active schema, a `status` the type doesn't declare, a tag not in the registry — all three mean a file was edited outside the CLI), **missing-required** (a field the type requires that the document lacks), **unknown-relation-kind** (an edge whose kind the schema no longer registers), and **schema-drift** (the schema itself changed since the index was built). Run before finishing.
-- `docir check --strict` — exits nonzero on **error**-severity findings only (`duplicate-id`, `dangling`, `malformed` — the corpus is broken). Use as a **CI / pre-merge gate**. Warnings (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`, `unknown-status`, `unknown-tag`, `missing-required`, `unknown-relation-kind`, `schema-drift`) are reported but never fail the build; `--strict-all` makes them fatal too.
+- `docir check` — Tier 1 warnings: cycles, orphans, layering, **dangling** `related` links, **duplicate ids**, **stale** docs (past their review cadence), **unknown type/status/tag** (a `type` not in the active schema, a `status` the type doesn't declare, a tag not in the registry — all three mean a file was edited outside the CLI), **missing-required** (a field the type requires that the document lacks), **unknown-relation-kind** (an edge whose kind the schema no longer registers), and **schema-drift** (the schema itself changed since the index was built) and **stale-index-build** (the index was built by a docir that is no longer installed). Run before finishing.
+- `docir check --strict` — exits nonzero on **error**-severity findings only (`duplicate-id`, `dangling`, `malformed` — the corpus is broken). Use as a **CI / pre-merge gate**. Warnings (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`, `unknown-status`, `unknown-tag`, `missing-required`, `unknown-relation-kind`, `schema-drift`, `stale-index-build`) are reported but never fail the build; `--strict-all` makes them fatal too.
 - **Recovering from `missing-required`**: the schema now requires a field the document was
   written without — usually because `docs-schema.yaml` gained a `required:` entry, or an upgrade
   brought one in through a profile. Supply it (`docir update <id> --set-owner ...`) or drop the
@@ -441,6 +441,15 @@ to leave alone.
   `unknown-type`, `unknown-status` and `missing-required` findings beside it — then `docir
   reindex`, which is what records the new baseline. Set `DOCIR_SCHEMA_NOTICE=1` to have every
   command print the drift on stderr instead of waiting for a `check`.
+- **After the docir package itself is upgraded: `docir self upgrade`.** One command for the
+  three steps that have to follow a new version — it reindexes (the index is derived and
+  gitignored, and a rebuild is what records the schema baseline *and* the version that built
+  it), refreshes any installed agent instruction file to the running version, then reports
+  what `check` still finds. **`stale-index-build`** is the finding that asks for it: the index
+  was built by a docir that is no longer installed. It is a warning, never a `--strict`
+  failure — every store is in that state between an upgrade and the next rebuild. The command
+  does not install docir; upgrade the package the way it was installed (`uv tool upgrade
+  docir`) and then run it.
 - `docir lint --deep` — Tier 2 advisories (duplicate content, oversized docs).
 - `docir reindex [--changed]` — after a doc file was hand-edited, merged, or freshly cloned.
   `--changed` only skips re-saving files whose content is unchanged; deleted files are swept

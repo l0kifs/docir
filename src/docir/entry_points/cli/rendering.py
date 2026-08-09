@@ -368,5 +368,26 @@ def render_setup(files: Sequence[Mapping[str, object]]) -> None:
         console.print(f"[{color}]{action:<9}[/] {file.get('path')}  [dim]{version}[/]{suffix}")
 
 
+def render_upgrade(
+    reindex: Mapping[str, object],
+    agents: Sequence[Mapping[str, object]],
+    findings: Sequence[Mapping[str, object]],
+) -> None:
+    """Render the outcome of ``docir self upgrade``, step by step.
+
+    Each line names the command it stands in for, because that is what the user
+    would otherwise have run — and still can, when only one of the three is what
+    they need.
+    """
+    skipped = reindex.get("documents_skipped")
+    console.print(
+        f"[cyan]reindex[/]   {reindex.get('documents_indexed', 0)} documents, "
+        f"{reindex.get('tags_indexed', 0)} tags"
+        + (f"  [yellow]{skipped} skipped[/]" if skipped else "")
+    )
+    render_setup(agents)
+    render_findings(findings, empty="no structural issues")
+
+
 def render_message(message: str) -> None:
     console.print(message)

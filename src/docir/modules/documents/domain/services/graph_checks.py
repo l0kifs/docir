@@ -45,7 +45,8 @@ ERROR_KINDS: frozenset[str] = frozenset({"duplicate-id", "dangling", "malformed"
 
 #: Everything else (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`,
 #: `unknown-status`, `unknown-tag`, `tag-key-format`, `unmatched-code`,
-#: `missing-required`, `unknown-relation-kind`, `schema-drift`)
+#: `missing-required`, `unknown-relation-kind`, `schema-drift`,
+#: `stale-index-build`)
 #: describes shape or classification, not
 #: damage. `orphan` in particular fires for any document with no relations — the
 #: default state of a new one — so treating these as build failures made the gate

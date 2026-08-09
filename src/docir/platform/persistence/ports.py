@@ -54,6 +54,24 @@ class SchemaBaselineRepository(ABC):
         """Replace the baseline with ``payload``."""
 
 
+class IndexBuildRepository(ABC):
+    """Stores the docir version that last rebuilt the index."""
+
+    @abstractmethod
+    def get(self) -> str | None:
+        """The recorded version, or ``None`` if the store has never had one.
+
+        ``None`` means *unknown*, not *current* — the same rule the schema
+        baseline follows. A store predating the table, or one not reindexed
+        since, has nothing to compare against, and reading absence as "built by
+        the running version" would hide exactly the case this exists for.
+        """
+
+    @abstractmethod
+    def set(self, version: str) -> None:
+        """Record ``version`` as the build that produced the current index."""
+
+
 class DocumentRepository(ABC):
     """Stores document metadata and the relation graph derived from it."""
 

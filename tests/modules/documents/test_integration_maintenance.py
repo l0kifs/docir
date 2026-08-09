@@ -7,6 +7,7 @@ from contextlib import closing
 
 import pytest
 
+from docir import __version__
 from docir.config.settings import Settings
 from docir.entry_points.composition import build_container
 from docir.entry_points.dispatch import Dispatcher
@@ -16,6 +17,7 @@ from docir.platform.errors import (
     UnknownRelationKindError,
     ValidationError,
 )
+from docir.platform.persistence.unit_of_work import UnitOfWork
 
 # Valid YAML, but `created`/`updated` are not ISO dates — a hand-edit/foreign file.
 _MALFORMED_FILE = (
@@ -269,6 +271,90 @@ class TestTheSchemaChangingUnderTheStore:
         with closing(build_container(settings, background_embeddings=False)) as after:
             kinds = {i["kind"] for i in after.dispatcher.dispatch("check", {})}
         assert {"schema-drift", "missing-required"} <= kinds
+
+
+class TestAnIndexBuiltByCodeThatIsNoLongerInstalled:
+    """`check` reports the *build*, which the schema baseline cannot see.
+
+    The baseline compares two schemas, so it stays silent when a release changes
+    how documents are read rather than what they must contain — chunked
+    embeddings rewrote every vector in the index without touching a type, a
+    status or a cadence. This is the finding that says "rebuild it" then.
+    """
+
+    @staticmethod
+    def _pretend_an_older_docir_built_it(
+        uow_factory: Callable[[], UnitOfWork], version: str = "0.0.1"
+    ) -> None:
+        with uow_factory() as uow:
+            uow.index_build.set(version)
+            uow.commit()
+
+    def test_a_store_that_has_never_been_reindexed_reports_nothing(
+        self, dispatcher: Dispatcher
+    ) -> None:
+        # Absent means unknown, not stale — the rule the schema baseline
+        # follows. Otherwise every store fires this once, for nothing.
+        dispatcher.dispatch("add", {"type": "decision", "title": "A", "description": "d"})
+        kinds = {i["kind"] for i in dispatcher.dispatch("check", {})}
+        assert "stale-index-build" not in kinds
+
+    def test_reindex_stamps_the_running_version_and_check_stays_quiet(
+        self, dispatcher: Dispatcher, uow_factory: Callable[[], UnitOfWork]
+    ) -> None:
+        dispatcher.dispatch("add", {"type": "decision", "title": "A", "description": "d"})
+        dispatcher.dispatch("reindex", {})
+
+        with uow_factory() as uow:
+            assert uow.index_build.get() == __version__
+        kinds = {i["kind"] for i in dispatcher.dispatch("check", {})}
+        assert "stale-index-build" not in kinds
+
+    def test_check_names_the_version_that_built_it(
+        self, dispatcher: Dispatcher, uow_factory: Callable[[], UnitOfWork]
+    ) -> None:
+        dispatcher.dispatch("add", {"type": "decision", "title": "A", "description": "d"})
+        dispatcher.dispatch("reindex", {})
+        self._pretend_an_older_docir_built_it(uow_factory)
+
+        findings = [i for i in dispatcher.dispatch("check", {}) if i["kind"] == "stale-index-build"]
+        assert len(findings) == 1
+        assert "0.0.1" in findings[0]["message"] and __version__ in findings[0]["message"]
+
+    def test_it_is_a_warning_so_the_ci_gate_stays_green(
+        self, dispatcher: Dispatcher, uow_factory: Callable[[], UnitOfWork]
+    ) -> None:
+        # Every store is in this state between an upgrade and the next rebuild;
+        # failing the build for it would red-light every repo on release day.
+        dispatcher.dispatch("add", {"type": "decision", "title": "A", "description": "d"})
+        dispatcher.dispatch("reindex", {})
+        self._pretend_an_older_docir_built_it(uow_factory)
+
+        findings = [i for i in dispatcher.dispatch("check", {}) if i["kind"] == "stale-index-build"]
+        assert findings and all(i["severity"] == "warning" for i in findings)
+
+    def test_a_downgrade_reports_it_too(
+        self, dispatcher: Dispatcher, uow_factory: Callable[[], UnitOfWork]
+    ) -> None:
+        # Inequality, not "older than": going back a version needs the same
+        # rebuild, and ordering version strings is a question this avoids.
+        dispatcher.dispatch("add", {"type": "decision", "title": "A", "description": "d"})
+        dispatcher.dispatch("reindex", {})
+        self._pretend_an_older_docir_built_it(uow_factory, version="99.0.0")
+
+        kinds = {i["kind"] for i in dispatcher.dispatch("check", {})}
+        assert "stale-index-build" in kinds
+
+    def test_reindex_clears_it(
+        self, dispatcher: Dispatcher, uow_factory: Callable[[], UnitOfWork]
+    ) -> None:
+        dispatcher.dispatch("add", {"type": "decision", "title": "A", "description": "d"})
+        dispatcher.dispatch("reindex", {})
+        self._pretend_an_older_docir_built_it(uow_factory)
+
+        dispatcher.dispatch("reindex", {})
+        kinds = {i["kind"] for i in dispatcher.dispatch("check", {})}
+        assert "stale-index-build" not in kinds
 
 
 class TestAnEdgeWhoseKindTheRegistryStoppedListing:

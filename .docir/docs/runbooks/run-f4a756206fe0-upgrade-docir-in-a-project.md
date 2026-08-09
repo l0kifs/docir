@@ -9,6 +9,7 @@ related:
 - arch-90c90751344f
 - adr-bd3a820cc57a
 - adr-3a2d5ee7bc84
+- adr-31aa7aa60d11
 status: active
 tags:
 - release
@@ -46,6 +47,14 @@ daemon and its own schema baseline.
 
 ```bash
 uv tool upgrade docir     # or: pipx upgrade docir, uv lock --upgrade-package docir
+docir self upgrade        # once per store: reindex, refresh the agent files, check
+```
+
+`docir self upgrade` is the three commands below in the order they have to run,
+and it reports each one. They are still worth understanding, because when only
+one of them is what you need, that one is still a command.
+
+```bash
 docir reindex             # once per store
 docir check               # read the new warnings
 docir agent update        # then commit the refreshed instruction files
@@ -53,8 +62,13 @@ docir agent update        # then commit the refreshed instruction files
 
 ### `docir reindex` — the only mandatory step
 
-It is the only writer of the schema baseline the index records, so until it runs
-`check` reports no `schema-drift` at all: absent means *unknown*, not unchanged.
+It is the only writer of the two things the index records about the code that
+built it — the schema baseline and the docir version — so until it runs, `check`
+reports neither `schema-drift` nor `stale-index-build`: absent means *unknown*,
+not unchanged. The two answer different questions, which is why both exist: the
+baseline compares *schemas* and stays silent for a release that changes how
+documents are read rather than what they must contain (chunked embeddings
+rewrote every vector without touching a type or a cadence).
 It also raises the id counter to what is on disk, which is what a fresh clone
 needs — the index is gitignored, so a clone has no index and every read answers
 nothing until it is built. `check` does not warn about that state — an empty index

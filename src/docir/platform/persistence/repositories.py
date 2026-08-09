@@ -28,6 +28,7 @@ from docir.platform.persistence.models import (
     DocumentRow,
     DocumentTagRow,
     EmbeddingRow,
+    IndexBuildRow,
     RelationRow,
     SchemaBaselineRow,
     TagRow,
@@ -36,6 +37,7 @@ from docir.platform.persistence.ports import (
     ChunkEmbeddingRepository,
     DocumentRepository,
     EmbeddingRepository,
+    IndexBuildRepository,
     SchemaBaselineRepository,
     SearchIndex,
     StoredChunk,
@@ -530,3 +532,23 @@ class SqlAlchemySchemaBaselineRepository(SchemaBaselineRepository):
             self._session.add(SchemaBaselineRow(id=self._ROW_ID, payload=encoded))
         else:
             row.payload = encoded
+
+
+class SqlAlchemyIndexBuildRepository(IndexBuildRepository):
+    """The single-row record of which docir version last rebuilt the index."""
+
+    _ROW_ID = 1
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def get(self) -> str | None:
+        row = self._session.get(IndexBuildRow, self._ROW_ID)
+        return row.docir_version if row is not None else None
+
+    def set(self, version: str) -> None:
+        row = self._session.get(IndexBuildRow, self._ROW_ID)
+        if row is None:
+            self._session.add(IndexBuildRow(id=self._ROW_ID, docir_version=version))
+        else:
+            row.docir_version = version

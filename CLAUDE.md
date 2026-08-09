@@ -280,6 +280,21 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   what makes a document parse, so an absent one is already `malformed` — and it shares
   `validation.is_absent` with Tier 0 rather than restating "empty", because the two disagreeing
   would let `check` call a document conforming that the next write refuses.
+- **The index records which docir built it, and `docir self upgrade` is the command that
+  acts on it (adr-31aa7aa60d11).** Migration `0006` adds the one-row `index_build` table,
+  written by `reindex` and nothing else — the same single-writer rule the schema baseline
+  follows, for the same reason. It is a *separate* table on purpose: the baseline payload is
+  diffed line by line and printed, so a version key inside it would render every upgrade as a
+  schema change, and the baseline cannot answer this question anyway — it compares schemas, so
+  it is silent for a release that changes how documents are *read* (adr-927aa43d9635 rewrote
+  every vector without touching a type or a cadence). `stale-index-build` fires on
+  **inequality**, not "older than": a downgrade needs the same rebuild. Absent means unknown,
+  so a store not rebuilt since the table arrived reports nothing. `self upgrade` runs
+  reindex → `agent update` → check in that order (check last, so the findings describe the
+  state it left) and **must not gain the package install**: this process is the code that
+  would be replaced, so the rebuild after it would stamp the version on its way out. It is a
+  `self` group because `docir update <id>` already means "edit a document", and it is not an
+  MCP tool — the halves it orchestrates already are.
 - **Relation edges are typed (adr-599055502f0e).** `related` entries carry a `kind` (`RelatedRef{target,
   kind}`); the on-disk form is a bare id for the default `relates_to` (so pre-typed files round-trip
   unchanged) or a `{to, kind}` mapping. `relations.kind` is a **non-key** column — one kind per

@@ -21,22 +21,27 @@ from docir.entry_points.cli.body_input import resolve_body
 from docir.entry_points.cli.runner import (
     CliState,
     execute,
+    execute_with,
     get_state,
     help_wants_json,
     run_local,
     set_state,
     use_json,
+    with_executor,
 )
 from docir.entry_points.composition import (
     DEFAULT_INIT_ID_STYLE,
     InitResult,
+    UpgradeResult,
     initialize_store,
+    upgrade_store,
 )
 from docir.entry_points.daemon.cmds import daemon_app
 from docir.entry_points.mcp.cmds import mcp_app
 from docir.modules.agents.api import (
     AGENT_NAMES,
     DEFAULT_AGENTS,
+    InstalledFile,
     InstallRequest,
     SetupResult,
     UpdateRequest,
@@ -66,9 +71,11 @@ app = typer.Typer(
 tag_app = typer.Typer(help="Manage the tag registry.", no_args_is_help=True)
 agent_app = typer.Typer(help="Install AI-assistant instructions for docir.", no_args_is_help=True)
 schema_app = typer.Typer(help="Inspect and validate the document schema.", no_args_is_help=True)
+self_app = typer.Typer(help="Maintain the docir installation itself.", no_args_is_help=True)
 app.add_typer(tag_app, name="tag")
 app.add_typer(agent_app, name="agent")
 app.add_typer(schema_app, name="schema")
+app.add_typer(self_app, name="self")
 app.add_typer(daemon_app, name="daemon")
 app.add_typer(mcp_app, name="mcp")
 
@@ -746,6 +753,37 @@ def agent_update(
     _emit_setup(run_local(lambda: service.update(request)))
 
 
+# -- the installation itself -------------------------------------------------
+
+
+@self_app.command("upgrade")
+def self_upgrade(
+    directory: Annotated[Path, typer.Argument(help="Project directory.")] = Path("."),
+) -> None:
+    """Bring this store and its generated files in line with the installed docir.
+
+    Run it after upgrading the package. It rebuilds the index (which is derived,
+    gitignored, and the only place the schema baseline and the build version are
+    recorded), refreshes any installed agent instruction files to the running
+    version, and then reports what `check` still finds — in that order, so the
+    findings describe the state you are left in.
+
+    It does not install a new docir. This process is the code that would be
+    replaced, so everything after that call would still be the old build's work,
+    starting with the rebuild that stamps which version built the index. Upgrade
+    the package the way you installed it (`uv tool upgrade docir`), then run
+    this.
+    """
+    result = with_executor(
+        lambda executor: upgrade_store(
+            lambda command, payload: execute_with(executor, command, payload),
+            project_root=directory.resolve(),
+            version=__version__,
+        )
+    )
+    _emit_upgrade(result)
+
+
 # -- maintenance ------------------------------------------------------------
 
 
@@ -1055,6 +1093,34 @@ def _emit_schema(data: dict[str, object]) -> None:
         rendering.emit_json(data, trim=state.trim)
     else:
         rendering.render_schema(data)
+
+
+def _emit_upgrade(result: UpgradeResult) -> None:
+    """Emit one report for the three steps, rather than three commands' output."""
+    agents = [_setup_file(file) for file in result.agents]
+    findings = list(result.findings)
+    state = get_state()
+    if use_json(state):
+        payload: dict[str, object] = {
+            "version": result.version,
+            "reindex": result.reindex,
+            "agents": agents,
+            "findings": findings,
+        }
+        rendering.emit_json(payload, trim=state.trim)
+    else:
+        rendering.render_upgrade(result.reindex, agents, findings)
+
+
+def _setup_file(file: InstalledFile) -> dict[str, object]:
+    return {
+        "target": file.target,
+        "path": file.path,
+        "action": file.action.value,
+        "previous_version": file.previous_version,
+        "new_version": file.new_version,
+        "note": file.note,
+    }
 
 
 def _emit_setup(result: SetupResult) -> None:

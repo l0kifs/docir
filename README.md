@@ -241,6 +241,7 @@ can verify, which is exactly why it should not be written by hand.
 | `docir get <id>` | Full document with body — or one section with `--section "<heading>"` |
 | `docir check` | Structural findings — duplicate ids, dangling edges, staleness (`--strict` gates CI on errors, `--fix` repairs them) |
 | `docir agent install` | Teach this repo's AI agent to drive docir |
+| `docir self upgrade` | After upgrading the package: reindex, refresh the agent files, report what `check` finds |
 | `docir build --out site/` | Render the store as a self-contained static site for humans |
 | `docir mcp serve` | Serve the same commands as MCP tools, for a client that speaks MCP |
 
@@ -252,6 +253,7 @@ get · query · search · context · build
 tag {add, list, rename, rm}
 agent {install, update}
 schema {show, validate}
+self upgrade
 check [--fix] · lint · reindex · embed · version
 daemon serve · mcp serve
 ```
@@ -332,19 +334,24 @@ The schema, the agent instructions and the site templates ship *inside the packa
 release can change what a store enforces and what an agent reads with nothing in your
 `git diff` to review. Migrations, a daemon serving old code (it records the build it
 loaded and is respawned once that stops matching) and vectors from a superseded model all
-sort themselves out on the next command. What is left is four:
+sort themselves out on the next command. What is left is two:
 
 ```bash
 uv tool upgrade docir     # or: pipx upgrade docir
-docir reindex             # once per store — the only mandatory step
-docir check               # new warnings are expected; --strict stays green
-docir agent update        # refresh the stamped instruction files, then commit them
+docir self upgrade        # per store: reindex + refresh the agent files + check
 ```
 
-`reindex` is the only writer of the schema baseline that `check` compares against, so
-until it runs `schema-drift` reports nothing — absent means *unknown*, not unchanged. It
-is also what a fresh clone needs: the index is gitignored, so a clone has none, and an
-empty index answers `no structural issues` exactly like a healthy one.
+`docir self upgrade` is the three commands you would otherwise run in order, and the
+order matters: the rebuild comes first because the index is derived and gitignored and is
+the only place the schema baseline and the version that built it are recorded, and `check`
+comes last so its findings describe the state you are left in. It does not install docir —
+this process is the code that would be replaced, so everything after that call would still
+be the old build's work, starting with the stamp saying which version built the index.
+
+Until a store is rebuilt it reports neither `schema-drift` nor `stale-index-build`: absent
+means *unknown*, not unchanged. That is also what a fresh clone needs — the index is
+gitignored, so a clone has none, and an empty index answers `no structural issues` exactly
+like a healthy one.
 
 The rest of the procedure — `docir init --force`, MCP clients, pinning the version CI
 installs — is [a runbook in docir's own store](https://l0kifs.github.io/docir/run-f4a756206fe0.html).

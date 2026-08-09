@@ -138,3 +138,17 @@ class SchemaBaselineRow(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     payload: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class IndexBuildRow(Base):
+    """The docir version that last rebuilt the index (one row).
+
+    Beside the schema baseline rather than inside it: that payload is diffed and
+    printed, so a version key in it would report every upgrade as a schema
+    change.
+    """
+
+    __tablename__ = "index_build"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    docir_version: Mapped[str] = mapped_column(Text, nullable=False)

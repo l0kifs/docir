@@ -17,8 +17,10 @@ from pathlib import Path
 
 from sqlalchemy import Engine
 
+from docir import __version__
 from docir.config.settings import Settings, enclosing_project_home
 from docir.entry_points.dispatch import Dispatcher
+from docir.modules.agents.api import InstalledFile, UpdateRequest, build_agent_service
 from docir.modules.documents.api import (
     ID_STYLES,
     PROFILE_NAMES,
@@ -162,7 +164,15 @@ def build_container(
     document_service = DocumentService(uow_factory, file_store, scheduler, embedder, clock, schema)
     tag_service = TagService(uow_factory, tag_file_store, file_store)
     maintenance_service = MaintenanceService(
-        uow_factory, file_store, tag_file_store, scheduler, embedder, schema, clock, code_matcher
+        uow_factory,
+        file_store,
+        tag_file_store,
+        scheduler,
+        embedder,
+        schema,
+        clock,
+        __version__,
+        code_matcher,
     )
     dispatcher = Dispatcher(document_service, tag_service, maintenance_service)
     return Container(
@@ -281,6 +291,70 @@ def initialize_store(
         schema_preserved=schema_preserved,
         enclosing_home=enclosing,
     )
+
+
+# -- post-upgrade maintenance (``docir self upgrade``) -----------------------
+
+#: Runs one dispatcher command and returns its data (the CLI supplies the
+#: error handling, so this module never decides an exit code).
+CommandRunner = Callable[[str, dict[str, object]], object]
+
+
+@dataclass(frozen=True)
+class UpgradeResult:
+    """What ``docir self upgrade`` did, in the order it did it."""
+
+    version: str
+    reindex: dict[str, object]
+    agents: tuple[InstalledFile, ...]
+    findings: tuple[dict[str, object], ...]
+
+
+def upgrade_store(
+    run: CommandRunner,
+    *,
+    project_root: Path,
+    version: str = __version__,
+) -> UpgradeResult:
+    """Bring one store and its generated files in line with the running docir.
+
+    Three commands in a fixed order, which is two more than a user should have
+    to remember and exactly the sequence they had to run by hand:
+
+    * ``reindex`` — the index is derived and gitignored, and it is the only
+      writer of the schema baseline and of the version that built it, so a store
+      reports no drift and no stale build until it is rebuilt.
+    * ``agent update`` — the instruction files are rendered from a template
+      inside the package and stamped with the version that rendered them.
+      Nothing else reports that the stamp has fallen behind.
+    * ``check`` — **last**, so its findings describe the state the upgrade left
+      behind rather than the one it started from.
+
+    It deliberately does not upgrade the *package*. This process is running the
+    code that would be replaced, so every step after that call would still be
+    the old build's work — including the rebuild that records which version
+    built the index, which would then record the wrong one (adr-31aa7aa60d11).
+    """
+    reindex = run("reindex", {})
+    setup = build_agent_service(version).update(
+        UpdateRequest(project_root=project_root, global_root=Path.home())
+    )
+    findings = run("check", {})
+    return UpgradeResult(
+        version=version,
+        reindex=_as_mapping(reindex),
+        agents=setup.files,
+        findings=tuple(
+            _as_mapping(item) for item in (findings if isinstance(findings, list) else [])
+        ),
+    )
+
+
+def _as_mapping(value: object) -> dict[str, object]:
+    """A response payload as a plain mapping (the wire type is ``object``)."""
+    if not isinstance(value, dict):
+        return {}
+    return {str(key): item for key, item in value.items()}
 
 
 def _schema_write_plan(

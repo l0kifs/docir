@@ -193,6 +193,35 @@ drops it. `--expand 0` grew slightly more (+25) than full `context` (+20), since
 graph-reached neighbour has no similarity either — the more the graph contributes, the less
 the field costs.
 
+## Federation: what a split corpus costs (`federation.py`)
+
+```bash
+uv run python benchmarks/federation.py
+```
+
+A second harness, answering a different question: reads federate across stores
+(adr-fb938175f72a), so what does splitting a corpus cost, and which merge should pay it?
+It builds the same corpus three ways — whole, and alternately halved into two stores —
+and asks every task of all three.
+
+| strategy | recall@5 | MRR |
+|---|---:|---:|
+| single store (the ceiling) | 0.97 | 0.97 |
+| split · merge on **similarity** | 0.91 | 0.93 |
+| split · merge on rank (cross-store RRF) | 0.88 | 0.72 |
+
+*26 documents, 20 tasks, k=5, `bge-small-en-v1.5`, 2026-08-12.*
+
+**Cross-store RRF is round-robin, not a simplification of it.** RRF sums `1/(k + rank)`
+over the lists a document appears in; each document lives in exactly one store, so every
+sum has one term and the order is rank position alone. Ordering by `similarity` — the raw
+cosine, the one number comparable across stores — wins on both metrics and by 21 points of
+MRR, which is the number that says whether the right document arrived first.
+
+The ~6 points of recall a split costs are mostly the *graph*, not the ranking: 8 of the
+corpus's 17 edges cross the split, and an edge cannot cross stores because Tier 0
+validates a `related` target locally. That is the price of federating at all.
+
 ## What this does not tell you
 
 - **Single-annotator ground truth.** The judgments in `tasks.yaml` were written by the

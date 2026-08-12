@@ -33,6 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   transports would otherwise answer different questions, which is what the MCP module exists to
   prevent. A test asserts the parameter against `FEDERATED_COMMANDS`.
 
+  The merge choice is now measured, not asserted (`benchmarks/federation.py`): on the same
+  corpus split in two, merging on `similarity` scores recall@5 **0.91 / MRR 0.93** against
+  rank-merge's **0.88 / 0.72**, with a single store's 0.97 / 0.97 as the ceiling. Cross-store
+  RRF over the lists the stores return *is* rank-merge — every document appears in exactly one
+  list, so its fused score has one term. About six points of the recall a split costs are the
+  graph rather than the ranking: 8 of the corpus's 17 edges cross the split, and an edge cannot
+  cross stores.
+
   Supersedes the federation exclusion in adr-20eec6e2e2ca. See adr-fb938175f72a.
 
 - **`docir build` draws `mermaid` fences as diagrams.** A fenced `mermaid` block is the one

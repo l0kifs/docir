@@ -123,3 +123,36 @@ only identifier; `store` disambiguates a collision rather than qualifying the id
   make `dangling` unanswerable.
 - `--limit` against N stores asks each for `limit` and truncates the merge, so a
   federated read costs N times the work of a local one.
+
+## Measurement (2026-08-12)
+
+Measured on docir's own benchmark corpus (26 documents, 20 tasks, k=5,
+`bge-small-en-v1.5`) by splitting it alternately into two stores and asking
+every task of both, `benchmarks/federation.py`:
+
+| strategy | recall@5 | MRR |
+|---|---|---|
+| single store (the ceiling) | 0.97 | 0.97 |
+| split · merge on **similarity** | 0.91 | 0.93 |
+| split · merge on rank (cross-store RRF) | 0.88 | 0.72 |
+
+Two things follow, and the second is why the alternative is now closed rather
+than deferred.
+
+**Cross-store RRF over the lists the stores return *is* round-robin.** RRF sums
+`1/(k + rank)` across the lists a document appears in; each document lives in
+exactly one store, so every sum has one term and the fused order is rank
+position alone. Ordering by similarity beats it on both metrics and by 21 points
+of MRR — the number that says whether the right document arrived *first*, which
+is the whole job of a ranked read for an agent that will read two or three of
+them.
+
+**A split costs about six points of recall no matter how it is merged**, and
+most of that is the graph rather than the ranking: 8 of the corpus's 17 edges
+cross the split, and an edge cannot cross stores because Tier 0 validates a
+`related` target locally. That cost belongs to federating at all, not to this
+choice, and it is the ceiling any future re-fusion would have to beat.
+
+Re-fusing the *raw* lexical and vector rankings — which needs the fan-out to
+live inside `indexing` — remains untested and remains the only version of the
+alternative that could still supersede this decision.

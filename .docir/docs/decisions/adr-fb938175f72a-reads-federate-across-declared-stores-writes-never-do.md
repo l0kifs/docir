@@ -1,0 +1,125 @@
+---
+code:
+- src/docir/entry_points/federation.py
+created: '2026-08-12'
+description: Why docir reads fan out across a committed list of peer stores, why peers
+  are opened read-only, and why the merge sorts on similarity rather than score.
+id: adr-fb938175f72a
+related:
+- kind: supersedes
+  to: adr-20eec6e2e2ca
+status: accepted
+tags:
+- architecture
+- cli
+- retrieval
+title: Reads federate across declared stores; writes never do
+type: decision
+updated: '2026-08-12'
+---
+
+## Context
+
+adr-20eec6e2e2ca gave docir a project-local store and closed with an explicit
+exclusion: *"no multi-store federation/search across stores — one resolved store
+per invocation."* That is the right default and the wrong ceiling. In a
+multi-repo organisation the decision governing the service you are editing lives
+in the platform repo, and an agent reading `context` in the service repo cannot
+see it — so it re-decides. DocHub's answer is a root manifest that consolidates
+many repositories; docir had nothing.
+
+The constraint that shapes every option: **a peer store belongs to someone
+else.** Its index is derived and gitignored, its schema may use different
+profiles, and nothing gives this process the right to write to it.
+
+## Decision
+
+Reads fan out across a declared set of peer stores. Writes never do.
+
+### The peer list is a committed file
+
+`.docir/stores.yaml`, beside `docs-schema.yaml`, holding a list of store homes.
+Relative paths resolve against this store's home, so a file committed by one
+person works for everyone who clones the same layout. `--store PATH` (repeatable)
+adds one for a single invocation; it does not replace the file's list. The list
+is read per request rather than at daemon startup — it is one small file, and a
+daemon that had cached it would answer from a set the reader had already edited.
+
+Rejected: an env var (`DOCIR_STORES`) — nothing about it is shareable with the
+team, which is the whole point; and walking up for sibling `.docir/` directories
+— a store would join your reads because of where it sits on disk, which is
+exactly the kind of implicit resolution `docir init` was written to remove.
+
+### Peers are opened read-only, at the database
+
+A peer engine's URL is `sqlite:///file:<path>?mode=ro&uri=true`. SQLite then
+refuses a write with `attempt to write a readonly database`, so "docir does not
+write to a peer" is enforced by the database rather than promised by a comment.
+Nothing else would be sufficient: `build_container` runs migrations and ensures
+directories, both of which write, so peers get their own reader construction
+path that does neither.
+
+A peer is **unavailable** — never an error, never a silent empty result — when
+its home is missing, has no `index.db`, or fails to open (an index older than
+this docir's migrations reads as exactly that). The read proceeds without it and
+says so on stderr, naming the store and the command that fixes it, the way the
+global-fallback warning already does. An unavailable peer must not fail the
+read: the whole point is that a peer is someone else's repository, and its state
+is not this reader's problem to resolve.
+
+### Only four commands fan out
+
+`get`, `query`, `search`, `context`. `FEDERATED_COMMANDS` is asserted against
+`Dispatcher._handlers` in the suite, so a new command reaches federation by a
+decision rather than by omission — the same guard the MCP tool names have.
+
+Every write, every maintenance command and `build` stay local. `check` in
+particular: a peer's dangling edges are not this repository's to report, and
+`--fix` would repair someone else's corpus.
+
+### Merging is by similarity, never by score
+
+`score` is reciprocal-rank fusion, so it says where a document placed **within
+its own store's ranking**. A two-store probe makes the trap concrete: a document
+with `similarity 0.0` scored `0.0164` against another store's `similarity 0.378`
+scoring `0.0328` — the ordering those scores imply is an artifact of how many
+documents each store held. `similarity` is a raw cosine against the query and is
+the one number comparable across stores, which is what the merge sorts on.
+
+Hits carrying no `similarity` (lexical-only, or reached through the graph) are
+appended after the scored ones, round-robin across stores in each store's own
+order. Absent still means *not scored*, never zero — dropping them would filter
+on embedding-queue state, and sorting them as 0.0 would rank them below a
+genuinely irrelevant match. The local store wins ties. The merged list is then
+truncated to `limit`, so `--limit` keeps meaning "this many documents".
+
+A cross-store re-fusion of the raw rankings was the alternative. It is arguably
+more correct and it requires the fan-out to live inside `indexing`, which would
+make every store's candidate list one query's working set; that is a different
+and much larger change, and it can supersede this one on evidence.
+
+### `store` is stamped per row only while federating
+
+The read paths deliberately carry no `store` field: it is one absolute path,
+identical for every row, and per-row it costs more than the field is worth. That
+argument holds exactly while there is one store. With peers, the path is the
+only thing distinguishing two hits, so every row carries `store` — and a
+single-store read stays byte-identical to what it returns today. Ids remain the
+only identifier; `store` disambiguates a collision rather than qualifying the id.
+
+`get` tries the local store first and then each peer in order, first match wins.
+
+## Consequences
+
+- Supersedes the federation exclusion in adr-20eec6e2e2ca. Store *resolution* is
+  unchanged — there is still exactly one home per invocation, and it is still the
+  only one written to.
+- Each peer costs an engine and a schema load; the embedder is shared with the
+  primary, so the model is still loaded once per process.
+- A peer with a different schema is read as it is. Its types and statuses are
+  whatever that store declared, and this store's `check` says nothing about them.
+- Cross-store relation edges remain impossible: Tier 0 validates a `related`
+  target against the local store, and an edge that could point anywhere would
+  make `dangling` unanswerable.
+- `--limit` against N stores asks each for `limit` and truncates the merge, so a
+  federated read costs N times the work of a local one.

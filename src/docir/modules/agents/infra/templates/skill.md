@@ -464,6 +464,18 @@ to leave alone.
   skipped, not indexed — it exists on disk and is invisible to every read path. Non-zero
   means run `docir check` and fix the named file before trusting a search.
 
+## Other repositories' decisions
+
+If `.docir/stores.yaml` exists, this store reads peers alongside its own, and
+`context`, `query`, `search` and `get` already cover them — every row carries a
+`store` field naming where it came from. Add one for a single command with
+`--store ../platform/.docir`.
+
+Writes never federate: `add` and `update` always land in this repo's store, and
+so does everything `check` reports. If a peer is unreadable docir says so on
+stderr and answers from the rest — treat that as information, not as a failure
+to retry.
+
 ## Publishing for humans
 
 `docir build --out site/` renders the whole store as a self-contained static

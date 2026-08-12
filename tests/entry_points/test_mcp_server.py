@@ -24,6 +24,7 @@ from fastmcp.exceptions import ToolError
 from docir.config.settings import Settings
 from docir.entry_points.composition import Container, InProcessExecutor
 from docir.entry_points.dispatch import Dispatcher
+from docir.entry_points.federation import FEDERATED_COMMANDS
 from docir.entry_points.mcp.server import build_mcp_server
 from docir.modules.documents.api import describe_schema, load_schema
 from docir.platform.errors import DaemonError
@@ -108,12 +109,29 @@ def test_every_dispatcher_command_has_a_tool(server, dispatcher: Dispatcher) -> 
     direction". `ping` is excluded explicitly so removing it from the surface
     stays a decision rather than an omission.
     """
-    commands = set(dispatcher._handlers) - UNEXPOSED_COMMANDS
+    commands = set(dispatcher.commands) - UNEXPOSED_COMMANDS
     assert commands == set(COMMAND_TOOLS), "dispatcher vocabulary and COMMAND_TOOLS disagree"
 
     exposed = set(list_tools(server))
     missing = set(COMMAND_TOOLS.values()) - exposed
     assert not missing, f"dispatcher commands with no MCP tool: {sorted(missing)}"
+
+
+def test_every_federated_command_takes_stores(server) -> None:
+    """An MCP-only agent must be able to name a peer store per call.
+
+    The CLI has `--store`; without the matching parameter here, the two
+    transports answer different questions — which is the drift the whole MCP
+    module exists to prevent. Asserted from the published schema, so a parameter
+    the protocol cannot express fails here too.
+    """
+    tools = list_tools(server)
+    missing = sorted(
+        COMMAND_TOOLS[command]
+        for command in FEDERATED_COMMANDS
+        if "stores" not in tools[COMMAND_TOOLS[command]].inputSchema.get("properties", {})
+    )
+    assert not missing, f"federated commands whose tool cannot name a peer store: {missing}"
 
 
 def test_read_tools_are_annotated_read_only(server) -> None:

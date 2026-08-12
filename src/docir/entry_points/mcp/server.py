@@ -28,6 +28,7 @@ from typing import Any, cast
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 
+from docir.entry_points.federation import STORES_KEY, resolve_extra
 from docir.entry_points.payload import trim
 from docir.platform.errors import DocirError
 from docir.platform.transport.messages import Request, RequestExecutor
@@ -124,6 +125,7 @@ def build_mcp_server(
         expand: int = _DEFAULT_EXPAND,
         min_score: float | None = None,
         include_inactive: bool = False,
+        stores: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Rank the documents relevant to a task. Start here.
 
@@ -147,6 +149,9 @@ def build_mcp_server(
                 and has no absolute meaning). Omit for no floor.
             include_inactive: Also return archived documents and ones in a
                 status their type marks inactive.
+            stores: Extra store paths to read alongside this one, for this call.
+                Added to whatever `stores.yaml` already declares. Never written
+                to; every row of the reply names the `store` it came from.
         """
         return run.many(
             "context",
@@ -156,6 +161,7 @@ def build_mcp_server(
                 "expand": expand,
                 "min_score": min_score,
                 "include_inactive": include_inactive,
+                STORES_KEY: resolve_extra(stores or []),
             },
         )
 
@@ -165,6 +171,7 @@ def build_mcp_server(
         limit: int = 20,
         offset: int = 0,
         include_inactive: bool = False,
+        stores: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Full-text search over title, description and body.
 
@@ -177,6 +184,7 @@ def build_mcp_server(
             limit: Page size.
             offset: How many matches to skip.
             include_inactive: Also return documents in an inactive status.
+            stores: Extra store paths to read alongside this one, for this call.
         """
         return run.many(
             "search",
@@ -185,6 +193,7 @@ def build_mcp_server(
                 "limit": limit,
                 "offset": offset,
                 "include_inactive": include_inactive,
+                STORES_KEY: resolve_extra(stores or []),
             },
         )
 
@@ -200,6 +209,7 @@ def build_mcp_server(
         include_inactive: bool = False,
         limit: int = 50,
         offset: int = 0,
+        stores: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Filter documents by their frontmatter. No text matching.
 
@@ -224,6 +234,7 @@ def build_mcp_server(
             include_inactive: Also return documents in an inactive status.
             limit: Page size.
             offset: How many documents to skip.
+            stores: Extra store paths to read alongside this one, for this call.
         """
         return run.many(
             "query",
@@ -238,11 +249,14 @@ def build_mcp_server(
                 "include_inactive": include_inactive,
                 "limit": limit,
                 "offset": offset,
+                STORES_KEY: resolve_extra(stores or []),
             },
         )
 
     @mcp.tool(annotations=_READ_ONLY)
-    def docir_get(doc_id: str, section: str | None = None) -> dict[str, Any]:
+    def docir_get(
+        doc_id: str, section: str | None = None, stores: list[str] | None = None
+    ) -> dict[str, Any]:
         """Fetch one document — the whole body, or a single section of it.
 
         The only read path that returns a body. Reach for it after a skeleton
@@ -257,8 +271,17 @@ def build_mcp_server(
         Args:
             doc_id: The document id (e.g. "adr-3f9a2b1c7d4e").
             section: A heading. Returns that heading and the text under it.
+            stores: Extra store paths to search alongside this one. A federated
+                hit names its `store`; this is how you then read it.
         """
-        return run.one("get", {"doc_id": doc_id, "section": section})
+        return run.one(
+            "get",
+            {
+                "doc_id": doc_id,
+                "section": section,
+                STORES_KEY: resolve_extra(stores or []),
+            },
+        )
 
     @mcp.tool(annotations=_READ_ONLY)
     def docir_schema() -> dict[str, Any]:

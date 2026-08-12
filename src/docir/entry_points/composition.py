@@ -16,10 +16,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from sqlalchemy import Engine
+from sqlalchemy.exc import SQLAlchemyError
 
 from docir import __version__
 from docir.config.settings import Settings, enclosing_project_home
 from docir.entry_points.dispatch import Dispatcher
+from docir.entry_points.federation import FederatedDispatcher, Reader
 from docir.modules.agents.api import InstalledFile, UpdateRequest, build_agent_service
 from docir.modules.documents.api import (
     ID_STYLES,
@@ -63,7 +65,10 @@ class Container:
     """The wired application object graph plus the resources it owns."""
 
     settings: Settings
-    dispatcher: Dispatcher
+    #: The federated wrapper, not the bare dispatcher: reads fan out to declared
+    #: peers and everything else delegates unchanged (adr-fb938175f72a). With no
+    #: peers declared it is a pass-through.
+    dispatcher: FederatedDispatcher
     scheduler: EmbeddingScheduler
     engine: Engine
     #: The embedder actually built, not the one requested. `_build_embedder`
@@ -78,9 +83,14 @@ class Container:
 
 
 class InProcessExecutor(RequestExecutor):
-    """Dispatches requests directly against the local use-case services."""
+    """Dispatches requests directly against the local use-case services.
 
-    def __init__(self, dispatcher: Dispatcher) -> None:
+    Typed to :class:`Reader` rather than :class:`Dispatcher` because the
+    federated wrapper is what the container hands over; the executor only ever
+    calls ``dispatch``.
+    """
+
+    def __init__(self, dispatcher: Reader) -> None:
         self._dispatcher = dispatcher
 
     def execute(self, request: Request) -> Response:
@@ -175,13 +185,85 @@ def build_container(
         code_matcher,
     )
     dispatcher = Dispatcher(document_service, tag_service, maintenance_service)
+
+    def open_peer(home: Path) -> tuple[Reader | None, str]:
+        return build_peer_reader(home, embedder=embedder, clock=clock)
+
     return Container(
         settings=settings,
-        dispatcher=dispatcher,
+        dispatcher=FederatedDispatcher(dispatcher, settings.home, open_peer),
         scheduler=scheduler,
         engine=engine,
         embedder=embedder,
     )
+
+
+def peer_status(home: Path) -> str:
+    """Why a peer store cannot be read, or ``""`` when it can.
+
+    One implementation, two callers: the reader factory refuses to open an
+    unreadable peer, and the CLI warns about it before dispatching (the daemon's
+    own stderr is a log nobody reads — the same reason the schema notice is
+    emitted client-side). Two copies of "is this peer usable?" would answer
+    differently the first time one of them learned about a new failure.
+    """
+    if not home.is_dir():
+        return "no such store"
+    settings = Settings.resolve(home)
+    if not settings.db_path.is_file():
+        return "no index — run `docir reindex` in that store"
+    if not settings.schema_path.is_file():
+        return f"no {settings.schema_path.name}"
+    return ""
+
+
+def build_peer_reader(home: Path, *, embedder: Embedder, clock: Clock) -> tuple[Reader | None, str]:
+    """Open a peer store for reading, or say why it stayed shut.
+
+    Deliberately **not** ``build_container``: that runs migrations and creates
+    directories, and a peer is someone else's repository. The engine's URL
+    carries ``mode=ro``, so SQLite refuses a write rather than docir promising
+    not to attempt one — the guarantee is the database's, not this function's.
+
+    The reader is a full :class:`Dispatcher` rather than a hand-rolled read
+    surface, so a peer's ``context`` is coerced and executed by exactly the code
+    the local one is; a second vocabulary here is the drift the dispatcher
+    exists to prevent. The embedder is shared with the primary, so N peers still
+    load one model.
+    """
+    reason = peer_status(home)
+    if reason:
+        return None, reason
+    settings = Settings.resolve(home)
+    try:
+        schema = load_schema(settings.schema_path)
+        engine = create_index_engine(f"sqlite:///file:{settings.db_path}?mode=ro&uri=true")
+        session_factory = create_session_factory(engine)
+
+        def uow_factory() -> UnitOfWork:
+            return SqlAlchemyUnitOfWork(session_factory)
+
+        file_store = MarkdownDocumentFileStore(settings.docs_root)
+        # An inline scheduler is never reached on a read path (only writes
+        # schedule), and a write would be refused by the read-only connection
+        # before it could enqueue anything.
+        scheduler = build_scheduler(uow_factory, embedder, background=False)
+        documents = DocumentService(uow_factory, file_store, scheduler, embedder, clock, schema)
+        tags = TagService(uow_factory, YamlTagFileStore(settings.tags_path), file_store)
+        maintenance = MaintenanceService(
+            uow_factory,
+            file_store,
+            YamlTagFileStore(settings.tags_path),
+            scheduler,
+            embedder,
+            schema,
+            clock,
+            __version__,
+            None,
+        )
+    except (DocirError, SQLAlchemyError, OSError) as exc:
+        return None, f"cannot be read ({type(exc).__name__})"
+    return Dispatcher(documents, tags, maintenance), ""
 
 
 def build_in_process_executor(

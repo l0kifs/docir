@@ -63,6 +63,17 @@ class Dispatcher:
             "embed_flush": self._embed_flush,
         }
 
+    @property
+    def commands(self) -> frozenset[str]:
+        """The command vocabulary, for anything that must cover all of it.
+
+        Public because two guards depend on it — the MCP surface asserts a tool
+        per command, and federation asserts which commands fan out — and a guard
+        reaching into a private attribute breaks silently the day the attribute
+        is renamed.
+        """
+        return frozenset(self._handlers)
+
     def dispatch(self, command: str, payload: Payload) -> object:
         handler = self._handlers.get(command)
         if handler is None:

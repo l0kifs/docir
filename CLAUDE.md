@@ -505,6 +505,18 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   absent from every list path by contract (the skeleton rule), so a build that stopped at
   `query` would report the right count and publish empty pages, which looks exactly like
   success. `test_e2e_build.py::test_bodies_reach_the_pages` pins that.
+- **Reads federate; writes never do (adr-fb938175f72a).** `.docir/stores.yaml` declares peer
+  stores, and `FEDERATED_COMMANDS` (`entry_points/federation.py`) is exactly
+  `get`/`query`/`search`/`context` — asserted against `Dispatcher.commands` in the suite, so a
+  new command joins by decision rather than by omission. Three details are load-bearing. Peers
+  are opened `mode=ro`, which is why they get their own construction path: `build_container`
+  runs migrations and creates directories, and a peer is another repository. An unreadable peer
+  is skipped with a stderr warning (`peer_status`, called by both the CLI and the fan-out, so
+  the two cannot disagree) — a peer's index is gitignored, so a fresh clone of it has none, and
+  failing the read would make that everyone's outage. And `merge_ranked` sorts on `similarity`,
+  never `score`: RRF ranks *within one store*, so cross-store scores compare corpus sizes rather
+  than relevance. Rows carry `store` only while federating — the field is pure cost with one
+  store, which is why the read paths never carried it before.
 - **All exceptions live in `platform/errors`.** `DocirError` is the base and carries an `exit_code`;
   `entry_points/cli/runner.py` maps that onto the process exit code. Raise a typed subclass, not a
   bare `DocirError`, so the CLI reports the right code.

@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Reads federate across declared stores; writes never do.** In a multi-repo organisation the
+  decision governing the service you are editing lives in the platform repo, and an agent that
+  cannot see it re-decides. A store now declares peers in a committed `.docir/stores.yaml`
+  (relative paths resolve against the store, so a clone works unchanged), and `context`,
+  `query`, `search` and `get` answer from all of them. `--store <path>` adds one for a single
+  invocation, resolved against the working directory the way every other path argument is.
+
+  **Peers are opened read-only at the database** — `mode=ro`, so SQLite refuses a write rather
+  than docir promising not to attempt one. Peers get their own construction path because
+  `build_container` runs migrations and creates directories, and a peer is someone else's
+  repository. A peer that cannot be read is **skipped with a warning, never fatal**: its index
+  is derived and gitignored, so a colleague's fresh clone would otherwise be everyone's outage.
+
+  **The merge sorts on `similarity`, never `score`.** `score` is reciprocal-rank fusion — where
+  a document placed *within its own store* — so comparing two stores' scores compares the sizes
+  of their corpora. Hits with no vector are appended round-robin per store rather than treated
+  as 0.0, because absent still means *not scored*. Every row carries `store` while federating;
+  a single-store read is byte-identical to what it returned before.
+
+  `docir_context`, `docir_search`, `docir_query` and `docir_get` take the same list as a
+  `stores` argument, so an MCP-only agent is not restricted to the committed set — the two
+  transports would otherwise answer different questions, which is what the MCP module exists to
+  prevent. A test asserts the parameter against `FEDERATED_COMMANDS`.
+
+  Supersedes the federation exclusion in adr-20eec6e2e2ca. See adr-fb938175f72a.
+
 - **`docir build` draws `mermaid` fences as diagrams.** A fenced `mermaid` block is the one
   code block whose author meant the picture rather than the text; published as a highlighted
   code block, a sequence diagram in an architecture note is a wall of arrows the reader has to

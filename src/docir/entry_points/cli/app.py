@@ -92,6 +92,13 @@ def main_callback(
             help="Store to use (default: $DOCIR_HOME, a discovered .docir, or ~/.docir).",
         ),
     ] = None,
+    store: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--store",
+            help="Also read this store (repeatable); adds to stores.yaml. Reads only.",
+        ),
+    ] = None,
     no_daemon: Annotated[
         bool, typer.Option("--no-daemon", help="Run in-process, bypass the daemon.")
     ] = False,
@@ -109,7 +116,15 @@ def main_callback(
 ) -> None:
     """Resolve global options and initialize CLI state."""
     settings = Settings.resolve(home, use_daemon=False if no_daemon else None)
-    set_state(CliState(settings=settings, json_output=json_output, pretty=pretty, trim=not no_trim))
+    set_state(
+        CliState(
+            settings=settings,
+            json_output=json_output,
+            pretty=pretty,
+            trim=not no_trim,
+            stores=tuple(store or ()),
+        )
+    )
 
 
 @app.command()

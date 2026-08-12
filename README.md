@@ -325,6 +325,36 @@ beside the pages and loads it from there. No CDN, so the site still opens from
 loaded only on the pages that do. Without the flag the diagram publishes as its
 own source, framed and copyable — the same block you have today.
 
+## Reading across repositories
+
+The decision that governs the service you are editing often lives in another
+repo, and an agent that cannot see it re-decides. A store declares the peers it
+reads in `.docir/stores.yaml` — committed, so the set is the team's rather than
+each machine's:
+
+```yaml
+stores:
+  - ../platform/.docir       # relative to this store, so a clone works unchanged
+  - ~/work/shared/.docir
+```
+
+`docir context`, `query`, `search` and `get` then answer from all of them, and
+every row names the `store` it came from. `--store <path>` adds one for a single
+command, and the four MCP read tools take the same thing as a `stores` argument,
+so an agent that only speaks MCP is not stuck with the committed set. Four
+things are worth knowing:
+
+- **Writes never federate.** `add`, `update`, `check`, `reindex` and `build` see
+  only the resolved home. There is still exactly one store you can write to.
+- **Peers are opened read-only** — the connection carries SQLite's `mode=ro`, so
+  a write is refused by the database rather than avoided by convention.
+- **A peer that cannot be read is skipped, not fatal.** Its index is derived and
+  gitignored, so a colleague's fresh clone has none; docir says so on stderr and
+  answers from the rest.
+- **Ranking merges on `similarity`, not `score`.** `score` is a rank within one
+  store's own fusion, so comparing two stores' scores compares corpus sizes.
+  Hits with no vector yet are appended, round-robin, rather than treated as 0.
+
 ## How state is stored
 
 State lives in one resolved store per invocation. Run `docir init` in a repo to keep its

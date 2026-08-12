@@ -16,7 +16,13 @@ import typer
 from docir import __version__
 from docir.config.settings import Settings
 from docir.entry_points.cli import rendering
-from docir.entry_points.composition import Container, build_in_process_executor
+from docir.entry_points.composition import Container, build_in_process_executor, peer_status
+from docir.entry_points.federation import (
+    FEDERATED_COMMANDS,
+    STORES_KEY,
+    peer_homes,
+    resolve_extra,
+)
 from docir.modules.release.api import build_release_service
 from docir.platform.errors import DocirError
 from docir.platform.transport.messages import Request, RequestExecutor, Response
@@ -30,6 +36,10 @@ class CliState:
     json_output: bool = False
     pretty: bool = False
     trim: bool = True
+    #: Extra peer stores for this invocation (``--store``), added to whatever
+    #: ``stores.yaml`` declares. Reads only — every write goes to the one
+    #: resolved home (adr-fb938175f72a).
+    stores: tuple[str, ...] = ()
 
 
 _state: CliState | None = None
@@ -99,6 +109,7 @@ def execute(command: str, payload: dict[str, object]) -> object:
     :func:`_unwrap`, which is why this survived (issue-06f48d8f239f).
     """
     state = get_state()
+    payload = _with_peers(state, command, payload)
     executor, closer = run_local(lambda: _build_executor(state.settings))
     try:
         response = run_local(lambda: executor.execute(Request(command=command, payload=payload)))
@@ -109,6 +120,35 @@ def execute(command: str, payload: dict[str, object]) -> object:
             closer.close()
     warn_about_a_newer_release(state.settings)
     return _unwrap(response)
+
+
+def _with_peers(state: CliState, command: str, payload: dict[str, object]) -> dict[str, object]:
+    """Attach this invocation's ad-hoc peers, and warn about unreachable ones.
+
+    The warning is client-side for the reason the schema notice is: with the
+    daemon, the process that discovers an unreadable peer is the daemon, and its
+    stderr is a log nobody is reading. The daemon skips the same peers
+    independently — both ask :func:`peer_status`, so they cannot disagree about
+    what "unavailable" means.
+
+    A peer is dropped from the read, never fatal to it: a peer is someone else's
+    repository, and its index is derived and gitignored, so a colleague's fresh
+    clone would otherwise be everyone's outage.
+    """
+    if command not in FEDERATED_COMMANDS:
+        return payload
+    # Resolved here, against *this* process's working directory: a `--store`
+    # path is one a person typed at a shell, and with the daemon the process
+    # that reads it is a different one that started somewhere else entirely.
+    extra = resolve_extra(state.stores)
+    homes = peer_homes(state.settings.home, extra)
+    if not homes:
+        return payload
+    for home in homes:
+        reason = peer_status(home)
+        if reason:
+            rendering.render_warning(f"skipping peer store {home}: {reason}")
+    return {**payload, STORES_KEY: extra}
 
 
 def warn_about_a_newer_release(settings: Settings) -> None:

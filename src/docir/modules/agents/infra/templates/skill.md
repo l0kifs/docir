@@ -474,6 +474,7 @@ form; it shows the relation graph in both directions and flags stale documents.
 ```bash
 docir build --out site/ --title "<project> — design docs"   # heading, tab, wordmark
 docir build --out site/ --logo assets/logo.svg              # mark + favicon
+docir build --out site/ --mermaid vendor/mermaid.min.js     # draw mermaid fences
 docir build --out site/ --include-archived                  # archived docs too
 ```
 
@@ -483,6 +484,12 @@ favicon — pass it when the repo has its own logo, otherwise the site carries
 docir's. Archived documents are left out unless you ask for them. `--out` is
 regenerated each build, and a directory docir did not build is refused unless
 you pass `--force`.
+
+A ` ```mermaid ` fence in a body publishes as its own source unless you pass
+`--mermaid` pointing at mermaid's browser bundle; docir writes it beside the
+pages and loads it from there, so the site still opens from `file://`. docir
+does not ship the bundle — it is megabytes — and writes it only when a document
+actually draws something.
 
 ## Working across git branches
 

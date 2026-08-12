@@ -48,6 +48,7 @@ from markdown_it import MarkdownIt
 from markdown_it.token import Token
 
 from docir.modules.publishing.domain.site import INBOUND_KIND, Edge, Site, SiteDocument
+from docir.modules.publishing.infra import diagrams
 from docir.modules.publishing.infra.branding import DOCIR_BRANDING, Branding, brand_html
 from docir.modules.publishing.infra.graph import render_graph_page
 from docir.modules.publishing.infra.highlight import highlight, language_label
@@ -449,6 +450,7 @@ background:var(--bg);border-right:1px solid var(--line);box-shadow:var(--shadow)
 grid-column:1}
 .tiles{grid-template-columns:repeat(2,1fr)}}
 """
+    + diagrams.DIAGRAM_CSS
 )
 
 _FILTER_JS = """\
@@ -740,7 +742,12 @@ addEventListener('popstate',()=>{
 
 
 def render_site(
-    site: Site, *, title: str, version: str, branding: Branding = DOCIR_BRANDING
+    site: Site,
+    *,
+    title: str,
+    version: str,
+    branding: Branding = DOCIR_BRANDING,
+    runtime: str | None = None,
 ) -> dict[str, str]:
     """Render the whole site as ``relative path -> file contents``.
 
@@ -748,6 +755,11 @@ def render_site(
     the corpus drawn as an interactive map. Returning content rather than
     writing it keeps this layer free of the filesystem, so a test can assert on
     the HTML without a temp directory and the writer has exactly one job.
+
+    ``runtime`` is the mermaid bundle's source, when the publisher supplied one.
+    It joins the returned files — and only if some page actually drew a diagram,
+    which is knowable here and nowhere else: this is the layer that rendered the
+    bodies. A corpus with no mermaid in it publishes no megabyte of JavaScript.
     """
     by_id = {document.id: document for document in site.documents}
     # Previous/next inside the document's own type, in the listing's order —
@@ -773,8 +785,13 @@ def render_site(
             by_id=by_id,
             neighbors=neighbors[document.id],
             branding=branding,
+            runtime=runtime is not None,
         )
         pages[source_name(document.id)] = document.body
+    if runtime is not None and any(
+        diagrams.RUNTIME_FILE in page for name, page in pages.items() if name.endswith(".html")
+    ):
+        pages[diagrams.RUNTIME_FILE] = runtime
     return pages
 
 
@@ -1126,6 +1143,7 @@ def _render_document(
     by_id: Mapping[str, SiteDocument],
     neighbors: tuple[SiteDocument | None, SiteDocument | None],
     branding: Branding,
+    runtime: bool = False,
 ) -> str:
     # Every published document except this one: a body that names its own id
     # would otherwise get a link to the page it is already on, which reads as a
@@ -1185,6 +1203,11 @@ def _render_document(
         branding=branding,
         rail=rail,
         stale_count=site.stale_count,
+        # Only a page that has a diagram loads the runtime: it is megabytes,
+        # and most documents have none.
+        diagram_scripts=(
+            diagrams.script_tags() if runtime and diagrams.DIAGRAM_CLASS in body_html else ""
+        ),
     )
 
 
@@ -1663,9 +1686,14 @@ def _render_fence(_renderer: object, tokens: list, index: int, *_: object) -> st
     the raw source — after rendering, the language is gone and the source is
     HTML that a second pass would have to un-escape to colour. Registered via
     ``add_render_rule``, which binds the renderer as the first argument.
+
+    A ``mermaid`` fence leaves here as a figure instead: it is the one fence
+    whose author meant the picture rather than the text (``infra/diagrams.py``).
     """
     token = tokens[index]
     info = getattr(token, "info", "") or ""
+    if info.strip().split(" ")[0].lower() == diagrams.LANGUAGE:
+        return diagrams.render_diagram(token.content)
     return (
         '<div class="codeblk"><div class="hd">'
         f"<span>{html.escape(language_label(info))}</span>"
@@ -1851,6 +1879,7 @@ def _page(
     branding: Branding,
     rail: str = "",
     stale_count: int = 0,
+    diagram_scripts: str = "",
 ) -> str:
     """One shell for every page: top bar, corpus sidebar, content, optional rail.
 
@@ -1905,6 +1934,7 @@ the markdown is the source of truth.</footer></div>
   </div>
 </div>
 <script>{_SHELL_JS}</script>
+{diagram_scripts}
 </body></html>
 """
 

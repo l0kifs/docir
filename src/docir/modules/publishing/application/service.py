@@ -8,6 +8,7 @@ from pathlib import Path
 
 from docir.modules.publishing.domain.site import build_site
 from docir.modules.publishing.infra.branding import resolve_branding
+from docir.modules.publishing.infra.diagrams import resolve_runtime
 from docir.modules.publishing.infra.rendering import render_search_index, render_site
 from docir.platform.errors import DocirError
 
@@ -28,6 +29,11 @@ class PublishRequest:
     #: docir's. A site carrying someone else's logo is not their
     #: documentation, so this is a build input rather than a constant.
     logo: Path | None = None
+    #: Mermaid's browser bundle, to draw ``mermaid`` fences as diagrams.
+    #: A build input rather than a bundled asset — it is megabytes of
+    #: JavaScript, and a corpus that draws no diagrams should not carry it.
+    #: Absent, a mermaid fence publishes its source (``infra/diagrams.py``).
+    mermaid: Path | None = None
     #: Overwrite a directory that is not a docir site. Off by default: `--out`
     #: is a path a person types, and a typo pointing at `src/` should not be
     #: answered by writing HTML into it.
@@ -59,19 +65,27 @@ class SiteBuilder:
         """
         out = Path(request.out)
         self._check_target(out, force=request.force)
-        # Before the guard clears the directory: an unreadable logo should
-        # fail the build, not empty the output and then fail it.
+        # Before the guard clears the directory: an unreadable logo or mermaid
+        # bundle should fail the build, not empty the output and then fail it.
         branding = resolve_branding(request.logo)
+        runtime = resolve_runtime(request.mermaid)
 
         site = build_site(request.documents)
-        pages = render_site(site, title=request.title, version=request.version, branding=branding)
+        pages = render_site(
+            site,
+            title=request.title,
+            version=request.version,
+            branding=branding,
+            runtime=runtime,
+        )
         pages["search-index.json"] = render_search_index(site)
 
         out.mkdir(parents=True, exist_ok=True)
-        # Both generated extensions are swept, for the same reason: a page and
-        # its markdown source are equally derived, and one left behind after
-        # its document is deleted is an orphan nobody knows is stale.
-        for pattern in ("*.html", "*.md"):
+        # Every generated extension is swept, for the same reason: a page, its
+        # markdown source and the diagram runtime are equally derived, and one
+        # left behind after its document is deleted — or after the build stops
+        # being given ``--mermaid`` — is an orphan nobody knows is stale.
+        for pattern in ("*.html", "*.md", "*.js"):
             for existing in sorted(out.glob(pattern)):
                 existing.unlink()
         for name, content in pages.items():

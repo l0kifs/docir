@@ -20,8 +20,9 @@ and staleness, which no other ADR site shows.
 
 `PublishRequest` carries `out` (target directory), `documents` (a sequence of
 `docir get` payloads), `title`, `version`, `logo` (an optional path to the
-publisher's own mark) and `force`. `PublishResult` reports `out`, `pages`,
-`documents`, `stale` and the `files` written.
+publisher's own mark), `mermaid` (an optional path to mermaid's browser bundle)
+and `force`. `PublishResult` reports `out`, `pages`, `documents`, `stale` and
+the `files` written.
 
 ## Behavioural guarantees
 - **Input is data, not services.** `documents` is the documented JSON shape of
@@ -76,6 +77,17 @@ publisher's own mark) and `force`. `PublishResult` reports `out`, `pages`,
   theme (comment / keyword / string / function / flag) covering shell, python,
   yaml, json, sql and toml. An unrecognised language renders plain rather than
   guessing — a wrong colour asserts a structure the source does not have.
+- **A `mermaid` fence is a picture, and its runtime is a build input.** The one
+  fence whose author meant the diagram rather than the text renders as a figure
+  wearing the code block's frame. `mermaid` supplies mermaid's browser bundle;
+  it is written beside the pages as `mermaid.min.js` and loaded from there with
+  a relative classic `<script>` — never a CDN, and never a module, because both
+  break a site opened from `file://`. It is written **only when some document
+  actually drew a diagram**, and loaded only on the pages that have one: the
+  bundle is megabytes. Without it the element holds its own source as
+  preformatted text, framed and copyable — a page whose runtime is absent is no
+  worse than the code block it replaced. Diagrams are redrawn on a theme change,
+  because mermaid bakes its palette into the SVG at render time.
 - **Chrome identifies a document only by its docir id.** The breadcrumb leaf,
   the id chip and the copyable `docir get <id>` command all carry the id;
   sequence labels inside titles ("adr-a343140d72e2") are title text, never parsed or

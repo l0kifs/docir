@@ -203,6 +203,10 @@ def build(
         Path | None,
         typer.Option("--logo", help="Image for the mark and favicon (default: docir's)."),
     ] = None,
+    mermaid: Annotated[
+        Path | None,
+        typer.Option("--mermaid", help="Mermaid browser bundle, to draw mermaid fences."),
+    ] = None,
     include_archived: Annotated[
         bool, typer.Option("--include-archived", help="Also publish archived documents.")
     ] = False,
@@ -231,6 +235,12 @@ def build(
     (svg/png/jpg/webp/gif), which sets both — one flag brands the whole site. It
     is inlined into every page so the site stays self-contained, which is why a
     logo has a size limit: export it at header size.
+
+    A ```mermaid fence in a body publishes as its source unless you pass
+    --mermaid path/to/mermaid.min.js (the browser bundle), which is written
+    beside the pages and drawn from there — no CDN, so the site still works from
+    file://. The runtime is megabytes, so it is yours to supply and is only
+    written when some document actually draws a diagram.
     """
     _warn_on_global_fallback()
     state = get_state()
@@ -258,6 +268,7 @@ def build(
                 title=title,
                 version=__version__,
                 logo=logo,
+                mermaid=mermaid,
                 force=force,
             )
         )

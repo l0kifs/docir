@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`docir build` draws `mermaid` fences as diagrams.** A fenced `mermaid` block is the one
+  code block whose author meant the picture rather than the text; published as a highlighted
+  code block, a sequence diagram in an architecture note is a wall of arrows the reader has to
+  compile in their head. It now renders as a figure wearing the code block's frame, with the
+  diagram inside it.
+
+  **The runtime is a build input, not a bundled asset** — the same call `--logo` makes.
+  Mermaid's browser bundle is megabytes of JavaScript, and vendoring it would put it in every
+  wheel, every CI image and every install's supply chain to serve the corpora that draw
+  diagrams. `docir build --out site/ --mermaid path/to/mermaid.min.js` supplies it; docir
+  writes it beside the pages and loads it from there with a relative classic `<script>` — never
+  a CDN and never a module, both of which break a site opened from `file://`. It is written
+  only when some document actually drew a diagram, and loaded only on the pages that have one.
+
+  **Without the flag the diagram publishes its own source**, framed and copyable, exactly as
+  the code block did — a page whose runtime is absent is no worse than it was. Diagrams redraw
+  on a theme change, because mermaid bakes its palette into the SVG at render time, so a
+  diagram drawn in light mode would otherwise stay dark-on-dark after the toggle.
+
 ## [0.12.0] - 2026-08-09
 
 The release that made upgrading docir a docir command. An upgrade used to be three steps a

@@ -296,6 +296,7 @@ a hard sell to them.
 docir build --out site/                             # one page per document, plus an index
 docir build --out site/ --title "Acme — decisions"  # names the heading, the tab and the wordmark
 docir build --out site/ --logo brand/mark.svg       # your logo in the corner and the tab
+docir build --out site/ --mermaid vendor/mermaid.min.js   # draw ```mermaid fences as diagrams
 docir build --out site/ --include-archived          # publish archived documents too
 ```
 
@@ -314,6 +315,15 @@ heading, the browser tab and the name beside the mark; without it every page
 reads "Documentation". `--out` is regenerated on every build, so a document
 deleted from the store cannot survive as an orphaned page; a directory docir did
 not build is refused unless you pass `--force`.
+
+A fenced `mermaid` block is the one code block whose author meant the picture,
+so the site draws it — given a runtime. Mermaid's browser bundle is megabytes of
+JavaScript, which docir will not put in every wheel to serve the corpora that
+draw diagrams, so you supply it: `--mermaid path/to/mermaid.min.js` writes it
+beside the pages and loads it from there. No CDN, so the site still opens from
+`file://`; it is written only when some document actually draws something, and
+loaded only on the pages that do. Without the flag the diagram publishes as its
+own source, framed and copyable — the same block you have today.
 
 ## How state is stored
 

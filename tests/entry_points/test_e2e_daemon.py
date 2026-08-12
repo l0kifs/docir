@@ -20,7 +20,7 @@ import pytest
 
 from docir import __version__
 from docir.config.settings import DEFAULT_REQUEST_TIMEOUT, Settings
-from docir.entry_points.composition import Container, InProcessExecutor
+from docir.entry_points.composition import Container, InProcessExecutor, build_container
 from docir.entry_points.daemon import lifecycle, socket_executor
 from docir.entry_points.daemon.socket_executor import SocketExecutor
 from docir.platform.errors import DaemonError, DaemonTimeoutError
@@ -507,6 +507,92 @@ class TestRealDaemon:
             was_running = lifecycle.stop(daemon_settings)
             assert was_running
         assert not lifecycle.is_running(daemon_settings)
+
+    def test_reads_federate_over_the_socket(self, settings: Settings, tmp_path: Path) -> None:
+        """The peer readers live in the daemon, and nothing else exercises that.
+
+        In-process tests build the fan-out in the test's own process, so they
+        cannot show that a peer opens inside a *spawned* daemon, that the
+        `stores` payload key survives JSON on the wire, or that the `store`
+        stamp comes back through the protocol. Each of those is a place
+        federation could be silently local.
+        """
+        peer_home = tmp_path / "peer" / ".docir"
+        peer = build_container(
+            Settings.resolve(peer_home, use_daemon=False), background_embeddings=False
+        )
+        try:
+            peer.dispatcher.dispatch(
+                "add",
+                {
+                    "type": "decision",
+                    "title": "All services authenticate with mTLS",
+                    "description": "Platform-wide transport rule.",
+                },
+            )
+        finally:
+            peer.close()
+
+        daemon_settings = Settings.resolve(settings.home, use_daemon=True)
+        daemon_settings.ensure_directories()
+        try:
+            lifecycle.ensure_running(daemon_settings)
+            executor = SocketExecutor(daemon_settings)
+            local = executor.execute(
+                Request(
+                    command="add",
+                    payload={
+                        "type": "issue",
+                        "title": "Login endpoint returns 500",
+                        "description": "Fails under load.",
+                    },
+                )
+            )
+            assert local.ok
+
+            # Ad-hoc first: the peer travels in the payload, as `--store` and the
+            # MCP `stores` argument both send it.
+            ad_hoc = executor.execute(
+                Request(
+                    command="query", payload={"limit": 10, "stores": [str(peer_home.resolve())]}
+                )
+            )
+            assert ad_hoc.ok
+            rows = ad_hoc.data
+            assert isinstance(rows, list)
+            assert {row["title"] for row in rows} == {
+                "Login endpoint returns 500",
+                "All services authenticate with mTLS",
+            }
+            assert {row["store"] for row in rows} == {
+                str(daemon_settings.home),
+                str(peer_home.resolve()),
+            }
+
+            # Then declared: the daemon re-reads stores.yaml per request, so a
+            # file written after it started must still be seen.
+            (daemon_settings.home / "stores.yaml").write_text(
+                f"stores:\n  - {peer_home.resolve()}\n", encoding="utf-8"
+            )
+            declared = executor.execute(Request(command="query", payload={"limit": 10}))
+            assert declared.ok
+            declared_rows = declared.data
+            assert isinstance(declared_rows, list)
+            assert len(declared_rows) == 2
+
+            # A write still lands in one store, over the socket like everywhere
+            # else: the daemon holds the peers, so this is where "writes never
+            # federate" would break without anything saying so.
+            peer_ids = {
+                row["id"] for row in declared_rows if row["store"] == str(peer_home.resolve())
+            }
+            missing = executor.execute(
+                Request(command="update", payload={"doc_id": next(iter(peer_ids)), "status": "x"})
+            )
+            assert not missing.ok
+            assert "no document" in str((missing.error or {}).get("message", ""))
+        finally:
+            lifecycle.stop(daemon_settings)
 
     def test_a_live_daemon_on_other_code_is_replaced(self, settings: Settings) -> None:
         daemon_settings = Settings.resolve(settings.home, use_daemon=True)

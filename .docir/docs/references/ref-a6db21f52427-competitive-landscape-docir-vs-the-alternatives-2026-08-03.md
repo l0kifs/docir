@@ -5,15 +5,18 @@ description: What the adjacent tools do, where docir is unique, and the ranked l
 id: ref-a6db21f52427
 owner: maintainer
 related:
+- adr-307ba1f1a820
 - adr-354a4270ecd8
+- adr-927aa43d9635
 - adr-a343140d72e2
 - adr-d657a09b8c4a
 - arch-1cfb1b212237
-- adr-927aa43d9635
-- adr-307ba1f1a820
 - issue-20933967697b
 - issue-90aea6d1b891
 - issue-afd25273ff1f
+- issue-9b2d2ab09060
+- adr-fb938175f72a
+- adr-9c7c1ab8acef
 status: active
 tags:
 - docs
@@ -322,7 +325,7 @@ This is the most credible open gap in the list, and it has a shape that fits: an
 document metadata and edges (JMESPath is the small, well-specified choice), plus named checks a
 store declares in its own `docs-schema.yaml` and `check` evaluates. That keeps adr-b2cfed9d5888
 honest — docir still ships no opinions about anyone's architecture; the rules would be the
-user's — while removing the reason most of those feature requests exist. Not started.
+user's — while removing the reason most of those feature requests exist. Tracked as issue-9b2d2ab09060, which carries the concrete questions, the line adr-b2cfed9d5888 draws, and the three open design questions. Not started.
 
 ### ~~15. Single-store: no cross-repo reads~~ — **closed in the unreleased section**
 

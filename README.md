@@ -344,8 +344,11 @@ command, and the four MCP read tools take the same thing as a `stores` argument,
 so an agent that only speaks MCP is not stuck with the committed set. Four
 things are worth knowing:
 
-- **Writes never federate.** `add`, `update`, `check`, `reindex` and `build` see
-  only the resolved home. There is still exactly one store you can write to.
+- **Writes never federate**, and neither does `build`. `add`, `update`, `check`
+  and `reindex` see only the resolved home, and a published site is one store's
+  corpus — a copy of a peer's decision would age the moment that repo edits it,
+  and that repo publishes its own site. There is still exactly one store you can
+  write to.
 - **Peers are opened read-only** — the connection carries SQLite's `mode=ro`, so
   a write is refused by the database rather than avoided by convention.
 - **A peer that cannot be read is skipped, not fatal.** Its index is derived and

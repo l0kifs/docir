@@ -15,6 +15,7 @@ from typer.testing import CliRunner
 
 from docir.config.settings import Settings
 from docir.entry_points.cli.app import app
+from docir.entry_points.composition import build_container
 
 runner = CliRunner()
 
@@ -144,3 +145,49 @@ def test_an_empty_store_says_so(settings: Settings, tmp_path) -> None:
     assert result.exit_code == 0, "an empty store is legitimate, not an error"
     assert json.loads(result.stdout)["documents"] == 0
     assert "docir reindex" in str(result.stderr), "the fix was not named"
+
+
+def test_a_site_publishes_one_store_even_when_reads_federate(
+    store: Settings, tmp_path, monkeypatch
+) -> None:
+    """A site is a projection of *one* repository's corpus (adr-fb938175f72a).
+
+    `query` and `get` federate by default, and `build` is built from both — so
+    a store declaring peers published their documents into this repo's site
+    while the summary line still named this store. A copy of someone else's
+    decision goes stale the moment they edit it, which is the failure docir's
+    staleness model exists to prevent, and their repo publishes its own site.
+    """
+    peer_home = tmp_path / "peer" / ".docir"
+    peer = build_container(
+        Settings.resolve(peer_home, use_daemon=False), background_embeddings=False
+    )
+    try:
+        peer.dispatcher.dispatch(
+            "add",
+            {
+                "type": "decision",
+                "title": "A peer decision",
+                "description": "Lives in another repository.",
+                "body": "Body.",
+            },
+        )
+    finally:
+        peer.close()
+    (store.home / "stores.yaml").write_text(
+        f"stores:\n  - {peer_home.resolve()}\n", encoding="utf-8"
+    )
+
+    # The peer is reachable — otherwise this test passes because federation is
+    # broken rather than because `build` opted out.
+    federated = json.loads(runner.invoke(app, ["--no-daemon", "query", "--limit", "10"]).stdout)
+    assert "A peer decision" in {row["title"] for row in federated}
+
+    result = _build(tmp_path)
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout)["documents"] == 2
+    published = " ".join(
+        page.read_text(encoding="utf-8") for page in (tmp_path / "site").glob("*.html")
+    )
+    assert "A peer decision" not in published
+    assert "Old way" in published

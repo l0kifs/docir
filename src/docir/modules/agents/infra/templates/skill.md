@@ -472,7 +472,9 @@ If `.docir/stores.yaml` exists, this store reads peers alongside its own, and
 `--store ../platform/.docir`.
 
 Writes never federate: `add` and `update` always land in this repo's store, and
-so does everything `check` reports. If a peer is unreadable docir says so on
+so does everything `check` reports. Neither does `docir build` — a published
+site is this store's corpus, because a copy of a peer's decision goes stale the
+moment that repo edits it. If a peer is unreadable docir says so on
 stderr and answers from the rest — treat that as information, not as a failure
 to retry.
 

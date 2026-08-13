@@ -39,6 +39,7 @@ from docir.entry_points.composition import (
     upgrade_store,
 )
 from docir.entry_points.daemon.cmds import daemon_app
+from docir.entry_points.federation import LOCAL_ONLY_KEY
 from docir.entry_points.mcp.cmds import mcp_app
 from docir.modules.agents.api import (
     AGENT_NAMES,
@@ -259,12 +260,17 @@ def build(
     """
     _warn_on_global_fallback()
     state = get_state()
+    # Local only, explicitly: a site is a projection of *one* repository's
+    # corpus (adr-fb938175f72a). `query` and `get` federate by default, so
+    # without this a store that declares peers published their documents into
+    # this repo's site while the summary still named this store.
     skeletons = execute(
         "query",
         {
             "limit": _BUILD_PAGE_LIMIT,
             "include_archived": include_archived,
             "include_inactive": True,
+            LOCAL_ONLY_KEY: True,
         },
     )
     ids = [str(row["id"]) for row in _as_mappings(skeletons) if row.get("id")]

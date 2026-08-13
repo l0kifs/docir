@@ -19,6 +19,7 @@ from docir.entry_points.cli import rendering
 from docir.entry_points.composition import Container, build_in_process_executor, peer_status
 from docir.entry_points.federation import (
     FEDERATED_COMMANDS,
+    LOCAL_ONLY_KEY,
     STORES_KEY,
     peer_homes,
     resolve_extra,
@@ -135,7 +136,7 @@ def _with_peers(state: CliState, command: str, payload: dict[str, object]) -> di
     repository, and its index is derived and gitignored, so a colleague's fresh
     clone would otherwise be everyone's outage.
     """
-    if command not in FEDERATED_COMMANDS:
+    if command not in FEDERATED_COMMANDS or payload.get(LOCAL_ONLY_KEY):
         return payload
     # Resolved here, against *this* process's working directory: a `--store`
     # path is one a person typed at a shell, and with the daemon the process

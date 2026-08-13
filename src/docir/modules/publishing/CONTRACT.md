@@ -28,6 +28,13 @@ the `files` written.
 - **Input is data, not services.** `documents` is the documented JSON shape of
   `docir get`; absent keys read as their defaults, so a site can be built from
   captured CLI output. This module imports nothing from `documents`.
+- **A site is one store's corpus.** Reads federate across declared peers
+  (adr-fb938175f72a) and `build` is assembled from `query` + `get`, so the
+  caller opts the pair out explicitly; this module is handed the local corpus
+  and nothing else. Publishing a peer's document here would make a copy that
+  goes stale the moment that repository edits it — the failure the staleness
+  model exists to prevent — while claiming, in the same summary line, to be
+  this store's site. A peer publishes its own.
 - **The output directory is regenerated wholesale** — every `*.html` and
   `*.md` is removed before writing, so a document deleted from the store
   cannot survive as an orphaned page or an orphaned source. A directory that

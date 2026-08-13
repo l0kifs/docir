@@ -56,6 +56,17 @@ FEDERATED_COMMANDS = frozenset({"get", "query", "search", "context"})
 #: the next caller's reads.
 STORES_KEY = "stores"
 
+#: Payload key opting one request out of federation entirely.
+#:
+#: An empty ``stores`` list cannot mean this — the MCP tools send one whenever
+#: the argument is omitted, and a declared ``stores.yaml`` must still apply
+#: there. So the opt-out is its own key, and it is what ``docir build`` sets:
+#: a site is a projection of *one* repository's corpus. Publishing a peer's
+#: documents into your site makes a copy that ages the moment that repo edits
+#: it — the failure docir's staleness model exists to prevent — and that repo
+#: publishes its own site anyway.
+LOCAL_ONLY_KEY = "local_only"
+
 
 class Reader(Protocol):
     """The read half of a dispatcher — all a peer is ever asked for."""
@@ -171,8 +182,11 @@ class FederatedDispatcher:
 
     def dispatch(self, command: str, payload: dict[str, object]) -> object:
         extra = payload.get(STORES_KEY) or ()
-        rest = {key: value for key, value in payload.items() if key != STORES_KEY}
-        if command not in FEDERATED_COMMANDS:
+        local_only = bool(payload.get(LOCAL_ONLY_KEY))
+        rest = {
+            key: value for key, value in payload.items() if key not in (STORES_KEY, LOCAL_ONLY_KEY)
+        }
+        if local_only or command not in FEDERATED_COMMANDS:
             return self._base.dispatch(command, rest)
 
         homes = peer_homes(self._home, tuple(str(item) for item in _as_sequence(extra)))

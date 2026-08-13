@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   graph rather than the ranking: 8 of the corpus's 17 edges cross the split, and an edge cannot
   cross stores.
 
+  **`docir build` stays single-store**, explicitly. It is assembled from `query` plus one
+  `get` per document — both federated — so a store declaring peers published their documents
+  into this repository's site while the summary line still named this store. A published page
+  is a copy, and a copy of a peer's decision goes stale the moment that repo edits it, which
+  nothing in the site could detect; the peer publishes its own site anyway.
+
   Supersedes the federation exclusion in adr-20eec6e2e2ca. See adr-fb938175f72a.
 
 - **`docir build` draws `mermaid` fences as diagrams.** A fenced `mermaid` block is the one

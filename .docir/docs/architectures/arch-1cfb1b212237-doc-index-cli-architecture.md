@@ -15,7 +15,7 @@ tags:
 - retrieval
 title: Doc-Index CLI — Architecture
 type: architecture
-updated: '2026-08-06'
+updated: '2026-08-13'
 ---
 
 ## Principle
@@ -27,39 +27,38 @@ directly; all writes go through the CLI to guarantee schema consistency.
 
 ## Diagram
 
+The thesis in one picture: the files are the source, everything below them is a
+compile artifact, and there is exactly one path that writes markdown.
+
+```mermaid
+flowchart TD
+    CLI["docir CLI"]
+    MCP["MCP tools"]
+    PEER[("peer store, read-only")]
+    DISP["Dispatcher — the command vocabulary"]
+    SVC["DocumentService — the one write path"]
+    SCHEMA["docs-schema.yaml — types, statuses, cadences"]
+    MD["docs/*.md — frontmatter + body"]
+    TAGS["tags.yaml — the tag registry"]
+    IDX[("SQLite index — metadata, FTS5, relations, vectors")]
+    QUEUE["embedding queue — debounced, dirty-flagged"]
+
+    CLI --> DISP
+    MCP --> DISP
+    PEER -.->|"federated reads"| DISP
+    DISP --> SVC
+    SCHEMA -->|"validates every write"| SVC
+    SVC -->|"writes markdown"| MD
+    SVC -->|"metadata, FTS, relations"| IDX
+    MD -.->|"reindex rebuilds"| IDX
+    TAGS -.->|"reindex"| IDX
+    SVC -.->|"flags dirty"| QUEUE
+    QUEUE -.->|"vectors, later"| IDX
 ```
-┌─────────────────┐
-│   docs/*.md       │  ← source of truth, versioned by git
-│  (frontmatter +    │     + docs/tags.yaml (tag registry)
-│   markdown body)   │
-└────────┬─────────┘
-         │ index / reindex
-         ▼
-┌─────────────────┐
-│  SQLite index      │  ← derived layer, .gitignore
-│  - docs (metadata)  │
-│  - relations (graph)│
-│  - FTS5 (full text)  │
-│  - embeddings (BLOB) │
-└────────┬─────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Daemon (worker)   │  ← long-lived: owns DB connection, warm
-│  - serves requests  │     embedding model, async embed queue
-│  - embed queue      │
-└────────┬─────────┘
-         │ Unix socket
-         ▼
-┌─────────────────┐
-│   CLI (Typer)       │  ← thin client, single entry point
-│  get/query/search/   │     spawns daemon on first use
-│  context/update/add  │
-└────────┬─────────┘
-         │
-         ▼
-     AI agent (Claude Code)
-```
+
+Solid edges are synchronous and current when the command returns. Dashed edges are
+the deferred or derived ones: a reindex makes the index agree with the files, the
+embedding queue catches up afterwards, and a peer store is read but never written.
 
 ## Layers and responsibilities
 

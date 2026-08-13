@@ -11,6 +11,7 @@ block it replaced.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -169,3 +170,40 @@ class TestBuildIntegration:
         with pytest.raises(ValidationError):
             builder.build(PublishRequest(out=out, documents=_DOCS, mermaid=tmp_path / "missing.js"))
         assert (out / "arch-0001.html").exists()
+
+
+class TestProseIsNotADiagram:
+    """Found by building docir's own site: two of its documents *write about*
+    this feature, so the runtime's filename and the marker class both appear in
+    ordinary prose. A substring check on either one publishes megabytes of
+    JavaScript for a corpus that draws nothing."""
+
+    _WRITES_ABOUT_IT: ClassVar[dict[str, str]] = {
+        "id": "adr-0002",
+        "title": "The mermaid runtime is a build input",
+        "description": "Why docir does not vendor the bundle.",
+        "type": "decision",
+        "status": "accepted",
+        "body": (
+            "## Decision\n\n"
+            "Point `--mermaid` at mermaid.min.js. The element carries the\n"
+            "`docir-mermaid` class and the page loads mermaid.min.js beside it.\n"
+        ),
+    }
+
+    def test_a_document_about_diagrams_publishes_no_runtime(self) -> None:
+        pages = render_site(
+            build_site([self._WRITES_ABOUT_IT]), title="Docs", version="1", runtime=_RUNTIME
+        )
+        assert diagrams.RUNTIME_FILE not in pages
+
+    def test_and_its_page_does_not_load_one(self) -> None:
+        pages = render_site(
+            build_site([_DOCS[0], self._WRITES_ABOUT_IT]),
+            title="Docs",
+            version="1",
+            runtime=_RUNTIME,
+        )
+        # The real diagram still gets it; the document describing it does not.
+        assert diagrams.loads_runtime(pages["arch-0001.html"])
+        assert not diagrams.loads_runtime(pages["adr-0002.html"])

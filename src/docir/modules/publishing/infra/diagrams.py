@@ -125,6 +125,27 @@ def render_diagram(source: str) -> str:
     )
 
 
+def has_diagram(body_html: str) -> bool:
+    """Whether a rendered body actually drew a diagram.
+
+    Tests the opening tag rather than the class name on its own, because a
+    document that *writes about* this feature — this repository has two —
+    mentions the class and the runtime's filename in prose. Escaped into a
+    ``<code>`` element those become ``&lt;div class=...``, so the raw tag is
+    the one form prose cannot forge.
+    """
+    return f'<div class="{DIAGRAM_CLASS}">' in body_html
+
+
+def loads_runtime(page_html: str) -> bool:
+    """Whether a finished page references the runtime, for the same reason.
+
+    The bare filename appears on every page that documents ``--mermaid``; the
+    script element appears only where :func:`script_tags` put it.
+    """
+    return f'<script src="{RUNTIME_FILE}">' in page_html
+
+
 def script_tags() -> str:
     """The runtime and its bootstrap, for a page that has at least one diagram.
 

@@ -86,10 +86,40 @@ jobs:
           DOCIR_EMBEDDER: deterministic
         run: uv run docir --no-daemon check --strict
 
+      - name: Fetch the mermaid runtime
+        # docir does not ship mermaid's browser bundle — it is ~3 MB, and most
+        # corpora draw nothing (adr-9c7c1ab8acef). Fetching it *here* keeps the
+        # published site self-contained: `build` writes it beside the pages and
+        # loads it relatively, so a reader needs no CDN. Pinned to an exact
+        # version, and the digest is checked, because this is third-party
+        # JavaScript entering a page docir publishes under its own name.
+        env:
+          MERMAID_VERSION: 11.16.1
+          MERMAID_SHA256: 18327bef70d96fb505fe7287d9f6a7362ebf07ff6576ddfaffb1a06f3e1a2954
+        run: |
+          curl -sfL -o mermaid.min.js \
+            "https://cdn.jsdelivr.net/npm/mermaid@${MERMAID_VERSION}/dist/mermaid.min.js"
+          echo "${MERMAID_SHA256}  mermaid.min.js" | sha256sum -c -
+
       - name: Build the site
         env:
           DOCIR_EMBEDDER: deterministic
-        run: uv run docir --no-daemon build --out site --title "docir — design documents"
+        run: |
+          uv run docir --no-daemon build --out site \
+            --title "docir — design documents" --mermaid mermaid.min.js
+
+      - name: Assert the diagrams can draw
+        # `build` writes the runtime only when a document actually drew
+        # something, so its absence means either "no diagram in the corpus" or
+        # "the fence stopped being recognised" — and the second is invisible in
+        # a green check mark. The architecture note carries one, so this store's
+        # answer is always "yes".
+        run: |
+          if [ ! -f site/mermaid.min.js ]; then
+            echo "::error::no diagram runtime in the site — the mermaid fence was not rendered"
+            exit 1
+          fi
+          echo "diagram runtime published ($(wc -c < site/mermaid.min.js) bytes)"
 
       - name: Assert the site is not empty
         # The belt to the reindex step's braces. A site with no documents is a

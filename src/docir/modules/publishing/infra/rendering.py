@@ -789,7 +789,7 @@ def render_site(
         )
         pages[source_name(document.id)] = document.body
     if runtime is not None and any(
-        diagrams.RUNTIME_FILE in page for name, page in pages.items() if name.endswith(".html")
+        diagrams.loads_runtime(page) for name, page in pages.items() if name.endswith(".html")
     ):
         pages[diagrams.RUNTIME_FILE] = runtime
     return pages
@@ -1206,7 +1206,7 @@ def _render_document(
         # Only a page that has a diagram loads the runtime: it is megabytes,
         # and most documents have none.
         diagram_scripts=(
-            diagrams.script_tags() if runtime and diagrams.DIAGRAM_CLASS in body_html else ""
+            diagrams.script_tags() if runtime and diagrams.has_diagram(body_html) else ""
         ),
     )
 

@@ -15,7 +15,7 @@ tags:
 - retrieval
 title: Reads federate across declared stores; writes never do
 type: decision
-updated: '2026-08-12'
+updated: '2026-08-13'
 ---
 
 ## Context
@@ -156,3 +156,32 @@ choice, and it is the ceiling any future re-fusion would have to beat.
 Re-fusing the *raw* lexical and vector rankings — which needs the fan-out to
 live inside `indexing` — remains untested and remains the only version of the
 alternative that could still supersede this decision.
+
+## Amendment: build is single-store (2026-08-13)
+
+`docir build` renders one store's corpus, and that is now explicit rather than
+incidental. The build is assembled from `query` plus one `get` per document —
+both federated commands — so a store declaring peers published their documents
+into this repository's site while the summary line still named this store. The
+CLI opts that pair out with a `local_only` payload key, which the fan-out reads
+before anything else.
+
+An empty `stores` list could not carry that meaning: the MCP tools send one
+whenever the argument is omitted, and a declared `stores.yaml` must still apply
+there.
+
+Why single-store is the right answer rather than a flag:
+
+- A published page is a **copy**, and a copy of a peer's decision goes stale the
+  moment that repository edits it. That is the failure the staleness model exists
+  to prevent, and nothing in the site could detect it — `verified` means a human
+  re-read the document in *its own* store.
+- The peer publishes its own site. The useful cross-repository artifact is a
+  link, not a duplicate, and a link needs the peer's site URL, which this store
+  does not know.
+- `--out` is regenerated wholesale, so the copies would also be silently
+  re-created on every build, each time from whatever the peer's index happened
+  to hold.
+
+`check`, `reindex` and every write were already local; this closes the one read
+path whose *output is written to disk* rather than answered to a caller.

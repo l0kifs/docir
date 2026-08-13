@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-08-13
+
+The release that lets a store read the repository next door, and lets an author draw. Both are
+opt-in and neither changes what a store already does.
+
+### Upgrade notes
+
+- **Nothing is required.** A store with no `.docir/stores.yaml` and no `mermaid` fences behaves
+  exactly as it did in 0.12.0, byte for byte — a single-store read still carries no `store` field.
+- **Federation is a file you write.** `.docir/stores.yaml` lists peer store homes; commit it, so
+  the set is the team's rather than each machine's. Peers open read-only and an unreadable one is
+  skipped with a warning, so a colleague's unbuilt index is never your outage.
+- **`docir build` publishes one store**, and did so incorrectly for the few hours federation
+  existed before this release. If you built a site from a store with peers during that window,
+  rebuild it — pages for another repository's documents may be sitting in your output directory.
+- **`--mermaid` needs a bundle you supply.** docir does not ship mermaid's browser build; without
+  the flag a `mermaid` fence publishes its source, exactly as it did before.
+
 ### Added
 
 - **Reads federate across declared stores; writes never do.** In a multi-repo organisation the
@@ -1308,7 +1326,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/l0kifs/docir/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/l0kifs/docir/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/l0kifs/docir/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/l0kifs/docir/compare/v0.9.0...v0.10.0

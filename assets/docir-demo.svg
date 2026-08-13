@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1082 438" width="1082" height="438" role="img" aria-label="A terminal running docir context, which returns three ranked documents with no bodies, then docir get --section, which returns one section."><style>
+    .term-bg { fill: #0d1117; }
+    .term-bar { fill: #161b22; }
+    .term-edge { fill: none; stroke: #30363d; stroke-width: 1; }
+    text { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+            "DejaVu Sans Mono", monospace; font-size: 13.0px;
+            white-space: pre; dominant-baseline: alphabetic; }
+    .prompt { fill: #3fb950; }
+    .cmd    { fill: #e6edf3; }
+    .out    { fill: #9198a1; }
+    .body   { fill: #e6edf3; }
+    .title  { fill: #6e7783; font-size: 11.5px; }
+    /* Amber is only ever the caret — the brand's one fixed rule. */
+    .cur1, .cur2 { fill: #E0932C; }
+    .o1, .o2 { opacity: 0; }
+
+    @keyframes type1 {
+      0%             { width: 0; }
+      10.0%    { width: 429.0px; }
+      96.25%   { width: 429.0px; }
+      97.5%   { width: 0; }
+      100%           { width: 0; }
+    }
+    @keyframes type2 {
+      0%, 38.75%  { width: 0; }
+      46.875%      { width: 366.6px; }
+      96.25%     { width: 366.6px; }
+      97.5%     { width: 0; }
+      100%             { width: 0; }
+    }
+    @keyframes reveal1 {
+      0%, 10.625%  { opacity: 0; }
+      13.125%      { opacity: 1; }
+      96.25%     { opacity: 1; }
+      97.5%     { opacity: 0; }
+      100%             { opacity: 0; }
+    }
+    @keyframes reveal2 {
+      0%, 47.5%  { opacity: 0; }
+      50.0%      { opacity: 1; }
+      96.25%     { opacity: 1; }
+      97.5%     { opacity: 0; }
+      100%             { opacity: 0; }
+    }
+    /* The caret sits at the end of what has been typed, then stops blinking
+       while the reader is meant to be looking at the output. */
+    @keyframes caret1 {
+      0%             { transform: translateX(0); opacity: 1; }
+      10.0%    { transform: translateX(429.0px); opacity: 1; }
+      10.625%    { transform: translateX(429.0px); opacity: 0; }
+      100%           { opacity: 0; }
+    }
+    @keyframes caret2 {
+      0%, 38.75%  { transform: translateX(0); opacity: 0; }
+      39.375%      { transform: translateX(0); opacity: 1; }
+      46.875%      { transform: translateX(366.6px); opacity: 1; }
+      47.5%      { opacity: 0; }
+      100%             { opacity: 0; }
+    }
+    .c1-clip { animation: type1 16.0s steps(55, end) infinite; }
+    .c2-clip { animation: type2 16.0s steps(47, end) infinite; }
+    .o1 { animation: reveal1 16.0s linear infinite; }
+    .o2 { animation: reveal2 16.0s linear infinite; }
+    .cur1 { animation: caret1 16.0s steps(55, end) infinite; }
+    .cur2 { animation: caret2 16.0s steps(47, end) infinite; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .c1-clip { animation: none; width: 429.0px; }
+      .c2-clip { animation: none; width: 366.6px; }
+      .o1, .o2 { animation: none; opacity: 1; }
+      .cur1, .cur2 { animation: none; opacity: 0; }
+    }
+    </style><rect class="term-bg" width="1082" height="438" rx="10"/><path class="term-bar" d="M0 10a10 10 0 0 1 10-10h1062a10 10 0 0 1 10 10v32H0z"/><circle cx="22" cy="21" r="5.5" fill="#ff5f57"/><circle cx="40" cy="21" r="5.5" fill="#febc2e"/><circle cx="58" cy="21" r="5.5" fill="#28c840"/><text class="title" x="541" y="25" text-anchor="middle">~/acme-payments — docir</text><rect class="term-edge" x="0.5" y="0.5" width="1081" height="437" rx="10"/><g class="c1"><text class="prompt" x="26.0" y="62.0">$</text><g clip-path="url(#clip-c1)"><text class="cmd" x="41.6" y="62.0">docir context "implement a new auth endpoint" --limit 3</text></g><rect class="cur1" x="41.6" y="51.0" width="7.8" height="16.0"/><clipPath id="clip-c1"><rect class="c1-clip" x="41.6" y="47.0" width="0" height="23.0"/></clipPath></g><g class="o1"><text class="out" x="26.0" y="87.0">┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━━┓</text><text class="out" x="26.0" y="106.0">┃ id                 ┃ type     ┃ status   ┃ title                    ┃ description              ┃ score ┃   sim ┃ matched section ┃</text><text class="out" x="26.0" y="125.0">┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━━┩</text><text class="out" x="26.0" y="144.0">│ issue-1ca65f9f25da │ issue    │ open     │ Refresh token race under │ Two tabs refreshing at   │ 0.032 │ 0.531 │ Symptom         │</text><text class="out" x="26.0" y="163.0">│                    │          │          │ concurrent logins        │ once revoke each other.  │       │       │                 │</text><text class="out" x="26.0" y="182.0">│ adr-db2079b2d42d   │ decision │ proposed │ Short-lived JWTs with    │ How API clients          │ 0.016 │ 0.553 │ Decision        │</text><text class="out" x="26.0" y="201.0">│                    │          │          │ refresh rotation         │ authenticate and how     │       │       │                 │</text><text class="out" x="26.0" y="220.0">│                    │          │          │                          │ sessions are renewed.    │       │       │                 │</text><text class="out" x="26.0" y="239.0">│ adr-8d39326052c8   │ decision │ proposed │ Rate limits are          │ Why throttling keys on   │ 0.016 │ 0.536 │ -               │</text><text class="out" x="26.0" y="258.0">│                    │          │          │ per-account, not per-IP  │ the account.             │       │       │                 │</text><text class="out" x="26.0" y="277.0">└────────────────────┴──────────┴──────────┴──────────────────────────┴──────────────────────────┴───────┴───────┴─────────────────┘</text></g><g class="c2"><text class="prompt" x="26.0" y="315.0">$</text><g clip-path="url(#clip-c2)"><text class="cmd" x="41.6" y="315.0">docir get adr-db2079b2d42d --section "Decision"</text></g><rect class="cur2" x="41.6" y="304.0" width="7.8" height="16.0"/><clipPath id="clip-c2"><rect class="c2-clip" x="41.6" y="300.0" width="0" height="23.0"/></clipPath></g><g class="o2"><text class="body" x="26.0" y="340.0">## Decision</text><text class="body" x="26.0" y="359.0"></text><text class="body" x="26.0" y="378.0">Access tokens live 15 minutes. Refresh tokens rotate on every use and are</text><text class="body" x="26.0" y="397.0">single-use; replaying one revokes the whole family.</text></g></svg>

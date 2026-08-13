@@ -110,6 +110,8 @@ ignore = []
 [tool.ruff.lint.per-file-ignores]
 "**/__init__.py" = ["F401"]
 "tests/**" = ["N802", "N803", "S101"]
+# Captured terminal output, 132 columns wide because a terminal is.
+"scripts/make_demo_svg.py" = ["E501"]
 
 # ---------------------------------------------------------------------------
 # ty — Astral type checker (refined against docs.astral.sh/ty)

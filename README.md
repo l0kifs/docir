@@ -11,6 +11,12 @@
 
 [The idea](#the-idea) · [Quickstart](#quickstart) · [Why not just…](#why-not-just) · [Commands](#commands) · [Upgrading](#upgrading) · [Docs](docs/) · [Live site](https://l0kifs.github.io/docir/index.html)
 
+<br />
+
+<img src="https://raw.githubusercontent.com/l0kifs/docir/main/assets/docir-demo.svg" alt="A terminal: docir context returns three ranked documents with no bodies, each naming the section that matched; docir get --section then returns just that section." width="820" />
+
+<sub>Ask in your own words. Get ranked skeletons — no bodies, so scanning is cheap.<br />Read the one section that matched.</sub>
+
 </div>
 
 ---
@@ -113,7 +119,9 @@ produced each vector, ignores the others, and recomputes them on the next write 
 ## Quickstart
 
 ```bash
-# 1. install
+# 1. install  (~240 MB of deps; the 64 MB embedding model downloads on first use,
+#              once — the only step that needs network. DOCIR_EMBEDDER=deterministic
+#              opts out of both, at a measured cost: see below.)
 uv tool install docir          # or: pipx install docir
 
 # 2. scope docs to this repo (creates ./.docir, like `git init`)

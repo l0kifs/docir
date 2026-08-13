@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-08-13
+
+A patch for one real defect in 0.13.0's diagram support, plus the package metadata that
+should have shipped years of releases ago.
+
+### Fixed
+
+- **A document that *writes about* diagrams no longer publishes a diagram runtime.** The
+  checks deciding "does this page draw something" were substring tests over the rendered HTML,
+  so the filename `mermaid.min.js` and the marker class appearing in ordinary prose satisfied
+  them — this repository has two such documents. A corpus that draws nothing would have had
+  ~3 MB of JavaScript written beside its pages, and a page that only documents the flag would
+  have loaded it. Both checks now test the raw `<div class=...>` and `<script src=...>` tags,
+  which prose cannot forge: it reaches the page escaped.
+
+### Documentation
+
+- **The package is findable.** `keywords` and `[project.urls]` ship with the distribution, so
+  the PyPI page links to the source, the published corpus, the changelog and the issue
+  tracker. It previously linked nowhere at all.
+- **The README quoted superseded benchmark figures.** It carried `recall@5 0.96/0.93` and
+  `MRR 0.95/0.80` from before the 2026-08-03 corpus re-base, which `benchmarks/README.md`
+  explicitly warns not to compare across, plus a sentence that had conflated `search`'s MRR
+  with its recall. The current corpus reads **0.97 (MRR 0.97)** against **0.80 (MRR 0.76)**,
+  and the corrected paragraph leads with the split an average was hiding: the two embedders
+  are within noise on questions worded like the documents, and **0.95 against 0.65** on
+  questions that share no vocabulary with them. Both harnesses were re-run to confirm.
+- **The architecture note draws its own diagram** — the first mermaid fence in docir's own
+  store, and the worked example for 0.13.0's diagram support. The Pages workflow fetches a
+  digest-pinned runtime and asserts it reached the site.
+
 ## [0.13.0] - 2026-08-13
 
 The release that lets a store read the repository next door, and lets an author draw. Both are
@@ -1326,7 +1357,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.13.1...HEAD
+[0.13.1]: https://github.com/l0kifs/docir/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/l0kifs/docir/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/l0kifs/docir/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/l0kifs/docir/compare/v0.10.0...v0.11.0

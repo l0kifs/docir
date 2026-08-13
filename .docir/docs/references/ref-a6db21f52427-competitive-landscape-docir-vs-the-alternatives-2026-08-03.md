@@ -21,8 +21,8 @@ tags:
 - agents
 title: Competitive landscape — docir vs. the alternatives (2026-08-03)
 type: reference
-updated: '2026-08-06'
-verified: '2026-08-06'
+updated: '2026-08-13'
+verified: '2026-08-13'
 ---
 
 # Competitive landscape — docir vs. the alternatives
@@ -34,13 +34,13 @@ than `no`.*
 
 ## Who is actually competing
 
-*Re-verified 2026-08-06 against docir 0.10.0-dev (the `Unreleased` changelog section): seven of
-the twelve gaps below are closed — five shipped, and two closed as **decisions** rather than as
-features. Gap 7 closed on that date, in the work this re-verification produced. Only docir's own
-cells were re-checked — nothing about a competitor was re-verified, so their columns still date
-from 2026-08-03.*
+*Re-verified 2026-08-13 against docir 0.12.0+`Unreleased`. Two things changed since the
+2026-08-06 pass: a fifth market entered the picture (architecture-as-code, below), and three
+gaps it exposed were worked — one shipped, one narrowed, one closed as a decision. Only docir's
+own cells have ever been re-checked; every competitor column still dates from the compile that
+introduced it.*
 
-docir sits at the intersection of three markets that mostly do not overlap with each other:
+docir sits at the intersection of markets that mostly do not overlap with each other:
 
 | Category | What they optimize for | Representative tools |
 |---|---|---|
@@ -48,13 +48,42 @@ docir sits at the intersection of three markets that mostly do not overlap with 
 | **Local markdown search for agents** | Retrieval quality over an existing pile of `.md` | qmd (`tobi/qmd`), qmd forks, Cognee/Supermemory (hosted, heavier) |
 | **Decision-record & governance tooling** | Human-authored ADRs, publication, enforcement | adr-tools, Log4brains, archgate, adrkit, trackfw |
 | **Spec-driven development** | A workflow (propose → spec → tasks → archive) an agent follows | OpenSpec, GitHub Spec Kit, Kiro, BMAD-METHOD |
+| **Architecture-as-code / EA modelling** | A queryable model of an organisation's systems, rendered as diagrams | DocHub, LikeC4, Structurizr, IcePanel |
 
 **docir's actual position:** it is the only tool in the set that treats documents as a *compiled,
 schema-validated corpus* — it takes the retrieval stack from category 2, the write-through-CLI
 discipline from category 1, and the decision/ADR semantics from category 3, and adds a hard
 validation gate none of them have.
 
----
+### The fifth market, and why it is adjacent rather than competing
+
+DocHub (378★, Apache-2.0 plus a "do not conceal your use" clause, first commit 2021) is the one
+worth naming, because it is the most-developed thing in the category and because it publicly
+targets *architecture for AI agents* — docir's own ground. It is a Vue SPA over a GitLab or
+Bitbucket backend: YAML manifests describe components, contexts and entities in an extensible
+metamodel, JSONata queries and user-written validators run over that model, and the portal
+renders C4, PlantUML, BPMN, Mermaid, OpenAPI and AsyncAPI. Manifests federate across
+repositories through a root manifest with semver-versioned `$package` dependencies.
+
+The unit of description is the difference, and it is not a matter of degree:
+
+| | **docir** | **DocHub** |
+|---|---|---|
+| Unit | a document — decision, issue, note | an entity — component, context, deployment unit |
+| Reader | an agent, over CLI or MCP | a person, in a portal or IDE panel |
+| Query | ranked lexical + vector fusion | JSONata over the model |
+| Validation | a hard write-time gate + `check --strict` | user-authored validators, reported in the UI |
+| Diagrams | the relation graph, plus `mermaid` fences (unreleased) | C4, PlantUML, BPMN, Swagger, AsyncAPI |
+| Freshness | `owner`/`verified`/`review_days`, a review queue | not modelled |
+| Federation | read-only across declared stores (unreleased) | manifests consolidated across repos |
+| Runtime | one CLI, no server, offline | Docker + a Git backend, or an IDE plugin |
+| Its AI story | MCP server, skeleton reads, local vectors | a community RAG example: Yandex embeddings, ChromaDB, Telegram |
+
+Read it as: DocHub answers *what systems do we have and how do they connect*; docir answers
+*what did we already decide about this code, and is it still true*. A team can plausibly want
+both. What DocHub demonstrates that docir should take seriously is not a feature — it is that
+"architecture as data" (a real query language over the corpus) and cross-repo consolidation are
+what an organisation asks for once more than one team is involved. Gaps 14 and 15 are those.
 
 ## Table A — the closest technical competitors (retrieval over local markdown)
 
@@ -262,39 +291,92 @@ docir's `related:` frontmatter is invisible to every markdown editor. Less press
 the published site renders the graph both ways, so the human reader has somewhere to go.
 
 ### 12. No team/multi-device sync story beyond git
+
 Basic Memory Cloud (paid) and sqlite-memory (CRDT) both sell shared knowledge across agents and
 teammates. docir's answer is "commit it", which is defensible for a repo-scoped tool and a
 non-answer for personal/cross-repo knowledge.
 
+### ~~13. No diagrams beyond the relation graph~~ — **narrowed in the unreleased section, deliberately not closed**
+*(DocHub: C4, PlantUML, BPMN, Swagger, AsyncAPI, SmartAnts)*
+
+The single most visible difference to a human evaluating both in ten seconds. Half of it was
+never real: the site has drawn the typed relation graph as an interactive per-type constellation
+since 0.10.0 (adr-307ba1f1a820), plus a 1-hop map on every document page — generated SVG, no
+runtime. The half that was real is *author-drawn* diagrams, and the unreleased section draws `mermaid` fences
+(adr-9c7c1ab8acef) — with the runtime supplied by the publisher rather than vendored, because
+the bundle is megabytes and most corpora draw nothing.
+
+The rest stays unbuilt on purpose. C4, BPMN and contract rendering are the *modelling* tool's
+job: they need an entity model docir does not have and should not grow (gap 13's sibling,
+below). Link out to the tool that owns the contract.
+
+### 14. No expression language over the corpus *(DocHub: JSONata; also its validators)*
+
+docir has rich structure — typed edges, staleness, `code` globs, a schema — and exactly one way
+to interrogate it: the filters `query` ships with. "Which decisions are older than their cadence
+and govern code nobody owns?" is not expressible, and every new question of that shape is a
+feature request. DocHub's answer is a real query language over the model, which also doubles as
+its rule engine: a validator *is* a JSONata expression that must return empty.
+
+This is the most credible open gap in the list, and it has a shape that fits: an expression over
+document metadata and edges (JMESPath is the small, well-specified choice), plus named checks a
+store declares in its own `docs-schema.yaml` and `check` evaluates. That keeps adr-b2cfed9d5888
+honest — docir still ships no opinions about anyone's architecture; the rules would be the
+user's — while removing the reason most of those feature requests exist. Not started.
+
+### ~~15. Single-store: no cross-repo reads~~ — **closed in the unreleased section**
+
+The decision governing the service you are editing lives in the platform repo, and an agent
+reading `context` in the service repo could not see it, so it re-decided. adr-fb938175f72a
+supersedes the exclusion adr-20eec6e2e2ca wrote: a store declares peers in a committed
+`stores.yaml`, and `context`/`query`/`search`/`get` answer from all of them, with `--store` and
+the MCP `stores` argument for one-off peers.
+
+Writes never federate and neither does `build`; peers open `mode=ro` so SQLite refuses a write
+rather than docir promising not to attempt one; an unreadable peer is skipped with a warning,
+because its index is gitignored and a colleague's fresh clone must not be everyone's outage. The
+merge sorts on `similarity`, and that is measured rather than argued: on the benchmark corpus
+split in two, similarity-merge scores recall@5 0.91 / MRR 0.93 against rank-merge's 0.88 / 0.72
+(`benchmarks/federation.py`). Cross-store RRF over the returned lists *is* rank-merge — each
+document appears in exactly one list, so its fused score has one term.
+
+What docir still does not do is DocHub's version of this: versioned package dependencies between
+stores, and a consolidated *model*. It reads peers; it does not compose them.
+
 ## Recommended reading of these gaps
 
-As of 2026-08-06, all twelve are settled: **1, 2, 4, 5 and 7 shipped** (2 in both halves); **3, 6 and 8 closed
-as decisions** — built, measured or reasoned against, and removed rather than deferred; **9 and
-12 are correct omissions** given the "curated corpus, git canonical" thesis, so listing them is
-scope-awareness, not a to-do. The two that were still open this morning closed during the day;
-what the list leaves behind is one standing constraint, not a backlog:
+Of fifteen, **eleven are settled**: 1, 2, 4, 5, 7 and 15 shipped (2 in both halves, 13 in half);
+3, 6 and 8 closed as decisions — built, measured or reasoned against, and removed rather than
+deferred; 9 and 12 are correct omissions given the "curated corpus, git canonical" thesis, so
+listing them is scope-awareness rather than a to-do. What is left is one open gap, one standing
+constraint, and one thing not to build:
 
-1. ~~Gap 6 (enforcement against code)~~ — **answered** (adr-b2cfed9d5888). The binding site gap 7
-   shipped made the question live, and the answer is that the rule is a test docir points at,
-   plus a review-time notice. No engine. That leaves nothing in either table that is open work.
+1. **Gap 14 (an expression language) is the only real open work.** It is what "architecture as
+   data" means in practice, it is the honest version of a rules engine (the rules are the
+   user's, so adr-b2cfed9d5888 still holds), and it removes the reason most future filter
+   requests will exist. Nothing else in either table is open.
 
-2. ~~Gap 2's residual~~ — **done** (issue-afd25273ff1f): a hit now names the section that
-   matched, and the name is what `get --section` takes. It was the last piece of retrieval
-   parity, and it cost ~20 tokens per result set against a body fetch saved.
-3. **Gap 10 is packaging, not a feature.** `fastembed`/`onnxruntime` is the weight, and the
+2. **Gap 10 is packaging, not a feature.** `fastembed`/`onnxruntime` is the weight, and the
    documented escape hatch ranks *below* plain full-text search (`benchmarks/` §1), so "make it
    lighter" and "keep it good" are the same decision, not two.
+
+3. **Do not grow an entity model.** Components, contexts, deployment units and C4 are the
+   adjacent market's product, with five years of work behind them; chasing them makes a worse
+   DocHub. The `code:` glob is already the version of that idea that fits docir's unit — it
+   binds a *document* to the system without modelling the system.
 
 **Gap 11 is not worth building.** It buys a graph view in a human's editor, and 0.10.0 already
 publishes the graph both ways in the site — for docir's actual reader, an agent, `related:`
 frontmatter is the better-typed form and `[[wikilinks]]` would be a second, weaker one to keep in
 sync.
 
-One thing the backfill taught that no table row would have: a document that governs everything
-answers every question. `arch-1cfb1b212237` carries `src/docir/**` and so appears in every
-`--code` result. That is *true* and still costs the reader something, which is the tension to
-watch as more documents adopt the field — not a reason to write a narrower pattern than the
-document means.
+Two things the work behind this list taught that no table row would have. A document that governs
+everything answers every question: `arch-1cfb1b212237` carries `src/docir/**` and so appears in
+every `--code` result — *true*, and still a cost to the reader, which is the tension to watch as
+more documents adopt the field. And a capability reaches further than the command that introduced
+it: federating reads silently federated `build`, which published a peer's decisions into this
+repo's site while the summary line named this store (adr-fb938175f72a's amendment). When
+something becomes true of "reads", check every path that is built from one.
 
 ## Sources
 
@@ -307,3 +389,4 @@ document means.
 - [architecture-decision-records topic](https://github.com/topics/architecture-decision-records) · [agent-memory topic](https://github.com/topics/agent-memory)
 - [riponcm/projectmem](https://github.com/riponcm/projectmem) · [jayzeng/agentmemory](https://github.com/jayzeng/agentmemory)
 - [ADR complete guide 2026](http://docs.align.tech/blog/architecture-decision-records-complete-guide/) · [Best spec-driven tools 2026](https://www.augmentcode.com/tools/best-spec-driven-development-tools)
+- *(2026-08-13)* [DocHubTeam/DocHub](https://github.com/DocHubTeam/DocHub) · [rpiontik/DocHubExamples](https://github.com/rpiontik/DocHubExamples) · [dochub-manual](https://github.com/DocHubTeam/dochub-manual) · [dochub.info](https://dochub.info/docs/dochub). Repository metadata read from the GitHub API on that date; feature claims from the READMEs, the manual and the 16 worked examples, not from hands-on use.

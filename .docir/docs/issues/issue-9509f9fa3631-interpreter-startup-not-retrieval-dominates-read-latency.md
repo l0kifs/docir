@@ -3,8 +3,9 @@ code:
 - src/docir/entry_points/cli/**
 - benchmarks/latency.py
 created: '2026-08-14'
-description: 'Measured: ~0.8s of every docir read is process start and imports; a
-  warm-daemon get or search adds under 0.1s of actual work.'
+description: 'Startup still dominates after the SQLAlchemy fix: ~0.49s of a 0.53s
+  warm-daemon read is process start and imports. What remains is pydantic-settings
+  (~97ms) and docir''s own 130 modules.'
 id: issue-9509f9fa3631
 owner: maintainer
 related:

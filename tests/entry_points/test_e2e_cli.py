@@ -46,8 +46,14 @@ def _break_graph(doc_id: str) -> None:
     edges it would break (issue-fd547a293d01), so the only route to a dangling edge is from
     outside the CLI.
     """
-    for path in _ENV["settings"].docs_root.rglob(f"{doc_id}-*.md"):
+    removed = list(_ENV["settings"].docs_root.rglob(f"{doc_id}-*.md"))
+    for path in removed:
         path.unlink()
+    # Assert the removal actually happened. With no file to delete the reindex
+    # is clean and `check` finds nothing, so the caller's assertion fails one
+    # line later claiming the strict gate is broken — which is what a setup that
+    # silently did nothing looks like from the outside.
+    assert len(removed) == 1, f"expected one file for {doc_id}, removed {len(removed)}"
     assert run("reindex").exit_code == 0
 
 
@@ -213,8 +219,16 @@ class TestMaintenanceCommands:
     def test_check_strict_fails_on_a_broken_graph(self) -> None:
         # `dangling` is real damage — an edge resolving to nothing — so it is
         # exactly what the merge gate exists to catch.
-        run("add", "--type", "decision", "--title", "Target", "--description", "d")
-        run(
+        #
+        # Both writes are asserted, and the id this test hardcodes is asserted
+        # with them: a silent failure in either leaves nothing to dangle, and
+        # the test then fails on the last line as though `--strict` had stopped
+        # gating. That is how one unexplained failure here read (2026-08-14),
+        # and the setup gave nothing to distinguish the two.
+        target = run("add", "--type", "decision", "--title", "Target", "--description", "d")
+        assert target.exit_code == 0, target.stdout
+        assert "adr-0001" in target.stdout
+        source = run(
             "add",
             "--type",
             "decision",
@@ -225,6 +239,7 @@ class TestMaintenanceCommands:
             "--related",
             "adr-0001",
         )
+        assert source.exit_code == 0, source.stdout
         _break_graph("adr-0001")
         assert run("check", "--strict").exit_code == 1
 

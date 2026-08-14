@@ -222,6 +222,85 @@ The ~6 points of recall a split costs are mostly the *graph*, not the ranking: 8
 corpus's 17 edges cross the split, and an edge cannot cross stores because Tier 0
 validates a `related` target locally. That is the price of federating at all.
 
+## Latency: what a read costs, and what the daemon is worth (`latency.py`)
+
+```bash
+uv run python benchmarks/latency.py
+uv run python benchmarks/latency.py --sizes 25,100 --samples 8   # quicker
+```
+
+A third harness, answering what neither of the other two can: how long the agent waits.
+It grows one store through 25 → 100 → 500 → 2000 generated documents and, at each size,
+times whole `python -m docir` processes in three modes — a **warm daemon** (one is already
+serving the store), a **cold daemon** (stopped before every sample, so each pays a spawn, a
+model load and a handshake) and **no daemon** (`DOCIR_NO_DAEMON=1`, nothing shared between
+invocations).
+
+Whole processes, not `dispatch()` calls: the three modes differ only in what a *process*
+has to do before it can answer, so timing the dispatcher would measure the one part that is
+identical in all three. The cost is that every number includes interpreter start and
+docir's imports — which is why `docir version`, which builds no container and opens no
+store, is timed beside them as a floor.
+
+**p50 seconds. 2026-08-14, docir 0.13.1, Apple M1 (8 cores), `bge-small-en-v1.5`.
+n=15 warm, n=5 elsewhere.**
+
+| command | mode | 25 docs | 100 | 500 | 2000 |
+|---|---|---:|---:|---:|---:|
+| `context` | warm daemon | **0.86** | **0.87** | **1.23** | **1.42** |
+| `context` | cold daemon | 2.16 | 2.26 | 2.27 | 2.91 |
+| `context` | no daemon | 1.43 | 1.43 | 1.50 | 1.90 |
+| `search` | warm daemon | 0.87 | 0.82 | 0.83 | 0.82 |
+| `search` | cold daemon | 1.62 | 1.61 | 1.72 | 1.75 |
+| `search` | no daemon | 0.88 | 0.86 | 0.98 | 0.82 |
+| `get` | warm daemon | 0.83 | 0.84 | 0.82 | 0.83 |
+| `get` | cold daemon | 1.62 | 1.67 | 1.73 | 1.73 |
+| `get` | no daemon | 0.89 | 0.83 | 0.87 | 0.78 |
+| `docir version` | floor | 0.87 | 0.82 | 0.85 | 0.73 |
+
+The floor row wanders by ~0.1s between runs, so **treat anything under ~0.15s as noise**
+and read the columns for shape. The 500-document column was re-measured on its own: the
+sweep's first pass ran it while the machine was busy and every row landed about 2× high,
+which is the kind of number that looks like a finding and is not.
+
+### 1. Most of a warm read is starting Python
+
+`docir version` opens no store and still costs ~0.8s. Subtract it and a warm-daemon `get`
+or `search` is **under 0.1s of actual work at every size** — the daemon answers over a Unix
+socket and the client spends its life importing Typer and docir.
+
+That is where a read's time goes today, and none of it is in the index. It is also the
+ceiling on what any ranking change can win back at this corpus size.
+
+### 2. The daemon buys one thing: the loaded model
+
+`get` and `search` never embed anything, and the embedder is loaded lazily
+(`platform/embedding/fastembed.py`), so an in-process run of either never touches the
+model. Their daemon and no-daemon columns are **a wash — every difference is inside the
+noise band**, which is the honest reading of a component that has nothing to keep warm for
+them.
+
+The measurable return is on `context`, which embeds the query: **~0.5s saved per
+invocation**, at every corpus size (0.57 / 0.55 / 0.27 / 0.48). That is the model load,
+paid once by a daemon and once *per command* without one.
+
+**A cold daemon is worse than no daemon for a single command.** A cold `search` costs
+~1.7s against ~0.9s in-process: you pay for a spawn, a container and a model the command
+was never going to use. It is an investment rather than a fee — the next command gets it
+back — but it is why the first command after an idle shutdown or an upgrade feels slow.
+
+### 3. Only `context` grows with the corpus, and it grows in vectors
+
+`search` and `get` are flat from 25 to 2000 documents in every mode: SQLite and FTS5 do
+that work through an index. `context` moves 0.86 → 1.42 warm, and the reason is the
+semantic scan, which is linear in *chunks* rather than documents (adr-927aa43d9635) —
+2 000 documents is 10 000 vectors here, because every `##` section is embedded and the
+generated documents have four each.
+
+So the shape is: comfortable to a few thousand documents on a laptop, and the first thing
+to change past that is the vector scan, not the schema. Nothing in the read path needed to
+change for this corpus, which is the useful thing to know before optimizing it.
+
 ## What this does not tell you
 
 - **Single-annotator ground truth.** The judgments in `tasks.yaml` were written by the
@@ -238,6 +317,14 @@ validates a `related` target locally. That is the price of federating at all.
   not impossible for it — which is why `search` scores 0.80 there rather than 0.
 - **Nothing here measures whether retrieved context changed what an agent did.** That is
   the outcome the product actually exists for, and it needs a different instrument.
+- **The latency numbers are one laptop, unloaded.** They are a shape — flat here, linear
+  there — not a service-level objective. A busy machine moves every row: an early run of
+  the 500-document column landed 2× high across the board and had to be re-measured.
+- **`latency.py` times reads only.** Writes are the daemon's other job (it serializes
+  them), and nothing here prices `add`, `update` or `reindex`.
+- **Its corpus is uniform.** Every generated document has four sections and a similar
+  length, so the vector count is exactly 5× the document count. A real store is lumpier,
+  and the chunk count is what the semantic scan actually walks.
 
 ## Adding to it
 

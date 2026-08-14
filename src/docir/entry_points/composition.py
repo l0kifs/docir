@@ -14,9 +14,7 @@ import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-
-from sqlalchemy import Engine
-from sqlalchemy.exc import SQLAlchemyError
+from typing import TYPE_CHECKING
 
 from docir import __version__
 from docir.config.settings import Settings, enclosing_project_home
@@ -40,14 +38,16 @@ from docir.platform.errors import DocirError, SchemaError
 from docir.platform.filesystem.code_matcher import RepositoryCodeMatcher
 from docir.platform.filesystem.markdown_store import MarkdownDocumentFileStore
 from docir.platform.filesystem.tag_store import YamlTagFileStore
-from docir.platform.persistence.engine import (
-    create_index_engine,
-    create_session_factory,
-    run_migrations,
-)
-from docir.platform.persistence.sqlalchemy_uow import SqlAlchemyUnitOfWork
 from docir.platform.persistence.unit_of_work import UnitOfWork
 from docir.platform.transport.messages import Request, RequestExecutor, Response
+
+# SQLAlchemy and Alembic are ~360ms of import, and a command that never builds a
+# container never needs them — which is *every* command in daemon mode, where the
+# CLI is a socket client (issue-9509f9fa3631). They are therefore imported inside
+# the functions that construct an engine, and the annotation-only name here is
+# resolved by the type checker rather than at runtime.
+if TYPE_CHECKING:
+    from sqlalchemy import Engine
 
 #: Environment variable selecting the embedder implementation. Unset means the
 #: real model; ``deterministic`` selects the dependency-free hashing embedder.
@@ -149,6 +149,13 @@ def build_container(
     ``clock`` is injectable so tests can freeze the date; production passes the
     default :class:`SystemClock`.
     """
+    from docir.platform.persistence.engine import (
+        create_index_engine,
+        create_session_factory,
+        run_migrations,
+    )
+    from docir.platform.persistence.sqlalchemy_uow import SqlAlchemyUnitOfWork
+
     settings.ensure_directories()
     run_migrations(settings.database_url)
 
@@ -231,6 +238,11 @@ def build_peer_reader(home: Path, *, embedder: Embedder, clock: Clock) -> tuple[
     exists to prevent. The embedder is shared with the primary, so N peers still
     load one model.
     """
+    from sqlalchemy.exc import SQLAlchemyError
+
+    from docir.platform.persistence.engine import create_index_engine, create_session_factory
+    from docir.platform.persistence.sqlalchemy_uow import SqlAlchemyUnitOfWork
+
     reason = peer_status(home)
     if reason:
         return None, reason
@@ -361,6 +373,8 @@ def initialize_store(
     gitignore_written = force or not gitignore_path.exists()
     if gitignore_written:
         gitignore_path.write_text(_STORE_GITIGNORE, encoding="utf-8")
+
+    from docir.platform.persistence.engine import run_migrations
 
     run_migrations(settings.database_url)
     load_schema(schema_path)  # validate the merged core + profiles (raises SchemaError)

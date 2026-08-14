@@ -227,3 +227,8 @@ examples/.workspace/
 # docir dogfoods its own store: .docir/docs/ and .docir/docs-schema.yaml are
 # committed, the derived index is ignored by .docir/.gitignore. Do not ignore
 # .docir/ wholesale — that is what kept this repo from using its own product.
+
+# Personal launch working files — a plan and post drafts, not project artifacts.
+# Kept in the repo so they survive a reboot and sit beside what they describe.
+/LAUNCH-PLAN.md
+/LAUNCH-DRAFTS.md

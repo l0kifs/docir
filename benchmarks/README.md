@@ -139,7 +139,9 @@ Mean payload an agent reads, per task (~4 chars/token):
 
 On a 26-document corpus. The ratio grows with corpus size, since `context` is bounded by
 `--limit` and the others are not — it went from 8.3× to 13.7× when the corpus gained three
-long documents, which is the shape of the claim rather than a number to quote absolutely.
+long documents. That growth is now measured rather than asserted: see *Token cost by corpus
+size* below, which also prices the alternative an agent would actually run. **Read the two
+together — the 13.7× here is against reading every body, which nobody does.**
 
 Of that, **12 tokens are `matched_section`** — measured by suppressing the field and
 re-running on this same corpus (484 vs 472), not by comparing against the 464 printed
@@ -301,6 +303,60 @@ So the shape is: comfortable to a few thousand documents on a laptop, and the fi
 to change past that is the vector scan, not the schema. Nothing in the read path needed to
 change for this corpus, which is the useful thing to know before optimizing it.
 
+## Token cost by corpus size, against a baseline an agent would run (`tokens.py`)
+
+```bash
+uv run python benchmarks/tokens.py
+uv run python benchmarks/tokens.py --sizes 25,100        # quicker
+```
+
+§3 prices one corpus and says the ratio "grows with corpus size ... the shape of the claim
+rather than a number to quote absolutely". This is the line, on the same seeded corpora
+`latency.py` builds, priced through the same renderer an agent reads (trimmed JSON, ~4
+chars/token). It also adds the baseline §3 was missing: **what an agent does without docir
+is not read every document** — it greps, then opens the few files that matched.
+
+**~tokens per task, mean of 6 queries. 2026-08-15, `bge-small-en-v1.5`, `--limit 5`.**
+
+| strategy | 25 docs | 100 | 500 | 2000 |
+|---|---:|---:|---:|---:|
+| `docir context` | **516** | **524** | **519** | **522** |
+| `docir search` | 496 | 493 | 487 | 488 |
+| `docir query` (all skeletons) | 2 317 | 9 460 | 47 542 | 190 384 |
+| `rg -l` + read 5 files | 1 434 | 2 148 | 5 818 | 20 054 |
+| read every body | 10 113 | 41 106 | 206 132 | 824 991 |
+
+As a multiple of `context`: grep **2.8× → 4.1× → 11.2× → 38.4×**, reading everything
+19.6× → 78.5× → 397× → 1 581×.
+
+### 1. `context` is flat, and that is the whole claim
+
+516 → 522 tokens across an 80× corpus. `--limit` bounds the response, so the cost of asking
+does not depend on how much there is to ask about; every alternative scales with the store.
+That is the property to defend in any change to the read path — a field added to a skeleton
+is paid five times, a field added to `query` is paid once per document.
+
+### 2. Quote the grep row, not "read every body"
+
+Against reading everything, docir looks 20× to 1 580× cheaper. That number is real and
+useless: nobody reads a whole docs tree. Against the honest alternative it is **2.8× at 25
+documents and 11× at 500** — a smaller claim that survives contact with someone who would
+have run `rg` instead.
+
+The baseline is deliberately the *cheapest* version of that alternative: `rg -l` prints
+paths and not matching lines, and the five files opened are the best-matching ones, a
+ranking a real agent does not have. A second grep, a sixth file, or re-reading after a
+compaction all cost more — so this is a floor on the alternative, and therefore a floor on
+docir's multiple.
+
+### 3. Read the 2 000 column with care
+
+At 2 000 documents ~90% of the grep baseline is the **file list**, not the files: five
+bodies are ~2 060 tokens of the 20 054. That is partly an artifact of a generated corpus —
+ten subjects and eight aspects, so a query term matches a large fraction of the store,
+where a real repository's vocabulary is more spread out. The 25- and 100-document columns
+are the ones close to a real docs tree, and they are the ones to quote.
+
 ## What this does not tell you
 
 - **Single-annotator ground truth.** The judgments in `tasks.yaml` were written by the
@@ -317,6 +373,9 @@ change for this corpus, which is the useful thing to know before optimizing it.
   not impossible for it — which is why `search` scores 0.80 there rather than 0.
 - **Nothing here measures whether retrieved context changed what an agent did.** That is
   the outcome the product actually exists for, and it needs a different instrument.
+- **The grep baseline is modelled, not run.** No agent was observed; `tokens.py` prices
+  `rg -l` plus five file reads in Python. A real session also pays for the turns in
+  between, which nothing here counts.
 - **The latency numbers are one laptop, unloaded.** They are a shape — flat here, linear
   there — not a service-level objective. A busy machine moves every row: an early run of
   the 500-document column landed 2× high across the board and had to be re-measured.

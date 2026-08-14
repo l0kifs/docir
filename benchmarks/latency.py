@@ -96,7 +96,10 @@ QUERIES = (
     "what limits a noisy integration to its own share",
 )
 
-_SEED = 20260814
+#: Fixes the generated corpus. Public because `tokens.py` builds the same store
+#: from it — two harnesses reporting different numbers for "500 documents" would
+#: be measuring two corpora and saying one word.
+SEED = 20260814
 
 _TYPES = ("decision", "issue", "architecture")
 
@@ -306,7 +309,7 @@ def main() -> int:
     # times the length of a sequential one in every skeleton the read returns.
     settings.schema_path.write_text(render_schema_yaml(id_style="random"), encoding="utf-8")
     container = build_container(settings, background_embeddings=False)
-    rng = random.Random(_SEED)
+    rng = random.Random(SEED)
     ids: list[str] = []
     collected: dict[int, dict[tuple[str, str], list[float]]] = {}
 

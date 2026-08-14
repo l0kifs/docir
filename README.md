@@ -471,6 +471,7 @@ ADR, added with `docir add --type decision`, never by hand.
 uv sync                                              # dev environment
 uv run python benchmarks/run.py                      # retrieval quality + token cost
 uv run python benchmarks/latency.py                  # read latency by corpus size + daemon mode
+uv run python benchmarks/tokens.py                   # token cost by corpus size, vs a grep baseline
 uv run pytest --cov=docir --cov-fail-under=90        # tests + coverage gate
 uv run ruff check . && uv run ty check && uv run tach check
 ```

@@ -8,7 +8,7 @@ description: merge-forward keeps the first heading, then the merged block hard-s
 id: issue-66d43f63e441
 related:
 - adr-927aa43d9635
-status: open
+status: resolved
 tags:
 - retrieval
 - material
@@ -54,3 +54,24 @@ section whose start falls inside a continuation piece.
 Either way the guard has to assert the invariant directly — **every level-2+
 heading in a body names at least one chunk** — over a body shaped like this one,
 because a count of chunks cannot tell a swallowed heading from a merged one.
+
+## Resolution
+
+`_merge_short` now declines a merge whose result would exceed
+`MAX_CHUNK_CHARS`, on both the forward path and the trailing-section path. The
+reasoning is that such a merge is self-defeating: `_split_long` immediately
+undoes it and keeps only the first piece's heading, so it saves no vector and
+costs an address. The short section is emitted as it is instead — a small chunk
+that is correctly named beats a section nothing can name.
+
+`arch-0a3c2d6d54a6` now has 15 chunks and no headless one; `Event timeline`
+names its own. Across this repo's 142 documents, no real heading is lost to a
+split.
+
+Guarded in `test_domain_chunking.py` by the invariant rather than by the
+symptom — no chunk is headless, for a short-then-long body, a long-then-short
+body, and the sandwich. Verified by restoring the old merge: 3 tests fail.
+
+A merge may still *absorb* a following heading when the result fits; that is the
+documented forward-merge rule, the text stays in a named chunk, and it is not
+what this issue was about.

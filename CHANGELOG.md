@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A short section before a long one no longer erases the long one's heading from the index.**
+  Merging a below-minimum section forward and then hard-splitting the result kept only the first
+  piece's heading, so the following section named no chunk at all — `docir get <id> --section`
+  still returned it, but `matched_section` could never point there. A merge that would overflow
+  the chunk ceiling is now declined: it saves no vector and costs an address.
 - **A `##` inside a fenced code block is no longer read as a section heading.** The chunker
   already skipped fences; the section read/edit path did not, so a document quoting a markdown
   template disagreed with itself. `docir get <id> --section` returned a fragment ending in an

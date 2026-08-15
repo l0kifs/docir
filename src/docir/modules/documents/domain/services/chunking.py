@@ -146,14 +146,23 @@ def _merge_short(sections: list[tuple[str, str]]) -> list[tuple[str, str]]:
     Forward rather than backward so the merged block keeps the *first*
     heading — that is the one a reader would name, and the one the section read
     path resolves.
+
+    A merge that would overflow :data:`MAX_CHUNK_CHARS` is declined, because
+    :func:`_split_long` would immediately undo it and keep only the *first*
+    piece's heading — so the following section's heading would name no chunk at
+    all, and ``matched_section`` could never point at it (issue-66d43f63e441). A
+    merge that has to be split saves no vector and costs an address, so the short
+    section is emitted as it is instead.
     """
     merged: list[tuple[str, str]] = []
     pending: tuple[str, str] | None = None
     for heading, text in sections:
         if pending is not None:
-            heading_text = f"## {heading}\n\n{text}" if heading else text
-            text = f"{pending[1]}\n\n{heading_text}".strip()
-            heading = pending[0] or heading
+            combined = f"{pending[1]}\n\n{_render((heading, text))}".strip()
+            if len(combined) <= MAX_CHUNK_CHARS:
+                heading, text = pending[0] or heading, combined
+            else:
+                merged.append(pending)
             pending = None
         if len(text) < MIN_CHUNK_CHARS:
             pending = (heading, text)
@@ -161,10 +170,11 @@ def _merge_short(sections: list[tuple[str, str]]) -> list[tuple[str, str]]:
         merged.append((heading, text))
     if pending is not None:
         # Nothing followed it. Append to the previous chunk if there is one,
-        # rather than emitting a chunk below the minimum.
-        if merged:
-            last_heading, last_text = merged[-1]
-            merged[-1] = (last_heading, f"{last_text}\n\n{_render(pending)}".strip())
+        # rather than emitting a chunk below the minimum — unless that would
+        # overflow, which costs the same heading the forward merge does.
+        last = merged[-1] if merged else None
+        if last is not None and len(last[1]) + len(_render(pending)) + 2 <= MAX_CHUNK_CHARS:
+            merged[-1] = (last[0], f"{last[1]}\n\n{_render(pending)}".strip())
         else:
             merged.append(pending)
     return merged

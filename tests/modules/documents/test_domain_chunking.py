@@ -107,6 +107,53 @@ class TestSizeBounds:
         assert len(chunks) == 1
         assert "One line." in chunks[0].text
 
+    def test_a_merge_that_would_have_to_be_split_is_declined(self) -> None:
+        """Guards issue-66d43f63e441 — the two rules composed to erase a heading.
+
+        `arch-0a3c2d6d54a6` had a 149-char `Backbone` before a long
+        `Event timeline`. The short one merged forward, the merged block then
+        overflowed and was hard-split, and only the first piece kept a heading —
+        so `Event timeline` named no chunk at all and `matched_section` could
+        never point at it, while `get --section` still returned it fine.
+        """
+        long_text = "x" * (MAX_CHUNK_CHARS - 20)
+        body = (
+            "## Backbone\n\nsix words of summary here.\n\n" + f"## Event timeline\n\n{long_text}\n"
+        )
+        chunks = split_body(body)
+        assert [chunk.heading for chunk in chunks] == ["Backbone", "Event timeline"]
+        assert all(chunk.heading for chunk in chunks), "a heading was lost to the split"
+
+    def test_a_short_section_still_merges_when_the_result_fits(self) -> None:
+        # The decline is narrow: merging is still what a short section gets,
+        # because a heading plus one line is not worth a vector of its own.
+        body = "## Tiny\n\nOne line.\n\n" + _section("Substantial")
+        assert len(split_body(body)) == 1
+
+    def test_a_trailing_short_section_that_would_overflow_stays_separate(self) -> None:
+        # The same composition from the other end: appending it to the previous
+        # chunk would overflow, split, and drop this heading instead.
+        body = "## Big\n\n" + "x" * MAX_CHUNK_CHARS + "\n\n## Tail\n\nOne line.\n"
+        chunks = split_body(body)
+        assert [chunk.heading for chunk in chunks] == ["Big", "Tail"]
+
+    def test_no_heading_is_lost_to_a_split_in_either_composition(self) -> None:
+        """The invariant, stated once: a split never costs an address.
+
+        A merge may still absorb a heading — that is the documented forward-merge
+        rule and a reader can still reach the text. Being cut away by the
+        overflow splitter is different: nothing names the section afterwards.
+        """
+        long_text = "x" * MAX_CHUNK_CHARS
+        for body in (
+            f"## A\n\nshort.\n\n## B\n\n{long_text}\n",
+            f"## A\n\n{long_text}\n\n## B\n\nshort.\n",
+            f"## A\n\nshort.\n\n## B\n\n{long_text}\n\n## C\n\nshort.\n",
+        ):
+            chunks = split_body(body)
+            headless = [chunk for chunk in chunks if not chunk.heading]
+            assert not headless, f"{len(headless)} unaddressable chunk(s) in {body[:20]!r}"
+
     def test_a_lone_short_body_is_still_one_chunk(self) -> None:
         """Nothing to merge into: better a small chunk than no chunk at all."""
         chunks = split_body("## Tiny\n\nOne line.\n")

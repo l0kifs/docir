@@ -6,16 +6,33 @@ from pathlib import Path
 
 from docir.modules.agents.api import AGENT_NAMES, build_agent_service
 from docir.modules.agents.application.service import InstallRequest
+from docir.modules.agents.domain import rendering
+from docir.modules.agents.domain.targets import AGENT_TARGETS, AgentForm
 from docir.modules.agents.infra.file_sink import FilesystemSink
 from docir.modules.agents.infra.template_provider import PackagedTemplateProvider
 
 
 class TestPackagedTemplate:
     def test_ships_the_guide_with_frontmatter(self) -> None:
-        text = PackagedTemplateProvider().skill_template()
+        text = PackagedTemplateProvider().template("skill")
         assert text.startswith("---")
         assert "name: docir" in text
         assert "# docir — Agent Guide" in text
+
+    def test_every_catalogue_skill_has_a_packaged_template(self) -> None:
+        """A target naming a template that never shipped fails only on install.
+
+        Names come from the static catalogue, so this is a packaging mistake
+        rather than a runtime condition — which means the suite is the only
+        place it can be caught before a user hits it.
+        """
+        provider = PackagedTemplateProvider()
+        skills = [t for t in AGENT_TARGETS.values() if t.form is AgentForm.SKILL]
+        assert skills, "no skills in the catalogue — the sweep is checking nothing"
+        for skill in skills:
+            text = provider.template(skill.template)
+            assert text.startswith("---"), f"{skill.name}: template has no frontmatter"
+            assert rendering.parse_description(text), f"{skill.name}: template has no description"
 
 
 class TestFilesystemSink:
@@ -31,7 +48,7 @@ class TestFilesystemSink:
 
 class TestApiBuilder:
     def test_agent_names(self) -> None:
-        assert set(AGENT_NAMES) == {"claude", "agents"}
+        assert set(AGENT_NAMES) == {"claude", "claude-writing", "agents"}
 
     def test_build_and_install_end_to_end(self, tmp_path: Path) -> None:
         service = build_agent_service("3.1.4")

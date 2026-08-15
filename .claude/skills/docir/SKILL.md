@@ -2,7 +2,7 @@
 name: docir
 description: Use docir to read and write this project's git-backed design docs — decisions/ADRs, issues, architecture notes — instead of editing markdown by hand. Trigger whenever the repo uses docir (a `docir` command is available, a `.docir/` store exists in the repo or `~/.docir`, or docs carry docir frontmatter) and you are about to implement a feature (pull relevant decisions first), record or resolve a decision/issue/ADR, search project knowledge, or restructure/migrate existing markdown docs into docir. Covers the read path (`docir context/get/search/query`) and the write path (`docir init/add/update/archive`) — every doc write MUST go through the CLI.
 ---
-<!-- docir:v0.12.0 — generated file, do not edit by hand; refresh with `docir agent update` after upgrading docir -->
+<!-- docir:v0.13.1 — generated file, do not edit by hand; refresh with `docir agent update` after upgrading docir -->
 
 # docir — Agent Guide
 
@@ -465,6 +465,20 @@ to leave alone.
   skipped, not indexed — it exists on disk and is invisible to every read path. Non-zero
   means run `docir check` and fix the named file before trusting a search.
 
+## Other repositories' decisions
+
+If `.docir/stores.yaml` exists, this store reads peers alongside its own, and
+`context`, `query`, `search` and `get` already cover them — every row carries a
+`store` field naming where it came from. Add one for a single command with
+`--store ../platform/.docir`.
+
+Writes never federate: `add` and `update` always land in this repo's store, and
+so does everything `check` reports. Neither does `docir build` — a published
+site is this store's corpus, because a copy of a peer's decision goes stale the
+moment that repo edits it. If a peer is unreadable docir says so on
+stderr and answers from the rest — treat that as information, not as a failure
+to retry.
+
 ## Publishing for humans
 
 `docir build --out site/` renders the whole store as a self-contained static
@@ -475,6 +489,7 @@ form; it shows the relation graph in both directions and flags stale documents.
 ```bash
 docir build --out site/ --title "<project> — design docs"   # heading, tab, wordmark
 docir build --out site/ --logo assets/logo.svg              # mark + favicon
+docir build --out site/ --mermaid vendor/mermaid.min.js     # draw mermaid fences
 docir build --out site/ --include-archived                  # archived docs too
 ```
 
@@ -484,6 +499,12 @@ favicon — pass it when the repo has its own logo, otherwise the site carries
 docir's. Archived documents are left out unless you ask for them. `--out` is
 regenerated each build, and a directory docir did not build is refused unless
 you pass `--force`.
+
+A ` ```mermaid ` fence in a body publishes as its own source unless you pass
+`--mermaid` pointing at mermaid's browser bundle; docir writes it beside the
+pages and loads it from there, so the site still opens from `file://`. docir
+does not ship the bundle — it is megabytes — and writes it only when a document
+actually draws something.
 
 ## Working across git branches
 

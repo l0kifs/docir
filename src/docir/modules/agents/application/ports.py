@@ -12,10 +12,10 @@ from typing import Protocol
 
 
 class TemplateProvider(Protocol):
-    """Yields the canonical instruction template shipped with docir."""
+    """Yields the instruction templates shipped with docir, by name."""
 
-    def skill_template(self) -> str:
-        """Return the raw skill template (frontmatter + body), verbatim."""
+    def template(self, name: str) -> str:
+        """Return the raw template ``name`` (frontmatter + body), verbatim."""
         ...
 
 

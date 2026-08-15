@@ -332,7 +332,7 @@ def _shipped_vocabulary() -> tuple[dict[str, frozenset[str]], frozenset[str]]:
     return statuses, frozenset().union(*statuses.values())
 
 
-GUIDE = PackagedTemplateProvider().skill_template()
+GUIDE = PackagedTemplateProvider().template("skill")
 TREE, GROUPS = _cli_tree()
 TYPE_STATUSES, ALL_STATUSES = _shipped_vocabulary()
 INVOCATIONS = _invocations(GUIDE)

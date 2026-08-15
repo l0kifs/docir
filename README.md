@@ -52,7 +52,8 @@ uv tool install docir          # or: pipx install docir
 docir init
 
 # 3. teach this repo's AI agent to drive docir (writes a Claude Code skill)
-docir agent install            # add --agent agents for an AGENTS.md block
+docir agent install            # --agent claude-writing adds the doc-writing rules;
+                               # --agent agents links the skills from AGENTS.md
 
 # 4. capture a decision…
 docir add --type decision --title "Auth strategy" \
@@ -219,7 +220,7 @@ because both go through the same dispatcher — an MCP tool and its CLI command 
 answer differently.
 
 ```bash
-docir agent install                       # a Claude skill / an AGENTS.md block: drive the CLI
+docir agent install                       # a Claude skill (AGENTS.md links it): drive the CLI
 claude mcp add docir -- docir mcp serve   # or the same commands as MCP tools
 ```
 

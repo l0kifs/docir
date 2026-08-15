@@ -1,10 +1,13 @@
 # agents
 
 ## Purpose
-Installs and refreshes the AI-assistant instruction files that teach a coding
-agent to drive docir — a Claude Code skill (`.claude/skills/docir/SKILL.md`) and
-an `AGENTS.md` block. One packaged instruction template is the single source of
-truth for what every target embeds.
+Installs and refreshes the AI-assistant instruction files for docir — two Claude
+Code skills and an `AGENTS.md` block that **links** to them. `claude`
+(`.claude/skills/docir/SKILL.md`) teaches the CLI; `claude-writing`
+(`.claude/skills/docir-writing/SKILL.md`) teaches how to write the documents and
+is opt-in (adr-735ba7f6209b). Each installs one packaged template verbatim, and
+the block carries only those templates' `description` plus the path to each file
+(adr-6ed847e02fe5).
 
 ## Public operations
 - `build_agent_service(version) -> AgentSetupService` — wire the service (the
@@ -26,6 +29,16 @@ note}` where `action` is an `InstallAction` (`created`/`updated`/`skipped`). A
 - An `AGENTS.md` is only touched inside docir's `<!-- docir:start/end -->` block
   (replaced, not duplicated); a foreign `AGENTS.md` is never rewritten by
   `update` unless `agents` is explicitly requested (then the block is appended).
+- **Selecting a pointer target also writes the skills it names**, on both
+  `install` and `update` — so the block never links a file that is not there,
+  including after someone deletes the skill and keeps the block. The linked path
+  is always `/`-separated.
+- **The block indexes every skill installed under the same root**, not only the
+  ones it names, and installing a skill refreshes an already-installed block in
+  the same run. An optional skill therefore appears in the index once it exists
+  without the index pulling it in for everyone.
+- A block written before the pointer form is replaced by one on the next
+  `update`, reported as a note on that file.
 - Generated files carry a parseable version stamp so `update` reports the
   installed→refreshed transition.
 

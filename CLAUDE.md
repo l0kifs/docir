@@ -478,13 +478,35 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   `docs-schema.yaml` committed, index gitignored. Do not reach into `documents.infra` for the schema —
   `DEFAULT_SCHEMA_YAML`/`PROFILE_NAMES` are exported from `documents.api`.
 - **`docir agent install/update` bypasses the daemon/dispatcher on purpose (adr-3a2d5ee7bc84).** The
-  `agents` module installs AI-assistant instruction files (a Claude skill / an `AGENTS.md` block)
-  from one packaged template (`modules/agents/infra/templates/skill.md`, the canonical guide — edit
-  it there, not `docs/AGENT_GUIDE.md`, which is now a pointer). It touches no index/DB, so the CLI
-  builds the service directly via `agents.api.build_agent_service(__version__)` and runs it
-  in-process — like `version` and `daemon serve`, not through the `RequestExecutor`/`Dispatcher`.
-  Generated files carry a `<!-- docir:vX -->` stamp so `update` reports a version transition; a
-  foreign `AGENTS.md` is never rewritten (only docir's marker block is).
+  `agents` module installs AI-assistant instruction files (a Claude skill, and an `AGENTS.md`
+  block linking it) from one packaged template (`modules/agents/infra/templates/skill.md`, the
+  canonical guide — edit it there, not `docs/AGENT_GUIDE.md`, which is now a pointer). It touches
+  no index/DB, so the CLI builds the service directly via
+  `agents.api.build_agent_service(__version__)` and runs it in-process — like `version` and
+  `daemon serve`, not through the `RequestExecutor`/`Dispatcher`. Generated files carry a
+  `<!-- docir:vX -->` stamp so `update` reports a version transition; a foreign `AGENTS.md` is
+  never rewritten (only docir's marker block is).
+- **There are two skills, and the second is opt-in (adr-735ba7f6209b).** `claude` teaches the CLI;
+  `claude-writing` (`.claude/skills/docir-writing/SKILL.md`, template `writing.md`) teaches how to
+  write the documents — one name per concept, one purpose per document, state each fact once and
+  link it, and keep each `##` section under ~1,200 chars. That last number is `MAX_CHUNK_CHARS`,
+  not a style preference; the skill deliberately carries **no word limit**, because the
+  topic-based standards reject one and `similarity_lint.py` already warns on size. It stays out
+  of `DEFAULT_AGENTS` since both skills match the same work and a repo that did not ask for the
+  second should not pay its context. `TemplateProvider.template(name)` is a keyed catalogue, so a
+  third skill is a template plus a catalogue entry — do not grow either skill into a grab-bag.
+- **The `AGENTS.md` block points at the skills; it does not contain them (adr-6ed847e02fe5).** It
+  carries the template's frontmatter `description` verbatim plus a repo-relative link, so docir's
+  own output stops being the duplication docir exists to prevent — and a second skill costs a line
+  rather than another ~500. It indexes every skill installed under the same root, and installing a
+  skill refreshes an installed block in the same run — so the optional skill is listed once it
+  exists without the index dragging it in.
+  Three details hold it up. `AgentTarget.points_to` is the block's *floor* —
+  content and install dependency both — so selecting `agents` writes the skill too (on `update` as
+  well, which is what heals a block whose skill was deleted) and the two cannot disagree. The path
+  comes from `posix_path`, never `os.sep`, because the block is committed and read on every OS.
+  And a legacy block is identified by the *absence* of `MARK_POINTER`, not by matching the old
+  guide's wording — which would rot the moment the template changed.
 - **`docir mcp serve` is a third client of the dispatcher, not a second implementation
   (adr-354a4270ecd8).** Every tool in `entry_points/mcp/server.py` is one `Request` through a
   `RequestExecutor` — the same boundary the CLI and the daemon socket cross — so an MCP tool

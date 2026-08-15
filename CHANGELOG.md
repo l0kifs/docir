@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`docir agent install --agent claude-writing` — a second, opt-in skill covering how to write
+  the documents**, beside the one covering how to drive the CLI. Four rules: name each concept
+  the same way everywhere, give one document one purpose (its `type` says which), state each fact
+  once and link to it with a typed edge, and keep each `##` section under ~1,200 characters — the
+  size docir embeds at, so a longer one is split mid-paragraph and retrieves worse. It carries no
+  word limit: length follows purpose, and `docir lint --deep` already warns on size. Not installed
+  by default; `AGENTS.md` lists it once it exists.
+
+### Changed
+
+- **`AGENTS.md` now points at the Claude skill instead of inlining it.** The block used to
+  hold the whole ~500-line guide, so a repo installing both targets committed the same text
+  twice and only one copy was refreshed — the duplication docir exists to prevent, in docir's
+  own output. It now carries the skill's frontmatter `description` verbatim plus a link to
+  `.claude/skills/docir/SKILL.md`, and shrinks to ~8 lines. Existing blocks migrate on the
+  next `docir agent update`, which reports the replacement; surrounding house rules are
+  preserved as before.
+- **`docir agent install --agent agents` also writes the skill it links.** Previously it wrote
+  a block and no skill file at all. `docir agent update` expands the same way, so a block whose
+  skill was deleted is repaired rather than left naming a file that is not there.
+
 ## [0.13.1] - 2026-08-13
 
 A patch for one real defect in 0.13.0's diagram support, plus the package metadata that

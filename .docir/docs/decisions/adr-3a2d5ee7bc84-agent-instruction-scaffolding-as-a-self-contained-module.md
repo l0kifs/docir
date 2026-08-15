@@ -16,7 +16,7 @@ tags:
 - architecture
 title: Agent-instruction scaffolding as a self-contained module
 type: decision
-updated: '2026-08-06'
+updated: '2026-08-15'
 ---
 
 ## Context
@@ -69,6 +69,7 @@ wrong. The module is therefore **clean**: it introduces **no `platform → agent
 baseline edge** and depends only on `platform.errors`.
 
 ## Consequences
+
 - Easier: `docir agent install` is a one-command onboarding; the guide is now
   shipped in the wheel and versioned with docir, so `update` refreshes it after
   an upgrade. `AGENTS.md` covers every non-Claude assistant.
@@ -84,3 +85,8 @@ baseline edge** and depends only on `platform.errors`.
   later is a new entry in `AGENT_TARGETS` plus a render branch, nothing more.
 - Follow-up: `docs/AGENT_GUIDE.md` becomes a thin pointer to the packaged
   template so the two never drift.
+- **Amended by adr-6ed847e02fe5.** One clause above no longer holds: `AGENTS.md`
+  does not embed the guide body. It carries the skill's `description` and a link
+  to the skill file, and selecting that target installs the skill it names.
+  Everything else here — the module placement, the daemon bypass, the single
+  packaged template, the version stamp — stands.

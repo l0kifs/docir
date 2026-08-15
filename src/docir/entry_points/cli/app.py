@@ -754,7 +754,7 @@ def agent_install(
         typer.Option("--global", help="Install the skill under ~/ instead of the project."),
     ] = False,
 ) -> None:
-    """Install docir's agent instructions (a Claude skill and/or an AGENTS.md block)."""
+    """Install docir's agent instructions (a Claude skill; AGENTS.md links to it)."""
     service = build_agent_service(__version__)
     request = InstallRequest(
         project_root=directory.resolve(),

@@ -216,15 +216,22 @@ the local store alone.
 
 Three properties are load-bearing:
 
-- **Peers are opened read-only at the database**
-  (`sqlite:///file:<path>?mode=ro&uri=true`), so "docir does not write to a
-  peer" is enforced by SQLite rather than promised by a comment. This is also
-  why peers get their own construction path: the normal container build runs
-  migrations and creates directories, both of which write.
-- **An unreadable peer is skipped with a warning on stderr, never an error.** A
-  peer's index is derived and gitignored, so a fresh clone of it simply has
-  none; failing the read would make one repository's state everyone's outage.
-- **The merge sorts on `similarity`, never `score`.** RRF ranks *within* one
-  store, so comparing two stores' scores compares the sizes of their corpora.
-  Rows carry a `store` field only while federating — it is pure cost with one
-  store, which is why the read paths never carried it before.
+### Peers are opened read-only at the database
+
+(`sqlite:///file:<path>?mode=ro&uri=true`), so "docir does not write to a
+peer" is enforced by SQLite rather than promised by a comment. This is also
+why peers get their own construction path: the normal container build runs
+migrations and creates directories, both of which write.
+
+### An unreadable peer is skipped with a warning on stderr, never an error.
+
+A
+peer's index is derived and gitignored, so a fresh clone of it simply has
+none; failing the read would make one repository's state everyone's outage.
+
+### The merge sorts on similarity, never score.
+
+RRF ranks *within* one
+store, so comparing two stores' scores compares the sizes of their corpora.
+Rows carry a `store` field only while federating — it is pure cost with one
+store, which is why the read paths never carried it before.

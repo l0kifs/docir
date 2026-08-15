@@ -26,7 +26,7 @@ tags:
 - integrity
 title: Capture a decision (the write path)
 type: architecture
-updated: '2026-08-06'
+updated: '2026-08-15'
 ---
 
 ## Backbone
@@ -64,28 +64,55 @@ nothing detects it automatically and no test covers it. → `issue-61b66ed696de`
   (CONFIRMED: 6 concurrent `--no-daemon` adds all returned `adr-0002`). Allocation is now one
   atomic upsert, and `docir init` defaults to `id_style: random`, which uses no counter at
   all. → `issue-389dc5dac58a`.
-- **H2** — RESOLVED 2026-07-26. `reindex` restored documents, tags, FTS and embeddings but
-  not the id counter (CONFIRMED: fresh-clone → reindex → add re-minted a live id). It now
-  restores it, and a create refuses to overwrite a file already holding the id. → `issue-b7ddde3ce860`.
-  One residual: the restore misreads an all-digit random id as sequential → `issue-f09fab3f5c36`.
-- **H3** — `--override` permits an illegal status transition. Nothing records that an override
-  occurred; the resulting document is indistinguishable from a legal one. → `issue-0783d236d565`.
-- **H4** — `delete --force` removes a document while other documents' *files* keep pointing at
-  it. No compensating action. → `issue-fd547a293d01` (CONFIRMED).
-- **H5** — `archive` does not check incoming references at all, though `delete` does. The
-  asymmetry is undocumented; the archived doc silently vanishes from graph traversal.
-- **H6** — On the `archive`/`unarchive` no-op path the view is built without computing
-  staleness, so a stale document reports `stale: false`. → `issue-7d4fdccf8343`.
-- **H7** — Tier 0 validates `related` only for edges supplied *in this call*. A document that
-  already holds a dangling edge can be updated freely and the broken edge is rewritten to the
-  canonical file. → `issue-fd547a293d01` (CONFIRMED by probe).
-- **H8** — Two concurrent updates to the same document silently last-write-wins; the
-  stale-write guard is computed on every update but consulted only for `--replace-body`.
-  → `issue-be95d3e242a3`.
-- **H9** — `created`/`updated`/`verified` are local dates with no timezone recorded.
-  → `issue-7e16dfe2521c` (cosmetic).
-- **H10** — No duplicate-content check on `add`. Two identical decisions can be created; only
-  the opt-in Tier 2 `lint --deep` mentions it.
+
+### H2
+
+— RESOLVED 2026-07-26. `reindex` restored documents, tags, FTS and embeddings but
+not the id counter (CONFIRMED: fresh-clone → reindex → add re-minted a live id). It now
+restores it, and a create refuses to overwrite a file already holding the id. → `issue-b7ddde3ce860`.
+One residual: the restore misreads an all-digit random id as sequential → `issue-f09fab3f5c36`.
+
+### H3
+
+— `--override` permits an illegal status transition. Nothing records that an override
+occurred; the resulting document is indistinguishable from a legal one. → `issue-0783d236d565`.
+
+### H4
+
+— `delete --force` removes a document while other documents' *files* keep pointing at
+it. No compensating action. → `issue-fd547a293d01` (CONFIRMED).
+
+### H5
+
+— `archive` does not check incoming references at all, though `delete` does. The
+asymmetry is undocumented; the archived doc silently vanishes from graph traversal.
+
+### H6
+
+— On the `archive`/`unarchive` no-op path the view is built without computing
+staleness, so a stale document reports `stale: false`. → `issue-7d4fdccf8343`.
+
+### H7
+
+— Tier 0 validates `related` only for edges supplied *in this call*. A document that
+already holds a dangling edge can be updated freely and the broken edge is rewritten to the
+canonical file. → `issue-fd547a293d01` (CONFIRMED by probe).
+
+### H8
+
+— Two concurrent updates to the same document silently last-write-wins; the
+stale-write guard is computed on every update but consulted only for `--replace-body`.
+→ `issue-be95d3e242a3`.
+
+### H9
+
+— `created`/`updated`/`verified` are local dates with no timezone recorded.
+→ `issue-7e16dfe2521c` (cosmetic).
+
+### H10
+
+— No duplicate-content check on `add`. Two identical decisions can be created; only
+the opt-in Tier 2 `lint --deep` mentions it.
 
 ## Off-system steps
 

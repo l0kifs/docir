@@ -23,7 +23,7 @@ tags:
 - agents
 title: Adopt docir in a repository (bootstrap, schema, agent onboarding)
 type: architecture
-updated: '2026-08-06'
+updated: '2026-08-15'
 ---
 
 ## Backbone
@@ -50,46 +50,60 @@ install → `docir init` → choose profiles → `docir agent install` → first
   is gitignored, and it is the exact path that corrupts id allocation. Everything in this flow
   is correct right up to the point where a second person joins.
 
-- **H2 — no `docir init` is required.** Every command silently falls back to a global
-  `~/.docir` (settings.py:104) and `load_schema` writes a default schema on first touch
-  (schema_loader.py:26-31, 35). Running `docir add` in an uninitialised repo therefore
-  succeeds and writes the document into the user's *home* store, not the repo. Nothing warns.
-  A user who forgets `init` gets a working command and silently misplaced documents.
-  → `issue-34b4f0ca1e13`.
+### H2 — no docir init is required.
 
-- **H3 — `docir agent install --agent <typo>` is a silent no-op.** Unknown target names are
-  skipped without error (agents/application/service.py:96-98). CONFIRMED: `--agent claud`
-  returned `[]`, exit code 0, wrote nothing. For a once-per-repo onboarding command, the user
-  reasonably concludes their agent is configured when it is not. → `issue-b8220546282c`.
+Every command silently falls back to a global
+`~/.docir` (settings.py:104) and `load_schema` writes a default schema on first touch
+(schema_loader.py:26-31, 35). Running `docir add` in an uninitialised repo therefore
+succeeds and writes the document into the user's *home* store, not the repo. Nothing warns.
+A user who forgets `init` gets a working command and silently misplaced documents.
+→ `issue-34b4f0ca1e13`.
 
-- **H4 — `docir schema validate` validates far less than its name claims.** CONFIRMED: a
-  schema whose only transition target is a typo (`open: [closd]`) and whose
-  `inactive_statuses` names an undeclared status (`done`) reports `{"valid":true}`. The defect
-  surfaces later as `invalid transition 'open' -> 'closed'`, which points at the *write*, not
-  at the schema — and `closed` genuinely is a declared status, so the message actively
-  misdirects. Neither transition targets nor `inactive_statuses` are checked for membership in
-  the declared status set, so a type can be authored with **no reachable exit from its default
-  status**. → `issue-b47a1203baa2`.
+### H3 — docir agent install --agent <typo> is a silent no-op.
 
-- **H5 — disabling a profile strands existing documents.** Documented and deliberate
-  (`unknown-type` finding, CLAUDE.md), and there is no migration path: the docs of the
-  disabled type can no longer be validated, are never stale, and are skipped by layering
-  checks. Behaviour is defined; the *recovery* is not. → `issue-ed49c1d03894`.
+Unknown target names are
+skipped without error (agents/application/service.py:96-98). CONFIRMED: `--agent claud`
+returned `[]`, exit code 0, wrote nothing. For a once-per-repo onboarding command, the user
+reasonably concludes their agent is configured when it is not. → `issue-b8220546282c`.
 
-- **H6 — `.docir/.gitignore` is written only if absent**, and `docir init --force` overwrites
-  both it and `docs-schema.yaml` together with no separate control and no diff/confirmation
-  (composition.py:184-192). `--force` on a store with a customised schema destroys it. Nothing
-  warns, nothing backs up. → `issue-fde9a7151bd1`.
+### H4 — docir schema validate validates far less than its name claims.
 
-- **H7 — the id style is chosen once, at init, and cannot be changed afterwards.** `docir
-  init` defaults to `id_style: random` (BR-074) precisely because a repo store is shared. But
-  switching an existing store's style leaves the old documents in the old style, and there is
-  no re-key operation — the same missing capability as `issue-20933967697b`. Also `issue-f09fab3f5c36`: the counter
-  restore misreads an all-digit random id as sequential.
+CONFIRMED: a
+schema whose only transition target is a typo (`open: [closd]`) and whose
+`inactive_statuses` names an undeclared status (`done`) reports `{"valid":true}`. The defect
+surfaces later as `invalid transition 'open' -> 'closed'`, which points at the *write*, not
+at the schema — and `closed` genuinely is a declared status, so the message actively
+misdirects. Neither transition targets nor `inactive_statuses` are checked for membership in
+the declared status set, so a type can be authored with **no reachable exit from its default
+status**. → `issue-b47a1203baa2`.
 
-- **H8 — no import path for an existing corpus.** A repo that already keeps ADRs must
-  re-create each one through `docir add`, and ids are always system-allocated, so historical
-  ADR numbers cannot be preserved. → `issue-20933967697b`.
+### H5 — disabling a profile strands existing documents.
+
+Documented and deliberate
+(`unknown-type` finding, CLAUDE.md), and there is no migration path: the docs of the
+disabled type can no longer be validated, are never stale, and are skipped by layering
+checks. Behaviour is defined; the *recovery* is not. → `issue-ed49c1d03894`.
+
+### H6 — .docir/.gitignore is written only if absent
+
+, and `docir init --force` overwrites
+both it and `docs-schema.yaml` together with no separate control and no diff/confirmation
+(composition.py:184-192). `--force` on a store with a customised schema destroys it. Nothing
+warns, nothing backs up. → `issue-fde9a7151bd1`.
+
+### H7 — the id style is chosen once, at init, and cannot be changed afterwards.
+
+`docir
+init` defaults to `id_style: random` (BR-074) precisely because a repo store is shared. But
+switching an existing store's style leaves the old documents in the old style, and there is
+no re-key operation — the same missing capability as `issue-20933967697b`. Also `issue-f09fab3f5c36`: the counter
+restore misreads an all-digit random id as sequential.
+
+### H8 — no import path for an existing corpus.
+
+A repo that already keeps ADRs must
+re-create each one through `docir add`, and ids are always system-allocated, so historical
+ADR numbers cannot be preserved. → `issue-20933967697b`.
 
 ## Off-system steps
 

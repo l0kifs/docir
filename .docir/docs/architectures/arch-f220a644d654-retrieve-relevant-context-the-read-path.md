@@ -20,7 +20,7 @@ tags:
 - embeddings
 title: Retrieve relevant context (the read path)
 type: architecture
-updated: '2026-08-06'
+updated: '2026-08-15'
 ---
 
 ## Backbone
@@ -50,31 +50,51 @@ express intent → rank (lexical + semantic) → filter visibility → expand on
   returned **9** documents. For the product whose headline claim is "token-cheap for agents"
   (README:46) with a default `--limit 5`, the result size is unbounded by the caller.
   → `issue-996b567e5131`.
-- **H2 — visibility rules disagree between step 6 and step 7.** Step 7 checks `archived` but
-  not inactive status. CONFIRMED: a `resolved` issue is returned by `docir context` without
-  `--include-resolved`, while `search`/`query` correctly hide it. → `issue-8c37bf22ba3c`.
-- **H3 — no relevance floor.** Every active document receives a semantic rank, so the fused
-  list is never empty. CONFIRMED: `context "how do I bake sourdough bread"` against a store
-  containing only a Postgres decision returned that decision with `score 0.0328`. An agent
-  cannot distinguish "here is what matters" from "nothing matches". → `issue-93152f7b9213`.
-- **H4 — the `score` is not comparable across queries.** RRF output depends only on rank
-  position, so the top hit's score is ~identical for a perfect and a nonsense query. It is
-  emitted as a bare number named `score` (README:90) with no stated interpretation.
-  Same root cause as H3, separate consequence for anyone thresholding on it. → `issue-93152f7b9213`.
-- **H5 — `search` can silently under-return.** It fetches `limit * 2` candidates then filters
-  inactive ones. With more than half inactive in the head of the ranking, fewer than `limit`
-  results come back with no indication that filtering, not scarcity, caused it.
-  → `issue-e19a2fde1805`.
-- **H6 — semantic ranking loads every active vector into memory on every call**
-  (`active_vectors()`, repositories.py:309-320). Fine at thousands; no stated ceiling, no
-  pagination, no test at scale. Recorded as a limit-of-validity question, not a defect. → `issue-f6a5d0b86806`.
-- **H7 — graph expansion follows outgoing edges only.** A decision that supersedes an ADR is
-  reachable from it, but from the superseded ADR the newer one is not. Whether that is
-  intended is unstated — for `supersedes` specifically, the *incoming* direction is the one a
-  reader needs ("has this been replaced?"). → `issue-5bfbc6f2699d`.
-- **H8 — `get` ignores every visibility rule** and returns archived/inactive docs in full
-  (document_service.py:210-214, docstring says "regardless of status"). Deliberate and
-  documented; recorded so the asymmetry is not mistaken for a bug.
+
+### H2 — visibility rules disagree between step 6 and step 7.
+
+Step 7 checks `archived` but
+not inactive status. CONFIRMED: a `resolved` issue is returned by `docir context` without
+`--include-resolved`, while `search`/`query` correctly hide it. → `issue-8c37bf22ba3c`.
+
+### H3 — no relevance floor.
+
+Every active document receives a semantic rank, so the fused
+list is never empty. CONFIRMED: `context "how do I bake sourdough bread"` against a store
+containing only a Postgres decision returned that decision with `score 0.0328`. An agent
+cannot distinguish "here is what matters" from "nothing matches". → `issue-93152f7b9213`.
+
+### H4 — the score is not comparable across queries.
+
+RRF output depends only on rank
+position, so the top hit's score is ~identical for a perfect and a nonsense query. It is
+emitted as a bare number named `score` (README:90) with no stated interpretation.
+Same root cause as H3, separate consequence for anyone thresholding on it. → `issue-93152f7b9213`.
+
+### H5 — search can silently under-return.
+
+It fetches `limit * 2` candidates then filters
+inactive ones. With more than half inactive in the head of the ranking, fewer than `limit`
+results come back with no indication that filtering, not scarcity, caused it.
+→ `issue-e19a2fde1805`.
+
+### H6 — semantic ranking loads every active vector into memory on every call
+
+(`active_vectors()`, repositories.py:309-320). Fine at thousands; no stated ceiling, no
+pagination, no test at scale. Recorded as a limit-of-validity question, not a defect. → `issue-f6a5d0b86806`.
+
+### H7 — graph expansion follows outgoing edges only.
+
+A decision that supersedes an ADR is
+reachable from it, but from the superseded ADR the newer one is not. Whether that is
+intended is unstated — for `supersedes` specifically, the *incoming* direction is the one a
+reader needs ("has this been replaced?"). → `issue-5bfbc6f2699d`.
+
+### H8 — get ignores every visibility rule
+
+and returns archived/inactive docs in full
+(document_service.py:210-214, docstring says "regardless of status"). Deliberate and
+documented; recorded so the asymmetry is not mistaken for a bug.
 
 ## Off-system steps
 

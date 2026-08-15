@@ -16,7 +16,7 @@ tags:
 - docs
 title: The site publishes the relation graph as an interactive constellation page
 type: decision
-updated: '2026-08-06'
+updated: '2026-08-15'
 ---
 
 ## Context
@@ -68,20 +68,28 @@ filtering).
 
 Two follow-on decisions landed the same day, both index/graph UX:
 
-- **Deep links by fragment.** `graph.html#<id>` pins that document on load
-  (card open, filters relaxed if they hid it); every document page links to
-  it, and pinning keeps the fragment in sync via `replaceState`. A
-  `hashchange` listener covers same-document fragment navigation, which
-  never re-runs load-time init.
-- **Faceted index filters.** Type and status are multi-select checkbox
-  facets (OR within, AND across, live result counts); the status facet is
-  narrowed by the type selection and drops selections that become
-  unavailable. Dates offer rolling presets (7/30/90 days, this year) plus an
-  absolute custom range — rolling for "what changed lately" links,
-  absolute for citations. The whole state mirrors into the URL query.
-  Chosen over single-selects after the standard faceted-search findings
-  (counts per option, dependent facets, instant application).
-- **`[hidden]` reset.** Author `display` rules on rows and facet labels
-  overrode the UA's `[hidden]` mapping, so filtered-out rows never left
-  the screen when their section stayed visible. Both stylesheets now carry
-  `[hidden]{display:none!important}`.
+### Deep links by fragment.
+
+`graph.html#<id>` pins that document on load
+(card open, filters relaxed if they hid it); every document page links to
+it, and pinning keeps the fragment in sync via `replaceState`. A
+`hashchange` listener covers same-document fragment navigation, which
+never re-runs load-time init.
+
+### Faceted index filters.
+
+Type and status are multi-select checkbox
+facets (OR within, AND across, live result counts); the status facet is
+narrowed by the type selection and drops selections that become
+unavailable. Dates offer rolling presets (7/30/90 days, this year) plus an
+absolute custom range — rolling for "what changed lately" links,
+absolute for citations. The whole state mirrors into the URL query.
+Chosen over single-selects after the standard faceted-search findings
+(counts per option, dependent facets, instant application).
+
+### [hidden] reset.
+
+Author `display` rules on rows and facet labels
+overrode the UA's `[hidden]` mapping, so filtered-out rows never left
+the screen when their section stayed visible. Both stylesheets now carry
+`[hidden]{display:none!important}`.

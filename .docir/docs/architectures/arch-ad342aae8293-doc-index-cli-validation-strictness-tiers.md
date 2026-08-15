@@ -137,18 +137,26 @@ compares schemas and stays silent for a release that changes how documents are
 
 Three rules hold this up:
 
-- **Absent means unknown, not unchanged.** A store with no baseline reports
-  nothing, rather than reporting its entire schema as new; an unparseable one
-  reads the same way, since `reindex` overwrites it. `stale-index-build`
-  likewise fires on **inequality**, not "older than" — a downgrade needs the
-  same rebuild.
-- **`reindex` is the only writer.** It is already the "make derived state agree
-  with the sources" verb. A separate `accept` command would be a ritual whose
-  only effect is silencing a report.
-- **One renderer.** The drift check lives in `application`, which may not import
-  `infra`, so both sides go through `domain/services/schema_shape.describe`. A
-  second renderer would mean a baseline written in one shape and compared in
-  another.
+### Absent means unknown, not unchanged.
+
+A store with no baseline reports
+nothing, rather than reporting its entire schema as new; an unparseable one
+reads the same way, since `reindex` overwrites it. `stale-index-build`
+likewise fires on **inequality**, not "older than" — a downgrade needs the
+same rebuild.
+
+### reindex is the only writer.
+
+It is already the "make derived state agree
+with the sources" verb. A separate `accept` command would be a ritual whose
+only effect is silencing a report.
+
+### One renderer.
+
+The drift check lives in `application`, which may not import
+`infra`, so both sides go through `domain/services/schema_shape.describe`. A
+second renderer would mean a baseline written in one shape and compared in
+another.
 
 `DOCIR_SCHEMA_NOTICE=1` prints the drift on stderr after every command. It is
 emitted **client-side**, through the same request boundary, because with the

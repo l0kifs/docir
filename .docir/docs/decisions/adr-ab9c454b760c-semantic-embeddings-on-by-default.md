@@ -15,7 +15,7 @@ tags:
 - retrieval
 title: Semantic embeddings on by default
 type: decision
-updated: '2026-08-06'
+updated: '2026-08-15'
 ---
 
 ## Context
@@ -92,23 +92,32 @@ held its model as bare `object`), now fixed with a `_TextEmbedding` Protocol.
 Tests that load the real model are marked `slow`; CI caches `~/.cache/fastembed`.
 
 ### Considered and rejected
+
 - **Leave it opt-in and just document the caveat.** This was the first attempt,
   and the docs change is in git history. It is defensible — but it makes the
   headline feature something the user has to discover and enable, and the
   comparison table then has to carry a ⚠️ against the one row the product is
   named for. Correct documentation of a weak default is still a weak default.
-- **Prefer `fastembed` if importable, fall back silently otherwise.** Keeps the
-  install light, but a plain `pip install docir` would still have no semantic
-  retrieval, so the README could not honestly drop the caveat. It also makes
-  behaviour depend on what happens to be installed, which is the least debuggable
-  kind of default.
-- **A smaller or quantized-further model.** `bge-small` is already the small,
-  quantized tier. The remaining weight is `onnxruntime`, not the weights.
-- **Falling back to the hashing embedder at runtime when the model fails to
-  load.** Rejected: it would mix vector spaces within one index. Dimension
-  mismatch raises, so the failure would be loud, but a *same-width* mismatch
-  would silently rank against meaningless vectors. The embedder is chosen once,
-  at container build, and never swapped mid-flight.
+
+### Prefer fastembed if importable, fall back silently otherwise.
+
+Keeps the
+install light, but a plain `pip install docir` would still have no semantic
+retrieval, so the README could not honestly drop the caveat. It also makes
+behaviour depend on what happens to be installed, which is the least debuggable
+kind of default.
+
+### A smaller or quantized-further model.
+
+`bge-small` is already the small,
+quantized tier. The remaining weight is `onnxruntime`, not the weights.
+
+### Falling back to the hashing embedder at runtime when the model fails to load.
+
+Rejected: it would mix vector spaces within one index. Dimension
+mismatch raises, so the failure would be loud, but a *same-width* mismatch
+would silently rank against meaningless vectors. The embedder is chosen once,
+at container build, and never swapped mid-flight.
 
 ## Consequences
 - Easier: semantic retrieval works from `pip install docir` with no flags;

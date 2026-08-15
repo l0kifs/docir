@@ -155,19 +155,27 @@ clone has none — and to recover from corruption.
 
 Three things about it are load-bearing:
 
-- **`--changed` is not a different result, only less work.** It skips re-saving
-  files whose content is unchanged. The removal sweep runs in **both** modes: it
-  used to be skipped under `--changed`, which gave the fast path quietly
-  different semantics — a document deleted from the filesystem stayed in the
-  index and kept being returned by every read path.
-- **Read `documents_skipped`.** A source file whose frontmatter will not parse is
-  skipped, not indexed: it exists on disk and is invisible to every read path. A
-  rebuild that quietly dropped a document used to look exactly like one that did
-  not. Non-zero means run `docir check`, which names each file.
-- **It restores derived state the files do not carry.** The id counter is raised
-  to the highest suffix on disk, and the schema baseline and the version stamp
-  are rewritten — `reindex` is the only writer of all three, because it is the
-  verb that already means "make the derived state agree with the sources".
+### --changed is not a different result, only less work.
+
+It skips re-saving
+files whose content is unchanged. The removal sweep runs in **both** modes: it
+used to be skipped under `--changed`, which gave the fast path quietly
+different semantics — a document deleted from the filesystem stayed in the
+index and kept being returned by every read path.
+
+### Read documents_skipped.
+
+A source file whose frontmatter will not parse is
+skipped, not indexed: it exists on disk and is invisible to every read path. A
+rebuild that quietly dropped a document used to look exactly like one that did
+not. Non-zero means run `docir check`, which names each file.
+
+### It restores derived state the files do not carry.
+
+The id counter is raised
+to the highest suffix on disk, and the schema baseline and the version stamp
+are rewritten — `reindex` is the only writer of all three, because it is the
+verb that already means "make the derived state agree with the sources".
 
 ## Archiving vs. deletion
 

@@ -141,7 +141,7 @@ status` / `docir daemon stop` are useful escape hatches), and `docir
 
 ```yaml
 ---
-id: adr-0007
+id: adr-3f9a2b1c7d4e            # `random` id_style; `sequential` mints adr-0007
 title: Auth strategy
 description: How the service authenticates API clients and refreshes tokens.
 type: decision
@@ -155,6 +155,9 @@ created: 2026-06-15
 updated: 2026-06-30
 owner: platform-team             # optional: staleness steward
 verified: 2026-06-30             # optional: last human re-confirmation
+code:                            # optional: the code this document governs
+  - src/auth/**
+  - tests/test_auth.py
 ---
 ```
 Body: standard markdown, human-readable, diffs cleanly in git.
@@ -166,7 +169,7 @@ Body: standard markdown, human-readable, diffs cleanly in git.
 | `id` | yes | `docir add` (auto-generated) | `<type-prefix>-<suffix>`, never chosen manually. The suffix depends on the type's `id_style`: `random` (`adr-3f9a2b1c7d4e`) is what `docir init` writes by default, because two branches of one repo each have their own index and would otherwise both mint `adr-0007`; `sequential` (`adr-0007`) is opt-in via `docir init --id-style sequential` for readable numbers within a single store. `--id` adopts an existing id, for migrating a corpus whose numbers are already cited |
 | `title` | yes | `docir add`, `docir update --set-title` | Canonical document title. Frontmatter-only source of truth; the CLI never enforces or generates a body heading from it |
 | `description` | yes | `docir add`, `docir update --set-description` | One- or two-sentence summary of the document, written by the agent at creation and kept current on meaningful edits. Feeds search quality — indexed in FTS and included in the embedded text — and shown in `docir query`/`docir context` result listings so the agent can judge relevance without fetching the full body |
-| `type` | yes | `docir add` (fixed at creation) | Document type (`decision`, `issue`, `architecture`, ...); determines which schema/status enum from `docs-schema.yaml` applies |
+| `type` | yes | `docir add` (fixed at creation) | Document type (`decision`, `issue`, `architecture`, ...); selects the grammar that applies. That grammar is **not** only `docs-schema.yaml`: the frozen core and the named profiles are merged in from the installed package on every command, so an upgrade can change a type's rules with nothing in `git diff` — see "Schema drift and the index build stamp" |
 | `status` | yes | `docir add` (default), `docir update --status` | Type-specific enum (e.g. `decision`: proposed/accepted/rejected/superseded; `issue`: open/resolved). Transitions are validated against `docs-schema.yaml` |
 | `tags` | no | `docir add --tags`, `docir update --set-tags` | List of tag keys for `docir query --tag` filtering. Each key must exist in the tag registry (Tier 0 validation) — free-form tags are rejected, preventing synonym sprawl |
 | `related` | no | `docir add --related`, `docir update` | List of **typed edges** to other documents (`<id>` = default `relates_to`, or `{to, kind}`); forms the relation graph used for traversal and Tier 1 graph checks. Kinds come from the schema's `relation_types` registry (unknown kind = Tier 0 error); a type may whitelist kinds/targets via `allowed_relations` |
@@ -174,6 +177,7 @@ Body: standard markdown, human-readable, diffs cleanly in git.
 | `updated` | yes | `docir add` / `update` / `archive` / `unarchive` | Stamped whenever one of those calls actually changes something. Deliberately **not** advanced by the mechanical rewrites — `check --fix`, the unlinking half of `delete --force`, and `tag rename` / `tag rm --force` — because staleness falls back to `updated` when there is no `verified`, so a mechanical bump would launder the review clock. `TagService` has no `Clock` for exactly this reason |
 | `owner` | no | `docir add --owner`, `docir update --set-owner` | Optional steward, surfaced by the staleness check; written only when set |
 | `verified` | no | `docir update --verified` | Optional date a human last re-confirmed the doc is still correct; resets the staleness clock (staleness measures from `verified`, else `updated`) |
+| `code` | no | `docir add --code`, `docir update --set-code` | Repo-relative globs naming the code this document governs, so a later session can ask `docir query --code <path>` which decisions concern the files it is about to change. Only the *shape* is validated on write — absolute paths, `..` segments, backslash separators and empty entries are refused, but a pattern matching nothing today is accepted, because a decision is routinely written before the code it decides. `docir check` reports `unmatched-code` once a pattern stops matching, and only when the store sits in a repository. The index returns them sorted; the file keeps the author's order |
 | `archived` | no | `docir archive` / `docir unarchive` | Absent by default; `true` removes the document from active search (FTS, embeddings) while keeping the file and index rows |
 
 `created` is set once by `docir add` and never modified afterward. `updated`
@@ -202,6 +206,7 @@ mapping key → description; promotable to a full tag doc-type later if tags
 need their own relations/history).
 
 ```yaml
+
 # docs/tags.yaml
 auth:    "Authentication, authorization, tokens, sessions."
 api:     "Public/internal HTTP API surface and versioning."
@@ -849,39 +854,54 @@ Every command below exists in `docir --help`; the groups are `agent`, `daemon`,
 **Scenario:** an agent is asked to implement a new authentication endpoint.
 
 1. **Discover context**
-   Agent runs `docir context "implement new auth endpoint"`.
-   CLI runs FTS scoring on the query, pulls top matches (e.g. `adr-0007`
-   "Auth strategy", `issue-12` "Token refresh bug"), then traverses their
-   `related` links one hop out (finds `adr-0003` "API versioning policy").
-   Returns 3 documents instead of the full `docs/` folder.
+   Agent runs `docir context "implement new auth endpoint"`. The CLI ranks the
+   corpus twice — FTS5 over the text and cosine over the vectors, per document
+   *and* per section — fuses the two rankings, then expands one hop across the
+   relation graph inside the same `--limit` budget. Expansion follows outgoing
+   edges **and** incoming successor edges, so a decision that supersedes a hit
+   arrives with it rather than sitting one hop away backwards.
+   It returns a handful of documents instead of the whole store — as
+   **skeletons**: frontmatter, typed edges, staleness, and no bodies. That is
+   the contract that makes the step cheap.
 
-2. **Read relevant decisions**
-   Agent calls `docir get adr-0007` to read the full accepted decision on
-   auth strategy before writing code, ensuring the implementation follows
-   the agreed approach.
+2. **Read only what matters**
+   Agent judges relevance from the skeletons — by `similarity`, the raw cosine,
+   never by `score`, which is rank-derived and says nothing about how good a
+   match was — then calls `docir get adr-3f9a2b1c7d4e` for the bodies it
+   actually needs. If the hit named a `matched_section`, that heading goes
+   straight to `docir get <id> --section "<heading>"` and the agent pays for one
+   section instead of a body ten times its size.
 
-3. **Implement the feature**
-   Agent writes the endpoint code (outside the doc system).
+3. **Check what the change is governed by**
+   `docir query --code src/auth/login.py` answers the other direction: which
+   documents declared they govern the files about to change. The patterns are
+   matched as text, so a file the branch *deletes* still finds its decisions.
 
-4. **Record a new decision or open issue**
-   If the implementation surfaces a new tradeoff, agent runs:
-   `docir add --type decision --title "Refresh token rotation" --description "..." --tags auth,api --related adr-0007`
-   (`auth` and `api` must already exist in the tag registry, or the call
-   fails Tier 0 validation.) CLI generates a new `adr-00xx` file with valid
-   frontmatter, agent fills in the body.
+4. **Implement the feature** (outside the doc system).
 
-5. **Update status of resolved issue**
-   Agent runs `docir update issue-12 --status resolved`.
-   CLI validates the transition, rewrites frontmatter in `issues/issue-12.md`,
-   and updates its metadata/FTS rows synchronously — the index is current
-   immediately (a status-only change doesn't touch the embedding).
+5. **Record a new decision or open issue**
+   If the implementation surfaces a new tradeoff:
+   `docir add --type decision --title "Refresh token rotation" --description "..." --tags auth,api --related adr-3f9a2b1c7d4e --code "src/auth/**"`
+   `auth` and `api` must already exist in the tag registry and the `--related`
+   target must exist, or the call fails Tier 0. The CLI allocates the id from
+   the index counter — never by scanning files, which is what keeps parallel
+   agents from minting the same one — writes the file with valid frontmatter,
+   and indexes it. The vector is queued, not computed: add `--wait-embeddings`
+   if the next command must find it semantically.
 
-6. **Commit**
-   Agent (or human) commits the changed `.md` files to git, purely as a
-   history/snapshot action. The index was already updated during steps 4–5
-   and does not depend on this commit happening.
+6. **Update the status of the resolved issue**
+   `docir update issue-7d1e4b9c02fa --status resolved`. The CLI validates the
+   transition against the type's state machine, rewrites the frontmatter, and
+   updates metadata, FTS and relations synchronously — the index is current when
+   the command returns. A status-only change does not touch the embedding.
 
-7. **Human review**
-   A teammate reviews the diff in the PR as plain markdown — no DB
-   inspection required — and can trace the decision's history via
-   `git log` on the file.
+7. **Commit**
+   Agent or human commits the changed `.md` files, purely as a history action.
+   The index was already updated in steps 5–6 and does not depend on the commit;
+   it is gitignored, and a fresh clone rebuilds it with `docir reindex`.
+
+8. **Human review**
+   A teammate reviews the diff as plain markdown — no database inspection — and
+   traces the decision's history with `git log` on the file. For a reader who
+   will not run the CLI, `docir build --out site/` renders the same corpus as a
+   browsable site with the relation graph in both directions.

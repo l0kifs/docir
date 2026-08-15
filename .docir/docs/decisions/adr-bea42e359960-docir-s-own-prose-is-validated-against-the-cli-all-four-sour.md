@@ -48,17 +48,25 @@ None of it was found by reading the suite. All of it was found by running the co
 
 ## Decision
 
-**One oracle, five sources.** `tests/entry_points/test_agent_guide_matches_cli.py`
+**One oracle, six sources.** `tests/entry_points/test_agent_guide_matches_cli.py`
 resolves every `docir ...` code literal in the packaged guide, `README.md`,
-`CLAUDE.md`, every file under `.docir/docs/**`, and every docstring under `src/`
+`CLAUDE.md`, every file under `.docir/docs/**`, every docstring under `src/`, and
+every markdown file shipped inside the package — the six `CONTRACT.md` files —
 against the same introspected command tree. A document in the store, a docstring on
 the method that implements the command, and the guide shipped to other repositories
 are judged by identical rules, because they fail identically.
 
-The source half was added last and found 37 more stale invocations, which is the
-argument for the rule in general: each source was believed clean until the same
-oracle was pointed at it. A docstring is not a lesser document — it is the one a
-reader reaches by following the code, and it names commands constantly.
+Each source was added believing the previous pass had finished the job, and each
+one moved the count: the store held 96 stale invocations, `src/` docstrings held 37
+more after the markdown side was clean, and the contracts held none — which is the
+result the rule is *for*. A source is not covered because someone looked at it; it
+is covered because the oracle is pointed at it and keeps being pointed at it.
+
+The `CONTRACT.md` files earn their place for a structural reason rather than a
+historical one. §8.6 already makes each change in the same commit as the `api.py`
+it documents, so they are the one document class *guaranteed* to be edited exactly
+when a module's public operations move — which is precisely when a command name in
+one goes stale. They were clean today and are the most likely to rot tomorrow.
 
 Three parts are load-bearing and are the reason this is a decision rather than a patch.
 

@@ -637,3 +637,76 @@ def test_no_source_docstring_invokes_a_retired_binary_name(source: str) -> None:
     assert not hits, (
         f"{source} documents `{hits[0]}` — the binary is `docir`. {len(hits)} occurrence(s)."
     )
+
+
+# --- the sixth source: markdown shipped inside the package ------------------
+
+#: The `CONTRACT.md` beside each module's `api.py`. §8.6 makes them change in
+#: the same commit as the surface they document, so they are the one document
+#: class guaranteed to be edited whenever a module's public operations move —
+#: which is exactly when a command name in one goes stale. They ship in the
+#: wheel, and until now nothing read them.
+#:
+#: `skill.md` is deliberately excluded: it is already checked through
+#: `PackagedTemplateProvider` above, and covering it twice would double every
+#: one of its cases. The exclusion is by *identity*, not by directory, so a
+#: second template added beside it is picked up here.
+_PACKAGED_MD = {
+    str(path.relative_to(_REPO)): path.read_text(encoding="utf-8")
+    for path in sorted((_REPO / "src").rglob("*.md"))
+    if path.read_text(encoding="utf-8") != GUIDE
+}
+
+PACKAGED_INVOCATIONS = [
+    (name, invocation) for name, text in _PACKAGED_MD.items() for invocation in _invocations(text)
+]
+
+
+def test_every_module_contract_is_read() -> None:
+    """One `CONTRACT.md` per module, and the sweep must see all of them.
+
+    A module whose contract is missing from this set is either absent from the
+    tree or excluded by accident; both look identical to "checked and clean".
+    """
+    modules = {
+        path.name for path in (_REPO / "src" / "docir" / "modules").iterdir() if path.is_dir()
+    }
+    modules -= {"__pycache__"}
+    read = {name.split("/")[-2] for name in _PACKAGED_MD if name.endswith("CONTRACT.md")}
+    assert modules == read, f"contracts not read: {sorted(modules - read)}"
+
+
+@pytest.mark.parametrize(
+    ("module", "expected"),
+    [
+        # One anchor per contract that names a command at all, so a file
+        # dropping out of the sweep is visible rather than merely quieter.
+        ("documents", "docir schema show"),
+        ("publishing", "docir get"),
+        ("release", "docir self upgrade"),
+        ("tags", "docir check"),
+    ],
+)
+def test_the_packaged_extractor_finds_known_invocations(module: str, expected: str) -> None:
+    assert any(
+        f"/{module}/" in name and invocation.startswith(expected)
+        for name, invocation in PACKAGED_INVOCATIONS
+    ), f"extractor no longer finds {expected!r} in {module}/CONTRACT.md — under-checking"
+
+
+@pytest.mark.parametrize(
+    ("source", "invocation"),
+    PACKAGED_INVOCATIONS,
+    ids=lambda value: value[:60] if isinstance(value, str) else value,
+)
+def test_packaged_markdown_invocation_exists_in_the_cli(source: str, invocation: str) -> None:
+    problems = _problems(invocation)
+    if not problems:
+        return
+    assert _exemption(invocation), f"{source}: " + "\n".join(problems)
+
+
+@pytest.mark.parametrize("source", sorted(_PACKAGED_MD))
+def test_no_packaged_markdown_invokes_a_retired_binary_name(source: str) -> None:
+    hits = _retired_binary_hits(_PACKAGED_MD[source])
+    assert not hits, f"{source} invokes `{hits[0]}` — the binary is `docir`"

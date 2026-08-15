@@ -583,11 +583,13 @@ tests/
   corpus, also assert *which* items it found: a count cannot distinguish "nothing is wrong"
   from "nothing is checked".
 - **`tests/entry_points/test_agent_guide_matches_cli.py` validates docir's own prose**
-  against the Typer command tree, introspected from `cli.app` rather than shelled out. Five
+  against the Typer command tree, introspected from `cli.app` rather than shelled out. Six
   sources: the packaged guide (`modules/agents/infra/templates/skill.md`) and `README.md`,
   which an *adopter* reads; `CLAUDE.md` and every file in `.docir/docs/**`, which an agent
-  working in this repo reads; and every docstring under `src/`, which 37 stale invocations
-  survived in after the markdown side was clean. Any `docir ...` in a fenced block, an
+  working in this repo reads; every docstring under `src/`, which 37 stale invocations
+  survived in after the markdown side was clean; and the six `CONTRACT.md` files, which
+  §8.6 forces to change whenever a module's public surface does — so they are the prose
+  most likely to name a command on the day it moves. Any `docir ...` in a fenced block, an
   inline code span or an RST literal must resolve to a real command with real flags — so
   prose naming a command that does not exist must not be written in backticks. Three things are deliberate. A retired binary name
   gets its **own** check (`_RETIRED_BINARIES`), because a code span opening with the old name

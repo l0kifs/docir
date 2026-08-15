@@ -576,6 +576,14 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   (the adapter held its model as bare `object`; it now depends on a `_TextEmbedding` Protocol).
   Tests that load the real model are marked `slow` (~4 s cold, ~2 ms warm); CI caches
   `~/.cache/fastembed`. Run `uv run python benchmarks/run.py` before and after touching ranking.
+  **For a change to the *chunking* rules `run.py` is the wrong instrument**: its corpus has no
+  section over the ceiling and none quoting a fenced heading, so a broken splitter scores what a
+  working one does (issue-b1a6e57deeec). `benchmarks/chunking.py` is the one that moves. Its
+  corpus **declares** each body's real headings by hand — a scanner checked against itself agrees
+  with itself, which is why the first version of that guard saw nothing — and it reports structure
+  (headings addressable, phantom headings) as the gate with retrieval as context, because which
+  section wins a query is the embedder's judgement and tuning prose until it matches would measure
+  the tuning.
 - **Vectors record which model produced them, and mismatches are recomputed, not compared
   (adr-ab9c454b760c).**
   `set_vector` writes `embeddings.model_id`; `active_vectors(model_id)` returns only matching

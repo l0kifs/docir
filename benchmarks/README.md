@@ -195,6 +195,33 @@ drops it. `--expand 0` grew slightly more (+25) than full `context` (+20), since
 graph-reached neighbour has no similarity either — the more the graph contributes, the less
 the field costs.
 
+## Chunking: is a section reachable at all (`chunking.py`)
+
+```bash
+uv run python benchmarks/chunking.py
+```
+
+`corpus.yaml` cannot exercise the splitting rules: 30 sections, none over the
+ceiling, none quoting a fenced heading, no continuation chunk anywhere. So a
+broken splitter scores exactly what a working one does — two real chunking
+defects were fixed on 2026-08-15 and `run.py` moved by nothing
+(issue-b1a6e57deeec).
+
+`chunking_corpus.yaml` is built out of the shapes that fail, and declares the
+headings each body really has. That list is written by hand and not derived,
+because a scanner cannot be checked against itself: a fence-blind one reports
+the headings quoted inside a fence and agrees with its own answer.
+
+Two blocks, read differently. **Structure** is the gate — headings that name a
+chunk, text no heading points at, phantom headings — and none of it involves the
+model. **Retrieval** is context: which section wins a query is the embedder's
+judgement, and `matched expectation` is one annotator's view of which section
+answers a question, so tuning prose until they agree would measure the tuning.
+
+Verified by injecting each defect: restoring the fence-blind scanner invents a
+`Credentials` heading out of a quoted template, and restoring the unconditional
+merge leaves `Failover sequence` naming no chunk at all.
+
 ## Federation: what a split corpus costs (`federation.py`)
 
 ```bash

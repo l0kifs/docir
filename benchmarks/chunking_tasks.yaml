@@ -1,0 +1,59 @@
+# Tasks whose answers exist only if the splitting rules work.
+#
+# `relevant` is the corpus key that must be retrieved. `section` is the heading
+# the hit should name — `matched_section` is what tells an agent which
+# `get --section` to run, and it is the field the merge rule silently destroyed
+# (issue-66d43f63e441). Recall alone cannot see that: the text stays in some
+# chunk, just one nothing can address.
+#
+# Every task is paraphrased. None reuses its target section's vocabulary, so a
+# lexical match cannot carry it and only a vector over that section can.
+#
+# Each `section` is a heading that exists in the body. A run that reports a
+# heading not in this list has invented one, which is what a fence-blind scanner
+# does with a quoted markdown template (issue-af046a467575).
+
+- id: C01
+  task: how long must we wait before an old TLS credential is really out of use
+  relevant: arch-tail-answer
+  section: Retirement
+  why: >
+    The quarantine interval sits in the last section, past the document vector's
+    window. Reachable only because that section is embedded on its own.
+
+- id: C02
+  task: what happens to a data connector when its published spec stops passing validation
+  relevant: arch-fenced-template
+  section: Quarantine
+  why: >
+    The holding lane is described in the section *after* a fenced markdown
+    template. A scanner that reads the fenced headings as real ones cuts the
+    body there and embeds fragments of a broken fence instead.
+
+- id: C03
+  task: what proves a region switchover actually worked rather than just looking healthy
+  relevant: arch-short-then-long
+  section: Verification
+  why: >
+    The canary-session rule is the document's last section, and the one a reader
+    is sent to. Unaffected by the merge rule, so it isolates a general section
+    failure from the specific one C04 catches.
+
+- id: C04
+  task: why is losing a region not declared immediately when probes start failing
+  relevant: arch-short-then-long
+  section: Failover sequence
+  why: >
+    An 86-character section precedes this one, and merging the two would exceed
+    the chunk ceiling. Declining that merge is what keeps this heading
+    addressable; merging and then splitting kept only the first heading, so this
+    section named no chunk at all (issue-66d43f63e441).
+
+- id: C05
+  task: what must a connector state about how frequently it is scheduled to run
+  relevant: arch-fenced-template
+  section: Descriptors
+  why: >
+    The answer is inside the fenced template. It belongs to `Descriptors`,
+    because the fence is quoted text — a fence-blind scanner reports the phantom
+    heading `Cadence`, a name `get --section` cannot resolve.

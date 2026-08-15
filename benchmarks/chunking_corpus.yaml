@@ -1,0 +1,245 @@
+# A corpus shaped like the ways chunking fails.
+#
+# `corpus.yaml` cannot exercise the splitting rules at all: 30 sections, none
+# over the ceiling, none quoting a fenced heading, and 52 chunks with no
+# continuation among them (issue-b1a6e57deeec). A corpus with nothing to split
+# scores the same whether the splitter works or not.
+#
+# Two properties are deliberate and load-bearing:
+#
+# * **Bodies run past the document vector's window (~2,400 characters), and every
+#   target section sits after it.** A hit on one is then evidence that the
+#   section became a vector of its own, not that the document vector happened to
+#   cover it. Documents in docir's own store average more than this, so the size
+#   is realistic rather than chosen to make a number move.
+# * **Each target section owns a noun that appears nowhere else in the corpus**
+#   (quarantine interval, holding lane, canary session), so a hit is evidence the
+#   chunk exists rather than evidence of topic overlap.
+
+- key: arch-tail-answer
+  type: architecture
+  title: Certificate rotation across the edge fleet
+  description: How TLS material is issued, distributed and retired on the edge tier.
+  # Ground truth, written by hand: the headings this body really has. Declared
+  # here rather than derived, because a scanner cannot be checked against itself
+  # — a fence-blind one reports the quoted headings and agrees with its own list.
+  sections: [Trust model, Issuance, Distribution, Inventory reconciliation, Retirement]
+  body: |
+    ## Trust model
+
+    Edge nodes terminate TLS with certificates issued by the internal authority
+    rather than a public one, because the fleet is reachable only from the
+    private interconnect and a public issuer would add an external dependency to
+    a path that has none. The authority is operated by the platform team and its
+    root is offline; only intermediates reach the network, and an intermediate is
+    replaced yearly whether or not anything has gone wrong, so the replacement
+    procedure is exercised rather than merely documented.
+
+    Trust is asymmetric on purpose. A node trusts the authority absolutely, and
+    the authority trusts nothing a node tells it about itself. Everything the
+    issuing path decides is derived from the attestation quote and the fleet
+    inventory, both of which a compromised node cannot forge on its own.
+
+    ## Issuance
+
+    Issuance happens on a schedule rather than on demand: a node that discovers
+    an expiring certificate at request time has already failed, and the scheduler
+    is what turns that into an ordinary maintenance task instead of an incident.
+
+    The issuing service holds the signing key in a hardware module and never
+    exports it. A node proves its identity with an attestation quote, receives a
+    short-lived certificate, and writes it to a memory-backed filesystem so the
+    material never reaches persistent storage. Nodes that cannot attest are
+    refused and reported; there is no manual override, because an override on
+    this path is indistinguishable from the attack it would enable.
+
+    ## Distribution
+
+    Distribution is pull-based. Each node polls the issuing service on a jittered
+    interval, and the jitter is what keeps a fleet-wide restart from arriving as
+    a thundering herd against a service sized for steady state. The poll carries
+    the fingerprint the node currently holds, so an unchanged answer costs one
+    round trip and no signing work at all.
+
+    ## Inventory reconciliation
+
+    The issuing service and the fleet inventory are reconciled hourly, and the
+    reconciliation is the only place that notices a node which stopped polling.
+    A node absent from three consecutive polls but still present in inventory is
+    reported as drifted rather than dead, because the two failures need different
+    responses and conflating them sends an operator to the wrong runbook.
+
+    Drift that persists past a day is escalated to the owning team with the last
+    successful poll attached. The report deliberately carries no remediation
+    step: the causes seen in practice — an image rolled back to one without the
+    agent, a firewall rule applied to the wrong tag, a node genuinely retired and
+    never removed from inventory — have nothing in common except the symptom, and
+    a suggested fix would be wrong two times in three.
+
+    ## Retirement
+
+    Retirement is the part that is usually wrong. A certificate removed from the
+    issuing service is still installed on every node that fetched it, and the
+    node keeps serving with it until its next poll succeeds. Revocation lists
+    close that window in principle and rarely in practice, because the client
+    that most needs to honour one is the client least likely to fetch it.
+
+    The rule the fleet actually relies on is the **quarantine interval**: a
+    certificate counts as retired only after twice the maximum poll period has
+    elapsed since it was withdrawn, and the interconnect refuses any handshake
+    presenting material older than that regardless of its expiry. The number is
+    derived from the poll schedule rather than chosen, so lengthening it is a
+    change to one constant and not to a policy document.
+
+- key: arch-fenced-template
+  type: architecture
+  title: Interface descriptors for the ingest tier
+  description: The descriptor every ingest connector ships, and what validates it.
+  # `Purpose`, `Cadence`, `Credentials` and `Backpressure` are quoted inside a
+  # fence and are deliberately absent: a run that names one has read fenced text
+  # as structure (issue-af046a467575).
+  sections: [Why descriptors exist, Validation, Descriptors, Publication, Quarantine]
+  body: |
+    ## Why descriptors exist
+
+    The ingest tier runs a little over two hundred connectors written by teams
+    that do not otherwise coordinate. Scheduling them from a central place needs
+    facts about each one — how often it should run, how much of it may run at
+    once, what it reads — and the only durable way to hold those facts is beside
+    the code they describe, where the same review that changes the behaviour
+    changes the statement of it.
+
+    The alternative the tier grew out of was a central registry maintained by the
+    platform team. It was wrong within a quarter, because the people who knew a
+    connector had changed were never the people with commit access to the
+    registry, and nothing failed when the two disagreed.
+
+    ## Validation
+
+    Validation happens at build time, before an artifact can be published at all.
+    A connector whose descriptor is wrong fails in a way that looks like a
+    platform fault rather than a connector fault, so the check has to run where
+    the connector's own tests run and block the same pipeline they do.
+
+    The format is intentionally small: no expression language, no includes, no
+    defaults inherited from a parent. Each of those turns a reviewable file into
+    a program whose behaviour depends on where it is read.
+
+    ## Descriptors
+
+    A connector descriptor looks like this:
+
+    ```markdown
+    # <connector>
+
+    ## Purpose
+    One sentence. What the connector ingests, and from where.
+
+    ## Cadence
+    How often it runs, and what it does when a run overlaps the previous one.
+
+    ## Credentials
+    Which secret names it reads. Never the values.
+
+    ## Backpressure
+    What it does when the downstream buffer is full.
+    ```
+
+    Those four headings are fixed and the build rejects an unknown one, which is
+    what keeps the set readable as a table across the whole tier.
+
+    ## Publication
+
+    A descriptor is published as part of the connector's artifact rather than
+    separately, so the two versions cannot disagree. The scheduler reads the
+    descriptor out of the artifact it is about to run, not out of a registry
+    keyed by connector name, which is what makes a rollback carry its descriptor
+    with it instead of leaving the previous one in force.
+
+    Publication is idempotent and the build refuses to overwrite an existing
+    version, so the descriptor a run used can always be recovered from the
+    artifact store. That property is what makes incident review possible at all:
+    the question is almost always what the scheduler believed at the time, and
+    without it the answer is a reconstruction.
+
+    ## Quarantine
+
+    A connector whose descriptor stops validating is moved to the **holding
+    lane**: it keeps running against the last descriptor the build accepted, its
+    artifacts are marked provisional, and the scheduler stops widening its
+    concurrency. The lane exists because the alternative — stopping the connector
+    — turns a formatting mistake into missing data, and missing data in an ingest
+    tier is not recoverable by fixing the mistake afterwards.
+
+    A connector leaves the holding lane the moment a valid descriptor is
+    published. Nothing else clears it, and in particular no operator command
+    does, because an operator who can clear it will clear it under exactly the
+    pressure that makes the check worth having.
+
+- key: arch-short-then-long
+  type: architecture
+  title: Region failover for the session tier
+  description: How sessions survive the loss of a region, and what the drill proves.
+  sections: [Scope, Backbone, Failover sequence, Client repointing, Verification]
+  body: |
+    ## Scope
+
+    The session tier holds authentication state for signed-in users: a token, the
+    device it was issued to, and the expiry. It is not a cache. Losing it signs
+    everyone out at once, which is why it is replicated across regions while most
+    of the surrounding stack is not.
+
+    Replication is asynchronous and lags by a few hundred milliseconds under
+    normal load. That lag is the reason this document exists — every rule below
+    is about what may be assumed while the replica is behind, and the honest
+    answer is less than teams expect. A session written and read within the lag
+    window is not guaranteed to survive a failover, and the sign-in flow is built
+    to tolerate exactly that rather than to prevent it.
+
+    ## Backbone
+
+    detect loss → drain writes → promote replica → repoint clients → verify
+
+    ## Failover sequence
+
+    Loss detection is deliberately slow. A region is declared lost only after
+    three independent probes agree across two minutes, because the failure this
+    tier actually sees is a transient partition, and a failover triggered inside
+    one costs more than the partition would have. The probes run from outside the
+    region and from inside its peer, so a monitoring outage cannot by itself
+    declare a healthy region dead. Two minutes is long enough that every
+    partition seen in the last three years resolved inside it.
+
+    Draining writes is what makes the promotion safe. The session store accepts
+    writes through a single leader per region, and the drain closes that leader
+    before the replica is promoted, so the two are never writable at once. A
+    drain that cannot finish inside its budget escalates rather than proceeding —
+    a split-brain session store is the one failure this design refuses to trade
+    against, since the damage is silent and arrives as customers seeing each
+    other's data. The budget is two minutes, matched to the detection window so
+    the whole decision fits inside a single on-call response rather than
+    spanning a handover.
+
+    Promotion itself is a metadata change that completes in under a second.
+
+    ## Client repointing
+
+    Repointing is the slow part. Clients hold long-lived connections by design,
+    and the coordinated close is paced so the surviving region is never asked to
+    absorb the whole fleet's reconnects at once. Pacing is why a drill runs
+    eleven minutes while the promotion inside it runs one.
+
+    Clients that reconnect before the promotion completes are answered with a
+    retriable error rather than a redirect, because a redirect issued during the
+    drain sends them to a leader that is about to close. The error costs one
+    round trip; the redirect costs a reconnect storm against a region that has
+    not finished becoming writable.
+
+    ## Verification
+
+    Verification is the step teams skip. The drill counts as passed only when a
+    **canary session** written before the failover is read back after it, from
+    the promoted region, with its expiry intact — not merely when the tier
+    answers health checks. A tier that answers health checks with an empty
+    session store has failed the thing sessions are for, and it will report
+    itself healthy the entire time.

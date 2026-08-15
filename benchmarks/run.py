@@ -110,8 +110,14 @@ def _outcome(retrieved: list[str], data: object, all_ids: list[str]) -> Outcome:
     return Outcome(retrieved, len(payload), id_chars, sequential)
 
 
-def build_store(home: Path) -> tuple[object, dict[str, str]]:
-    """Load the corpus into a fresh store; return the container and key -> id map."""
+def build_store(home: Path, corpus_file: str = "corpus.yaml") -> tuple[object, dict[str, str]]:
+    """Load a corpus into a fresh store; return the container and key -> id map.
+
+    ``corpus_file`` is parameterised so :mod:`chunking` can load its own corpus
+    through this exact path rather than a second one — the store a benchmark
+    measures has to be built the way the shipped default builds it, and two
+    builders would eventually disagree about which that is.
+    """
     os.environ["DOCIR_HOME"] = str(home)
     os.environ["DOCIR_NO_DAEMON"] = "1"
     settings = Settings.resolve(home=home, use_daemon=False)
@@ -124,7 +130,7 @@ def build_store(home: Path) -> tuple[object, dict[str, str]]:
     container = build_container(settings, background_embeddings=False)
     dispatcher = container.dispatcher
 
-    corpus = yaml.safe_load((BENCH_DIR / "corpus.yaml").read_text(encoding="utf-8"))
+    corpus = yaml.safe_load((BENCH_DIR / corpus_file).read_text(encoding="utf-8"))
     ids: dict[str, str] = {}
     # Two passes: every `related` target must exist before it can be referenced.
     for doc in corpus:

@@ -1,6 +1,6 @@
 """Tier 1 structural checks — graph-level warnings, never write-blocking.
 
-Run on demand (``docs check``) or in CI, these surface graph-shape problems as
+Run on demand (``docir check``) or in CI, these surface graph-shape problems as
 warnings rather than failing an agent mid-task:
 
 * cycles in the relation graph,
@@ -38,7 +38,7 @@ _WHITE, _GREY, _BLACK = 0, 1, 2
 #: can model (a decision linking the issue that motivated it); for cycles it
 #: turned a mutually-referencing pair into a permanent warning, 127 of them on
 #: this store. A warning that fires on correct usage teaches people to ignore
-#: the whole of `docs check`, which is where the duplicate-id detection lives.
+#: the whole of `docir check`, which is where the duplicate-id detection lives.
 #: Findings that mean the corpus is *broken* — a document is unreachable, or an
 #: edge resolves to nothing. These are what a merge gate must stop.
 ERROR_KINDS: frozenset[str] = frozenset({"duplicate-id", "dangling", "malformed"})

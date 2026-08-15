@@ -1,6 +1,6 @@
 """Tier 0 validation — the synchronous, blocking hard checks.
 
-These run inline in every ``docs add`` / ``docs update`` call, like a compiler.
+These run inline in every ``docir add`` / ``docir update`` call, like a compiler.
 They are deterministic and essentially free of false positives: missing
 required fields, invalid status values/transitions, and dangling ``tags`` /
 ``related`` references. Graph-shape and content heuristics deliberately live in

@@ -1,7 +1,7 @@
 """Tier 2 advisory checks — heuristic, opt-in, never CI-blocking.
 
-Run only when a human chooses to (``docs lint --deep``). Reuses the same
-fastembed vectors already computed for ``docs context`` to flag content
+Run only when a human chooses to (``docir lint --deep``). Reuses the same
+fastembed vectors already computed for ``docir context`` to flag content
 similarity (DRY at the idea level), plus a simple document-size heuristic for
 scope creep (an SRP smell). Everything here is a suggestion, never an error.
 """

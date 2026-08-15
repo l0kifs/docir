@@ -1,4 +1,4 @@
-"""Filter value objects for the structured read path (``docs query``)."""
+"""Filter value objects for the structured read path (``docir query``)."""
 
 from __future__ import annotations
 

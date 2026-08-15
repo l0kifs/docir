@@ -1,4 +1,4 @@
-"""Hybrid scoring for ``docs context`` — fuse lexical and semantic ranks.
+"""Hybrid scoring for ``docir context`` — fuse lexical and semantic ranks.
 
 Rather than replacing FTS5 outright (lexical matches are valuable and cheap),
 the context read path combines the BM25 ranking with cosine-similarity ranking.

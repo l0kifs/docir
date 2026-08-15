@@ -47,7 +47,7 @@ tags:
 - schema
 title: Business rule register — 47 rules, BR-001..BR-074
 type: reference
-updated: '2026-08-05'
+updated: '2026-08-15'
 ---
 
 # Business rule register
@@ -352,19 +352,31 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 
 ## BR-031
 
-**Statement.** The system shall always return the requested number of context results when the corpus is non-empty, regardless of how well any document matches.
+**Statement.** `docir context` ranks every document with an active vector, so the fused list is
+never empty on a non-empty corpus. "Nothing relevant exists" is expressible only through
+`--min-score`, which filters on `similarity` — the raw cosine — and not on `score`.
 
-**Pattern:** ubiquitous · **Flow:** arch-f220a644d654 · **Actor:** — · **Confidence:** observed · **Status:** assumed · **Owner:** repo maintainer
+**Pattern:** ubiquitous · **Flow:** arch-f220a644d654 · **Actor:** — · **Confidence:** observed · **Status:** confirmed · **Owner:** repo maintainer
 
-- *Given* a store containing only 'Postgres connection pooling' · *when* docir context 'how do I bake sourdough bread' --limit 3 · *then* OBSERVED: returns the Postgres decision, score 0.0328
+- *Given* a store containing only 'Postgres connection pooling' · *when* docir context 'how do I bake sourdough bread' --limit 3 · *then* OBSERVED (2026-07-30, v0.2.1): returns the Postgres decision, score 0.0328
+- *Given* the same store · *when* the same query with `--min-score 0.5` · *then* the empty result is a real answer: nothing scored close enough
 
-**Notes:** An emergent rule nobody wrote: every active vector is ranked, so the fused list is never empty and there is no similarity floor. "Nothing relevant" is not an expressible answer.
+**Notes:** The 2026-07-30 observation recorded this as an emergent rule nobody wrote, with no
+similarity floor available. The floor now exists. The distinction it rests on is the
+load-bearing part: `score` is RRF, a fusion of *ranks*, so a nonsense query against a
+one-document store scored the same ~0.0328 a perfect match does — which is exactly why
+"nothing relevant" was inexpressible. `FusedScore.similarity` carries the raw cosine through
+and `--min-score` filters on that. Two exemptions are deliberate and remain: graph neighbours
+are never filtered (they are present because a selected document links them, not because they
+scored), and a hit with **no** `similarity` is kept — absent means *no current vector*, not
+zero, so dropping it would filter on embedding-queue staleness rather than relevance.
 
-**Open questions:** issue-93dd537bbbbb
+**Open questions:** resolved — issue-93dd537bbbbb
 
 **Evidence:**
-- `src/docir/modules/indexing/domain/scoring.py:36-42`
-- `src/docir/modules/documents/application/services/document_service.py:257`
+- `src/docir/modules/indexing/domain/scoring.py` (`FusedScore.similarity`)
+- `src/docir/modules/documents/application/services/document_service.py`
+- `docir context --min-score`
 
 ## BR-032
 

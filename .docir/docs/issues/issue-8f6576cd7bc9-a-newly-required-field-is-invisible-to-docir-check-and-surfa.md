@@ -23,7 +23,7 @@ tags:
 title: A newly-required field is invisible to docir check, and surfaces one write
   at a time
 type: issue
-updated: '2026-08-08'
+updated: '2026-08-15'
 ---
 
 **Class:** missing · **Severity:** material
@@ -94,7 +94,7 @@ would fail CI for a corpus that was valid the day before the upgrade, which is h
 gate became unusable the first time. `--strict-all` still covers anyone who wants it fatal.
 
 That also makes the recovery queryable rather than discovered: `check`, fix the named documents
-with `docir update <id> --owner ...`, done.
+with `docir update <id> --set-owner ...`, done.
 
 Deliberately not proposed:
 

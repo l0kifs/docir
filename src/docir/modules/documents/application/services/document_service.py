@@ -53,7 +53,7 @@ from docir.platform.persistence.unit_of_work import UnitOfWork
 
 UnitOfWorkFactory = Callable[[], UnitOfWork]
 
-# How many FTS candidates to pull before hybrid fusion in ``docs context``.
+# How many FTS candidates to pull before hybrid fusion in ``docir context``.
 _CONTEXT_CANDIDATES = 25
 
 #: How many extra FTS candidates to request per result wanted, before filtering
@@ -122,7 +122,7 @@ class DocumentService:
     # -- write path ---------------------------------------------------------
 
     def add(self, request: AddDocumentRequest) -> DocumentView:
-        """Create a new document (``docs add``)."""
+        """Create a new document (``docir add``)."""
         status = request.status or self._schema.default_status_for(request.type)
         self._validator.validate_status(request.type, status)
         today = self._clock.today()
@@ -167,7 +167,7 @@ class DocumentService:
         return DocumentView.from_document(document, stale=self._is_stale(document))
 
     def update(self, request: UpdateDocumentRequest) -> DocumentView:
-        """Patch metadata and/or edit the body (``docs update``).
+        """Patch metadata and/or edit the body (``docir update``).
 
         Every edit is applied to ``base`` — the document as it is **on disk**,
         not as the index remembers it — because the files are the source of
@@ -220,7 +220,7 @@ class DocumentService:
         )
 
     def archive(self, doc_id: str) -> DocumentView:
-        """Soft-remove a document from active search (``docs archive``)."""
+        """Soft-remove a document from active search (``docir archive``)."""
         with self._uow_factory() as uow:
             document = self._require(uow, doc_id)
             if document.archived:
@@ -237,7 +237,7 @@ class DocumentService:
         return DocumentView.from_document(updated, stale=self._is_stale(updated))
 
     def unarchive(self, doc_id: str) -> DocumentView:
-        """Restore a document to active search (``docs unarchive``)."""
+        """Restore a document to active search (``docir unarchive``)."""
         with self._uow_factory() as uow:
             document = self._require(uow, doc_id)
             if not document.archived:
@@ -252,22 +252,22 @@ class DocumentService:
         return DocumentView.from_document(updated, stale=self._is_stale(updated))
 
     def delete(self, doc_id: str, *, force: bool = False) -> tuple[str, ...]:
-        """Hard-delete the file and all index rows (``docs delete``).
+        """Hard-delete the file and all index rows (``docir delete``).
 
         A forced delete **strips the edge from every document that referenced
         it**, in the same transaction, and returns their ids. Without that the
         delete left the corpus in a state it could detect and not exit: the
-        referencing file kept `related: [<deleted id>]`, `docs check` reported
+        referencing file kept `related: [<deleted id>]`, `docir check` reported
         it forever, and because Tier 0 only validates the edges supplied in the
         *current* call, any later `update` re-persisted the dead edge to the
         canonical file. The compensating write is the same one `tag rm --force`
         already performs for tags.
 
-        `updated` is deliberately not advanced on the referencing documents, so
-        this matches `check --fix` rather than `tag rm --force`: staleness
-        records when a human last vouched for the content, and having a link
-        removed from underneath you is not that (the tag path bumping it is
-        issue-9ed4905e0db8, a separate open defect — do not copy it here).
+        `updated` is deliberately not advanced on the referencing documents —
+        the same rule `check --fix` and the tag paths follow (issue-9ed4905e0db8
+        moved the tag side here). Staleness records when a human last vouched
+        for the content, and having a link removed from underneath you is not
+        that. A fourth mechanical rewrite does not set `updated` either.
         """
         with self._uow_factory() as uow:
             document = self._require(uow, doc_id)
@@ -298,7 +298,7 @@ class DocumentService:
     # -- read path ----------------------------------------------------------
 
     def get(self, doc_id: str, section: str | None = None) -> DocumentView:
-        """Return one document in full, regardless of status (``docs get``).
+        """Return one document in full, regardless of status (``docir get``).
 
         With ``section``, ``body`` carries only that heading and the text under
         it, and ``section`` names what was returned. Same span
@@ -319,7 +319,7 @@ class DocumentService:
             return replace(view, body=extract_section(document.body, section), section=section)
 
     def query(self, request: QueryRequest) -> list[DocumentSummary]:
-        """Structured metadata filtering (``docs query``) — skeleton results.
+        """Structured metadata filtering (``docir query``) — skeleton results.
 
         Two predicates are applied here rather than in SQL, and both *before*
         the limit, so ``--stale --limit 10`` means "ten stale documents" rather
@@ -406,7 +406,7 @@ class DocumentService:
         return matched[request.offset : request.offset + request.limit]
 
     def search(self, request: SearchRequest) -> list[DocumentSummary]:
-        """Full-text search over active documents (``docs search``) — skeletons.
+        """Full-text search over active documents (``docir search``) — skeletons.
 
         Closed documents are filtered *after* the index returns, because FTS5
         does not know a document's status. A fixed over-fetch of ``limit * 2``
@@ -443,7 +443,7 @@ class DocumentService:
                 candidates *= 2
 
     def context(self, request: ContextRequest) -> list[DocumentSummary]:
-        """Ranked, minimal relevant document set (``docs context``) — skeletons.
+        """Ranked, minimal relevant document set (``docir context``) — skeletons.
 
         ``limit`` is a hard ceiling on the response. Graph expansion runs inside
         it, not on top of it: ``expand`` slots are held back for neighbours, and

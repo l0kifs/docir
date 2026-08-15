@@ -1,4 +1,4 @@
-"""The tag-registry use cases (``docs tag ...``).
+"""The tag-registry use cases (``docir tag ...``).
 
 The registry is the source of truth for what tags exist. ``rename`` and a
 forced ``rm`` are not just registry edits: because a tag is a classifier rather
@@ -74,7 +74,7 @@ class TagService:
         self._file_store = file_store
 
     def add(self, key: str, description: str) -> TagView:
-        """Register a new tag (``docs tag add``)."""
+        """Register a new tag (``docir tag add``)."""
         _require_valid_key(key)
         with self._uow_factory() as uow:
             if uow.tags.exists(key):
@@ -86,7 +86,7 @@ class TagService:
         return TagView(key=tag.key, description=tag.description)
 
     def list_all(self, *, limit: int = DEFAULT_TAG_PAGE, offset: int = 0) -> list[TagView]:
-        """One page of the registry, key-ordered (``docs tag list``).
+        """One page of the registry, key-ordered (``docir tag list``).
 
         Paged because the registry grows with the vocabulary and this is the
         only path that reads it for display; the write paths still take it whole,
@@ -117,7 +117,7 @@ class TagService:
             ]
 
     def rename(self, old: str, new: str, *, merge: bool = False) -> tuple[str, ...]:
-        """Rename a tag across the registry and all documents (``docs tag rename``).
+        """Rename a tag across the registry and all documents (``docir tag rename``).
 
         With ``merge``, ``new`` may already exist: every document carrying
         ``old`` gets ``new`` instead, and ``old`` leaves the registry. Without
@@ -180,7 +180,7 @@ class TagService:
         return tuple(rewritten)
 
     def remove(self, key: str, *, force: bool = False) -> tuple[str, ...]:
-        """Remove a tag (``docs tag rm``); blocked while in use unless forced.
+        """Remove a tag (``docir tag rm``); blocked while in use unless forced.
 
         Returns the ids of the documents it stripped the tag from. A forced
         removal rewrites other people's files, and reporting only ``removed

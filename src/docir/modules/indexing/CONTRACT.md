@@ -3,7 +3,8 @@
 ## Purpose
 Owns how relevant a document is to a query — the relevance and ranking engine.
 It fuses lexical and semantic signals for context retrieval and manages when
-document embeddings are (re)computed.
+embeddings are (re)computed — a vector per document *and* one per `##` section,
+since the model reads only the first ~512 tokens of a body (adr-927aa43d9635).
 
 ## Public operations
 - `HybridScorer.semantic_ranking(query, candidates) -> [SemanticHit]` — cosine ranking,
@@ -30,9 +31,11 @@ document embeddings are (re)computed.
 - none
 
 ## Owns
-- data: per-document embedding vectors and the dirty-recompute queue.
-  Physically stored in the shared index owned by `platform` (grandfathered;
-  see adr-d3e3616400bf).
+- data: per-document embedding vectors, the per-section chunk vectors written
+  beside them in the same transaction (there is deliberately no second dirty
+  flag — chunks are rewritten wholesale under the existing queue), and the
+  dirty-recompute queue. Physically stored in the shared index owned by
+  `platform` (grandfathered; see adr-d3e3616400bf).
 
 ## Depends on
 - modules: none

@@ -178,7 +178,7 @@ class DocumentSummary:
 
 @dataclass(frozen=True, slots=True)
 class AddDocumentRequest:
-    """Input for ``docs add``.
+    """Input for ``docir add``.
 
     ``related`` entries are compact ``<id>`` / ``<id>:<kind>`` tokens (the CLI
     form), parsed into typed edges by the service.
@@ -204,7 +204,7 @@ class AddDocumentRequest:
 
 @dataclass(frozen=True, slots=True)
 class UpdateDocumentRequest:
-    """Input for ``docs update`` (metadata patch and/or a body edit).
+    """Input for ``docir update`` (metadata patch and/or a body edit).
 
     ``None`` collection fields mean "leave unchanged"; an empty tuple means
     "clear". Exactly one body mode may be set at a time. ``set_related`` entries
@@ -232,7 +232,7 @@ class UpdateDocumentRequest:
 
 @dataclass(frozen=True, slots=True)
 class QueryRequest:
-    """Input for ``docs query`` (structured filtering).
+    """Input for ``docir query`` (structured filtering).
 
     ``owner`` and ``stale_only`` are what turn staleness from a finding into a
     worklist: "what do I own?" and "what of it is overdue?". Combined they are
@@ -258,7 +258,7 @@ class QueryRequest:
 
 @dataclass(frozen=True, slots=True)
 class SearchRequest:
-    """Input for ``docs search`` (full-text)."""
+    """Input for ``docir search`` (full-text)."""
 
     text: str
     limit: int = 20
@@ -275,7 +275,7 @@ DEFAULT_CONTEXT_EXPAND = 2
 
 @dataclass(frozen=True, slots=True)
 class ContextRequest:
-    """Input for ``docs context`` (hybrid ranking + one-hop graph traversal).
+    """Input for ``docir context`` (hybrid ranking + one-hop graph traversal).
 
     ``limit`` is the hard ceiling on documents returned. ``expand`` is how many
     of those slots may go to graph-reached neighbours; the rest go to ranked

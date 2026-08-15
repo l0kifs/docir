@@ -101,11 +101,11 @@ class MaintenanceService:
         self._linter = SimilarityLinter()
 
     def reindex(self, *, changed_only: bool = False) -> ReindexResult:
-        """Rebuild the index from the canonical files (``docs reindex``).
+        """Rebuild the index from the canonical files (``docir reindex``).
 
         Files that do not parse are skipped (see :class:`ReindexResult`) and
         counted, so "rebuilt 12 documents" cannot quietly mean "of 13 on disk".
-        ``docs check`` reports each one individually as a ``malformed`` finding.
+        ``docir check`` reports each one individually as a ``malformed`` finding.
         """
         with self._uow_factory() as uow:
             tags_indexed = self._reindex_tags(uow)
@@ -131,7 +131,7 @@ class MaintenanceService:
         )
 
     def reindex_embeddings(self) -> int:
-        """Recompute every active document's vector (``docs reindex --embeddings``)."""
+        """Recompute every active document's vector (``docir reindex --embeddings``)."""
         with self._uow_factory() as uow:
             for document in uow.documents.all():
                 if not document.archived:
@@ -140,11 +140,11 @@ class MaintenanceService:
         return self._scheduler.flush()
 
     def flush_embeddings(self) -> int:
-        """Synchronously drain the embedding queue (``docs embed --flush``)."""
+        """Synchronously drain the embedding queue (``docir embed --flush``)."""
         return self._scheduler.flush()
 
     def check(self) -> list[CheckIssue]:
-        """Tier 1 structural checks over the graph (``docs check``).
+        """Tier 1 structural checks over the graph (``docir check``).
 
         Also catches the two Tier 0 rules a hand-edit can bypass: a status the
         type does not declare and a tag that is not in the registry. The CLI
@@ -386,7 +386,7 @@ class MaintenanceService:
         return actions
 
     def lint_deep(self) -> list[LintFinding]:
-        """Tier 2 advisory checks (``docs lint --deep``)."""
+        """Tier 2 advisory checks (``docir lint --deep``)."""
         with self._uow_factory() as uow:
             self._scheduler.flush()
             # Document vectors only, deliberately: the duplicate check asks

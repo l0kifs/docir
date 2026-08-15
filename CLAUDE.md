@@ -140,7 +140,7 @@ means per-module storage plus an event bus, which is a rewrite the project delib
 ## Invariants worth preserving
 
 - **Embeddings are the one deferred, eventually-consistent piece.** A content change sets an
-  `embedding_dirty` flag (persisted, survives a daemon restart) and returns; everything else (file,
+  `embeddings.dirty` flag (persisted, survives a daemon restart) and returns; everything else (file,
   metadata, FTS, relations) is synchronous and current when the command returns. Two scheduler
   implementations back this: `InlineEmbeddingScheduler` (in-process/tests, drains synchronously so
   behaviour is deterministic) and `ThreadedEmbeddingScheduler` (daemon, debounced background thread).
@@ -222,9 +222,9 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   from every referencing document in the same transaction and returns their ids (the CLI
   prints "unlinked from ..."), so it cannot leave a dangling reference — the pattern
   `tag rm --force` already used for tags. It deliberately does **not** advance those
-  documents' `updated`: it follows `check --fix`, not the tag path, because a link removed
-  from underneath you is not a human re-verification (the tag path bumping it is a known
-  open defect). Consequence for tests: `delete --force` can no longer manufacture a dangling
+  documents' `updated` — the same rule `check --fix` and the tag paths follow, because a link
+  removed from underneath you is not a human re-verification.
+  Consequence for tests: `delete --force` can no longer manufacture a dangling
   edge, so the `drop_file_of` fixture builds one the way it really arises — remove the
   target's file as a merge would, then `reindex`.
 - **`docir check --fix` (`MaintenanceService.repair`) is the only sanctioned recovery path.**
@@ -379,13 +379,16 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   *and* by `_augment_with_related`; do not inline the check into either. They used to differ —
   expansion tested only `archived` — so a `resolved` issue the caller had excluded came back
   through a neighbour edge, and the filter that held on `query`/`search`/ranked `context` leaked
-  on the fourth path. Expansion follows outgoing edges **and** incoming `supersedes`/`contradicts`
-  (`_SUCCESSOR_KINDS`), successors first in each seed's edge list: a `supersedes` edge points from
+  on the fourth path. Expansion follows outgoing edges **and** incoming *successor* edges,
+  successors first in each seed's edge list: a `supersedes` edge points from
   the new document to the old one, so before this the replacement sat one hop away *backwards* and
   the graph could not answer "is this decision still current?" — the question it exists for.
-  `_SUCCESSOR_KINDS` is intentionally a separate constant from the layering check's
-  `graph_checks._DEPENDENCY_KINDS` — they briefly held the same two kinds for unrelated reasons
-  and have since diverged entirely. `DocumentRepository.incoming` takes an optional `kinds` filter
+  **Which kinds count is schema data, not a hardcoded name set (adr-234b956a48d8).** Traversal
+  reads `Schema.successor_relation_kinds()` and layering reads `is_dependency_relation`, so a
+  custom kind declared `successor: true` / `dependency: true` behaves like the core ones; the
+  frozensets these replaced (`_SUCCESSOR_KINDS`, `graph_checks._DEPENDENCY_KINDS`) are gone, and
+  reintroducing one silently strands every custom kind with that shape.
+  `DocumentRepository.incoming` takes an optional `kinds` filter
   for this; unfiltered it is still the delete integrity check.
 - **The schema is core + profiles (adr-2a3f625bb2f8).** `infra/profiles.py` holds a frozen domain-agnostic
   core (the `decision` type + relation registry + cadences) and bundled profiles (software/research/
@@ -579,11 +582,25 @@ tests/
   suite. A test that has never failed has not been shown to work. Where a guard scans a
   corpus, also assert *which* items it found: a count cannot distinguish "nothing is wrong"
   from "nothing is checked".
-- **`tests/entry_points/test_agent_guide_matches_cli.py` validates the shipped agent guide**
-  against the Typer command tree, introspected from `cli.app` rather than shelled out. Any
-  `docir ...` in a fenced block or an inline code span in
-  `modules/agents/infra/templates/skill.md` must resolve to a real command with real flags —
-  so prose naming a command that does not exist must not be written in backticks.
+- **`tests/entry_points/test_agent_guide_matches_cli.py` validates docir's own prose**
+  against the Typer command tree, introspected from `cli.app` rather than shelled out. Five
+  sources: the packaged guide (`modules/agents/infra/templates/skill.md`) and `README.md`,
+  which an *adopter* reads; `CLAUDE.md` and every file in `.docir/docs/**`, which an agent
+  working in this repo reads; and every docstring under `src/`, which 37 stale invocations
+  survived in after the markdown side was clean. Any `docir ...` in a fenced block, an
+  inline code span or an RST literal must resolve to a real command with real flags — so
+  prose naming a command that does not exist must not be written in backticks. Three things are deliberate. A retired binary name
+  gets its **own** check (`_RETIRED_BINARIES`), because a code span opening with the old name
+  instead of `docir ` never reaches the extractor at all — that is how the architecture
+  document reached 96 of them. (Naming one in prose here trips that check, which is why this
+  sentence describes it instead of quoting it.) `_DELIBERATELY_UNREAL` exempts prose that names a verb *because it does
+  not exist* (`docir import`, `docir repair`, `docir schema accept`), and every entry must
+  still match something, so a shipped command cannot leave its exemption behind to shadow the
+  real thing. And `--type`/`--status` **values** are checked against the core merged with
+  *every* bundled profile (`TYPE_STATUSES`), not this store's resolved schema — whether
+  `decision` has an `open` status is not a local choice, but which profiles are enabled is,
+  so an example may name a `test_plan`. Resolving a command proves only its shape: a
+  `--type decision --status open` filter parses, runs, and matches nothing forever.
 - The coverage gate is **90%** (`--cov-fail-under=90`); `alembic/` and `fastembed.py` are omitted.
 
 ## Known rough edges / recorded deviations

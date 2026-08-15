@@ -6,7 +6,7 @@ description: Why docir reads fan out across a committed list of peer stores, why
   are opened read-only, and why the merge sorts on similarity rather than score.
 id: adr-fb938175f72a
 related:
-- kind: supersedes
+- kind: refines
   to: adr-20eec6e2e2ca
 status: accepted
 tags:
@@ -15,7 +15,7 @@ tags:
 - retrieval
 title: Reads federate across declared stores; writes never do
 type: decision
-updated: '2026-08-13'
+updated: '2026-08-15'
 ---
 
 ## Context

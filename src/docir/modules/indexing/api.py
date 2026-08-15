@@ -1,7 +1,7 @@
 """Public surface of the indexing module.
 
 The relevance/ranking engine over the derived index: hybrid (lexical + semantic)
-scoring for ``docs context`` and the deferred embedding-recompute scheduler.
+scoring for ``docir context`` and the deferred embedding-recompute scheduler.
 Consumers construct a scheduler through :func:`build_scheduler` and rank with
 :class:`HybridScorer`; the concrete scheduler implementations stay private.
 """

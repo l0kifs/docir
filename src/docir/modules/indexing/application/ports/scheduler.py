@@ -4,7 +4,7 @@ A content change flags the row dirty and returns immediately; the actual
 vector recompute happens off the write's critical path. This port abstracts
 that scheduling: the production adapter debounces and drains dirty rows on a
 background thread, while ``flush()`` forces a synchronous drain (the
-``--wait-embeddings`` / ``docs embed --flush`` escape hatch, and the path all
+``--wait-embeddings`` / ``docir embed --flush`` escape hatch, and the path all
 tests drive). Everything here is exposed synchronously so it is fully testable.
 """
 

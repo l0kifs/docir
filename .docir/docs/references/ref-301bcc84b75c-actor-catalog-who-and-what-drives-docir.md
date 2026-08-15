@@ -22,7 +22,7 @@ tags:
 - agents
 title: Actor catalog — who and what drives docir
 type: reference
-updated: '2026-08-05'
+updated: '2026-08-15'
 ---
 
 Reconstructed from the code and tests. `observed` means read off code or executed;
@@ -140,4 +140,16 @@ Reconstructed from the code and tests. `observed` means read off code or execute
 
 **Confidence:** assumed
 
-**Notes:** NO actor of this kind is served. `docir check` reports duplicate-id and dangling findings but there is no `docir repair`, no `--fix`, no runbook, and no documented manual procedure. Every failure mode this analysis confirmed leaves the user here with no tool. See issue-476b4e188fab.
+**Notes:** This actor was NOT served at the time of the 2026-07-26 pass: `docir check`
+reported duplicate-id and dangling findings and no command could act on them. **It is served
+now.** `docir check --fix` re-issues duplicate ids (the oldest file keeps the id, so existing
+edges stay valid) and drops dangling edges, reporting every change; `docir check --strict` is
+the pre-merge gate that catches both. `malformed` and `unknown-type` are still returned
+unrepaired in `RepairResult.remaining` — deliberately, because they need a human to decide
+what the file or the schema should say. The written procedures are `run-22e0a6ce6ae1` (AI
+code-check checklist) and `run-f4a756206fe0` (upgrading docir in a project).
+See issue-476b4e188fab for the argument.
+
+**Still unmodelled:** this actor has no authority concept and no usage data. docir has no
+actors or permissions at all (adr-90e994d931cc), so "operator" remains a role a person plays,
+not something the system knows about.

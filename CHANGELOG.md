@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **`docir lint --deep` reports `ambiguous-heading` and `unqualified-section-ref`.** The first is
+  a heading used twice in one document: section reads resolve to the first match, so the rest is
+  reachable only by fetching the whole body, and nothing said so. The second is prose naming a
+  section that lives in a *different* document — what a document split leaves behind. It only
+  speaks about headings unique to one document, because a check that cannot say which document
+  holds the section should not claim one.
 - **`docir lint --deep` reports `oversized-section`.** A section past the chunk ceiling is split
   and only the first piece keeps the heading, so the rest is text `context` can retrieve but
   `matched_section` can never name and `get --section` will not return on its own. The check runs

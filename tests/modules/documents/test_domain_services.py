@@ -687,6 +687,81 @@ class TestSimilarityLinter:
     def test_a_bodyless_document_is_silent(self) -> None:
         assert SimilarityLinter().find_oversized_sections([_doc("adr-0001", body="")]) == []
 
+    def test_a_heading_used_twice_is_flagged(self) -> None:
+        # issue-71555a89a73d: `--section` resolves to the first match, so the
+        # second is reachable only by fetching the whole body — silently.
+        body = "## Findings\n\nfirst pass.\n\n## Other\n\nx\n\n## Findings\n\nsecond pass.\n"
+        findings = SimilarityLinter().find_ambiguous_headings([_doc("adr-0001", body=body)])
+        assert [f.kind for f in findings] == ["ambiguous-heading"]
+        assert "'Findings'" in findings[0].message and "2 times" in findings[0].message
+
+    def test_distinct_headings_are_silent(self) -> None:
+        body = "## One\n\na\n\n## Two\n\nb\n"
+        assert SimilarityLinter().find_ambiguous_headings([_doc("adr-0001", body=body)]) == []
+
+    def test_a_heading_repeated_inside_a_fence_is_not_ambiguous(self) -> None:
+        # Shares the fence-aware scanner, so quoted markdown is not structure.
+        body = "## Findings\n\n```markdown\n## Findings\n```\n"
+        assert SimilarityLinter().find_ambiguous_headings([_doc("adr-0001", body=body)]) == []
+
+
+class TestUnqualifiedSectionRefs:
+    """Guards the failure a document split leaves behind, and its two false starts."""
+
+    def _docs(self, *bodies: tuple[str, str]) -> list[Document]:
+        return [_doc(doc_id, body=body) for doc_id, body in bodies]
+
+    def test_a_reference_to_a_relocated_section_is_flagged(self) -> None:
+        docs = self._docs(
+            ("adr-0001", 'see "Archiving vs. deletion" below for the rest\n'),
+            ("adr-0002", "## Archiving vs. deletion\n\nhow it works\n"),
+        )
+        findings = SimilarityLinter().find_unqualified_section_refs(docs)
+        assert [f.kind for f in findings] == ["unqualified-section-ref"]
+        assert "'adr-0002'" in findings[0].message
+        assert findings[0].doc_ids == ("adr-0001", "adr-0002")
+
+    def test_naming_the_owning_document_clears_it(self) -> None:
+        # What the fix looks like — the check has to recognise its own remedy or
+        # it reports the same line forever.
+        docs = self._docs(
+            ("adr-0001", 'see `adr-0002`, "Archiving vs. deletion" for the rest\n'),
+            ("adr-0002", "## Archiving vs. deletion\n\nhow it works\n"),
+        )
+        assert SimilarityLinter().find_unqualified_section_refs(docs) == []
+
+    def test_a_heading_many_documents_share_is_never_flagged(self) -> None:
+        """The first run reported this and was wrong, twice over.
+
+        `Resolution` is a heading in dozens of issues, so quoting the word was
+        enough to trip it; and with several owners the "it lives in X" clause
+        picked one arbitrarily and named the wrong document. A check that cannot
+        say which document is not entitled to the sentence.
+        """
+        docs = self._docs(
+            ("adr-0001", 'the "Resolution" section explains it\n'),
+            ("issue-0002", "## Resolution\n\nfixed\n"),
+            ("issue-0003", "## Resolution\n\nalso fixed\n"),
+        )
+        assert SimilarityLinter().find_unqualified_section_refs(docs) == []
+
+    def test_a_quoted_phrase_that_is_nobody_s_heading_is_ignored(self) -> None:
+        docs = self._docs(("adr-0001", 'he called it "Some Ordinary Phrase" once\n'))
+        assert SimilarityLinter().find_unqualified_section_refs(docs) == []
+
+    def test_quoting_your_own_heading_is_fine(self) -> None:
+        docs = self._docs(("adr-0001", '## Context\n\nsee "Context" above\n'))
+        assert SimilarityLinter().find_unqualified_section_refs(docs) == []
+
+    def test_each_stale_reference_is_reported_once(self) -> None:
+        docs = self._docs(
+            ("adr-0001", 'both "Archiving vs. deletion" and again "Archiving vs. deletion"\n'),
+            ("adr-0002", "## Archiving vs. deletion\n\nhow it works\n"),
+        )
+        assert len(SimilarityLinter().find_unqualified_section_refs(docs)) == 1
+
+
+class TestSimilarityLinterSizes:
     def test_scope_creep_flagged(self) -> None:
         big = _doc("adr-0001", body="x" * 10)
         findings = SimilarityLinter(size_threshold_chars=5).find_scope_creep([big])

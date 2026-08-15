@@ -7,7 +7,7 @@ description: A repeated heading makes --section resolve to the first occurrence 
 id: issue-71555a89a73d
 related:
 - adr-927aa43d9635
-status: open
+status: resolved
 tags:
 - retrieval
 - cosmetic
@@ -43,3 +43,24 @@ list is already computed by `scan_headings`, and the check is a count.
 The guard has to assert *which* heading it found, not merely that it found one —
 a count cannot distinguish a corpus with no duplicates from a scan that looked
 at nothing.
+
+## Resolution
+
+`SimilarityLinter.find_ambiguous_headings` reports it as a Tier 2 advisory,
+naming the heading and how many times it appears. It reads `scan_headings`, so a
+heading repeated inside a fenced block is not one.
+
+Shipped alongside `unqualified-section-ref`, the paired gap found the same
+afternoon: prose naming a section that lives in another document, which is what a
+document split leaves behind.
+
+That second check needed a correction before it was worth having. The first
+version keyed on any heading in the corpus, and both findings it produced were
+wrong: `Resolution` is a heading in dozens of issues, so quoting the word tripped
+it, and where several documents share a name the "it lives in X" clause picked
+one arbitrarily and named the wrong document. It now considers only headings
+unique to a single document — a check that cannot say *which* document is not
+entitled to the sentence. Both false positives are pinned as tests.
+
+Verified by injection: removing the unique-owner gate fails
+`test_a_heading_many_documents_share_is_never_flagged`.

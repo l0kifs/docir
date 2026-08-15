@@ -256,7 +256,8 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   hard, synchronous compiler-style gate (missing field, bad status/transition, unknown tag/related,
   unknown/disallowed relation kind); Tier 1 (`docir check`) is non-blocking structural graph warnings
   (incl. **staleness**, **unknown-type** and **schema drift**); Tier 2 (`docir lint --deep`) is advisory heuristics (embedding similarity,
-  scope creep, oversized sections). Never promote a heuristic to a hard error.
+  scope creep, oversized sections, ambiguous headings, unqualified section references).
+  Never promote a heuristic to a hard error.
   **`oversized-section` has no threshold of its own**: it runs `split_body` and reports what came
   out — which section was cut and how many pieces nothing can name — so the number behind it stays
   `MAX_CHUNK_CHARS`, derived from the measured model window. It fires ~100 times on docir's own

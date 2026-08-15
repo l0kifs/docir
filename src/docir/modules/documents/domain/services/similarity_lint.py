@@ -8,13 +8,24 @@ scope creep (an SRP smell). Everything here is a suggestion, never an error.
 
 from __future__ import annotations
 
+import re
+from collections import Counter
 from collections.abc import Collection
 from dataclasses import dataclass
 
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.schema import Schema
 from docir.modules.documents.domain.services.chunking import split_body
+from docir.modules.documents.domain.services.markdown_headings import scan_headings
 from docir.platform.embedding.vector import Embedding
+
+#: A quoted phrase long enough, and capitalised enough, to be a section name.
+#: Both quote styles, because prose in this corpus uses each.
+_QUOTED = re.compile(r'["“]([A-Z][^"”\n]{5,60})["”]')
+
+#: How far before a quoted heading a document id may sit and still count as
+#: qualifying it. One clause — `` `adr-0001`, "Context" `` — not a paragraph.
+_QUALIFY_WINDOW = 40
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,6 +163,83 @@ class SimilarityLinter:
                 )
                 for name, pieces in counts
             ]
+        return findings
+
+    def find_ambiguous_headings(self, documents: list[Document]) -> list[LintFinding]:
+        """Flag a heading used twice in one document, which ``--section`` cannot split.
+
+        Section reads resolve to the *first* match, so the later one is reachable
+        only by fetching the whole body — the cost the flag exists to remove. It
+        stays advisory because first-match is the right resolution rule: the
+        defect is that the condition is silent, not that the behaviour is wrong,
+        and a corpus can acquire one through a permitted hand-edit at any time
+        (issue-71555a89a73d).
+        """
+        findings: list[LintFinding] = []
+        for doc in documents:
+            counts = Counter(h.text for h in scan_headings(doc.body) if h.level >= 2)
+            findings += [
+                LintFinding(
+                    kind="ambiguous-heading",
+                    message=(
+                        f"{doc.id!r} uses the heading {name!r} {n} times — a section read "
+                        f"resolves to the first, so the rest are unreachable by name"
+                    ),
+                    doc_ids=(doc.id,),
+                )
+                for name, n in counts.items()
+                if n > 1
+            ]
+        return findings
+
+    def find_unqualified_section_refs(self, documents: list[Document]) -> list[LintFinding]:
+        """Flag prose naming a section that lives in a *different* document.
+
+        The failure mode a split leaves behind: text saying `see "Archiving vs.
+        deletion" below` keeps reading as though the section were local long
+        after it moved to a sibling, and no existing check looks at prose.
+
+        Deliberately narrow, because the input is a regex over quoted phrases. A
+        finding needs all three: the phrase is not a heading *here*, it is a
+        heading *somewhere*, and the owning document's id is not already beside
+        it. A reference that names its document is what the fix looks like, so
+        recognising it is what keeps the check quiet once acted on.
+
+        **Only headings unique to one document count.** Dropping that, the first
+        run reported two findings and both were wrong: `Resolution` is a heading
+        in dozens of issues, so quoting the word at all was enough to trip it,
+        and where several documents share a name the "it lives in X" clause
+        picked one arbitrarily and named the wrong document. A check that cannot
+        say *which* document is not entitled to the sentence.
+        """
+        seen_in: dict[str, set[str]] = {}
+        for doc in documents:
+            for heading in scan_headings(doc.body):
+                seen_in.setdefault(heading.text, set()).add(doc.id)
+        owners = {name: next(iter(docs)) for name, docs in seen_in.items() if len(docs) == 1}
+
+        findings: list[LintFinding] = []
+        for doc in documents:
+            local = {h.text for h in scan_headings(doc.body)}
+            seen: set[str] = set()
+            for match in _QUOTED.finditer(doc.body):
+                name = match.group(1)
+                owner = owners.get(name)
+                if owner is None or owner == doc.id or name in local or name in seen:
+                    continue
+                if owner in doc.body[max(0, match.start() - _QUALIFY_WINDOW) : match.start()]:
+                    continue
+                seen.add(name)
+                findings.append(
+                    LintFinding(
+                        kind="unqualified-section-ref",
+                        message=(
+                            f"{doc.id!r} names the section {name!r} without saying where it "
+                            f"is — it lives in {owner!r}"
+                        ),
+                        doc_ids=(doc.id, owner),
+                    )
+                )
         return findings
 
     def _threshold_for(self, doc_type: str, schema: Schema | None) -> int:

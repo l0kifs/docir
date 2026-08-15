@@ -456,9 +456,12 @@ to leave alone.
   has checked*, not "up to date". `--refresh` asks PyPI now (docir's only network call, and
   it is skipped if the answer is already from today). Set `DOCIR_UPDATE_CHECK=1` to have the
   daemon keep it fresh and every command say on stderr when a newer docir is out.
-- `docir lint --deep` — Tier 2 advisories: duplicate content, oversized documents, and
+- `docir lint --deep` — Tier 2 advisories: duplicate content, oversized documents,
   **oversized sections** (a section the chunker has to split, so part of it is text no
-  heading can address). All advisory — a long reference table is often right as it is.
+  heading can address), **ambiguous headings** (used twice in one document, so a section
+  read reaches only the first), and **unqualified section references** (prose naming a
+  section that lives in another document). All advisory — a long reference table is often
+  right as it is.
 - `docir reindex [--changed]` — after a doc file was hand-edited, merged, or freshly cloned.
   `--changed` only skips re-saving files whose content is unchanged; deleted files are swept
   from the index either way, so both modes leave the index agreeing with the filesystem.

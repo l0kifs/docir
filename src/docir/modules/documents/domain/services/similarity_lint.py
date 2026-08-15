@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.schema import Schema
+from docir.modules.documents.domain.services.chunking import split_body
 from docir.platform.embedding.vector import Embedding
 
 
@@ -109,6 +110,48 @@ class SimilarityLinter:
                         doc_ids=(doc.id,),
                     )
                 )
+        return findings
+
+    def find_oversized_sections(self, documents: list[Document]) -> list[LintFinding]:
+        """Flag sections the chunker has to split, and so cannot fully address.
+
+        Not a taste threshold: the check *runs the splitter* and reports what it
+        actually produced. A section over :data:`MAX_CHUNK_CHARS` is cut into
+        pieces, and only the first keeps the heading — so the rest is text that
+        `context` can retrieve but `matched_section` can never name and
+        ``get --section`` will not return on its own. The number behind it is
+        derived from the measured model window (adr-927aa43d9635), which is why
+        this check has no threshold of its own to tune.
+
+        Tier 2 on purpose, and it stays there. A long section is a *smell*: a
+        reference table split in half is two half-tables, and the fix for one of
+        those is to leave it alone — the same argument ``max_body_chars`` exists
+        for (issue-5d6a5e854d11). It reports the shape and lets a human decide.
+        """
+        findings: list[LintFinding] = []
+        for doc in documents:
+            heading, orphaned = "", 0
+            counts: list[tuple[str, int]] = []
+            for chunk in split_body(doc.body):
+                if chunk.heading:
+                    if orphaned:
+                        counts.append((heading, orphaned))
+                    heading, orphaned = chunk.heading, 0
+                elif heading:
+                    orphaned += 1
+            if orphaned:
+                counts.append((heading, orphaned))
+            findings += [
+                LintFinding(
+                    kind="oversized-section",
+                    message=(
+                        f"{doc.id!r} section {name!r} is split into {pieces + 1} chunks — "
+                        f"{pieces} of them nothing can address by heading"
+                    ),
+                    doc_ids=(doc.id,),
+                )
+                for name, pieces in counts
+            ]
         return findings
 
     def _threshold_for(self, doc_type: str, schema: Schema | None) -> int:

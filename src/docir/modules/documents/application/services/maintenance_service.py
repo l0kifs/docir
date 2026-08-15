@@ -400,6 +400,10 @@ class MaintenanceService:
             linked = {frozenset((rel.source, rel.target)) for rel in uow.documents.relations()}
         findings = self._linter.find_duplicates(vectors, linked)
         findings.extend(self._linter.find_scope_creep(documents, self._schema))
+        # Reads the bodies already loaded above, not the stored chunks: the
+        # answer must describe the document as it is now, not as it was when
+        # the embedding queue last drained.
+        findings.extend(self._linter.find_oversized_sections(documents))
         return findings
 
     # -- helpers ------------------------------------------------------------

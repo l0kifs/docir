@@ -74,7 +74,8 @@ characters. A longer section is split mid-paragraph, and the pieces retrieve
 worse than either would alone.
 
 - Keep a section under ~1,200 characters — roughly 200 words, or three short
-  paragraphs. That is the size docir chunks at.
+  paragraphs. That is the size docir chunks at, and `docir lint --deep` reports
+  each section it had to split, and how much of it no heading can address.
 - Give it a heading that names its subject: the heading is what a reader passes
   to `docir get adr-0007 --section "Context"`. "Notes" is not a subject.
 - Prefer several short sections to one long one. Short ones are separately

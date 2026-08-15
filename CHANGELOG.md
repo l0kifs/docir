@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- **`docir lint --deep` reports `oversized-section`.** A section past the chunk ceiling is split
+  and only the first piece keeps the heading, so the rest is text `context` can retrieve but
+  `matched_section` can never name and `get --section` will not return on its own. The check runs
+  the splitter and reports what it produced — which section, and how many pieces are unaddressable
+  — so it has no threshold of its own to tune. Advisory, like every Tier 2 finding: a long
+  reference table is frequently right as it is.
+
 ### Fixed
 
 - **A short section before a long one no longer erases the long one's heading from the index.**

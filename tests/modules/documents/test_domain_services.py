@@ -11,6 +11,7 @@ from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.entities.relation import Relation
 from docir.modules.documents.domain.schema import RelationKindSchema, Schema, TypeSchema
 from docir.modules.documents.domain.services import code_globs
+from docir.modules.documents.domain.services.chunking import MAX_CHUNK_CHARS, split_body
 from docir.modules.documents.domain.services.graph_checks import GraphChecker
 from docir.modules.documents.domain.services.markdown_sections import (
     append_section,
@@ -647,6 +648,44 @@ class TestSimilarityLinter:
         findings = SimilarityLinter(similarity_threshold=0.9).find_duplicates(vectors, [])
         assert [f.kind for f in findings] == ["duplicate"]
         assert findings[0].doc_ids == ("a", "b")
+
+    def test_a_section_within_the_window_is_not_flagged(self) -> None:
+        body = "## Context\n\n" + "x" * (MAX_CHUNK_CHARS - 20) + "\n"
+        assert SimilarityLinter().find_oversized_sections([_doc("adr-0001", body=body)]) == []
+
+    def test_a_split_section_is_flagged_with_what_it_cost(self) -> None:
+        # Not a taste threshold: the check runs the splitter and reports what
+        # came out, so the number behind it is the measured model window.
+        body = "## Context\n\n" + "\n\n".join(["y" * 900] * 3) + "\n"
+        findings = SimilarityLinter().find_oversized_sections([_doc("adr-0001", body=body)])
+        assert [f.kind for f in findings] == ["oversized-section"]
+        assert "'Context'" in findings[0].message
+        assert findings[0].doc_ids == ("adr-0001",)
+
+    def test_the_count_it_reports_is_the_chunker_s_own(self) -> None:
+        """A guard that recomputes the answer cannot drift from the thing it describes."""
+        body = "## Context\n\n" + "\n\n".join(["y" * 900] * 5) + "\n"
+        doc = _doc("adr-0001", body=body)
+        findings = SimilarityLinter().find_oversized_sections([doc])
+        unaddressable = sum(1 for c in split_body(doc.body) if not c.heading and c.ordinal > 0)
+        assert unaddressable > 1, "the fixture stopped exercising a multi-way split"
+        assert f"{unaddressable} of them" in findings[0].message
+
+    def test_a_preamble_is_not_blamed_on_a_section(self) -> None:
+        # Text before the first heading has no heading to lose, so splitting it
+        # costs no address and must not be reported as if it did.
+        body = "\n\n".join(["y" * 900] * 3) + "\n\n## Context\n\nshort.\n"
+        assert SimilarityLinter().find_oversized_sections([_doc("adr-0001", body=body)]) == []
+
+    def test_each_split_section_is_reported_separately(self) -> None:
+        long_text = "\n\n".join(["y" * 900] * 2)
+        body = f"## One\n\n{long_text}\n\n## Two\n\n{long_text}\n"
+        findings = SimilarityLinter().find_oversized_sections([_doc("adr-0001", body=body)])
+        assert len(findings) == 2
+        assert "'One'" in findings[0].message and "'Two'" in findings[1].message
+
+    def test_a_bodyless_document_is_silent(self) -> None:
+        assert SimilarityLinter().find_oversized_sections([_doc("adr-0001", body="")]) == []
 
     def test_scope_creep_flagged(self) -> None:
         big = _doc("adr-0001", body="x" * 10)

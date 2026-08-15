@@ -60,6 +60,7 @@ files and the derived index never disagree.
   nothing moved *or* when the store has no baseline: absent means unknown, not unchanged.
   `reindex` is the only writer of that baseline.
 - `MaintenanceService.lint_deep() -> [LintFinding]` — Tier 2 advisory findings
+  (`duplicate`, `scope-creep`, `oversized-section`); never blocking
 - `MaintenanceService.reindex_embeddings()/flush_embeddings() -> int`
 - `load_schema(path) -> Schema` — load the per-type document schema. Rejects a status name no
   type declares (transition target, `default_status`, `inactive_statuses` entry), and a

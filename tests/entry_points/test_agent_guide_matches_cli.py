@@ -467,7 +467,10 @@ REPO_INVOCATIONS = [
         ("CLAUDE.md", "docir get arch-1cfb1b212237"),
         ("CLAUDE.md", "docir add --type decision"),
         # The store: a fenced block, a table cell, and an inline span each.
-        ("arch-1cfb1b212237", "docir check"),
+        # `docir check` anchors the CLI-surface document rather than the spine:
+        # the architecture split moved the command vocabulary out of the latter,
+        # and an anchor is only worth having where the content actually lives.
+        ("arch-7fd54a82f7d6", "docir check"),
         ("arch-1cfb1b212237", "docir reindex"),
         ("run-", "docir build --out"),
     ],

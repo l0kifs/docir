@@ -10,7 +10,7 @@ runbooks and the gap register are documents in the project store (`.docir/docs/`
 them through the CLI rather than by path:
 
 ```bash
-docir get arch-1cfb1b212237        # Doc-Index CLI — Architecture (design rationale)
+docir get arch-1cfb1b212237        # Doc-Index CLI — Architecture (the shape; links the five below)
 docir get arch-322e5f992ad2        # Architecture Rules — Modular DDD (the module rules)
 docir query --type decision        # every ADR (a document's id is its only address)
 docir context "<what you are about to change>"   # ranked skeletons, no bodies

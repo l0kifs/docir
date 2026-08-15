@@ -42,6 +42,13 @@ paths that existed before the migration:
 | `docs/adr/ADR-0011-semantic-embeddings-by-default.md` | `adr-ab9c454b760c` | [decisions/…semantic-embeddings…](../.docir/docs/decisions/adr-ab9c454b760c-semantic-embeddings-on-by-default.md) |
 | `docs/architecture-rules.md` | `arch-322e5f992ad2` | [architectures/…architecture-rules…](../.docir/docs/architectures/arch-322e5f992ad2-architecture-rules-modular-ddd.md) |
 | `docs/doc-index-architecture.md` | `arch-1cfb1b212237` | [architectures/…doc-index-cli…](../.docir/docs/architectures/arch-1cfb1b212237-doc-index-cli-architecture.md) |
+
+That last one is now the shape only — the principle, the layer map and the
+daemon. The pipeline it used to describe in one 52,000-character body is five
+documents, each linked from it and each reachable on its own: `arch-39314a23ba7f`
+(file format), `arch-0368cc754c15` (write path), `arch-03eeae8bf37d` (read path),
+`arch-ad342aae8293` (validation tiers), `arch-7fd54a82f7d6` (CLI surface).
+
 | `docs/PUBLISHING.md` | `run-30aceb4eacc6` | [runbooks/…publishing-to-pypi…](../.docir/docs/runbooks/run-30aceb4eacc6-publishing-to-pypi.md) |
 | `docs/ai-code-check-checklist.md` | `run-22e0a6ce6ae1` | [runbooks/…ai-code-check-checklist…](../.docir/docs/runbooks/run-22e0a6ce6ae1-ai-code-check-checklist.md) |
 | `docs/COMPETITORS.md` | `ref-a6db21f52427` | [references/…competitive-landscape…](../.docir/docs/references/ref-a6db21f52427-competitive-landscape-docir-vs-the-alternatives-2026-08-03.md) |

@@ -57,7 +57,7 @@ replacing FTS5 outright — lexical matches are still valuable and cheap.
 
 ### Where it runs
 
-entirely inside the daemon (see above), so the model
+entirely inside the daemon (`arch-1cfb1b212237`, "Daemon process"), so the model
 is loaded once and reused; per-call added latency is on the order of
 single-digit to tens of milliseconds, not the cold-start cost of loading
 the model fresh.
@@ -176,7 +176,7 @@ read path:
   already fixed needs exactly that. (`--include-resolved` is the old spelling,
   still accepted; it named a status only two types have.)
 - `docir archive` goes further, removing a document from active search entirely
-  (see "Archiving vs. deletion") — for volume rather than for status.
+  (see `arch-0368cc754c15`, "Archiving vs. deletion") — for volume rather than for status.
 
 **There is exactly one visibility predicate, and expansion runs both ways.**
 `DocumentService._is_visible` (archived + inactive status) is called by the

@@ -43,7 +43,7 @@ tags:
 - testing
 title: Discovery probe log — PROBE-1..N and the delta pass
 type: reference
-updated: '2026-08-05'
+updated: '2026-08-15'
 ---
 
 # Run log — append-only
@@ -223,7 +223,7 @@ Attribution was tested, not assumed: each fix was reverted in isolation and the 
 re-run, to confirm they fail against the old behaviour (`assert 9 == 3` for issue-996b567e5131;
 8 concurrent adds colliding for issue-389dc5dac58a).
 
-### Findings produced BY these changes
+### Findings produced BY these changes (2026-07-26)
 
 ```
 GAP-040  the shipped agent guide told agents to run a flag that does not exist; nothing
@@ -334,7 +334,7 @@ failed (`_is_visible` → the resolved-neighbour leak; the incoming lookup → t
 successor). The third test, the `--include-resolved` escape hatch, passed under both reverts,
 which is what makes it an independent check rather than a restatement of the first.
 
-### Findings produced BY these changes
+### Findings produced BY these changes (2026-07-27)
 
 ```
 GAP-046  the benchmark cannot see either fix. Both change retrieval semantics; every

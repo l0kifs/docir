@@ -36,69 +36,92 @@ renewal strategy"). `fastembed` (ONNX-based, quantized, CPU-only, no
 external API call — consistent with the project's privacy-first stance
 elsewhere) closes this gap without pulling in heavy ML dependencies.
 
-- **Storage:** a document vector over `title` + `description` + body,
-  **plus one vector per `##` section** — see "Semantic index: every section
-  is embedded" below for why the document vector alone was not enough. Both
-  are BLOBs in SQLite; each row records the model that produced it, so
-  switching embedder recomputes rather than comparing vectors of different
-  widths. The agent-authored `description` gives the document vector a
-  concise, high-signal summary to anchor on, improving retrieval over
-  embedding raw body text alone. Brute-force cosine similarity is sufficient
-  at this scale (hundreds to low thousands of documents) — no ANN index
-  needed.
-- **`docir context` scoring:** combines FTS5 BM25 score and cosine
-  similarity (e.g. weighted sum or reciprocal rank fusion) rather than
-  replacing FTS5 outright — lexical matches are still valuable and cheap.
-- **Where it runs:** entirely inside the daemon (see above), so the model
-  is loaded once and reused; per-call added latency is on the order of
-  single-digit to tens of milliseconds, not the cold-start cost of loading
-  the model fresh.
-- **Recompute triggers:** the embedding is tied to *what changed*, not to
-  every `docir update` call — recomputing on metadata-only changes (e.g. a
-  status transition) would be wasted work with no benefit:
-  - `docir add` → embedding scheduled (new document).
-  - `docir update` changing `title`, `description`, or the body
-    (`--append-section`, `--replace-section`, `--replace-body`) →
-    embedding scheduled.
-  - `docir update` touching only other frontmatter fields (`--status`,
-    `--tags`, `related`) → embedding left untouched.
-  - `docir archive` / deletion → the vector is removed from the index along
-    with its FTS and relation rows, so an archived/deleted document can't
-    resurface via similarity search or Tier 2 DRY checks.
+### Storage
 
-- **Async recompute (not on the write's critical path):** an agent rarely
-  writes a document in a single call — it does `docir add` then several
-  `--append-section` edits over a long session. Recomputing the vector
-  synchronously on each write would re-embed the same document repeatedly
-  and put model inference on the write path, serializing the agent's rapid
-  successive calls behind it. Instead, two levels of consistency are
-  separated:
-  - **Synchronous, immediately consistent:** file write, metadata, FTS5,
-    relations. Cheap, and search correctness depends on it — ready by the
-    time the command returns.
-  - **Deferred, eventually consistent (embeddings only):** a content
-    change sets an `embedding_dirty` flag on the row (persisted in SQLite,
-    so it survives a daemon crash/restart) and returns immediately. A
-    background worker inside the daemon drains dirty rows with a short
-    **debounce** window (a few seconds), coalescing a burst of edits to
-    one document into a single recompute.
+a document vector over `title` + `description` + body,
+**plus one vector per `##` section** — see "Semantic index: every section
+is embedded" below for why the document vector alone was not enough. Both
+are BLOBs in SQLite; each row records the model that produced it, so
+switching embedder recomputes rather than comparing vectors of different
+widths. The agent-authored `description` gives the document vector a
+concise, high-signal summary to anchor on, improving retrieval over
+embedding raw body text alone. Brute-force cosine similarity is sufficient
+at this scale (hundreds to low thousands of documents) — no ANN index
+needed.
 
-- **Consistency window:** between the write and the vector being ready, the
-  document is still found via FTS (lexically) — the semantic contribution
-  simply joins a few seconds later. A brand-new document is FTS-only until
-  its vector lands; an updated one temporarily keeps its previous vector.
-  On daemon restart, the worker re-embeds anything still flagged dirty, so
-  nothing is silently lost.
+### docir context scoring
 
-- **Escape hatch:** `--wait-embeddings` on a write, or `docir embed --flush`,
-  forces a synchronous recompute when a semantically-heavy query must run
-  immediately afterward (e.g. in tests).
-- **Model version changes:** if the embedding model is upgraded, existing
-  vectors become stale; `docir reindex --embeddings` recomputes them all,
-  same fallback pattern as the existing `docir reindex`.
-- **Also powers Tier 2 DRY linting** (`docir lint --deep`): the same
-  vectors are reused to flag content-similarity across documents, so
-  there's no duplicate infrastructure for search vs. lint.
+combines FTS5 BM25 score and cosine
+similarity (e.g. weighted sum or reciprocal rank fusion) rather than
+replacing FTS5 outright — lexical matches are still valuable and cheap.
+
+### Where it runs
+
+entirely inside the daemon (see above), so the model
+is loaded once and reused; per-call added latency is on the order of
+single-digit to tens of milliseconds, not the cold-start cost of loading
+the model fresh.
+
+### Recompute triggers
+
+the embedding is tied to *what changed*, not to
+every `docir update` call — recomputing on metadata-only changes (e.g. a
+status transition) would be wasted work with no benefit:
+- `docir add` → embedding scheduled (new document).
+- `docir update` changing `title`, `description`, or the body
+  (`--append-section`, `--replace-section`, `--replace-body`) →
+  embedding scheduled.
+- `docir update` touching only other frontmatter fields (`--status`,
+  `--tags`, `related`) → embedding left untouched.
+- `docir archive` / deletion → the vector is removed from the index along
+  with its FTS and relation rows, so an archived/deleted document can't
+  resurface via similarity search or Tier 2 DRY checks.
+
+### Async recompute (not on the write's critical path)
+
+an agent rarely
+writes a document in a single call — it does `docir add` then several
+`--append-section` edits over a long session. Recomputing the vector
+synchronously on each write would re-embed the same document repeatedly
+and put model inference on the write path, serializing the agent's rapid
+successive calls behind it. Instead, two levels of consistency are
+separated:
+- **Synchronous, immediately consistent:** file write, metadata, FTS5,
+  relations. Cheap, and search correctness depends on it — ready by the
+  time the command returns.
+- **Deferred, eventually consistent (embeddings only):** a content
+  change sets an `embedding_dirty` flag on the row (persisted in SQLite,
+  so it survives a daemon crash/restart) and returns immediately. A
+  background worker inside the daemon drains dirty rows with a short
+  **debounce** window (a few seconds), coalescing a burst of edits to
+  one document into a single recompute.
+
+### Consistency window
+
+between the write and the vector being ready, the
+document is still found via FTS (lexically) — the semantic contribution
+simply joins a few seconds later. A brand-new document is FTS-only until
+its vector lands; an updated one temporarily keeps its previous vector.
+On daemon restart, the worker re-embeds anything still flagged dirty, so
+nothing is silently lost.
+
+### Escape hatch
+
+`--wait-embeddings` on a write, or `docir embed --flush`,
+forces a synchronous recompute when a semantically-heavy query must run
+immediately afterward (e.g. in tests).
+
+### Model version changes
+
+if the embedding model is upgraded, existing
+vectors become stale; `docir reindex --embeddings` recomputes them all,
+same fallback pattern as the existing `docir reindex`.
+
+### Also powers Tier 2 DRY linting
+
+(`docir lint --deep`): the same
+vectors are reused to flag content-similarity across documents, so
+there's no duplicate infrastructure for search vs. lint.
 
 ## Semantic index: every section is embedded
 

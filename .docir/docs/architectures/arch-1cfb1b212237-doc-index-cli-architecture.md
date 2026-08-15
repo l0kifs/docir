@@ -81,12 +81,14 @@ The CLI remains a thin, stateless client from the user's/agent's perspective
 (`docir <command> ...`), but underneath it delegates to a long-lived local
 background worker instead of doing heavy work cold on every invocation.
 
-**Why:** the dominant cost of adding a semantic layer is not the embedding
+### Why
+
+the dominant cost of adding a semantic layer is not the embedding
 computation itself but reloading the ONNX model into memory on every process
 start — hundreds of milliseconds to over a second per call if done cold. A
 persistent process keeps the model warm and serializes writes.
 
-**Lifecycle:**
+### Lifecycle
 
 1. On first invocation of any command, the CLI checks for a running daemon: a
    pid file under `DOCIR_HOME` and a Unix socket. The socket is **not** under
@@ -107,7 +109,9 @@ persistent process keeps the model warm and serializes writes.
 6. An idle timeout (`DOCIR_IDLE_TIMEOUT`, 900s) keeps it from lingering as a
    forgotten background process.
 
-**It also watches `docs/`.** Hand-editing a file is permitted, and the window
+### It also watches docs/
+
+Hand-editing a file is permitted, and the window
 between an edit and a `docir reindex` was one where every read answered from a
 stale index with nothing saying so. Automating it is safe only because the files
 are canonical: reindex writes no markdown, so it can only make the index agree
@@ -119,14 +123,18 @@ reindex failures on purpose: a half-written file is normal (editors save in two
 steps) and the next batch fixes it, while an exception would end the thread
 silently, leaving a daemon that looks healthy and has stopped watching.
 
-**A daemon that does not match the installed code is replaced.** It loads docir
+### A daemon that does not match the installed code is replaced
+
+It loads docir
 once and lives on, so after an upgrade or an edit under `src/` it kept answering
 from the old build — and a stale answer imitates a correct one. The pid file
 records a stamp of the version plus the newest mtime across the package, and a
 mismatch stops and respawns. The stamp a running daemon reports is the one it
 *started with*, not what is on disk now.
 
-**Reaching the socket and waiting for the reply are timed separately**, and only
+### Reaching the socket and waiting for the reply are timed separately
+
+, and only
 one is retryable. The connect is bounded at 5s, because a local `AF_UNIX`
 connect succeeds at once or not at all; the reply is bounded by
 `DOCIR_REQUEST_TIMEOUT` (300s), because it only arrives after the work is done

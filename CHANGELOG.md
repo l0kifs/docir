@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A `##` inside a fenced code block is no longer read as a section heading.** The chunker
+  already skipped fences; the section read/edit path did not, so a document quoting a markdown
+  template disagreed with itself. `docir get <id> --section` returned a fragment ending in an
+  *unclosed* fence, an unknown-heading error listed phantom headings as real, and
+  `docir update <id> --replace-section` ended the span at the phantom boundary — writing the
+  replacement and stranding the rest of the quote at top level, reporting success. All three
+  paths now read one shared fence-aware scanner. Run `docir reindex --embeddings` after
+  upgrading: chunk boundaries change for any document that quotes a fenced heading.
+
 ### Added
 
 - **`docir agent install --agent claude-writing` — a second, opt-in skill covering how to write

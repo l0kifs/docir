@@ -5,15 +5,16 @@ rules (append at end, replace under a heading, read one back) are unit-testable
 in isolation. :func:`extract_section` and :func:`replace_section` share one
 notion of where a section ends, which is what keeps ``get --section X`` and
 ``update --replace-section X`` talking about the same span of the file.
+
+That span is located with :func:`~.markdown_headings.scan_headings`, the same
+scanner :mod:`chunking` splits on — so a heading quoted inside a fenced block is
+not a section here either (issue-af046a467575).
 """
 
 from __future__ import annotations
 
-import re
-
+from docir.modules.documents.domain.services.markdown_headings import scan_headings
 from docir.platform.errors import ValidationError
-
-_HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
 
 
 def _reject_own_markers(heading: str) -> None:
@@ -66,22 +67,25 @@ def _locate_section(body: str, heading: str) -> tuple[list[str], int, int]:
     """
     lines = body.splitlines()
     target = heading.strip().lower()
-    for index, line in enumerate(lines):
-        match = _HEADING_RE.match(line)
-        if match and match.group(2).strip().lower() == target:
-            return lines, index, len(match.group(1))
+    for found in scan_headings(body):
+        if found.text.lower() == target:
+            return lines, found.line, found.level
 
     available = section_headings(body)
     listed = ", ".join(repr(name) for name in available) if available else "none"
     raise ValidationError(f"no section {heading!r} in this document; available: {listed}")
 
 
-def _section_end(lines: list[str], start_idx: int, start_level: int) -> int:
-    """The line index where a section ends: the next heading of equal/higher level."""
-    for index in range(start_idx + 1, len(lines)):
-        match = _HEADING_RE.match(lines[index])
-        if match and len(match.group(1)) <= start_level:
-            return index
+def _section_end(body: str, lines: list[str], start_idx: int, start_level: int) -> int:
+    """The line index where a section ends: the next heading of equal/higher level.
+
+    A heading inside a fenced block is not one, so a section that quotes a
+    markdown template runs past it to the real boundary. Ending the span early
+    is what let ``replace_section`` strand the rest of the quote at top level.
+    """
+    for found in scan_headings(body):
+        if found.line > start_idx and found.level <= start_level:
+            return found.line
     return len(lines)
 
 
@@ -94,7 +98,7 @@ def replace_section(body: str, heading: str, content: str) -> str:
     if no such heading exists.
     """
     lines, start_idx, start_level = _locate_section(body, heading)
-    end_idx = _section_end(lines, start_idx, start_level)
+    end_idx = _section_end(body, lines, start_idx, start_level)
 
     new_lines = [
         *lines[: start_idx + 1],
@@ -113,11 +117,7 @@ def section_headings(body: str) -> list[str]:
     named does not exist — a "no such section" error that does not list the real
     ones just moves the search into another round trip.
     """
-    return [
-        match.group(2).strip()
-        for line in body.splitlines()
-        if (match := _HEADING_RE.match(line)) is not None
-    ]
+    return [found.text for found in scan_headings(body)]
 
 
 def extract_section(body: str, heading: str) -> str:
@@ -138,5 +138,5 @@ def extract_section(body: str, heading: str) -> str:
     how someone finds it and repairs it.
     """
     lines, start_idx, start_level = _locate_section(body, heading)
-    end_idx = _section_end(lines, start_idx, start_level)
+    end_idx = _section_end(body, lines, start_idx, start_level)
     return "\n".join(lines[start_idx:end_idx]).strip() + "\n"

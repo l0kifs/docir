@@ -31,12 +31,10 @@ The rule (adr-927aa43d9635):
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import NamedTuple
 
-_HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
-_FENCE_RE = re.compile(r"^\s*(```|~~~)")
+from docir.modules.documents.domain.services.markdown_headings import scan_headings
 
 #: Sections shorter than this are merged into the following one. A heading plus
 #: a single sentence is not worth a vector of its own, and merging keeps the
@@ -122,20 +120,17 @@ def split_body(body: str) -> list[Chunk]:
 def _split_on_headings(body: str) -> list[tuple[str, str]]:
     """``(heading, text)`` pairs, cutting at level-2-or-deeper headings.
 
-    Tracks fenced code blocks so a ``##`` comment inside one is never mistaken
-    for a heading — the single case where a naive line scan silently corrupts
-    every chunk boundary after it.
+    The cut points come from :func:`~.markdown_headings.scan_headings`, which
+    skips fenced code blocks — a ``##`` comment inside one is not a heading, and
+    cutting there yields two chunks that are each invalid. The section-edit path
+    reads the same scanner, so what gets embedded and what ``get --section``
+    returns cannot describe different spans (issue-af046a467575).
     """
+    cuts = {found.line: found.text for found in scan_headings(body) if found.level >= SPLIT_LEVEL}
     sections: list[tuple[str, list[str]]] = [("", [])]
-    in_fence = False
-    for line in body.splitlines():
-        if _FENCE_RE.match(line):
-            in_fence = not in_fence
-            sections[-1][1].append(line)
-            continue
-        match = None if in_fence else _HEADING_RE.match(line)
-        if match is not None and len(match.group(1)) >= SPLIT_LEVEL:
-            sections.append((match.group(2).strip(), []))
+    for index, line in enumerate(body.splitlines()):
+        if (heading := cuts.get(index)) is not None:
+            sections.append((heading, []))
             continue
         sections[-1][1].append(line)
     return [

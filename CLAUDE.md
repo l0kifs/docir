@@ -348,6 +348,15 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   diverge, or an agent can read one span and overwrite another), and an unknown heading raises
   *listing the real ones*, because discovering them by fetching the whole body is the cost the flag
   removes.
+  **All three — read, write and chunk — take their headings from one scanner,
+  `markdown_headings.scan_headings`, and a heading inside a fenced block is not one**
+  (issue-af046a467575). `markdown_sections` used to scan lines naively while `chunking` tracked
+  fences, so a document quoting a markdown template read as sections the embedder never saw:
+  `--section` returned a fragment ending in an *unclosed* fence, and `--replace-section` ended the
+  span at the phantom boundary and stranded the rest of the quote at top level — a corrupted body,
+  reported as success. Do not give any of the three its own heading regex; the two agreeing is the
+  invariant, and `test_markdown_headings.py` asserts set **equality** against the shared scanner
+  because an earlier subset assertion passed with the divergence reintroduced.
 - **Every section is embedded, because the model never read the whole body (adr-927aa43d9635).**
   `bge-small-en-v1.5` reads ~512 tokens (~1,900 chars of prose) and silently ignores the rest —
   appending text past it returns a bit-identical vector. 84 of docir's own 103 documents exceed

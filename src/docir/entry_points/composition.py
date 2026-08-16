@@ -24,8 +24,10 @@ from docir.modules.agents.api import InstalledFile, UpdateRequest, build_agent_s
 from docir.modules.documents.api import (
     ID_STYLES,
     PROFILE_NAMES,
+    ConformanceReport,
     DocumentService,
     MaintenanceService,
+    check_schema_conformance,
     load_schema,
     render_schema_yaml,
 )
@@ -302,6 +304,34 @@ index.db-shm
 daemon.pid
 daemon.log
 """
+
+
+@dataclass(frozen=True)
+class SchemaValidation:
+    """The outcome of ``docir schema validate`` — the file, and what it costs.
+
+    Two answers in one object because they are two halves of one question.
+    Whether the file parses is a property of the file; whether the corpus still
+    fits it is a property of the pair, and it is the half that used to go
+    unreported at exactly the moment it mattered (issue-3678c897295f).
+    """
+
+    path: Path
+    types: int
+    corpus: ConformanceReport
+
+
+def validate_schema(settings: Settings) -> SchemaValidation:
+    """Load the schema and measure the documents on disk against it.
+
+    Deliberately builds no container: ``build_container`` opens an engine and
+    runs migrations, and this command has to stay reachable for a store too
+    broken to start. The file store is the only adapter it needs, and reading
+    files is all it does.
+    """
+    schema = load_schema(settings.schema_path)
+    corpus = check_schema_conformance(schema, MarkdownDocumentFileStore(settings.docs_root))
+    return SchemaValidation(path=settings.schema_path, types=len(schema.types), corpus=corpus)
 
 
 @dataclass(frozen=True)

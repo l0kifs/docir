@@ -24,6 +24,11 @@ from docir.modules.documents.application.services.maintenance_service import (
     MaintenanceService,
     ReindexResult,
 )
+from docir.modules.documents.application.services.schema_conformance import (
+    ConformanceFinding,
+    ConformanceReport,
+    check_schema_conformance,
+)
 from docir.modules.documents.infra.default_schema import (
     DEFAULT_ID_STYLE,
     DEFAULT_SCHEMA_YAML,
@@ -40,6 +45,8 @@ __all__ = [
     "ID_STYLES",
     "PROFILE_NAMES",
     "AddDocumentRequest",
+    "ConformanceFinding",
+    "ConformanceReport",
     "ContextRequest",
     "DocumentService",
     "DocumentSummary",
@@ -50,6 +57,7 @@ __all__ = [
     "RelatedView",
     "SearchRequest",
     "UpdateDocumentRequest",
+    "check_schema_conformance",
     "describe_schema",
     "load_schema",
     "render_schema_yaml",

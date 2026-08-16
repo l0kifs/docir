@@ -240,6 +240,12 @@ def render_repair(
         console.print("\n[green]no findings remain[/]")
 
 
+def _count(entry: object) -> int:
+    """A finding's ``count``, tolerant of a payload that has been round-tripped."""
+    value = entry.get("count") if isinstance(entry, Mapping) else None
+    return value if isinstance(value, int) else 0
+
+
 def _join(value: object) -> str:
     """Comma-join an unknown-typed sequence value for display."""
     if isinstance(value, list | tuple):
@@ -319,13 +325,48 @@ def _format_transitions(value: object) -> str:
     return "; ".join(parts) or "[dim]terminal[/]"
 
 
-def render_schema_valid(path: str, type_count: int) -> None:
-    """Confirm a schema file parsed and merged cleanly.
+def render_schema_valid(result: Mapping[str, object]) -> None:
+    """Confirm a schema file parsed, and say what it costs the corpus.
+
+    Takes the same payload the JSON branch emits — the convention `render_init`
+    follows — so the two views cannot report different numbers.
 
     ``soft_wrap`` keeps a long store path on one line — Rich's default hard wrap
     breaks it mid-token, which makes the path unusable when copied.
+
+    The corpus lines are yellow, never red, and never change the exit code: the
+    file is valid and the documents are what moved. They go to stdout with the
+    rest of the result because they *are* the result — the person who just
+    edited the schema is the one who needs them.
     """
-    console.print(f"[green]schema valid[/] [dim]({type_count} types)[/] {path}", soft_wrap=True)
+    console.print(
+        f"[green]schema valid[/] [dim]({result.get('types')} types)[/] {result.get('path')}",
+        soft_wrap=True,
+    )
+    unreadable = result.get("unreadable") or 0
+    if isinstance(unreadable, int) and unreadable:
+        console.print(
+            f"[yellow]{unreadable} file(s) under the docs root do not parse[/] "
+            f"[dim]and were not measured — `docir check` names them[/]"
+        )
+    findings = result.get("findings")
+    documents = result.get("documents")
+    if not isinstance(findings, Sequence) or not findings:
+        console.print(f"[dim]{documents} document(s) conform[/]")
+        return
+    rows = [entry for entry in findings if isinstance(entry, Mapping)]
+    console.print(
+        f"[yellow]{result.get('affected')} of {documents} document(s) do not fit this schema[/]"
+    )
+    for entry in rows:
+        count = _count(entry)
+        sample = entry.get("sample")
+        listed = _join(sample)
+        more = count - (len(sample) if isinstance(sample, list | tuple) else 0)
+        if more > 0:
+            listed = f"{listed}, +{more} more" if listed else f"{more} more"
+        console.print(f"  [yellow]{entry.get('kind')}[/] [bold]{count}[/] [dim]{listed}[/]")
+    console.print("[dim]`docir check` lists them all; the schema itself is fine[/]")
 
 
 def render_init(result: Mapping[str, object]) -> None:

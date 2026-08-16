@@ -246,6 +246,12 @@ docir schema show                   # the merged result — what validation enfo
 docir schema validate               # check an edit before it reaches a write
 ```
 
+`schema validate` answers two things: whether the file loads, and what it costs the
+corpus — how many documents carry a type, status, required field or relation kind this
+schema no longer accepts. It reads the files rather than the index, so it works on a
+fresh clone, and it never changes the exit code: the schema is valid, and the documents
+are what moved.
+
 Ids are random by default (`adr-3f9a2b1c7d4e`), which two branches can never mint
 identically. `--id-style sequential` trades that for human-friendly `adr-0007` numbering,
 collision-free within one store — a merge can bring two branches that allocated the same

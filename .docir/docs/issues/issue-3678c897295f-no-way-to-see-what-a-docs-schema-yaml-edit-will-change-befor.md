@@ -10,15 +10,16 @@ id: issue-3678c897295f
 owner: maintainer
 related:
 - adr-2a3f625bb2f8
-- issue-d891ab5501e6
 - adr-bd3a820cc57a
-status: open
+- issue-d891ab5501e6
+- adr-dbe6633405ca
+status: resolved
 tags:
 - cosmetic
 - schema
 title: No way to see what a docs-schema.yaml edit will change before it lands
 type: issue
-updated: '2026-08-08'
+updated: '2026-08-16'
 ---
 
 **Class:** missing · **Severity:** cosmetic
@@ -73,3 +74,15 @@ bounded, since `schema-drift` reports the change on the very next `check`.
 - `src/docir/modules/documents/domain/services/schema_shape.py` — the renderer and the differ both exist
 - `src/docir/config/settings.py:124` — the only mention of `.git`, and it is directory detection
 - `src/docir/entry_points/cli/app.py:529` — the shell pipes git in; docir does not call it
+
+## Resolution
+
+Half of this is built: `docir schema validate` now reports what the schema in
+the file costs the corpus, which is the question that actually gets asked while
+editing it. See adr-dbe6633405ca for the design and for the properties it has to
+keep (files not index, no database, no exit code change).
+
+The other half — comparing against the schema at a git ref — stays unbuilt, for
+the reason argued above: it needs docir to read git objects, which it has never
+done. Nothing in the built half needs history, since the schema in the file and
+the documents on disk are both present.

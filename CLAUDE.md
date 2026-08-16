@@ -429,6 +429,21 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   guessing). It deliberately does **not** consult the corpus — schema resolution knows
   nothing about documents, and stranding documents on a disabled type is a supported move
   reported as `unknown-type` + `schema-drift`, exactly as disabling a profile already was.
+- **`docir schema validate` reports what the schema costs the corpus, and never gates on it
+  (issue-3678c897295f).** The command run immediately after a schema edit used to answer only
+  "does this file parse?", so it said `valid: true` while a corpus left the type system.
+  Four properties are load-bearing. It runs **`GraphChecker.check_schema_conformance`**, which
+  `check` also calls — the four findings a *schema* edit can cause; a second list of check
+  names is the `is_absent` failure again, one command calling a document conforming that the
+  other refuses. It reads the **files, not the index**: a schema edit is a hand edit, which is
+  when the index is behind, and a fresh clone has none at all. It opens **no database**, which
+  is what preserves `schema validate`'s existing property of being reachable for a store too
+  broken to start — do not "simplify" it through `build_container`. And the **exit code does
+  not move**: the file is valid and the documents are what changed, so gating here would
+  red-build every repo mid-migration — the state a correct migration passes through. The graph
+  findings are deliberately excluded: `orphan` fires for every unlinked document, which would
+  bury the answer under the default state of a healthy corpus. `affected` counts distinct
+  documents, not findings — summing per-kind counts printed "14 of 8 document(s)".
 - **`update --type` retypes a document, and every rule about it is load-bearing
   (adr-f8cce745d0d5).** **The id is never re-minted**, prefix included: it is the corpus's
   only address, spelled out in every `related` edge pointing at the document, so a prefix

@@ -322,6 +322,13 @@ docir schema validate    # check docs-schema.yaml before it reaches a write
 adding a **profile** over inline types; add inline `types:` only for something
 no profile covers. Run `docir schema validate` after every edit.
 
+`schema validate` answers two questions: whether the file loads, and **what it
+costs the corpus** — how many documents carry a type, status, required field or
+relation kind the schema no longer accepts, with a sample of their ids. Check
+that number before you commit a schema edit; it is the one thing `git diff`
+cannot show you, since the core and profiles merge in at load. It never changes
+the exit code — the schema is valid, and the documents are what moved.
+
 Three keys are **required** on every type — omitting any is a `SchemaError`:
 
 | key | type | notes |

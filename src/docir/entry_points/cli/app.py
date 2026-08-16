@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from dataclasses import asdict
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -34,9 +35,11 @@ from docir.entry_points.cli.runner import (
 from docir.entry_points.composition import (
     DEFAULT_INIT_ID_STYLE,
     InitResult,
+    SchemaValidation,
     UpgradeResult,
     initialize_store,
     upgrade_store,
+    validate_schema,
 )
 from docir.entry_points.daemon.cmds import daemon_app
 from docir.entry_points.federation import LOCAL_ONLY_KEY
@@ -332,15 +335,36 @@ def schema_validate() -> None:
     `experiment.complete`, `hypothesis.supported`, `obligation.breached` — every
     one a correct terminal state for a document that stays relevant. A warning
     that fires on the product's own defaults is issue-40d1792bc9f9 again.
+
+    It also reports what the schema costs the corpus: how many documents carry a
+    type, status, required field or relation kind this schema does not accept.
+    That is `docir check`'s answer, given by the command you actually run after
+    editing the schema — which used to say `valid: true` while a corpus fell out
+    of the type system. The exit code does not change: the file is valid, and it
+    is the documents that have moved. Read from the files rather than the index,
+    since a schema edit is a hand edit and that is exactly when the index is
+    behind.
     """
     settings = get_state().settings
-    schema = run_local(lambda: load_schema(settings.schema_path))
-    data = {"valid": True, "path": str(settings.schema_path), "types": len(schema.types)}
+    payload = _validation_payload(run_local(lambda: validate_schema(settings)))
     state = get_state()
     if use_json(state):
-        rendering.emit_json(data, trim=state.trim)
+        rendering.emit_json(payload, trim=state.trim)
     else:
-        rendering.render_schema_valid(str(settings.schema_path), len(schema.types))
+        rendering.render_schema_valid(payload)
+
+
+def _validation_payload(result: SchemaValidation) -> dict[str, object]:
+    """`docir schema validate` as JSON. `valid` stays first and stays a bool."""
+    return {
+        "valid": True,
+        "path": str(result.path),
+        "types": result.types,
+        "documents": result.corpus.documents,
+        "unreadable": result.corpus.unreadable,
+        "affected": result.corpus.affected,
+        "findings": [asdict(finding) for finding in result.corpus.findings],
+    }
 
 
 # -- write path -------------------------------------------------------------

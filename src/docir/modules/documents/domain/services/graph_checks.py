@@ -120,10 +120,7 @@ class GraphChecker:
         would otherwise report every pattern in it as missing.
         """
         issues: list[CheckIssue] = []
-        issues.extend(self._find_unknown_type(documents))
-        issues.extend(self._find_unknown_status(documents))
-        issues.extend(self._find_missing_required(documents))
-        issues.extend(self._find_unknown_relation_kind(relations))
+        issues.extend(self.check_schema_conformance(documents, relations))
         if known_tags is not None:
             issues.extend(self._find_unknown_tag(documents, known_tags))
             issues.extend(self._find_tag_key_format(known_tags))
@@ -135,6 +132,35 @@ class GraphChecker:
             issues.extend(self._find_stale(documents, today))
         if code_matches is not None:
             issues.extend(self._find_unmatched_code(documents, code_matches))
+        return issues
+
+    def check_schema_conformance(
+        self, documents: list[Document], relations: list[Relation]
+    ) -> list[CheckIssue]:
+        """The findings that measure documents against the **schema** alone.
+
+        Split out of :meth:`check` because a second caller needs exactly these
+        and none of the rest: ``docir schema validate`` reports what the schema
+        in the file costs the corpus, at the moment someone edits it. The graph
+        findings are irrelevant there — ``orphan`` fires for every document with
+        no relations, so including them would bury the answer in the default
+        state of a healthy corpus.
+
+        ``check`` calls this rather than repeating the list, so the two cannot
+        answer differently about the same document. That is the same rule
+        ``is_absent`` follows across Tier 0 and Tier 1: a corpus reported as
+        conforming by one and refused by the other is the worst outcome
+        available.
+
+        These four and no others because these are the four a *schema* edit can
+        cause. ``unknown-tag`` measures the tag registry, which is a different
+        file that no schema change moves.
+        """
+        issues: list[CheckIssue] = []
+        issues.extend(self._find_unknown_type(documents))
+        issues.extend(self._find_unknown_status(documents))
+        issues.extend(self._find_missing_required(documents))
+        issues.extend(self._find_unknown_relation_kind(relations))
         return issues
 
     def _find_unmatched_code(

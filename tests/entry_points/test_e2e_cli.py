@@ -572,3 +572,70 @@ class TestRetypeThroughTheCli:
         result = run("update", "adr-0001", "--type", "product_decision")
         assert result.exit_code != 0
         assert "--status" in (result.stderr or "")
+
+
+class TestSchemaValidateReportsTheCorpus:
+    """`schema validate` says what the schema costs (issue-3678c897295f).
+
+    It used to answer only "does this file parse?", so the command a person runs
+    straight after editing the schema reported `valid: true` while a corpus fell
+    out of the type system. The exit code deliberately does not move: the file
+    is valid, and it is the documents that have changed underneath it.
+    """
+
+    _RENAMED = (
+        "profiles: [software]\n"
+        "disable_types: [decision]\n"
+        "types:\n"
+        "  product_decision:\n"
+        "    prefix: adr\n"
+        "    default_status: draft\n"
+        "    statuses:\n"
+        "      draft: [active]\n"
+        "      active: []\n"
+    )
+
+    @staticmethod
+    def _seed(count: int) -> None:
+        for n in range(count):
+            result = run("add", "--type", "decision", "--title", f"D{n}", "--description", "d")
+            assert result.exit_code == 0
+
+    def test_a_healthy_corpus_reports_conforming(self, settings: Settings) -> None:
+        self._seed(2)
+        payload = json.loads(run("schema", "validate").stdout)
+        assert payload["valid"] is True
+        assert payload["documents"] == 2
+        assert payload.get("findings") in (None, [])
+
+    def test_it_names_the_documents_a_schema_edit_stranded(self, settings: Settings) -> None:
+        self._seed(3)
+        settings.schema_path.write_text(self._RENAMED, encoding="utf-8")
+        result = run("schema", "validate")
+        payload = json.loads(result.stdout)
+        assert result.exit_code == 0  # the schema is fine; the corpus moved
+        assert payload["affected"] == 3
+        assert [f["kind"] for f in payload["findings"]] == ["unknown-type"]
+        assert payload["findings"][0]["count"] == 3
+
+    def test_the_exit_code_still_moves_for_a_broken_schema(self, settings: Settings) -> None:
+        # The command's original job is untouched: a file that will not load is
+        # still SchemaError's exit code, not a corpus report.
+        settings.schema_path.parent.mkdir(parents=True, exist_ok=True)
+        settings.schema_path.write_text("profiles: [nonsense]\n", encoding="utf-8")
+        assert run("schema", "validate").exit_code == 3
+
+    def test_it_works_with_no_index_at_all(self, settings: Settings) -> None:
+        # The point of reading files: a fresh clone has no index (it is
+        # gitignored), and that is exactly when someone edits the schema.
+        self._seed(2)
+        settings.db_path.unlink(missing_ok=True)
+        payload = json.loads(run("schema", "validate").stdout)
+        assert payload["documents"] == 2
+
+    def test_the_human_view_reports_the_same_numbers(self, settings: Settings) -> None:
+        self._seed(3)
+        settings.schema_path.write_text(self._RENAMED, encoding="utf-8")
+        out = run("--pretty", "schema", "validate").stdout
+        assert "3 of 3 document(s) do not fit this schema" in out
+        assert "unknown-type" in out

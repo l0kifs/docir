@@ -77,6 +77,16 @@ files and the derived index never disagree.
   and its prefix** (adr-f8cce745d0d5); it is refused when it names a type the schema does not
   define, one the same file declares inline, or all of them.
 - `describe_schema(Schema) -> dict` — the merged schema as plain data (`docir schema show`)
+- `check_schema_conformance(Schema, DocumentFileStore) -> ConformanceReport` — what a schema
+  costs the corpus, for `docir schema validate` (issue-3678c897295f). Runs
+  `GraphChecker.check_schema_conformance` — the four Tier 1 findings a *schema* edit can cause
+  (`unknown-type`/`unknown-status`/`missing-required`/`unknown-relation-kind`), which `check`
+  calls too so the two cannot disagree. Reads the **files**, not the index, and opens no
+  database: a schema edit is a hand edit, which is exactly when the index is behind, and
+  `schema validate` must stay reachable for a store too broken to start.
+  `ConformanceReport.affected` counts distinct documents, not findings; `documents` and
+  `unreadable` are reported always, since "0 findings" over a corpus that would not parse is
+  otherwise indistinguishable from a clean one. Advisory: it never changes an exit code.
 - `MaintenanceService.repair() -> RepairResult` — fix the mechanically-fixable Tier 1 damage:
   re-issue duplicate ids (oldest file keeps the id) and drop dead `related` edges. `malformed`,
   `unknown-type` and `unmatched-code` need a human — only they know whether the glob is stale

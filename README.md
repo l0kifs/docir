@@ -9,7 +9,8 @@
 
 [![PyPI](https://img.shields.io/pypi/v/docir)](https://pypi.org/project/docir/) [![Python](https://img.shields.io/pypi/pyversions/docir)](https://pypi.org/project/docir/) [![CI](https://img.shields.io/github/actions/workflow/status/l0kifs/docir/ci.yml?branch=main)](https://github.com/l0kifs/docir/actions) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-[Quickstart](#quickstart) · [Why not just…](#why-not-just) · [The model](#the-model) · [Commands](#commands) · [Going further](#going-further) · [Live site](https://l0kifs.github.io/docir/index.html)
+[The idea](#the-idea) · [Quickstart](#quickstart) · [Why not just…](#why-not-just) · [The model](#the-model) · [Editing by hand](#what-you-may-edit-by-hand) · [Commands](#commands) · [Conventions](#conventions)<br />
+[Reaching docir](#two-ways-an-agent-reaches-docir) · [Schema](#schema-core--profiles) · [Upgrading](#upgrading) · [Going further](#going-further) · [Architecture](#architecture) · [Support](#support) · [Contributing](#contributing) · [License](#license) · [Live site](https://l0kifs.github.io/docir/index.html)
 
 <br />
 
@@ -42,6 +43,9 @@ index (metadata + FTS5 full-text + a typed relation graph + semantic embeddings)
 
 ## Quickstart
 
+**Requirements.** Python 3.12+ and [uv](https://docs.astral.sh/uv/) (or pipx). Linux, macOS
+or Windows — everything runs locally, and only the first-run model download needs network.
+
 ```bash
 # 1. install  (~240 MB of deps; a 64 MB embedding model downloads on first use, once —
 #              the only step that needs network. DOCIR_EMBEDDER=deterministic opts out.)
@@ -64,32 +68,19 @@ docir context "implement a new auth endpoint"
 ```
 
 In a terminal, `docir context` prints ranked, body-less **skeletons** — frontmatter and
-typed edges, no body — so you scan wide, then fetch a body by id with `docir get`:
-
-```console
-$ docir context "implement a new auth endpoint"
-┏━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━┓
-┃ id         ┃ type     ┃ status   ┃ title              ┃ description                      ┃ score ┃
-┡━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━┩
-│ adr-0001   │ decision │ proposed │ Auth strategy      │ How the service authenticates    │ 0.033 │
-│            │          │          │                    │ API clients.                     │       │
-│ issue-0001 │ issue    │ open     │ Token refresh race │ Refresh token race under         │ 0.016 │
-│            │          │          │                    │ concurrent logins.               │       │
-└────────────┴──────────┴──────────┴────────────────────┴──────────────────────────────────┴───────┘
-```
-
-Built for agents, though: when the output is **captured** (stdout isn't a TTY), the same
-command emits **compact, trimmed JSON** — no borders, empty fields dropped, ~40% fewer tokens:
+typed edges, no body — so you scan wide, then fetch a body by id with `docir get`. Built
+for agents, though: when the output is **captured** (stdout isn't a TTY), the same command
+emits **compact, trimmed JSON** — no borders, empty fields dropped, ~40% fewer tokens:
 
 ```console
 $ docir context "implement a new auth endpoint" | cat
 [{"id":"adr-0001","title":"Auth strategy","description":"How the service authenticates API clients.","type":"decision","status":"proposed","tags":["auth"],"archived":false,"stale":false,"score":0.0328,"similarity":0.8951,"via_graph":false}, ...]
 ```
 
-*An absent field means its default (no owner, not stale). `score` fuses the full-text and
-vector rankings, so ordering is the point and the absolute value means little.
-`similarity` is the raw cosine against your query and does carry absolute meaning — it is
-what `--min-score` filters on, which is what makes an empty result a real answer.*
+An absent field means its default (no owner, not stale). `score` orders the results and
+means little on its own; `similarity` is the raw cosine against your query, and is what
+`--min-score` filters on — which is what makes an empty result a real answer. Both numbers
+are explained in [how to read a ranked result](https://l0kifs.github.io/docir/ref-0e14d7c32dbf.html).
 
 ## Why not just…
 
@@ -129,11 +120,10 @@ opts out, at a measured cost to recall:
   `docir query --code src/auth/login.py` asks it in reverse: which decisions govern the
   file I am editing. At review time,
   `docir query --code $(git diff --name-only origin/main...HEAD)` lists what a branch
-  should be read against — a notice, not a gate.
-- **A decision that can be enforced is enforced by a test.** Point `code` at the test that
-  fails when the code contradicts the decision, and CI already enforces it — in your
-  language, with your fixtures. docir ships no rule engine; it records the link and warns
-  when that test disappears.
+  should be read against — a notice, not a gate. Point `code` at the *test* that fails
+  when the code contradicts the decision and CI already enforces it, in your language
+  with your fixtures: docir ships no rule engine, it records the link and warns when
+  that test disappears.
 - **Only embeddings are deferred.** A content change flags the vector dirty and returns;
   the file, metadata, full-text index and relations are all current when the command
   returns. Force a flush with `--wait-embeddings`, `docir embed --flush`, or
@@ -158,8 +148,7 @@ outside change — so hand-editing is supported, but not on every field:
 It watches `.docir/docs/` and rebuilds what changed within a second of the edit, which
 is safe precisely because the files are canonical: a reindex only makes the index agree
 with them, and writes no markdown. `DOCIR_WATCH=0` turns it off; `--no-daemon` runs
-never watch, so CI still needs the explicit command. A hand-written `verified` date is
-the one thing nothing can verify, which is exactly why it should not be written by hand.
+never watch, so CI still needs the explicit command.
 
 ## Commands
 
@@ -190,6 +179,13 @@ check [--fix] · lint · reindex · embed · version
 daemon serve · mcp serve
 ```
 
+**Publishing.** `docir build --out site/` renders the store as a self-contained static site.
+`--title` names it (without it every page reads "Documentation"), `--logo` sets the mark and
+favicon, `--mermaid vendor/mermaid.min.js` draws fenced diagrams, `--include-archived` adds
+archived documents, `--force` overwrites a directory docir did not build.
+
+## Conventions
+
 **Where state lives.** Store precedence (highest first): `--home` → `DOCIR_HOME` → a
 project-local `.docir/` found by walking up from the CWD → the global `~/.docir`.
 `docir init` keeps docs with the code: `.docir/docs/` and `docs-schema.yaml` are
@@ -207,13 +203,6 @@ full-text index so one tag match cannot flood out the text matches. And `context
 paged: it returns a relevance-ranked set bounded by `--limit`, a token budget rather than
 a browse path.
 
-**Publishing.** `docir build --out site/` renders the store as a self-contained static
-site for the people who approve decisions. `--title` names it — without it every page
-reads "Documentation"; `--logo` sets the mark and the favicon; `--mermaid
-vendor/mermaid.min.js` draws fenced diagrams; `--include-archived` publishes archived
-documents; `--force` lets it overwrite a directory docir did not build. Flags, CI and the
-rest are in [the runbook](https://l0kifs.github.io/docir/run-6ab65e277573.html).
-
 ## Two ways an agent reaches docir
 
 Some agents run shell commands; some only call MCP tools. Both get the same vocabulary,
@@ -225,11 +214,11 @@ docir agent install                       # a Claude skill (AGENTS.md links it):
 claude mcp add docir -- docir mcp serve   # or the same commands as MCP tools
 ```
 
-`docir mcp serve` speaks stdio (what an MCP client spawns) or `--transport http`, and
-needs no extra — the MCP server ships with docir, because an agent that only speaks MCP
-cannot install the extra it would need to reach docir in the first place. `uvx docir mcp
-serve` runs it without installing anything. The tools are named `docir_context`,
-`docir_get`, `docir_add`, … and return the same body-less skeletons the CLI does.
+The MCP server ships inside docir — an agent that only speaks MCP could not install an
+extra to reach it. The tools are named `docir_context`, `docir_get`, `docir_add`, … and
+return the same body-less skeletons the CLI does. Transports, the writing skill and which
+path to choose are in
+[Connect an agent to docir](https://l0kifs.github.io/docir/run-00b9e9f30914.html).
 
 ## Schema: core + profiles
 
@@ -257,35 +246,12 @@ identically. `--id-style sequential` trades that for human-friendly `adr-0007` n
 collision-free within one store — a merge can bring two branches that allocated the same
 number, and `docir check` reports it as `duplicate-id`.
 
-### Renaming a type
-
 Merging only adds types, so `disable_types:` is how you give one up — and it is what frees
-that type's `prefix` for your own to claim, which is what lets a renamed corpus keep the
-ids it already has. Documents are then moved over one at a time; nothing is retyped for
-you, because only you know what each old status becomes.
-
-```yaml
-# docs-schema.yaml
-profiles: [software]
-disable_types: [decision]        # the name stops resolving, and `adr` is free
-types:
-  product_decision:
-    prefix: adr                  # the corpus keeps every adr-... id it has
-    default_status: draft
-    statuses: {draft: [active], active: []}
-```
-
-```bash
-docir schema validate
-docir query --type decision --limit 500 | jq -r '.[].id' \
-  | xargs -I{} docir update {} --type product_decision --status active
-docir reindex && docir check
-```
-
-Between the schema edit and the loop, `docir check` reports the not-yet-moved documents as
-`unknown-type` — a warning, so nothing is blocked. Retyping a document never changes its
-id: `adr-3f9a2b1c7d4e` stays itself under any type, because it is the only address every
-`related` edge has for it.
+that type's `prefix` for your own to claim, which is what lets a renamed corpus keep the ids
+it already has. Retyping never re-mints an id, because it is the only address every `related`
+edge has for the document. The schema edit, the migration loop and what `docir check` reports
+in between are in
+[Rename a document type](https://l0kifs.github.io/docir/run-781485012ad0.html).
 
 ## Upgrading
 
@@ -314,6 +280,9 @@ depth lives where an agent can retrieve it rather than in this file:
 | [Read across repositories](https://l0kifs.github.io/docir/run-45b267a709b4.html) | Federated reads over peers declared in `.docir/stores.yaml` — and why writes never federate |
 | [The embedding model](https://l0kifs.github.io/docir/ref-e7534f1c812d.html) | What it costs, what the fallback loses, why every section is embedded separately |
 | [Upgrade docir in a project](https://l0kifs.github.io/docir/run-f4a756206fe0.html) | `docir self upgrade`, schema drift, and what resyncs itself |
+| [Rename a document type](https://l0kifs.github.io/docir/run-781485012ad0.html) | `disable_types` frees the prefix, then documents are retyped one at a time — keeping every id |
+| [Connect an agent to docir](https://l0kifs.github.io/docir/run-00b9e9f30914.html) | The CLI skill or the bundled MCP server — transports, tool names, and why both answer identically |
+| [How to read a ranked result](https://l0kifs.github.io/docir/ref-0e14d7c32dbf.html) | `score` vs `similarity`, what `--min-score` filters, and the two hits it never drops |
 | [Every ADR and architecture note](https://l0kifs.github.io/docir/index.html) | The design rationale as documents — or `docir query --type decision` |
 
 ## Architecture
@@ -329,23 +298,30 @@ The design rationale and the module rules are themselves docir documents — run
 [`.docir/docs/architectures/`](.docir/docs/architectures/). [`docs/README.md`](docs/README.md)
 maps every pre-migration path to its id.
 
+## Support
+
+Questions and half-formed ideas go to
+[Discussions](https://github.com/l0kifs/docir/discussions); a reproducible bug goes to
+[Issues](https://github.com/l0kifs/docir/issues). Either way, every command prints JSON when
+its output is captured, so `docir check | cat` is already a complete report to paste.
+Anything exploitable goes through a private advisory instead — see the
+[security policy](.github/SECURITY.md).
+
 ## Contributing
 
 Issues and PRs welcome. docir dogfoods itself: its ADRs, architecture documents, runbooks
 and gap register live in its own store, so `docir context "what you are about to change"`
-is how you orient. Read the architecture rules and the ADRs (`docir query --type decision`)
-first — module boundaries are machine-checked by [tach](https://docs.gauge.sh) in CI,
-alongside lint, type-check, and a coverage gate. Every design deviation is recorded as an
-ADR, added with `docir add --type decision`, never by hand.
+is how you orient, and every design deviation is recorded as an ADR rather than written by
+hand. Module boundaries are machine-checked by [tach](https://docs.gauge.sh) in CI, alongside
+lint, type-check, dead-code scan, contract sync and a coverage gate.
 
 ```bash
 uv sync                                              # dev environment
-uv run python benchmarks/run.py                      # retrieval quality + token cost
-uv run python benchmarks/latency.py                  # read latency by corpus size + daemon mode
-uv run python benchmarks/tokens.py                   # token cost by corpus size, vs a grep baseline
 uv run pytest --cov=docir --cov-fail-under=90        # tests + coverage gate
-uv run ruff check . && uv run ty check && uv run tach check
 ```
+
+The full gate suite, the benchmark harnesses and the module rules are in
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

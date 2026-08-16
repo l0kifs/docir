@@ -145,7 +145,11 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   implementations back this: `InlineEmbeddingScheduler` (in-process/tests, drains synchronously so
   behaviour is deterministic) and `ThreadedEmbeddingScheduler` (daemon, debounced background thread).
   Anything that needs the vector *now* must flush: `--wait-embeddings` on a write, `docir embed
-  --flush`, or `docir reindex --embeddings`. Do not move embedding onto the synchronous write path.
+  --flush`, or a full `docir reindex` — which re-embeds every document it re-saves and reports the
+  count as `embeddings_recomputed`. There is no flag for "recompute the vectors too", and
+  adr-6a4718fa7a7d records why the one that existed was retired rather than repaired: it skipped
+  the rebuild instead of adding to it, so it recomputed exactly those vectors and wrote neither
+  the schema baseline nor the build stamp. Do not move embedding onto the synchronous write path.
 - **Ids are allocated from the DB counter (`id_sequences`), never by scanning files** — that is what
   keeps parallel agents from minting the same id. The claim only holds because the counter is
   bumped by **one atomic upsert** (`INSERT … ON CONFLICT DO UPDATE … RETURNING`, raw SQL in

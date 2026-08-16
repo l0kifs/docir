@@ -48,6 +48,9 @@ files and the derived index never disagree.
   either way the index ends up agreeing with the filesystem.
   `ReindexResult.documents_skipped` counts source files that would not parse: the scan is
   best-effort, so a partial rebuild must say so rather than look complete.
+  `ReindexResult.embeddings_recomputed` reports the drained queue: a rebuild re-embeds every
+  document it re-saves, and never said so — which is what let a "recompute the vectors" mode
+  look necessary (adr-6a4718fa7a7d).
 - `MaintenanceService.check() -> [CheckIssue]` — Tier 1 structural findings (incl. staleness,
   and `unknown-type`/`unknown-status`/`unknown-tag`, the three Tier 0 rules a hand-edit can
   bypass, plus `tag-key-format` for a registered key outside the shared grammar). Also
@@ -68,7 +71,10 @@ files and the derived index never disagree.
 - `MaintenanceService.lint_deep() -> [LintFinding]` — Tier 2 advisory findings
   (`duplicate`, `scope-creep`, `oversized-section`, `ambiguous-heading`,
   `unqualified-section-ref`); never blocking
-- `MaintenanceService.reindex_embeddings()/flush_embeddings() -> int`
+- `MaintenanceService.flush_embeddings() -> int` — drain the dirty queue (`docir embed --flush`).
+  A vector whose `model_id` no longer matches the active embedder counts as dirty, so this is
+  also what recomputes everything after an embedder switch. There is no separate "recompute
+  every vector" entry point (adr-6a4718fa7a7d).
 - `load_schema(path) -> Schema` — load the per-type document schema. Rejects a status name no
   type declares (transition target, `default_status`, `inactive_statuses` entry), and a
   `required:` entry naming a field no document can carry — both are unsatisfiable, and both are

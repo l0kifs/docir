@@ -11,7 +11,7 @@ tags:
 - architecture
 title: Doc-Index CLI — the read path
 type: architecture
-updated: '2026-08-15'
+updated: '2026-08-16'
 ---
 
 ## Read path
@@ -114,8 +114,12 @@ immediately afterward (e.g. in tests).
 ### Model version changes
 
 if the embedding model is upgraded, existing
-vectors become stale; `docir reindex --embeddings` recomputes them all,
-same fallback pattern as the existing `docir reindex`.
+vectors become stale — but nothing has to name them. Each row records the
+model that produced it, so a foreign `model_id` reads as dirty and
+`docir embed --flush` recomputes exactly those. A full `docir reindex`
+does it too, since it re-embeds every document it re-saves and reports
+the count as `embeddings_recomputed`; there is no separate flag for it
+(adr-6a4718fa7a7d).
 
 ### Also powers Tier 2 DRY linting
 

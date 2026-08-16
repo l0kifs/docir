@@ -193,8 +193,10 @@ class Dispatcher:
         return {"removed": key, "documents": list(stripped)}
 
     def _reindex(self, payload: Payload) -> object:
-        if _bool(payload, "embeddings"):
-            return {"embedded": self._maintenance.reindex_embeddings()}
+        # There is no `embeddings` key. It used to return here with vectors
+        # recomputed and neither stamp written, so a store that had just been
+        # reindexed still reported `stale-index-build`; the rebuild it skipped
+        # re-embeds everything anyway (adr-6a4718fa7a7d, issue-b24e14474820).
         result = self._maintenance.reindex(changed_only=_bool(payload, "changed_only"))
         return asdict(result)
 

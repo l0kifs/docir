@@ -17,7 +17,7 @@ tags:
 - agents
 title: Upgrade docir in a project
 type: runbook
-updated: '2026-08-09'
+updated: '2026-08-16'
 ---
 
 docir ships its schema, its agent instructions and its site templates inside the
@@ -32,16 +32,19 @@ daemon and its own schema baseline.
 
 ## What happens without you
 
-- **Migrations.** The composition root runs Alembic on every command, so the
-  first command after an upgrade brings the index schema forward.
-- **The daemon.** It loads docir once and would otherwise keep answering from
-  the old code — and a stale answer is indistinguishable from a correct one. The
-  pid file records a `CodeStamp` (`__version__` plus the newest mtime across the
-  package sources), and a client that does not match stops and respawns it.
+Two pieces of derived state carry on as if nothing changed, and neither
+announces itself:
+
+- **The daemon.** It loaded docir once and lives on, so after an upgrade it
+  keeps answering from the old code — and a stale answer is indistinguishable
+  from a correct one. The pid file records a `CodeStamp` (`__version__` plus the
+  newest mtime across the package sources), and a client that does not match
+  stops and respawns it.
 - **Embedding vectors.** Each row records the model that produced it; a foreign
   `model_id` reads as dirty rather than as a vector to compare against, so a
   changed model recomputes on the next write instead of raising a dimension
-  mismatch. Force it with `docir embed --flush` or `docir reindex --embeddings`.
+  mismatch. Force it with `docir embed --flush`, or let the full `docir reindex`
+  below do it — it re-embeds every document it re-saves (adr-6a4718fa7a7d).
 
 ## What you have to run
 

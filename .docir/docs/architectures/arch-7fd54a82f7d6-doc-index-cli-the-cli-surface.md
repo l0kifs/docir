@@ -11,7 +11,7 @@ tags:
 - architecture
 title: Doc-Index CLI — the CLI surface
 type: architecture
-updated: '2026-08-15'
+updated: '2026-08-16'
 ---
 
 ## CLI commands
@@ -45,7 +45,7 @@ Every command below exists in `docir --help`; the groups are `agent`, `daemon`,
 
 | Command | Purpose |
 |---|---|
-| `docir reindex [--changed] [--embeddings]` | Rebuild the index from the canonical files; read `documents_skipped` |
+| `docir reindex [--changed]` | Rebuild the index from the canonical files; re-embeds what it re-saves; read `documents_skipped` |
 | `docir check [--strict] [--strict-all] [--fix]` | Tier 1 structural findings; `--strict` is the CI gate (errors only), `--fix` repairs what needs no guess |
 | `docir lint --deep` | Tier 2 advisories (content similarity, scope creep) |
 | `docir embed --flush` | Force a synchronous recompute of dirty vectors |

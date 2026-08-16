@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **`docir reindex --embeddings` (breaking).** It selected a different operation rather than
+  widening the one it named: it recomputed every vector and returned *before* the rebuild,
+  writing neither the schema baseline nor the build stamp. So it did strictly less than the plain
+  command for the same money — measured at 59 s against a full rebuild's 55 s over 152
+  documents, because embedding dominates and both embed everything — and left `docir check`
+  reporting `stale-index-build` against a store that had just been reindexed, which reads as the
+  command having failed. 0.14.0's upgrade note told people to run it.
+  A rebuild re-embeds every document it re-saves, so nothing was left for a second mode to do,
+  and the case the flag was reached for is already covered: a vector records the model that
+  produced it and a foreign `model_id` reads as dirty, so `docir embed --flush` recomputes
+  everything after an embedder switch. The `embeddings` payload key and the MCP parameter are
+  gone with it; a leftover key is ignored rather than reviving the path. **Use `docir reindex`,
+  or `docir self upgrade`, which runs it.** (adr-6a4718fa7a7d)
+
+### Changed
+
+- **A reindex reports the vectors it recomputed.** `ReindexResult.embeddings_recomputed`, and
+  `, N vectors` in the human output. A rebuild always re-embedded everything it re-saved and
+  never said so, which is what made a separate flag look necessary in the first place.
+
 ## [0.14.0] - 2026-08-16
 
 The release that lets a corpus rename its own vocabulary, and that tells you what a schema edit
@@ -15,11 +37,12 @@ that quotes markdown is finally read the way it is written.
 
 ### Upgrade notes
 
-- **Run `docir self upgrade`, then `docir reindex --embeddings`.** The first rebuilds the index
-  and refreshes the generated agent files; the second is needed on top of it, because chunk
-  boundaries move for any document that quotes a fenced heading or has a short section sitting
-  before a long one, and a body whose text did not change is not otherwise re-embedded. Both are
-  index-only: no markdown is rewritten and no document's `updated` advances.
+- **Run `docir self upgrade`.** That is the whole upgrade: a full `docir reindex` re-embeds every
+  document, which is what this release needs, because chunk boundaries move for any document that
+  quotes a fenced heading or has a short section sitting before a long one. It is index-only — no
+  markdown is rewritten and no document's `updated` advances. (An earlier printing of this note
+  also asked for `docir reindex --embeddings`; that is redundant after a full reindex, and it does
+  not record the version stamp `check` reads.)
 - **Nothing else is required.** `update --type`, `disable_types:` and the widened
   `schema validate` are all opt-in; a store that uses none of them behaves exactly as it did in
   0.13.1. `schema validate`'s exit code has not moved — it still reports a valid file as valid.

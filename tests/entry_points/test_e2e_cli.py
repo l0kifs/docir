@@ -197,6 +197,15 @@ class TestMaintenanceCommands:
         assert run("embed", "--flush").exit_code == 0
         assert run("reindex").exit_code == 0
 
+    def test_reindex_has_no_embeddings_flag(self) -> None:
+        # It selected a path that skipped the rebuild and both stamps while
+        # recomputing exactly the vectors the rebuild recomputes anyway, so it
+        # was retired rather than repaired (adr-6a4718fa7a7d). A rebuild reports
+        # the count instead.
+        run("add", "--type", "decision", "--title", "A", "--description", "d")
+        assert run("reindex", "--embeddings").exit_code != 0
+        assert json.loads(run("--json", "reindex").stdout)["embeddings_recomputed"] >= 1
+
     def test_tag_rename_and_rm(self) -> None:
         _seed_tag()
         assert run("tag", "rename", "auth", "authn").exit_code == 0

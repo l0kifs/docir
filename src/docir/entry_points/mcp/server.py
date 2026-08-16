@@ -556,18 +556,21 @@ def build_mcp_server(
         return run.many("lint", {})
 
     @mcp.tool
-    def docir_reindex(changed_only: bool = False, embeddings: bool = False) -> dict[str, Any]:
+    def docir_reindex(changed_only: bool = False) -> dict[str, Any]:
         """Rebuild the derived index from the markdown files.
 
         The recovery path after anything edits the files out of band (a branch
         merge, a hand edit, a fresh clone — the index is gitignored). The files
         are canonical; this makes the index agree with them again.
 
+        Every document it re-saves is re-embedded before it returns, and
+        `embeddings_recomputed` says how many — so this is also how you
+        recompute every vector.
+
         Args:
             changed_only: Only reindex files whose content hash moved.
-            embeddings: Recompute every vector instead of reindexing metadata.
         """
-        return run.one("reindex", {"changed_only": changed_only, "embeddings": embeddings})
+        return run.one("reindex", {"changed_only": changed_only})
 
     @mcp.tool
     def docir_embed_flush() -> dict[str, Any]:

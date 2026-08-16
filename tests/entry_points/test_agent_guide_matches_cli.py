@@ -429,6 +429,7 @@ _DELIBERATELY_UNREAL: dict[tuple[str, ...], str] = {
     ("repair",): "the name of the gap `check --fix` closed, quoted in the issues that closed it",
     ("accept-schema",): "run-f4a756206fe0 records that this verb deliberately does not exist",
     ("reindex", "--all"): "the flag that never existed — the defect issue-87a27629f6a6 is about",
+    ("reindex", "--embeddings"): "adr-6a4718fa7a7d retires it; it and issue-b24e14474820 name it",
 }
 
 

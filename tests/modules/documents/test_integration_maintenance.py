@@ -140,8 +140,33 @@ class TestChangedReindexStillRemovesDeletions:
         assert dispatcher.dispatch("reindex", {})["documents_indexed"] == 1
 
 
-def test_reindex_embeddings(seeded: Dispatcher) -> None:
-    assert seeded.dispatch("reindex", {"embeddings": True})["embedded"] >= 1
+class TestARebuildIsHowVectorsAreRecomputed:
+    """There is no "recompute the vectors too" mode, and none is needed.
+
+    `reindex --embeddings` returned before the rebuild, so it recomputed exactly
+    the vectors a rebuild recomputes anyway and wrote neither the schema
+    baseline nor the build stamp — the 0.14.0 upgrade note told people to run it
+    (adr-6a4718fa7a7d, issue-b24e14474820).
+    """
+
+    def test_a_rebuild_reports_the_vectors_it_recomputed(self, seeded: Dispatcher) -> None:
+        # It always recomputed them and never said so, which is what made a
+        # separate flag look necessary.
+        assert seeded.dispatch("reindex", {})["embeddings_recomputed"] >= 1
+
+    def test_changed_re_embeds_nothing_when_nothing_moved(self, seeded: Dispatcher) -> None:
+        seeded.dispatch("reindex", {})
+        result = seeded.dispatch("reindex", {"changed_only": True})
+        assert result["documents_indexed"] == 0
+        assert result["embeddings_recomputed"] == 0
+
+    def test_a_leftover_embeddings_key_is_not_a_second_mode(self, seeded: Dispatcher) -> None:
+        # A caller still sending the retired key gets the rebuild, not the
+        # stamp-skipping path it used to select.
+        seeded.dispatch("reindex", {})
+        result = seeded.dispatch("reindex", {"changed_only": True, "embeddings": True})
+        assert result["documents_indexed"] == 0
+        assert result["embeddings_recomputed"] == 0
 
 
 def test_reindex_skips_malformed_file(dispatcher: Dispatcher, settings: Settings) -> None:
@@ -353,6 +378,22 @@ class TestAnIndexBuiltByCodeThatIsNoLongerInstalled:
         self._pretend_an_older_docir_built_it(uow_factory)
 
         dispatcher.dispatch("reindex", {})
+        kinds = {i["kind"] for i in dispatcher.dispatch("check", {})}
+        assert "stale-index-build" not in kinds
+
+    def test_no_reindex_payload_can_skip_the_stamp(
+        self, dispatcher: Dispatcher, uow_factory: Callable[[], UnitOfWork]
+    ) -> None:
+        # One payload could: `embeddings` selected a path that recomputed
+        # vectors and returned, so a store that had just been reindexed still
+        # reported a stale build and read as if the command had failed
+        # (issue-b24e14474820). The key is retired; sending it must not resurrect
+        # that path.
+        dispatcher.dispatch("add", {"type": "decision", "title": "A", "description": "d"})
+        dispatcher.dispatch("reindex", {})
+        self._pretend_an_older_docir_built_it(uow_factory)
+
+        dispatcher.dispatch("reindex", {"embeddings": True})
         kinds = {i["kind"] for i in dispatcher.dispatch("check", {})}
         assert "stale-index-build" not in kinds
 

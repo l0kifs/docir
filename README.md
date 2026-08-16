@@ -126,8 +126,8 @@ opts out, at a measured cost to recall:
   that test disappears.
 - **Only embeddings are deferred.** A content change flags the vector dirty and returns;
   the file, metadata, full-text index and relations are all current when the command
-  returns. Force a flush with `--wait-embeddings`, `docir embed --flush`, or
-  `docir reindex --embeddings`.
+  returns. Force a flush with `--wait-embeddings`, `docir embed --flush`, or a full
+  `docir reindex`, which re-embeds every document it re-saves and reports how many.
 
 ## What you may edit by hand
 

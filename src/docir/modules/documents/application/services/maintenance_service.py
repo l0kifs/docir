@@ -44,6 +44,11 @@ class ReindexResult:
     documents_removed: int
     tags_indexed: int
     documents_skipped: int = 0
+    #: Vectors recomputed before the run returned. A full reindex re-embeds
+    #: everything it re-saved, so this was always happening and simply went
+    #: unreported -- which is what let `--embeddings` look like the only way to
+    #: get it (issue-b24e14474820).
+    embeddings_recomputed: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +111,12 @@ class MaintenanceService:
         Files that do not parse are skipped (see :class:`ReindexResult`) and
         counted, so "rebuilt 12 documents" cannot quietly mean "of 13 on disk".
         ``docir check`` reports each one individually as a ``malformed`` finding.
+
+        A full rebuild re-embeds everything it re-saves, which is why there is
+        no "recompute the vectors too" mode: the one that existed skipped the
+        rebuild rather than adding to it, and so recomputed exactly these
+        vectors while writing neither the schema baseline nor the build stamp
+        (adr-6a4718fa7a7d, issue-b24e14474820).
         """
         with self._uow_factory() as uow:
             tags_indexed = self._reindex_tags(uow)
@@ -122,22 +133,13 @@ class MaintenanceService:
             # documents are read rather than what they must contain.
             uow.index_build.set(self._version)
             uow.commit()
-        self._scheduler.flush()
         return ReindexResult(
             documents_indexed=indexed,
             documents_removed=removed,
             tags_indexed=tags_indexed,
             documents_skipped=len(self._file_store.find_malformed()),
+            embeddings_recomputed=self._scheduler.flush(),
         )
-
-    def reindex_embeddings(self) -> int:
-        """Recompute every active document's vector (``docir reindex --embeddings``)."""
-        with self._uow_factory() as uow:
-            for document in uow.documents.all():
-                if not document.archived:
-                    uow.embeddings.mark_dirty(document.id)
-            uow.commit()
-        return self._scheduler.flush()
 
     def flush_embeddings(self) -> int:
         """Synchronously drain the embedding queue (``docir embed --flush``)."""

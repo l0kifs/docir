@@ -911,15 +911,19 @@ def reindex(
             help="Re-save only files whose content changed. Deletions are swept either way.",
         ),
     ] = False,
-    embeddings: Annotated[bool, typer.Option("--embeddings")] = False,
 ) -> None:
     """Rebuild the index from the canonical files.
 
     Source files that do not parse are skipped and counted as
     `documents_skipped`: a rebuild that quietly dropped a document used to look
     exactly like one that did not. `docir check` names each such file.
+
+    Every document this run re-saves is re-embedded before it returns, and
+    `embeddings_recomputed` says how many. So a full rebuild is also the way to
+    recompute every vector — there is no flag for that, because there was
+    nothing for one to add (adr-6a4718fa7a7d).
     """
-    data = execute("reindex", {"changed_only": changed, "embeddings": embeddings})
+    data = execute("reindex", {"changed_only": changed})
     skipped = data.get("documents_skipped") if isinstance(data, dict) else None
     if isinstance(skipped, int) and skipped:
         # stderr, so a captured JSON payload on stdout stays parseable.

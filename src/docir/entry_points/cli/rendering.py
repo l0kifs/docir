@@ -452,9 +452,13 @@ def render_upgrade(
             else f"[cyan]package[/]   {__version__} [dim](already the newest build)[/]"
         )
     skipped = reindex.get("documents_skipped")
+    embedded = reindex.get("embeddings_recomputed")
     console.print(
         f"[cyan]reindex[/]   {reindex.get('documents_indexed', 0)} documents, "
         f"{reindex.get('tags_indexed', 0)} tags"
+        # The vectors were always recomputed here; saying so is what stops the
+        # next reader reaching for `reindex --embeddings` on top (issue-b24e14474820).
+        + (f", {embedded} vectors" if embedded else "")
         + (f"  [yellow]{skipped} skipped[/]" if skipped else "")
     )
     render_setup(agents)

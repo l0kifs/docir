@@ -26,7 +26,7 @@ tags:
 - persistence
 title: Keep the corpus trustworthy (maintenance, CI, staleness)
 type: architecture
-updated: '2026-08-15'
+updated: '2026-08-16'
 ---
 
 ## Backbone
@@ -46,7 +46,7 @@ review stale docs → re-verify → (repair?)
 | 5 | StaleFlagged | system | past `review_days` since `verified`/`updated` | graph_checks.py:84-111 |
 | 6 | DocumentReVerified | ACT-007 | `docir update <id> --verified` | document_service.py:341-342 |
 | 7 | AdvisoryLinted | ACT-002 | `docir lint --deep` | maintenance_service.py:126-134 |
-| 8 | EmbeddingsRebuilt | ACT-002 | `docir reindex --embeddings` / `docir embed --flush` | maintenance_service.py:71-82 |
+| 8 | EmbeddingsRebuilt | ACT-002 | `docir embed --flush`, or any full `docir reindex` | maintenance_service.py:71-82 |
 | 9 | UnmatchedCodeFlagged | system | a governed `code:` glob matches nothing on disk | graph_checks.py:124-166, maintenance_service.py:159-169 |
 
 ### Why event 0 is numbered from zero

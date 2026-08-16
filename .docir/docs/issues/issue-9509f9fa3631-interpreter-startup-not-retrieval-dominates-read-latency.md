@@ -18,7 +18,7 @@ tags:
 - material
 title: Interpreter startup, not retrieval, dominates read latency
 type: issue
-updated: '2026-08-14'
+updated: '2026-08-16'
 ---
 
 ## What was measured
@@ -152,3 +152,49 @@ a fresh measurement.
 The floor is now `pydantic` + `pydantic_settings` (~276ms, from `config/settings.py`, needed by
 every command) and docir's own 130 modules (~190ms). Removing pydantic-settings from `Settings` is
 a design change, not a lazy import, and it should be prototyped and measured before it is chosen.
+
+## Candidate 1 was measured and rejected (2026-08-16)
+
+Deferring `composition` out of `cli/runner.py` module scope moves nothing on its own, and
+the reason is `cli/app.py`: it imports `composition` at module scope too, for `init` /
+`schema validate` / `self upgrade`, and `DEFAULT_INIT_ID_STYLE` is a Typer parameter
+default — evaluated at import, so no lazy import reaches it.
+
+Both halves were applied together (the constant inlined to make the experiment run), then
+reverted. Same machine and docir 0.13.1; the floor reproduced at 0.53 against the 0.49
+recorded on 2026-08-14.
+
+| measure | before | after |
+|---|---|---|
+| `import docir.entry_points.cli.app`, min of 9 | 416 ms | 375 ms |
+| modules loaded by `docir version` | 657 | 646 |
+
+`benchmarks/latency.py --sizes 25 --samples 15`, p50 seconds:
+
+| command | mode | before | after |
+|---|---|---|---|
+| `context` | warm daemon | 0.515 | 0.551 |
+| `search` | warm daemon | 0.538 | 0.568 |
+| `get` | warm daemon | 0.536 | 0.561 |
+| `version` | floor | 0.539 | 0.530 |
+
+Every warm p50 moved *up*, inside the ~0.15s this benchmark already documents as noise.
+The ~40 ms is real, and only visible at import scope.
+
+## Why candidate 1 is spent
+
+`composition`'s expensive imports are `documents.api`, `tags.api` and `agents.api` — and
+`app.py` imports those *directly*, for its Typer defaults (`ID_STYLES`, `PROFILE_NAMES`,
+`AGENT_NAMES`, `DEFAULT_TAG_PAGE`, `DEFAULT_CONTEXT_EXPAND`). Those are evaluated when the
+command tree is built, so they cannot be deferred without moving the constants. Deferring
+`composition` therefore drops ~10 modules, not a graph: the SQLAlchemy fix above already
+took everything this candidate was pointing at, and what was left of it is docir's own
+modules under a different name.
+
+Keeping the change would also mean relocating `DEFAULT_INIT_ID_STYLE` out of
+`composition` — a public name, so a `CONTRACT.md` change — to buy ~40 ms that no
+end-to-end measurement can see. Same verdict and the same rule as the `rich` half: do not
+retry without a fresh measurement.
+
+This does not touch **What is left**: `pydantic-settings` and docir's own ~130 modules are
+still the floor, and still the only remaining candidates.

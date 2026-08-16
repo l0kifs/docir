@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-08-17
+
+`docir self upgrade` cost a minute on a 300-document store and spent 96% of it recomputing
+vectors identical to the ones already in the index. It now rebuilds in full only when the
+index was built by a different version — which is the only time a full rebuild has anything
+to do.
+
+### Upgrade notes
+
+- **Run `docir self upgrade`.** This release stamps nothing new and rewrites no markdown; the
+  rebuild happens because the version moved, and it is the last slow one. Every upgrade after
+  this that finds nothing to upgrade takes about a second.
+- **Nothing else is required.** No migration, no flag retired, no document rewritten.
+  `reindex` output gains a key and the human line gains a number.
+
+### Changed
+
+- **`docir self upgrade` resyncs instead of always rebuilding.** It reads the version stamp
+  the index carries and takes the full path only when some other build wrote it. Measured on a
+  315-document store: **65 s → 1.5 s** when the running build already indexed it, and 62 s
+  when it did not — the expensive path is kept, because a release that changes how documents
+  are read (chunk boundaries, the embedder) needs exactly that pass. The decision is the stamp
+  rather than "did this invocation install a package", which is blind to a docir upgraded out
+  of band. A skipped rebuild now says so, since a bare `0 documents` reads like a failure.
+  (issue-cfeb6eaa31cc)
+- **`docir check --fix` stopped paying the same price.** Its repair reindexed in full before
+  allocating ids, and again after re-issuing duplicates; both are now changed-only, which is
+  all that "make the index agree with the files" ever needed. 59.8 s → ~1 s on the same store.
+- **A reindex reports vectors *and* documents.** 0.15.0 added the count and printed it as
+  `N vectors`, but the number counts documents — the queue is keyed by document while each one
+  writes a vector of its own plus one per `##` section, so a rebuild that wrote 1,326 vectors
+  reported "315 vectors". `ReindexResult.vectors_written` carries the real figure and the line
+  now reads `315 re-embedded (1326 vectors)`. `embeddings_recomputed` keeps meaning documents,
+  and `docir embed --flush` keeps `embedded` as documents with `vectors` beside it, so nothing
+  reading either key silently starts getting a 4x larger number.
+
+### Added
+
+- **`benchmarks/maintenance.py`** — the write path had no instrument, which is how a
+  minute-long command went unreported while `benchmarks/latency.py` measured reads. It times
+  reindex (full and changed), both upgrade paths, check, `check --fix`, `embed --flush` and
+  build, and measures the embedding share by re-running the same rebuild against the
+  model-free embedder rather than asserting it. Batching and thread-tuning the model were
+  measured and rejected: the shipped default is the fastest configuration on the hardware
+  tested.
+
 ## [0.15.0] - 2026-08-16
 
 A one-change release: the flag that claimed to recompute your vectors is gone, because the
@@ -1528,7 +1574,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/l0kifs/docir/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/l0kifs/docir/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/l0kifs/docir/compare/v0.13.1...v0.14.0
 [0.13.1]: https://github.com/l0kifs/docir/compare/v0.13.0...v0.13.1

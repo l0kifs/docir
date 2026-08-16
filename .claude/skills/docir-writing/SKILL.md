@@ -2,7 +2,7 @@
 name: docir-writing
 description: How to write the documents themselves — name each concept the same way everywhere, give one document one purpose, state each fact once and link to it instead of repeating it, and keep sections short enough to retrieve. Load whenever you are about to write, restructure, split or review a docir document's title, description or body. It governs the content; the docir skill governs the CLI.
 ---
-<!-- docir:v0.15.0 — generated file, do not edit by hand; refresh with `docir agent update` after upgrading docir -->
+<!-- docir:v0.16.0 — generated file, do not edit by hand; refresh with `docir agent update` after upgrading docir -->
 
 # docir — Writing Rules
 

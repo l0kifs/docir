@@ -222,7 +222,10 @@ class Dispatcher:
         return [asdict(finding) for finding in self._maintenance.lint_deep()]
 
     def _embed_flush(self, _payload: Payload) -> object:
-        return {"embedded": self._maintenance.flush_embeddings()}
+        drained = self._maintenance.flush_embeddings()
+        # `embedded` keeps meaning documents — it always did, and a client
+        # reading it must not silently start getting a 4x larger number.
+        return {"embedded": drained.documents, "vectors": drained.vectors}
 
 
 # -- payload coercion helpers ----------------------------------------------

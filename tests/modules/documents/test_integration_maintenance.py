@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Callable
 from contextlib import closing
 
@@ -149,10 +150,43 @@ class TestARebuildIsHowVectorsAreRecomputed:
     (adr-6a4718fa7a7d, issue-b24e14474820).
     """
 
-    def test_a_rebuild_reports_the_vectors_it_recomputed(self, seeded: Dispatcher) -> None:
-        # It always recomputed them and never said so, which is what made a
-        # separate flag look necessary.
+    def test_a_rebuild_reports_the_documents_it_re_embedded(self, seeded: Dispatcher) -> None:
+        # It always re-embedded them and never said so, which is what made a
+        # separate flag look necessary. The count is documents, not vectors —
+        # the queue is keyed by document, and each writes one per `##` section
+        # as well as its own.
         assert seeded.dispatch("reindex", {})["embeddings_recomputed"] >= 1
+
+    def test_vectors_written_is_the_real_vector_count(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        """The document count could not say why a rebuild takes a minute.
+
+        Embedding is ~96% of a rebuild and is linear in *vectors*, so reporting
+        315 documents for 1,326 vectors understated the work 4x — and the line
+        used to call that number "vectors" outright. Asserted against the rows
+        actually in the index rather than against `1 + len(sections)` recomputed
+        here, which would only prove the arithmetic agrees with itself.
+        """
+        dispatcher.dispatch(
+            "add",
+            {
+                "type": "decision",
+                "title": "Sectioned",
+                "description": "d",
+                "body": "## One\n\nalpha\n\n## Two\n\nbeta\n\n## Three\n\ngamma",
+            },
+        )
+        result = dispatcher.dispatch("reindex", {})
+        with closing(sqlite3.connect(settings.db_path)) as conn:
+            stored = (
+                conn.execute("SELECT COUNT(*) FROM embeddings WHERE vector IS NOT NULL").fetchone()[
+                    0
+                ]
+                + conn.execute("SELECT COUNT(*) FROM chunk_embeddings").fetchone()[0]
+            )
+        assert result["vectors_written"] == stored
+        assert result["vectors_written"] > result["embeddings_recomputed"]
 
     def test_changed_re_embeds_nothing_when_nothing_moved(self, seeded: Dispatcher) -> None:
         seeded.dispatch("reindex", {})

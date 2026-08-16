@@ -459,7 +459,7 @@ def test_lifecycle_and_maintenance_tools_reach_their_commands(server) -> None:
     # `changed_only` sees nothing, because the write already indexed it.
     assert call(server, "docir_reindex", {})["documents_indexed"] == 1
     assert call(server, "docir_reindex", {"changed_only": True})["documents_indexed"] == 0
-    assert call(server, "docir_embed_flush", {}) == {"embedded": 0}
+    assert call(server, "docir_embed_flush", {}) == {"embedded": 0, "vectors": 0}
     # Nothing to repair: the orphan is a warning `repair` deliberately leaves.
     # `actions` is absent rather than empty — trimming drops it, and an absent
     # field means its default.

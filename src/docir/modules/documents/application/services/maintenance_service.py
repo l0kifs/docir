@@ -18,7 +18,7 @@ from docir.modules.documents.domain.services import schema_shape
 from docir.modules.documents.domain.services.graph_checks import CheckIssue, GraphChecker
 from docir.modules.documents.domain.services.similarity_lint import LintFinding, SimilarityLinter
 from docir.modules.documents.domain.value_objects.identifiers import DocId
-from docir.modules.indexing.api import EmbeddingScheduler
+from docir.modules.indexing.api import DrainResult, EmbeddingScheduler
 from docir.platform.clock import Clock
 from docir.platform.embedding import Embedder
 from docir.platform.errors import ValidationError
@@ -44,11 +44,21 @@ class ReindexResult:
     documents_removed: int
     tags_indexed: int
     documents_skipped: int = 0
-    #: Vectors recomputed before the run returned. A full reindex re-embeds
-    #: everything it re-saved, so this was always happening and simply went
-    #: unreported -- which is what let `--embeddings` look like the only way to
-    #: get it (issue-b24e14474820).
+    #: Documents re-embedded before the run returned -- the drained queue, which
+    #: is keyed by document. A full reindex re-embeds everything it re-saved, so
+    #: this was always happening and simply went unreported, which is what let
+    #: `--embeddings` look like the only way to get it (issue-b24e14474820).
+    #:
+    #: Not a vector count -- `vectors_written` is. It is also not always
+    #: `documents_indexed`: an archived document is re-saved and has its vectors
+    #: *removed*, so it counts there and not here.
     embeddings_recomputed: int = 0
+    #: Vectors actually written by the drain: one per document plus one per `##`
+    #: section (adr-927aa43d9635), so ~4x `embeddings_recomputed` on a real
+    #: corpus. This is the number that explains the runtime -- embedding is ~96%
+    #: of a full rebuild, and it is linear in vectors rather than documents, so
+    #: the document count alone cannot say why 315 of them took a minute.
+    vectors_written: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,12 +143,14 @@ class MaintenanceService:
             # documents are read rather than what they must contain.
             uow.index_build.set(self._version)
             uow.commit()
+        drained = self._scheduler.flush()
         return ReindexResult(
             documents_indexed=indexed,
             documents_removed=removed,
             tags_indexed=tags_indexed,
             documents_skipped=len(self._file_store.find_malformed()),
-            embeddings_recomputed=self._scheduler.flush(),
+            embeddings_recomputed=drained.documents,
+            vectors_written=drained.vectors,
         )
 
     def resync(self) -> ReindexResult:
@@ -170,8 +182,13 @@ class MaintenanceService:
             recorded = uow.index_build.get()
         return self.reindex(changed_only=recorded == self._version)
 
-    def flush_embeddings(self) -> int:
-        """Synchronously drain the embedding queue (``docir embed --flush``)."""
+    def flush_embeddings(self) -> DrainResult:
+        """Synchronously drain the embedding queue (``docir embed --flush``).
+
+        Returns both counts rather than the document one alone: the caller is
+        reporting to a human who has just waited for it, and what they waited
+        for was the vectors.
+        """
         return self._scheduler.flush()
 
     def check(self) -> list[CheckIssue]:

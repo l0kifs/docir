@@ -64,8 +64,11 @@ def _seed_dirty_doc(factory: Factory, doc_id: str = "adr-0001") -> None:
 class TestSchedulers:
     def test_drain_dirty_computes_vector(self, uow_factory: Factory) -> None:
         _seed_dirty_doc(uow_factory)
-        count = drain_dirty(uow_factory, DeterministicEmbedder())
-        assert count == 1
+        drained = drain_dirty(uow_factory, DeterministicEmbedder())
+        # One document, two vectors: its own plus the body's single chunk. The
+        # two counts are separate because the queue is keyed by document while
+        # the cost is vectors (adr-927aa43d9635).
+        assert (drained.documents, drained.vectors) == (1, 2)
         with uow_factory() as uow:
             assert uow.embeddings.get_vector("adr-0001") is not None
             assert uow.embeddings.dirty_ids(DeterministicEmbedder().model_id) == []
@@ -73,7 +76,7 @@ class TestSchedulers:
     def test_inline_scheduler_flush(self, uow_factory: Factory) -> None:
         _seed_dirty_doc(uow_factory)
         scheduler = InlineEmbeddingScheduler(uow_factory, DeterministicEmbedder())
-        assert scheduler.flush() == 1
+        assert scheduler.flush().documents == 1
         scheduler.start()  # no-op
         scheduler.stop()  # no-op
 
@@ -92,7 +95,7 @@ class TestSchedulers:
         scheduler.start()
         scheduler.start()  # idempotent
         scheduler.schedule("adr-0001")
-        assert scheduler.flush() == 1
+        assert scheduler.flush().documents == 1
         scheduler.stop()
         scheduler.stop()  # idempotent
 

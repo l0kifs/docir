@@ -22,7 +22,12 @@ since the model reads only the first ~512 tokens of a body (adr-927aa43d9635).
   documents.
 - `build_scheduler(uow_factory, embedder, *, background) -> EmbeddingScheduler`
   — construct the deferred embedding-recompute scheduler for one process
-- `EmbeddingScheduler.schedule(id) / flush()` — queue and drain recomputes
+- `EmbeddingScheduler.schedule(id) / flush() -> DrainResult` — queue and drain recomputes
+- `DrainResult` — what one drain did (`documents`, `vectors`). Two numbers because the queue
+  is keyed by document while the work is vectors: each document writes its own plus one per
+  `##` section (adr-927aa43d9635), so 315 documents is 1,326 vectors. Reporting only the
+  document count understated a rebuild by 4x. Returned rather than counted from the index
+  afterwards, which would give the store's total — equal only after a full rebuild.
 
 ## Events published
 - none (no event bus; see adr-d3e3616400bf)

@@ -18,7 +18,7 @@ import threading
 from collections.abc import Callable
 from typing import Protocol
 
-from docir.modules.indexing.application.ports.scheduler import EmbeddingScheduler
+from docir.modules.indexing.application.ports.scheduler import DrainResult, EmbeddingScheduler
 from docir.platform.embedding import Embedder
 from docir.platform.persistence.ports import StoredChunk
 from docir.platform.persistence.unit_of_work import UnitOfWork
@@ -26,7 +26,7 @@ from docir.platform.persistence.unit_of_work import UnitOfWork
 UnitOfWorkFactory = Callable[[], UnitOfWork]
 
 
-def drain_dirty(uow_factory: UnitOfWorkFactory, embedder: Embedder) -> int:
+def drain_dirty(uow_factory: UnitOfWorkFactory, embedder: Embedder) -> DrainResult:
     """Recompute every dirty document's vectors in one transaction.
 
     Two vectors per document, not one: the document vector over title +
@@ -38,10 +38,13 @@ def drain_dirty(uow_factory: UnitOfWorkFactory, embedder: Embedder) -> int:
 
     Both are written under the same dirty flag and in the same transaction, so
     a document can never be indexed with vectors describing two different
-    bodies. Returns the number of documents (re)embedded; a dirty row whose
-    document has vanished is dropped so it cannot wedge the queue forever.
+    bodies. Returns both counts (see :class:`DrainResult`) — the documents
+    drained and the vectors that cost, which is ``1 + sections`` each. A dirty
+    row whose document has vanished is dropped so it cannot wedge the queue
+    forever, and counts as neither.
     """
-    count = 0
+    documents = 0
+    vectors = 0
     model_id = embedder.model_id
     with uow_factory() as uow:
         for doc_id in uow.embeddings.dirty_ids(model_id):
@@ -51,10 +54,15 @@ def drain_dirty(uow_factory: UnitOfWorkFactory, embedder: Embedder) -> int:
                 uow.chunks.remove(doc_id)
                 continue
             uow.embeddings.set_vector(doc_id, embedder.embed(document.embedding_text()), model_id)
-            uow.chunks.replace(doc_id, _chunks_for(document, embedder), model_id)
-            count += 1
+            chunks = _chunks_for(document, embedder)
+            uow.chunks.replace(doc_id, chunks, model_id)
+            documents += 1
+            # The document's own vector plus one per section — counted from what
+            # was written rather than from `embedding_chunks()`, so a splitter
+            # change cannot make the report and the index disagree.
+            vectors += 1 + len(chunks)
         uow.commit()
-    return count
+    return DrainResult(documents=documents, vectors=vectors)
 
 
 class _Chunkable(Protocol):
@@ -88,7 +96,7 @@ class InlineEmbeddingScheduler(EmbeddingScheduler):
     def schedule(self, doc_id: str) -> None:
         drain_dirty(self._uow_factory, self._embedder)
 
-    def flush(self) -> int:
+    def flush(self) -> DrainResult:
         return drain_dirty(self._uow_factory, self._embedder)
 
     def start(self) -> None:
@@ -118,7 +126,7 @@ class ThreadedEmbeddingScheduler(EmbeddingScheduler):
     def schedule(self, doc_id: str) -> None:
         self._wake.set()
 
-    def flush(self) -> int:
+    def flush(self) -> DrainResult:
         with self._lock:
             return drain_dirty(self._uow_factory, self._embedder)
 

@@ -135,6 +135,57 @@ def test_a_skipped_rebuild_says_so_rather_than_printing_a_bare_zero(
     assert "already built by this version" in result.stdout
 
 
+def test_the_re_embed_count_and_the_vector_count_are_both_reported(
+    settings: Settings, tmp_path
+) -> None:
+    """It reported the document count under the word "vectors".
+
+    The queue is keyed by document and each one writes a vector per `##` section
+    as well as its own (adr-927aa43d9635), so the two are ~4x apart on a real
+    corpus: the 315-document rebuild this was noticed on wrote 1,326 vectors and
+    said "315 vectors". Understating the work 4x is worse than not reporting it,
+    which is the state issue-b24e14474820 already rejected — and the vector count
+    is the one that explains the runtime, since embedding is ~96% of a rebuild
+    and is linear in vectors.
+    """
+    result = runner.invoke(
+        app,
+        [
+            "--no-daemon",
+            "add",
+            "--type",
+            "decision",
+            "--title",
+            "Sectioned",
+            "--description",
+            "d",
+            "--body",
+            "## One\n\nalpha\n\n## Two\n\nbeta",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    result = runner.invoke(
+        app, ["--no-daemon", "--pretty", "self", "upgrade", str(tmp_path), "--no-package"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "1 re-embedded (2 vectors)" in result.stdout
+
+
+def test_a_vector_count_equal_to_the_document_count_is_not_printed(
+    settings: Settings, tmp_path
+) -> None:
+    # A document with no `##` sections writes exactly one vector, and
+    # "1 re-embedded (1 vectors)" is both redundant and ungrammatical.
+    _add()
+    result = runner.invoke(
+        app, ["--no-daemon", "--pretty", "self", "upgrade", str(tmp_path), "--no-package"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "1 re-embedded" in result.stdout
+    assert "vectors" not in result.stdout
+
+
 def test_it_refreshes_an_installed_skill_and_leaves_an_absent_one_alone(
     settings: Settings, tmp_path
 ) -> None:

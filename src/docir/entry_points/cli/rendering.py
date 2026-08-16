@@ -453,13 +453,22 @@ def render_upgrade(
         )
     skipped = reindex.get("documents_skipped")
     embedded = reindex.get("embeddings_recomputed")
+    vectors = reindex.get("vectors_written")
     indexed = reindex.get("documents_indexed", 0)
     console.print(
         f"[cyan]reindex[/]   {indexed} documents, "
         f"{reindex.get('tags_indexed', 0)} tags"
-        # The vectors were always recomputed here; saying so is what stops the
+        # The re-embedding always happened here; saying so is what stops the
         # next reader reaching for `reindex --embeddings` on top (issue-b24e14474820).
-        + (f", {embedded} vectors" if embedded else "")
+        # Both numbers, because they answer different questions and are ~4x apart:
+        # the queue is keyed by document, while the runtime is linear in vectors —
+        # each document writes one per `##` section as well as its own
+        # (adr-927aa43d9635), so 315 re-embedded is 1,326 vectors.
+        + (f", {embedded} re-embedded" if embedded else "")
+        # Suppressed when the two agree, which is a corpus whose documents have
+        # no `##` sections: "1 re-embedded (1 vectors)" carries no information
+        # and is not even grammatical.
+        + (f" ({vectors} vectors)" if embedded and vectors and vectors != embedded else "")
         # Same reason the package line spells out "already the newest build":
         # `upgrade` resyncs, so it re-saves nothing when this build already
         # indexed the store and no file moved — and a bare "0 documents" reads

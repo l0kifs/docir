@@ -14,7 +14,7 @@ from docir.config.settings import Settings
 from docir.modules.documents.application.dto import AddDocumentRequest, UpdateDocumentRequest
 from docir.modules.documents.application.services.document_service import DocumentService
 from docir.modules.documents.infra.schema_loader import load_schema
-from docir.modules.indexing.api import EmbeddingScheduler
+from docir.modules.indexing.api import DrainResult, EmbeddingScheduler
 from docir.platform.clock import Clock
 from docir.platform.embedding.deterministic import DeterministicEmbedder
 from docir.platform.filesystem.markdown_store import MarkdownDocumentFileStore
@@ -35,8 +35,8 @@ class _RecordingScheduler(EmbeddingScheduler):
     def schedule(self, doc_id: str) -> None:
         self.scheduled.append(doc_id)
 
-    def flush(self) -> int:
-        return 0
+    def flush(self) -> DrainResult:
+        return DrainResult(documents=0, vectors=0)
 
     def start(self) -> None:
         pass

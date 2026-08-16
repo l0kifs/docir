@@ -50,7 +50,9 @@ files and the derived index never disagree.
   best-effort, so a partial rebuild must say so rather than look complete.
   `ReindexResult.embeddings_recomputed` reports the drained queue: a rebuild re-embeds every
   document it re-saves, and never said so — which is what let a "recompute the vectors" mode
-  look necessary (adr-6a4718fa7a7d).
+  look necessary (adr-6a4718fa7a7d). It counts *documents*; `ReindexResult.vectors_written`
+  is the vector count, ~4x larger, and the one that explains the runtime — embedding is ~96%
+  of a rebuild and is linear in vectors, not documents.
 - `MaintenanceService.resync() -> ReindexResult` — what `docir self upgrade` runs. Reads the
   build stamp and rebuilds in full only when some other version wrote it, since a full pass
   re-embeds everything it re-saves (~96% of the command) and has nothing to recompute on a
@@ -77,7 +79,9 @@ files and the derived index never disagree.
 - `MaintenanceService.lint_deep() -> [LintFinding]` — Tier 2 advisory findings
   (`duplicate`, `scope-creep`, `oversized-section`, `ambiguous-heading`,
   `unqualified-section-ref`); never blocking
-- `MaintenanceService.flush_embeddings() -> int` — drain the dirty queue (`docir embed --flush`).
+- `MaintenanceService.flush_embeddings() -> DrainResult` — drain the dirty queue
+  (`docir embed --flush`). Both counts, because the caller is reporting to a human who
+  just waited for it, and what they waited for was the vectors.
   A vector whose `model_id` no longer matches the active embedder counts as dirty, so this is
   also what recomputes everything after an embedder switch. There is no separate "recompute
   every vector" entry point (adr-6a4718fa7a7d).

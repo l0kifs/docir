@@ -330,6 +330,58 @@ So the shape is: comfortable to a few thousand documents on a laptop, and the fi
 to change past that is the vector scan, not the schema. Nothing in the read path needed to
 change for this corpus, which is the useful thing to know before optimizing it.
 
+## Maintenance: what a rebuild costs, and how much of it is the model (`maintenance.py`)
+
+```bash
+uv run python benchmarks/maintenance.py
+uv run python benchmarks/maintenance.py --sizes 100        # quicker
+```
+
+`latency.py` covers the read path. This covers the other one, and it exists because the
+gap between them hid a command that took a minute: `docir self upgrade` rebuilt in full
+every time, and the first report of it was a user noticing (issue-cfeb6eaa31cc).
+
+Its own file rather than rows in `latency.py`. That harness samples 15 times in three
+daemon modes; at a minute a run this would be hours, and it would re-answer a settled
+question — the daemon's whole win is the warm model (~0.5 s), which cannot move a 60 s
+rebuild. So: one mode, one sample, and sizes that stop where waiting stops being worth it.
+
+Same generated corpus and seed as `latency.py`, so "300 documents" means one thing across
+the benchmarks. 25 documents · 125 vectors, Apple M1, docir 0.15.0, seconds:
+
+| command | s | command | s |
+|---|---|---|---|
+| `reindex` (full) | 11.01 | `check` | 0.74 |
+| `reindex --changed` | 1.75 | `check --fix` | 0.86 |
+| `self upgrade` (stamp equal) | 2.21 | `embed --flush` | 0.78 |
+| `self upgrade` (stamp moved) | 8.42 | `build` | 1.18 |
+| `reindex`, no model | 1.00 | | |
+
+### 1. A rebuild is the embedding model, and nothing else
+
+The bottom row is the same rebuild against `DOCIR_EMBEDDER=deterministic`. The difference
+is **91%** of the command at 25 documents and 96% at 315 — it grows, because the fixed
+costs (scan, SQLite, FTS5) do not. Optimising anything else in `reindex` optimises the
+1 s.
+
+### 2. So the only lever is not rebuilding
+
+`self upgrade` resyncs: it reads the index build stamp and rebuilds in full only when
+some other version wrote it. Both rows above are the same command, and the difference
+between them is the whole fix. On a 315-document store it is 1.5 s against 62 s.
+
+The expensive row is not a regression to remove — a release that changes how documents
+are read (adr-927aa43d9635 rewrote every vector) needs exactly that pass. What changed is
+that it is now paid when the stamp says so rather than on every invocation.
+
+### 3. Batching and thread tuning do not help
+
+Measured separately and rejected: the shipped default (one text per call, onnxruntime's
+own thread count) is 58.2 ms/text against 79.3 at batch 16 and 100.3 at batch 64 —
+`fastembed` pads every batch to its longest member, and onnxruntime already saturates the
+cores on one ~300-token sequence. Pinning threads is worse too (66.1 at 4, 101.4 at 8).
+One laptop, one model: do not carry the verdict to different hardware without re-running.
+
 ## Token cost by corpus size, against a baseline an agent would run (`tokens.py`)
 
 ```bash
@@ -406,8 +458,12 @@ are the ones close to a real docs tree, and they are the ones to quote.
 - **The latency numbers are one laptop, unloaded.** They are a shape — flat here, linear
   there — not a service-level objective. A busy machine moves every row: an early run of
   the 500-document column landed 2× high across the board and had to be re-measured.
-- **`latency.py` times reads only.** Writes are the daemon's other job (it serializes
-  them), and nothing here prices `add`, `update` or `reindex`.
+- **`latency.py` times reads only.** `maintenance.py` prices the rebuild commands, but
+  neither one prices a single `add` or `update` under contention — writes are the
+  daemon's other job (it serializes them), and nothing here measures what that costs when
+  two agents write at once.
+- **`maintenance.py` samples once per size.** These are minute-scale commands, so there
+  is no p50 to hide behind: a busy machine moves a row and the run has to be repeated.
 - **Its corpus is uniform.** Every generated document has four sections and a similar
   length, so the vector count is exactly 5× the document count. A real store is lumpier,
   and the chunk count is what the semantic scan actually walks.

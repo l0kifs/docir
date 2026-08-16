@@ -516,3 +516,59 @@ class TestTheOptionalSchemaDriftNotice:
         result = run("query")
         assert result.exit_code == 0
         assert isinstance(json.loads(result.stdout), list)
+
+
+class TestRetypeThroughTheCli:
+    """`docir update <id> --type` end to end (adr-f8cce745d0d5).
+
+    The corpus-rename flow a person actually runs: edit the schema, then walk
+    `query --type <old>` retyping each document. The old type is gone from the
+    schema by the time the loop runs, which is the whole reason a retype does
+    not consult the type it is leaving.
+    """
+
+    _RENAMED = (
+        "profiles: [software]\n"
+        "disable_types: [decision]\n"
+        "types:\n"
+        "  product_decision:\n"
+        "    prefix: adr\n"
+        "    default_status: draft\n"
+        "    statuses:\n"
+        "      draft: [active]\n"
+        "      active: []\n"
+    )
+
+    def test_the_whole_rename_runs_through_the_cli(self, settings: Settings) -> None:
+        created = run("add", "--type", "decision", "--title", "Use PG", "--description", "d")
+        assert created.exit_code == 0
+        settings.schema_path.write_text(self._RENAMED, encoding="utf-8")
+        assert run("schema", "validate").exit_code == 0
+
+        stale = json.loads(run("query", "--type", "decision").stdout)
+        assert [row["id"] for row in stale] == ["adr-0001"]
+
+        result = run("update", "adr-0001", "--type", "product_decision", "--status", "active")
+        assert result.exit_code == 0
+        retyped = json.loads(result.stdout)
+        assert retyped["id"] == "adr-0001"  # the address survives the rename
+        assert retyped["type"] == "product_decision"
+        assert (settings.docs_root / retyped["path"]).exists()
+        assert not (settings.docs_root / "decisions").exists()
+
+    def test_the_retired_type_stops_accepting_writes(self, settings: Settings) -> None:
+        settings.schema_path.parent.mkdir(parents=True, exist_ok=True)
+        settings.schema_path.write_text(self._RENAMED, encoding="utf-8")
+        result = run("add", "--type", "decision", "--title", "A", "--description", "d")
+        assert result.exit_code != 0
+        assert "unknown document type" in (result.stderr or "")
+
+    def test_a_status_the_new_type_lacks_names_the_flag_that_fixes_it(
+        self, settings: Settings
+    ) -> None:
+        created = run("add", "--type", "decision", "--title", "A", "--description", "d")
+        assert created.exit_code == 0
+        settings.schema_path.write_text(self._RENAMED, encoding="utf-8")
+        result = run("update", "adr-0001", "--type", "product_decision")
+        assert result.exit_code != 0
+        assert "--status" in (result.stderr or "")

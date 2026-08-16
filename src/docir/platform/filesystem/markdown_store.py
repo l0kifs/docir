@@ -3,7 +3,9 @@
 Each document is a single ``docs/<type>s/<id>-<slug>.md`` file: a YAML
 frontmatter block (the indexed metadata) followed by the markdown body. The
 file path is fixed at creation from the id and slug and reused on every
-subsequent write, so editing a title never orphans a renamed file.
+subsequent write, so editing a title never orphans a renamed file. Changing the
+*type* is the one edit that moves it (:meth:`~MarkdownDocumentFileStore.relocate`),
+because the directory names the type.
 """
 
 from __future__ import annotations
@@ -52,6 +54,48 @@ class MarkdownDocumentFileStore(DocumentFileStore):
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_text(self._render(document), encoding="utf-8")
         return rel_path
+
+    def relocate(self, document: Document, *, from_path: str) -> str:
+        """Move the document into its type's directory, keeping its filename.
+
+        Write-then-delete, in that order: a crash between the two leaves two
+        files claiming one id, which `docir check` reports and `--fix` repairs.
+        The reverse order can leave none, and the files are the source of truth.
+        """
+        rel_path = f"{document.type}s/{Path(from_path).name}"
+        full_path = self._root / rel_path
+        moving = rel_path != from_path
+        if moving and full_path.exists():
+            # Same guard as `create=True`, for the same reason: the filename
+            # opens with the id, so something else already claims it there and
+            # overwriting would drop that document from every read path.
+            raise DuplicateDocumentIdError(
+                f"cannot retype {document.id!r}: {rel_path} already exists. "
+                f"Run `docir check` — two files claiming one id is a duplicate "
+                f"the repair path can re-issue."
+            )
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+        full_path.write_text(self._render(document), encoding="utf-8")
+        if moving:
+            self.delete(from_path)
+            self._prune_empty(self._root / from_path)
+        return rel_path
+
+    def _prune_empty(self, moved_from: Path) -> None:
+        """Drop the vacated type directory once its last document has left it.
+
+        Retyping a whole corpus otherwise leaves an empty ``decisions/`` behind,
+        and a directory listing is how a person reads which types a store uses.
+        ``rmdir`` refuses a non-empty directory, so this cannot take anything
+        with it; the docs root itself is never a candidate.
+        """
+        parent = moved_from.parent
+        if parent == self._root:
+            return
+        try:
+            parent.rmdir()
+        except OSError:
+            return
 
     def read(self, path: str) -> Document:
         full_path = self._root / path

@@ -44,6 +44,15 @@ _SCHEMA_HEADER = """\
 # You can enable several at once, and add your own inline `types:` /
 # `relation_types:` here — they are merged last and win on name conflicts.
 #
+# Merging only adds. To drop a type the core or a profile contributed — because
+# this corpus calls it something else, and leaving the old name addable would
+# split the corpus across two — list it under `disable_types:`:
+#
+#   disable_types: [decision]
+#
+# That also frees its `prefix`, so your own type can claim `adr` and keep the
+# ids you already have. Retype the documents with `docir update <id> --type`.
+#
 # Typed edges: a document's `related` entries carry a relation *kind*. Write a
 # bare id for the default `relates_to`, or `<id>:<kind>` (CLI) / `{to, kind}`
 # (frontmatter) for a typed edge.

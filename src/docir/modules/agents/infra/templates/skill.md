@@ -148,6 +148,7 @@ docir update <id> --set-description "..."        # keep summary current on edits
 docir update <id> --set-related adr-0001:supersedes   # replace typed edges
 docir update <id> --set-owner platform-team     # assign a steward
 docir update <id> --set-code "src/auth/**"      # what code this doc governs
+docir update <id> --type architecture --status draft   # retype; the id never changes
 docir update <id> --verified                     # stamp today as last-verified
 docir update <id> --append-section "Resolution" --body "Fixed in PR 42"
 docir update <id> --replace-section "Context" --body "..."
@@ -167,6 +168,11 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
   engine and will not gain one: the test already fails when the code
   contradicts the decision, and `--code tests/test_x.py` records which decision
   it enforces, so `check` notices when that test is deleted.
+- `--type` retypes a document. Its **id never changes**, prefix included — the id
+  is the only address every `related` edge has for it, so `adr-3f9a2b1c` stays
+  itself under a type whose prefix is something else. The file moves into the new
+  type's directory. The status carries over if the new type declares it and the
+  write is refused if it does not, so pass `--status` too when they differ.
 - `delete` is blocked while another doc links to it. `--force` deletes anyway and
   **strips the edge from each referencing doc**, naming them in its output — so a
   forced delete never leaves a dangling link. Prefer `archive` when the document
@@ -377,6 +383,33 @@ changes no traversal. The core six carry their meaning without being listed —
 `relates_to` and `contradicts` are symmetric, `supersedes`/`contradicts` are
 successors, `depends_on`/`refines` are dependencies. `docir schema show` prints
 the resolved properties of every kind.
+
+Merging only **adds** types: the core is always merged, and an inline block can
+only override a type by its own name. `disable_types:` is how you give one up —
+and it is what frees that type's `prefix`, so your own type can claim it and the
+corpus keeps the ids it already has.
+
+```yaml
+profiles: [software]
+disable_types: [decision]        # the name stops resolving, and `adr` is free
+types:
+  product_decision:
+    prefix: adr                  # every existing adr-... id stays valid
+    default_status: draft
+    statuses: {draft: [active], active: []}
+```
+
+Then move the documents over — one at a time, because only you know what each old
+status becomes:
+
+```bash
+docir query --type decision --limit 500 | jq -r '.[].id' \
+  | xargs -I{} docir update {} --type product_decision --status active
+```
+
+Until they are moved, `docir check` reports them as `unknown-type` (a warning, so
+nothing is blocked) beside the `schema-drift` finding naming the change. Disabling
+a name nothing declares, or one the same file declares inline, is refused.
 
 `allowed_relations` is a **whitelist trap**: absent/empty means permissive (any
 kind, any target), but listing one kind restricts the type to *only* the listed

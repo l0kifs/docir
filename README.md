@@ -148,7 +148,8 @@ outside change — so hand-editing is supported, but not on every field:
 |---|---|---|
 | document **body** | ✅ | — |
 | `docs-schema.yaml`, `docs/tags.yaml` | ✅ | no CLI write path for the schema |
-| `tags`, `status`, `related`, `type` | ❌ | `docir update --set-tags / --status / --set-related` |
+| `tags`, `status`, `related` | ❌ | `docir update --set-tags / --status / --set-related` |
+| `type` | ❌ | `docir update <id> --type <new>` — the id stays, the file moves |
 | `code` | ❌ | `docir update <id> --set-code "src/auth/**"` |
 | `id` | ❌ never | it is the primary key; changing it orphans every inbound link |
 | `verified` | ❌ never | `docir update <id> --verified` — it asserts a human re-read the doc |
@@ -249,6 +250,36 @@ Ids are random by default (`adr-3f9a2b1c7d4e`), which two branches can never min
 identically. `--id-style sequential` trades that for human-friendly `adr-0007` numbering,
 collision-free within one store — a merge can bring two branches that allocated the same
 number, and `docir check` reports it as `duplicate-id`.
+
+### Renaming a type
+
+Merging only adds types, so `disable_types:` is how you give one up — and it is what frees
+that type's `prefix` for your own to claim, which is what lets a renamed corpus keep the
+ids it already has. Documents are then moved over one at a time; nothing is retyped for
+you, because only you know what each old status becomes.
+
+```yaml
+# docs-schema.yaml
+profiles: [software]
+disable_types: [decision]        # the name stops resolving, and `adr` is free
+types:
+  product_decision:
+    prefix: adr                  # the corpus keeps every adr-... id it has
+    default_status: draft
+    statuses: {draft: [active], active: []}
+```
+
+```bash
+docir schema validate
+docir query --type decision --limit 500 | jq -r '.[].id' \
+  | xargs -I{} docir update {} --type product_decision --status active
+docir reindex && docir check
+```
+
+Between the schema edit and the loop, `docir check` reports the not-yet-moved documents as
+`unknown-type` — a warning, so nothing is blocked. Retyping a document never changes its
+id: `adr-3f9a2b1c7d4e` stays itself under any type, because it is the only address every
+`related` edge has for it.
 
 ## Upgrading
 

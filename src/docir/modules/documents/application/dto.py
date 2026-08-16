@@ -213,6 +213,11 @@ class UpdateDocumentRequest:
 
     doc_id: str
     status: str | None = None
+    #: Retype the document. The id never changes with it — it is the corpus's
+    #: only address, written into every ``related`` edge that points here, so a
+    #: retyped document keeps the prefix it was minted under. A prefix records
+    #: which type minted an id, not which type owns it today (adr-f8cce745d0d5).
+    set_type: str | None = None
     set_title: str | None = None
     set_description: str | None = None
     set_tags: tuple[str, ...] | None = None

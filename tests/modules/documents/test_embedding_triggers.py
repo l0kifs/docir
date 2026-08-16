@@ -74,3 +74,35 @@ def test_recompute_only_on_content_change(
     scheduler.scheduled.clear()
     service.update(UpdateDocumentRequest(doc_id=doc_id, append_section=("Notes", "more")))
     assert scheduler.scheduled == [doc_id]  # body change: re-embed
+
+
+def test_a_retype_is_not_a_content_change(
+    settings: Settings, uow_factory: Callable[[], UnitOfWork]
+) -> None:
+    """Renaming a corpus's types must not re-embed it (adr-f8cce745d0d5).
+
+    `type` is in `content_hash` — a write must not silently lose one — but not
+    in `embedding_text`, so the vectors a retype would recompute are identical
+    to the ones already stored. Under the daemon's debounced scheduler, getting
+    this wrong queues every document a corpus-wide rename touches.
+    """
+    scheduler = _RecordingScheduler()
+    service = DocumentService(
+        uow_factory,
+        MarkdownDocumentFileStore(settings.docs_root),
+        scheduler,
+        DeterministicEmbedder(),
+        _FixedClock(),
+        load_schema(settings.schema_path),
+    )
+
+    doc_id = service.add(
+        AddDocumentRequest(type="decision", title="A", description="d", body="b")
+    ).id
+
+    scheduler.scheduled.clear()
+    retyped = service.update(
+        UpdateDocumentRequest(doc_id=doc_id, set_type="architecture", status="draft")
+    )
+    assert retyped.type == "architecture"  # the write did happen
+    assert scheduler.scheduled == []

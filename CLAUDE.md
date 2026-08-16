@@ -416,6 +416,39 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   resolution does not re-key or migrate existing files — there is no document migration and
   deliberately so: every change class needs a human decision, which is what `check --fix`
   already refuses to guess at).
+- **Merging only adds, so `disable_types:` is how a schema subtracts (adr-f8cce745d0d5).**
+  It is applied *after* core+profiles+inline resolve, and the reason it exists is not the
+  name but the **prefix**: `Schema.__post_init__` refuses two types sharing one, so while
+  the core declares `decision`/`adr` no other type can claim `adr` — which is exactly what a
+  corpus renaming its types while keeping its `adr-...` ids needs (issue-ab138501abfd). The
+  unused name staying addable was the second half: two names for one concept, shipped in the
+  default schema. Two loader rules hold it up, both the "reported at load, naming what would
+  have worked" shape the `required:`/status checks already use: the name must be in the
+  resolved set (a typo that silently does nothing forever is the failure mode), and it may
+  not be one the same file also declares inline (a contradiction with no reading worth
+  guessing). It deliberately does **not** consult the corpus — schema resolution knows
+  nothing about documents, and stranding documents on a disabled type is a supported move
+  reported as `unknown-type` + `schema-drift`, exactly as disabling a profile already was.
+- **`update --type` retypes a document, and every rule about it is load-bearing
+  (adr-f8cce745d0d5).** **The id is never re-minted**, prefix included: it is the corpus's
+  only address, spelled out in every `related` edge pointing at the document, so a prefix
+  records which type *minted* an id and never which type owns it now. Status is validated
+  for **membership in the target type**, not as a transition (the type being left has no
+  transition graph reaching a different type's), and a status the new type does not declare
+  is **refused, not reset** — falling back to `default_status` rewrites every `accepted` in a
+  corpus to `draft` and reports success. The existing edges are re-validated against the new
+  type even when the call does not supply them, since `allowed_relations` belongs to the
+  *source* type and this write persists them. The file moves (`DocumentFileStore.relocate`)
+  keeping its **filename** — a retype is not a retitle — and the vacated directory is pruned,
+  because `ls docs/` is how a person reads which types a store uses. It is **not** a content
+  change: `type` is in `content_hash` but not `embedding_text`, so a corpus-wide rename must
+  not queue every document for re-embedding (pinned in `test_embedding_triggers.py`, where
+  the recording scheduler makes the decision observable — the inline scheduler drains before
+  anything can see it, so an assertion through `embed_flush` passes either way).
+  **The source type is never looked up, and that is what keeps the two halves from
+  deadlocking**: declaring the replacement type is impossible while the old one holds the
+  prefix, and disabling the old one first strands the corpus on an unknown type, so a retype
+  that required a known source type would leave hand-editing as the only way through.
 - **Alembic owns the schema and must sit beside the engine.** `run_migrations`
   (`platform/persistence/engine.py`) resolves the migration dir via `Path(__file__).parent /
   "alembic"`; moving `engine.py` without the `alembic/` folder silently breaks migrations. The FTS5

@@ -14,6 +14,12 @@ files and the derived index never disagree.
   `allow_transition_override` permits an illegal *jump* between declared statuses (never an
   undeclared one); when it actually bypasses a rule, `DocumentView.forced_transition`
   describes it so the caller can warn. Not persisted — no actors to attribute it to.
+  `set_type` retypes the document (adr-f8cce745d0d5): the id and its prefix are **not**
+  re-minted (the id is the corpus's only address), the file moves to the new type's directory
+  keeping its filename, and status, relation whitelist and required fields are all validated
+  against the type being *entered*. A status the new type does not declare is refused rather
+  than reset, and the source type is never looked up — so a retype is the way out of a type
+  `disable_types:` has removed. A retype is not a status transition and not a content change.
 - `DocumentService.get(id) -> DocumentView` — one document in full (with body)
 - `DocumentService.query(QueryRequest) -> [DocumentSummary]` — structured filtering (skeleton, no body).
   Pages with `limit`/`offset`, applied as a SQL window so the cost of a page does not grow with the
@@ -66,7 +72,10 @@ files and the derived index never disagree.
 - `load_schema(path) -> Schema` — load the per-type document schema. Rejects a status name no
   type declares (transition target, `default_status`, `inactive_statuses` entry), and a
   `required:` entry naming a field no document can carry — both are unsatisfiable, and both are
-  reported at load naming what would have worked.
+  reported at load naming what would have worked. `disable_types: [name, ...]` subtracts types
+  after the core/profile/inline merge, which is the only way to give up a merged type's **name
+  and its prefix** (adr-f8cce745d0d5); it is refused when it names a type the schema does not
+  define, one the same file declares inline, or all of them.
 - `describe_schema(Schema) -> dict` — the merged schema as plain data (`docir schema show`)
 - `MaintenanceService.repair() -> RepairResult` — fix the mechanically-fixable Tier 1 damage:
   re-issue duplicate ids (oldest file keeps the id) and drop dead `related` edges. `malformed`,

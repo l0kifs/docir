@@ -29,6 +29,21 @@ class DocumentFileStore(ABC):
         """
 
     @abstractmethod
+    def relocate(self, document: Document, *, from_path: str) -> str:
+        """Write the document under its (new) type's directory, dropping ``from_path``.
+
+        The paired write for a retype. A document's path is fixed at creation
+        and reused forever, so changing the type alone would leave the file in
+        the old type's directory — the layout would say one thing and the
+        frontmatter another, on every document a rename touched.
+
+        The *filename* is carried over rather than rebuilt: it encodes the id
+        and the title slug at creation, and a retype is not a retitle, so
+        reslugging here would bury the directory move in a rename git cannot
+        follow.
+        """
+
+    @abstractmethod
     def read(self, path: str) -> Document:
         """Parse a single markdown file (relative path) into a Document."""
 

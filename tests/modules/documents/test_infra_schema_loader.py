@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 import yaml
 
+from docir.modules.documents.domain.services import schema_shape
 from docir.modules.documents.infra.default_schema import (
     DEFAULT_SCHEMA_YAML,
     render_schema_yaml,
@@ -144,6 +145,108 @@ class TestProfilesAndCore:
     def test_profiles_must_be_a_list(self) -> None:
         with pytest.raises(SchemaError):
             parse_schema({"profiles": "software"})
+
+
+class TestDisableTypes:
+    """Subtracting a merged type (adr-f8cce745d0d5, issue-ab138501abfd).
+
+    Merging is additive and the core is injected whenever a `profiles:` key is
+    present, so before this the `decision` name and its `adr` prefix existed in
+    every store and could not be given up.
+    """
+
+    def test_a_core_type_can_be_removed(self) -> None:
+        schema = parse_schema({"profiles": ["software"], "disable_types": ["decision"]})
+        assert "decision" not in schema.types
+        # The profile's own types are untouched by the subtraction.
+        assert {"issue", "architecture", "release_note"} <= set(schema.types)
+
+    def test_removing_the_type_frees_its_prefix(self) -> None:
+        # The whole point: `product_decision` claims `adr` and the corpus keeps
+        # the `adr-...` ids it already has. This raised
+        # "prefix 'adr' used by both 'decision' and 'product_decision'".
+        schema = parse_schema(
+            {
+                "profiles": ["software"],
+                "disable_types": ["decision"],
+                "types": {
+                    "product_decision": {
+                        "prefix": "adr",
+                        "statuses": {"draft": ["active"], "active": []},
+                        "default_status": "draft",
+                    }
+                },
+            }
+        )
+        assert schema.prefix_for("product_decision") == "adr"
+        assert "decision" not in schema.types
+
+    def test_a_profile_type_can_be_removed_too(self) -> None:
+        schema = parse_schema({"profiles": ["software"], "disable_types": ["release_note"]})
+        assert "release_note" not in schema.types
+        assert "decision" in schema.types
+
+    def test_a_name_nothing_declares_is_refused(self) -> None:
+        # A typo that silently did nothing forever is the failure mode the
+        # `required:` and status-target checks already exist to prevent.
+        with pytest.raises(SchemaError) as excinfo:
+            parse_schema({"profiles": ["software"], "disable_types": ["decisions"]})
+        message = str(excinfo.value)
+        assert "'decisions'" in message
+        assert "decision" in message  # names what would have worked
+
+    def test_declaring_and_disabling_one_name_is_refused(self) -> None:
+        with pytest.raises(SchemaError) as excinfo:
+            parse_schema(
+                {
+                    "profiles": ["software"],
+                    "disable_types": ["decision"],
+                    "types": {
+                        "decision": {
+                            "prefix": "dec",
+                            "statuses": {"draft": []},
+                            "default_status": "draft",
+                        }
+                    },
+                }
+            )
+        assert "delete the block" in str(excinfo.value)
+
+    def test_disabling_everything_is_refused(self) -> None:
+        with pytest.raises(SchemaError) as excinfo:
+            parse_schema({"profiles": [], "disable_types": ["decision"]})
+        assert "no types" in str(excinfo.value)
+
+    def test_it_must_be_a_list(self) -> None:
+        with pytest.raises(SchemaError):
+            parse_schema({"profiles": ["software"], "disable_types": "decision"})
+
+    def test_it_applies_to_an_inline_only_schema(self) -> None:
+        # Nothing is merged into an inline-only file, so every name it could
+        # disable is one it declares -- which is the contradiction, reported the
+        # same way rather than as a key that works only in the other mode.
+        with pytest.raises(SchemaError) as excinfo:
+            parse_schema(
+                {
+                    "types": {
+                        "note": {
+                            "prefix": "n",
+                            "statuses": {"draft": []},
+                            "default_status": "draft",
+                        }
+                    },
+                    "disable_types": ["note"],
+                }
+            )
+        assert "delete the block" in str(excinfo.value)
+
+    def test_the_removal_reads_as_schema_drift(self, tmp_path) -> None:
+        # `check` has to be able to explain why a corpus went unknown-type.
+        before = describe_schema(parse_schema({"profiles": ["software"]}))
+        after = describe_schema(
+            parse_schema({"profiles": ["software"], "disable_types": ["decision"]})
+        )
+        assert "-type decision" in schema_shape.diff(before, after)
 
 
 class TestBundledProfileIntegrity:

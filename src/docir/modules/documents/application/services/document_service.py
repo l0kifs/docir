@@ -45,6 +45,7 @@ from docir.platform.errors import (
     DanglingReferenceError,
     DocumentNotFoundError,
     DuplicateDocumentIdError,
+    InvalidStatusError,
     StaleWriteError,
     ValidationError,
 )
@@ -204,7 +205,13 @@ class DocumentService:
             changes["updated"] = self._clock.today()
             updated = base.with_updates(**changes)
             self._validator.validate_required_fields(updated)
-            path = self._file_store.write(updated)
+            # A retype moves the file: the directory names the type, so leaving
+            # it where it was makes the layout disagree with the frontmatter on
+            # every document a corpus-wide rename touches.
+            if "type" in changes and base.path:
+                path = self._file_store.relocate(updated, from_path=base.path)
+            else:
+                path = self._file_store.write(updated)
             updated = updated.with_updates(path=path)
 
             uow.documents.save(updated)
@@ -631,6 +638,10 @@ class DocumentService:
             return None
         if request.status == base.status:
             return None
+        if request.set_type is not None and request.set_type != base.type:
+            # A retype is not a transition — there is no edge between two types'
+            # status graphs to break, so nothing was overridden.
+            return None
         type_schema = self._schema.types.get(base.type)
         if type_schema is None or type_schema.can_transition(base.status, request.status):
             return None
@@ -719,31 +730,28 @@ class DocumentService:
         changes: dict[str, object],
         uow: UnitOfWork,
     ) -> bool:
-        """Stage metadata changes; return whether embedding-relevant text moved."""
+        """Stage metadata changes; return whether embedding-relevant text moved.
+
+        The type is resolved first, because it selects the grammar every other
+        field is checked against — the status enum, the relation whitelist, the
+        required fields. On a retype those are all checked against the *target*
+        type, never the one the document is leaving, which is also what lets a
+        retype run on a document whose current type the schema no longer
+        declares (adr-f8cce745d0d5).
+        """
         content_changed = False
+        target_type = self._apply_type(request, base, changes)
         if request.set_title is not None:
             changes["title"] = request.set_title
             content_changed = True
         if request.set_description is not None:
             changes["description"] = request.set_description
             content_changed = True
-        if request.status is not None and request.status != base.status:
-            if request.allow_transition_override:
-                self._validator.validate_status(base.type, request.status)
-            else:
-                self._validator.validate_transition(base.type, base.status, request.status)
-            changes["status"] = request.status
+        self._apply_status(request, base, changes, target_type)
         if request.set_tags is not None:
             self._validator.validate_tags(request.set_tags, [tag.key for tag in uow.tags.all()])
             changes["tags"] = tuple(request.set_tags)
-        if request.set_related is not None:
-            refs = _parse_refs(request.set_related)
-            id_to_type = {doc.id: doc.type for doc in uow.documents.all()}
-            self._validator.validate_related(
-                [ref.target for ref in refs], id_to_type, source_id=base.id
-            )
-            self._validator.validate_relation_kinds(base.type, refs, id_to_type)
-            changes["related"] = refs
+        self._apply_related(request, base, changes, uow, target_type)
         if request.set_owner is not None:
             changes["owner"] = request.set_owner
         if request.set_code is not None:
@@ -752,6 +760,95 @@ class DocumentService:
         if request.mark_verified:
             changes["verified"] = self._clock.today()
         return content_changed
+
+    def _apply_type(
+        self, request: UpdateDocumentRequest, base: Document, changes: dict[str, object]
+    ) -> str:
+        """Stage a retype and return the type the rest of the write is checked against.
+
+        The id is deliberately untouched. It is the corpus's only address —
+        every ``related`` edge that points here spells it out, as does anything
+        outside the store — so a document retyped from ``decision`` keeps its
+        ``adr-`` prefix under a type whose prefix is something else. The prefix
+        records which type *minted* the id, not which type owns it now.
+
+        A retype is not marked as a content change: ``type`` is in
+        ``content_hash`` (a write must not silently lose one) but not in
+        ``embedding_text``, so the vectors are unaffected and re-embedding the
+        corpus to rename it would be pure cost.
+        """
+        if request.set_type is None or request.set_type == base.type:
+            return base.type
+        # Unknown target: raises naming the types that exist. The *source* type
+        # is never looked up, which is what keeps the retype available as the
+        # exit from a type `disable_types` has just removed.
+        self._schema.get(request.set_type)
+        changes["type"] = request.set_type
+        return request.set_type
+
+    def _apply_status(
+        self,
+        request: UpdateDocumentRequest,
+        base: Document,
+        changes: dict[str, object],
+        target_type: str,
+    ) -> None:
+        """Stage the status, validated against ``target_type``.
+
+        On a retype the check is *membership*, not transition: the type the
+        document is leaving has its own transition graph, and that graph says
+        nothing about a different type's. The current status is carried over
+        when the new type declares it and the write is refused when it does
+        not — never quietly reset to the new type's ``default_status``, which
+        across a corpus rewrites every ``accepted`` to ``draft`` and reports
+        success.
+        """
+        if target_type != base.type:
+            status = base.status if request.status is None else request.status
+            if request.status is None and not self._schema.get(target_type).is_valid_status(status):
+                valid = ", ".join(self._schema.get(target_type).statuses)
+                raise InvalidStatusError(
+                    f"cannot retype {base.id!r} to {target_type!r}: its status {status!r} "
+                    f"is not one that type declares. Pass --status with one of: {valid}"
+                )
+            self._validator.validate_status(target_type, status)
+            if status != base.status:
+                changes["status"] = status
+            return
+        if request.status is not None and request.status != base.status:
+            if request.allow_transition_override:
+                self._validator.validate_status(base.type, request.status)
+            else:
+                self._validator.validate_transition(base.type, base.status, request.status)
+            changes["status"] = request.status
+
+    def _apply_related(
+        self,
+        request: UpdateDocumentRequest,
+        base: Document,
+        changes: dict[str, object],
+        uow: UnitOfWork,
+        target_type: str,
+    ) -> None:
+        """Stage the edges, and re-check the existing ones when the type moved.
+
+        ``allowed_relations`` is a property of the *source* type, so a retype can
+        carry a document under a whitelist its untouched edges do not satisfy.
+        They are validated even though this call did not supply them, because
+        this is the write that would persist them.
+        """
+        retyped = target_type != base.type
+        if request.set_related is None and not (retyped and base.related):
+            return
+        id_to_type = {doc.id: doc.type for doc in uow.documents.all()}
+        if request.set_related is None:
+            self._validator.validate_relation_kinds(target_type, base.related, id_to_type)
+            return
+        refs = _parse_refs(request.set_related)
+        targets = [ref.target for ref in refs]
+        self._validator.validate_related(targets, id_to_type, source_id=base.id)
+        self._validator.validate_relation_kinds(target_type, refs, id_to_type)
+        changes["related"] = refs
 
     def _apply_body(
         self,

@@ -365,6 +365,7 @@ def build_mcp_server(
     def docir_update(
         doc_id: str,
         status: str | None = None,
+        set_type: str | None = None,
         set_title: str | None = None,
         set_description: str | None = None,
         set_tags: list[str] | None = None,
@@ -392,6 +393,10 @@ def build_mcp_server(
         Args:
             doc_id: The document to edit.
             status: New status. Must be a legal transition from the current one.
+            set_type: Retype the document. The id never changes, prefix
+                included — it is the corpus's only address. The file moves to
+                the new type's directory. The status carries over if the new
+                type declares it; if it does not, pass `status` too.
             set_title: Replace the title.
             set_description: Replace the description.
             set_tags: Replace the tag list wholesale (not a merge).
@@ -415,6 +420,7 @@ def build_mcp_server(
         payload: dict[str, object] = {
             "doc_id": doc_id,
             "status": status,
+            "set_type": set_type,
             "set_title": set_title,
             "set_description": set_description,
             "set_tags": set_tags,

@@ -408,6 +408,10 @@ def add(
 def update(
     doc_id: Annotated[str, typer.Argument(help="Document id.")],
     status: Annotated[str | None, typer.Option("--status")] = None,
+    set_type: Annotated[
+        str | None,
+        typer.Option("--type", help="Retype the document. The id never changes."),
+    ] = None,
     set_title: Annotated[str | None, typer.Option("--set-title")] = None,
     set_description: Annotated[str | None, typer.Option("--set-description")] = None,
     set_tags: Annotated[str | None, typer.Option("--set-tags")] = None,
@@ -443,11 +447,27 @@ def update(
     ] = False,
     wait_embeddings: Annotated[bool, typer.Option("--wait-embeddings")] = False,
 ) -> None:
-    """Update a document (metadata patch and/or a body edit)."""
+    """Update a document (metadata patch and/or a body edit).
+
+    --type retypes the document. Its id is left alone, prefix included: the id is
+    the only address the corpus has for it, so `adr-3f9a2b1c` stays `adr-3f9a2b1c`
+    under a type whose prefix is something else. A prefix records which type
+    minted an id, not which type owns it now. The file moves into the new type's
+    directory, keeping its filename.
+
+    The status is carried over if the new type declares it, and the write is
+    refused if it does not — pass --status alongside --type to say what it
+    becomes. That is a membership check, not a transition: the type being left
+    has no say over the statuses of the one being entered.
+
+    Retyping works even when the current type is one the schema no longer
+    declares, which is how a corpus leaves a type that `disable_types:` removed.
+    """
     body_text = resolve_body(body, body_file, stdin, default="")
     payload: dict[str, object] = {
         "doc_id": doc_id,
         "status": status,
+        "set_type": set_type,
         "set_title": set_title,
         "set_description": set_description,
         "set_tags": None if set_tags is None else _split_csv(set_tags),

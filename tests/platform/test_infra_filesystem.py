@@ -9,7 +9,11 @@ import pytest
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.value_objects.relations import RelatedRef
 from docir.modules.tags.domain.entities.tag import Tag
-from docir.platform.errors import DocumentNotFoundError, ValidationError
+from docir.platform.errors import (
+    DocumentNotFoundError,
+    DuplicateDocumentIdError,
+    ValidationError,
+)
 from docir.platform.filesystem.markdown_store import MarkdownDocumentFileStore
 from docir.platform.filesystem.tag_store import YamlTagFileStore
 
@@ -150,6 +154,61 @@ class TestMarkdownStore:
         (tmp_path / "decisions" / "adr-9999-bad.md").write_text(_MALFORMED, encoding="utf-8")
         assert {d.id for d in store.scan()} == {"adr-0001"}  # malformed skipped
         assert any("adr-9999-bad.md" in path for path, _reason in store.find_malformed())
+
+
+class TestRelocate:
+    """The paired write for a retype (adr-f8cce745d0d5)."""
+
+    def test_it_moves_the_file_and_keeps_the_filename(self, tmp_path) -> None:
+        store = MarkdownDocumentFileStore(tmp_path)
+        original = store.write(_doc())
+        moved = store.relocate(_doc(type="product_decision"), from_path=original)
+        assert moved == "product_decisions/adr-0001-auth-strategy.md"
+        assert (tmp_path / moved).exists()
+        assert not (tmp_path / original).exists()
+        assert store.read(moved).type == "product_decision"
+
+    def test_the_vacated_directory_goes_with_the_last_document(self, tmp_path) -> None:
+        store = MarkdownDocumentFileStore(tmp_path)
+        original = store.write(_doc())
+        store.relocate(_doc(type="product_decision"), from_path=original)
+        assert not (tmp_path / "decisions").exists()
+
+    def test_a_directory_with_documents_left_in_it_stays(self, tmp_path) -> None:
+        store = MarkdownDocumentFileStore(tmp_path)
+        original = store.write(_doc())
+        store.write(_doc(id="adr-0002", title="Second"))
+        store.relocate(_doc(type="product_decision"), from_path=original)
+        assert (tmp_path / "decisions").is_dir()
+
+    def test_the_docs_root_itself_is_never_pruned(self, tmp_path) -> None:
+        # A document written at the root has no type directory to vacate, and
+        # rmdir'ing the store's docs root would take the whole corpus with it.
+        store = MarkdownDocumentFileStore(tmp_path)
+        (tmp_path / "adr-0001-loose.md").write_text(
+            store._render(_doc()),
+            encoding="utf-8",
+        )
+        store.relocate(_doc(type="product_decision"), from_path="adr-0001-loose.md")
+        assert tmp_path.is_dir()
+
+    def test_an_occupied_destination_is_refused(self, tmp_path) -> None:
+        # Same guard as `create=True`: the filename opens with the id, so
+        # something else already claims it there and overwriting would drop that
+        # document from every read path.
+        store = MarkdownDocumentFileStore(tmp_path)
+        original = store.write(_doc())
+        store.write(_doc(type="product_decision"))
+        with pytest.raises(DuplicateDocumentIdError):
+            store.relocate(_doc(type="product_decision"), from_path=original)
+        assert (tmp_path / original).exists()  # the source is left intact
+
+    def test_relocating_onto_itself_is_a_plain_write(self, tmp_path) -> None:
+        store = MarkdownDocumentFileStore(tmp_path)
+        original = store.write(_doc())
+        same = store.relocate(_doc(title="Retitled"), from_path=original)
+        assert same == original
+        assert store.read(same).title == "Retitled"
 
 
 class TestTagFileStore:

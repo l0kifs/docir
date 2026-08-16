@@ -105,6 +105,7 @@ class Dispatcher:
         request = UpdateDocumentRequest(
             doc_id=_str(payload, "doc_id"),
             status=_opt_str(payload, "status"),
+            set_type=_opt_str(payload, "set_type"),
             set_title=_opt_str(payload, "set_title"),
             set_description=_opt_str(payload, "set_description"),
             set_tags=_opt_tuple(payload, "set_tags"),

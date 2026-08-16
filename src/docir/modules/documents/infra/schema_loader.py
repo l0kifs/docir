@@ -5,6 +5,9 @@ named bundled profiles and the file's own inline overrides) or defines its
 types inline the old way. Inline-only files stay fully backward compatible:
 no core is injected and relation kinds are unconstrained unless the file opts in
 with its own ``relation_types``.
+
+Merging only ever *adds* types, so ``disable_types:`` is how a store subtracts
+one it did not ask for — see :func:`_apply_disabled_types`.
 """
 
 from __future__ import annotations
@@ -82,7 +85,11 @@ def parse_schema(raw: object) -> Schema:
     if not isinstance(types_raw, dict) or not types_raw:
         raise SchemaError("schema must define a non-empty 'types' mapping (or 'profiles')")
     return Schema(
-        types=_parse_types_mapping(types_raw, _parse_id_style(raw.get("id_style"))),
+        types=_apply_disabled_types(
+            _parse_types_mapping(types_raw, _parse_id_style(raw.get("id_style"))),
+            raw.get("disable_types"),
+            types_raw,
+        ),
         relation_types=frozenset(_parse_relation_types(raw.get("relation_types"))),
         relation_kinds=_parse_relation_kinds(raw.get("relation_types")),
     )
@@ -130,10 +137,67 @@ def _merge_profiled(raw: object) -> Schema:
     if not merged_types:
         raise SchemaError("resolved schema has no types after merging profiles")
     return Schema(
-        types=merged_types,
+        types=_apply_disabled_types(merged_types, raw.get("disable_types"), raw.get("types")),
         relation_types=frozenset(merged_kinds),
         relation_kinds=merged_props,
     )
+
+
+def _apply_disabled_types(
+    merged: dict[str, TypeSchema], names: object, inline: object
+) -> dict[str, TypeSchema]:
+    """Remove the types named by ``disable_types:`` from the resolved set.
+
+    Merging is additive — the core is injected whenever a ``profiles:`` key is
+    present, and an inline block can only *override a type by its own name*. So
+    a store had no way to say "this corpus has no ``decision``": the name stayed
+    addable and, worse, its ``prefix`` stayed claimed, which made a differently
+    named type with the same prefix unexpressible. Renaming a corpus's types
+    while keeping its ids (``adr-...``) is exactly that shape
+    (issue-ab138501abfd).
+
+    Two rules keep it from being a quiet way to break a store:
+
+    * the name must be in the resolved set. A typo'd entry that silently did
+      nothing forever is the failure mode ``required:`` and the status targets
+      already have loader checks for — reported here, naming what would work.
+    * it may not name a type the *same file* declares inline. Declaring and
+      disabling one name in one file is a contradiction with no reading worth
+      guessing at; the fix is to delete the block, which the message says.
+
+    What it deliberately does not do is consult the corpus: schema resolution
+    knows nothing about documents, and disabling a type still in use is a
+    supported (if pointed) move — ``docir check`` reports those documents as
+    ``unknown-type`` and ``schema-drift`` names the change that caused it, the
+    same way disabling a profile already behaves. ``docir update <id> --type``
+    is the way out, and works *from* an unknown type for that reason.
+    """
+    if names is None:
+        return merged
+    if not isinstance(names, list):
+        raise SchemaError("'disable_types' must be a list of type names")
+    disabled = {str(name) for name in names}
+
+    unknown = sorted(disabled - set(merged))
+    if unknown:
+        known = ", ".join(sorted(merged)) or "<none>"
+        raise SchemaError(
+            f"'disable_types' names type(s) this schema does not define: "
+            f"{', '.join(repr(name) for name in unknown)}; defined types: {known}"
+        )
+
+    declared_here = sorted(disabled & {str(k) for k in inline}) if isinstance(inline, dict) else []
+    if declared_here:
+        raise SchemaError(
+            f"type(s) {', '.join(repr(name) for name in declared_here)} are both declared "
+            f"in this file's 'types:' block and listed in 'disable_types'; delete the "
+            f"block instead of disabling it"
+        )
+
+    remaining = {name: spec for name, spec in merged.items() if name not in disabled}
+    if not remaining:
+        raise SchemaError("'disable_types' would leave the schema with no types at all")
+    return remaining
 
 
 def _parse_relation_types(value: object) -> set[str]:

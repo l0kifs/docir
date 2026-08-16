@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-08-16
+
+A one-change release: the flag that claimed to recompute your vectors is gone, because the
+rebuild it skipped had been doing that all along and never said so.
+
+### Upgrade notes
+
+- **If you call `docir reindex --embeddings`, drop the flag.** It is now an unknown option and
+  exits non-zero. Plain `docir reindex` does everything it did and writes the two stamps it
+  skipped; `docir self upgrade` runs that for you.
+- **Nothing else changes.** No migration, no index rebuild required by this release, no document
+  is rewritten. `reindex` output gains a key.
+
 ### Removed
 
 - **`docir reindex --embeddings` (breaking).** It selected a different operation rather than
@@ -1515,7 +1528,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/l0kifs/docir/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/l0kifs/docir/compare/v0.13.1...v0.14.0
 [0.13.1]: https://github.com/l0kifs/docir/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/l0kifs/docir/compare/v0.12.0...v0.13.0

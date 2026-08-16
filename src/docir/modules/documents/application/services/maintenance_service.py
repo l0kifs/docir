@@ -141,6 +141,35 @@ class MaintenanceService:
             embeddings_recomputed=self._scheduler.flush(),
         )
 
+    def resync(self) -> ReindexResult:
+        """Rebuild only what the build stamp says is not already indexed.
+
+        What ``docir self upgrade`` runs. A full rebuild re-embeds every
+        document it re-saves, and on a 300-document store that is ~96% of the
+        command — the right price exactly once, when the code that *reads*
+        documents has moved under them (adr-6a4718fa7a7d: a release that changes
+        chunking is a full rebuild). Paid again against a store this same build
+        already indexed, it recomputes vectors byte-identical to the ones
+        already there, which is what made an upgrade of an unchanged corpus cost
+        a minute: measured at 58.4 s against 1.5 s for the same store's changed
+        pass, 315 documents and 1,326 vectors.
+
+        The stamp has to be read *before* the rebuild: both modes write it, so a
+        cheap pass would erase the evidence that a full one was needed.
+
+        It deliberately does **not** go through :meth:`stale_index_build`, which
+        answers a different question. That one folds "never recorded" into
+        ``None`` because absent means unknown and `check` must not report a
+        finding nobody can act on. Here unknown has to mean *rebuild*: a store
+        with no stamp was last built by code that did not write one, so its
+        vectors are exactly the ones a full pass exists to replace. Equality
+        against the running version is the only reading that is safe in both
+        directions — a downgrade needs the rebuild as much as an upgrade.
+        """
+        with self._uow_factory() as uow:
+            recorded = uow.index_build.get()
+        return self.reindex(changed_only=recorded == self._version)
+
     def flush_embeddings(self) -> int:
         """Synchronously drain the embedding queue (``docir embed --flush``)."""
         return self._scheduler.flush()
@@ -310,11 +339,17 @@ class MaintenanceService:
         needs a schema decision. They come back in ``remaining``.
         """
         # Repair reads the files as the source of truth, so bring the index in
-        # line first: id allocation consults it to find a free number.
-        self.reindex()
+        # line first: id allocation consults it to find a free number. Both
+        # passes are `--changed`, because agreeing with the files is all either
+        # one is for: the deletion sweep and `_restore_id_sequences` run in that
+        # mode too (the id allocator sees every id on disk either way), and what
+        # it skips is re-saving — and so re-embedding — documents that did not
+        # move. A re-issued file's hash changes with its id, so the second pass
+        # still picks up everything `_repair_duplicate_ids` rewrote.
+        self.reindex(changed_only=True)
         actions = self._repair_duplicate_ids()
         if actions:
-            self.reindex()
+            self.reindex(changed_only=True)
         actions.extend(self._repair_dangling())
         return RepairResult(actions=tuple(actions), remaining=tuple(self.check()))
 

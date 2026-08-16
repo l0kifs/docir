@@ -51,6 +51,12 @@ files and the derived index never disagree.
   `ReindexResult.embeddings_recomputed` reports the drained queue: a rebuild re-embeds every
   document it re-saves, and never said so — which is what let a "recompute the vectors" mode
   look necessary (adr-6a4718fa7a7d).
+- `MaintenanceService.resync() -> ReindexResult` — what `docir self upgrade` runs. Reads the
+  build stamp and rebuilds in full only when some other version wrote it, since a full pass
+  re-embeds everything it re-saves (~96% of the command) and has nothing to recompute on a
+  store this build already indexed. Equality against the running version, so a downgrade
+  rebuilds too, and an absent stamp rebuilds — unlike `check`'s `stale-index-build`, where
+  absent means unknown and stays silent, here unknown means the vectors predate the stamp.
 - `MaintenanceService.check() -> [CheckIssue]` — Tier 1 structural findings (incl. staleness,
   and `unknown-type`/`unknown-status`/`unknown-tag`, the three Tier 0 rules a hand-edit can
   bypass, plus `tag-key-format` for a registered key outside the shared grammar). Also

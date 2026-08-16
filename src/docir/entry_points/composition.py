@@ -454,7 +454,11 @@ def upgrade_store(
 
     * ``reindex`` — the index is derived and gitignored, and it is the only
       writer of the schema baseline and of the version that built it, so a store
-      reports no drift and no stale build until it is rebuilt.
+      reports no drift and no stale build until it is rebuilt. It runs in
+      ``resync`` mode, which rebuilds in full only when the build stamp says
+      some other version produced this index; against a store the running build
+      already indexed there is nothing for a full pass to recompute, and paying
+      for one cost ~60 s per 300 documents.
     * ``agent update`` — the instruction files are rendered from a template
       inside the package and stamped with the version that rendered them.
       Nothing else reports that the stamp has fallen behind.
@@ -466,8 +470,15 @@ def upgrade_store(
     starting with the rebuild that records which version built the index
     (adr-31aa7aa60d11). ``upgraded_from`` is what that handoff carries, and is
     ``None`` when no install happened.
+
+    It deliberately does *not* gate the rebuild. ``upgraded_from`` knows only
+    whether an install happened in *this* invocation, so it is blind to a docir
+    upgraded out of band — ``uv tool upgrade docir`` and then ``self upgrade``,
+    which finds the package current — and would skip the full pass that new
+    build needs. The stamp in the index answers the question directly, and in
+    both directions.
     """
-    reindex = run("reindex", {})
+    reindex = run("reindex", {"resync": True})
     setup = build_agent_service(version).update(
         UpdateRequest(project_root=project_root, global_root=Path.home())
     )

@@ -197,6 +197,15 @@ class Dispatcher:
         # recomputed and neither stamp written, so a store that had just been
         # reindexed still reported `stale-index-build`; the rebuild it skipped
         # re-embeds everything anyway (adr-6a4718fa7a7d, issue-b24e14474820).
+        # `resync` is a payload key rather than a command of its own: it is
+        # reached only by `docir self upgrade`, which is deliberately not an MCP
+        # tool (the halves it orchestrates already are, adr-31aa7aa60d11), and a
+        # new command would force one into existence to satisfy the tool-parity
+        # guard. It picks the mode from the build stamp instead of taking it
+        # from the caller, so the choice cannot be made by a client that cannot
+        # see the stamp.
+        if _bool(payload, "resync"):
+            return asdict(self._maintenance.resync())
         result = self._maintenance.reindex(changed_only=_bool(payload, "changed_only"))
         return asdict(result)
 

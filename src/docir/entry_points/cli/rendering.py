@@ -453,12 +453,18 @@ def render_upgrade(
         )
     skipped = reindex.get("documents_skipped")
     embedded = reindex.get("embeddings_recomputed")
+    indexed = reindex.get("documents_indexed", 0)
     console.print(
-        f"[cyan]reindex[/]   {reindex.get('documents_indexed', 0)} documents, "
+        f"[cyan]reindex[/]   {indexed} documents, "
         f"{reindex.get('tags_indexed', 0)} tags"
         # The vectors were always recomputed here; saying so is what stops the
         # next reader reaching for `reindex --embeddings` on top (issue-b24e14474820).
         + (f", {embedded} vectors" if embedded else "")
+        # Same reason the package line spells out "already the newest build":
+        # `upgrade` resyncs, so it re-saves nothing when this build already
+        # indexed the store and no file moved — and a bare "0 documents" reads
+        # like the rebuild failed rather than like there was none to do.
+        + ("" if indexed else " [dim](index already built by this version)[/]")
         + (f"  [yellow]{skipped} skipped[/]" if skipped else "")
     )
     render_setup(agents)

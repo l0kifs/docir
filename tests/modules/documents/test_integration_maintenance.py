@@ -9,7 +9,7 @@ import pytest
 
 from docir import __version__
 from docir.config.settings import Settings
-from docir.entry_points.composition import build_container
+from docir.entry_points.composition import Container, build_container
 from docir.entry_points.dispatch import Dispatcher
 from docir.platform.errors import (
     DocumentNotFoundError,
@@ -167,6 +167,101 @@ class TestARebuildIsHowVectorsAreRecomputed:
         result = seeded.dispatch("reindex", {"changed_only": True, "embeddings": True})
         assert result["documents_indexed"] == 0
         assert result["embeddings_recomputed"] == 0
+
+
+class TestResyncRebuildsOnlyWhenTheBuildMoved:
+    """`docir self upgrade` paid for a full re-embed of an unchanged corpus.
+
+    A full pass re-embeds every document it re-saves, which measured 58.4 s
+    against 1.5 s for the changed pass on a 315-document store — 96% of the
+    command, recomputing vectors byte-identical to the ones already indexed.
+    The build stamp is the only thing that separates "the reader moved under
+    these documents" from "nothing to do", so `resync` reads it *before* the
+    rebuild: both modes write it, so a cheap pass would erase the evidence.
+    """
+
+    @staticmethod
+    def _stamp(uow_factory: Callable[[], UnitOfWork], version: str) -> None:
+        with uow_factory() as uow:
+            uow.index_build.set(version)
+            uow.commit()
+
+    def test_a_store_this_build_indexed_is_not_rebuilt(self, seeded: Dispatcher) -> None:
+        seeded.dispatch("reindex", {})  # stamps the running version
+        result = seeded.dispatch("reindex", {"resync": True})
+        assert result["documents_indexed"] == 0
+        assert result["embeddings_recomputed"] == 0
+
+    def test_another_version_forces_the_full_rebuild(
+        self, seeded: Dispatcher, uow_factory: Callable[[], UnitOfWork]
+    ) -> None:
+        seeded.dispatch("reindex", {})
+        self._stamp(uow_factory, "0.0.1")
+        result = seeded.dispatch("reindex", {"resync": True})
+        assert result["documents_indexed"] >= 1
+        assert result["embeddings_recomputed"] >= 1
+
+    def test_a_downgrade_rebuilds_too(
+        self, seeded: Dispatcher, uow_factory: Callable[[], UnitOfWork]
+    ) -> None:
+        # Equality, not "older than" — the same rule `stale-index-build` uses.
+        seeded.dispatch("reindex", {})
+        self._stamp(uow_factory, "99.0.0")
+        assert seeded.dispatch("reindex", {"resync": True})["documents_indexed"] >= 1
+
+    def test_an_absent_stamp_rebuilds(
+        self, seeded: Dispatcher, uow_factory: Callable[[], UnitOfWork]
+    ) -> None:
+        """Unknown means rebuild here, the opposite of what `check` does with it.
+
+        `check` folds "never recorded" into silence because absent means unknown
+        and a finding nobody can act on is noise. This decision cannot borrow
+        that reading: a store with no stamp was last built by code that did not
+        write one, so its vectors are exactly the ones a full pass replaces.
+        Routing through `stale_index_build()` — which returns `None` for both
+        "this build" and "never recorded" — would skip the rebuild here.
+        """
+        with uow_factory() as uow:
+            assert uow.index_build.get() is None
+        assert seeded.dispatch("reindex", {"resync": True})["documents_indexed"] >= 1
+
+    def test_it_still_stamps_and_leaves_check_quiet(
+        self, seeded: Dispatcher, uow_factory: Callable[[], UnitOfWork]
+    ) -> None:
+        # The cheap path must not cost the store its stamp or its baseline —
+        # that was the defect that retired `reindex --embeddings`.
+        seeded.dispatch("reindex", {})
+        seeded.dispatch("reindex", {"resync": True})
+        with uow_factory() as uow:
+            assert uow.index_build.get() == __version__
+        kinds = {i["kind"] for i in seeded.dispatch("check", {})}
+        assert "stale-index-build" not in kinds and "schema-drift" not in kinds
+
+
+def test_repair_does_not_re_embed_untouched_documents(
+    seeded: Dispatcher, container: Container, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`check --fix` reindexed in full first, so it paid the same ~60 s.
+
+    Its rebuild is only there to make the index agree with the files before id
+    allocation reads it, and `--changed` does that: the deletion sweep and the
+    id-counter restore run in both modes.
+
+    Counted at the embedder, not asserted through a later `reindex --changed`:
+    that would report 0 whichever mode `repair` used — a full rebuild also
+    leaves the index agreeing with the files — so it would hold with the defect
+    reintroduced and prove nothing.
+    """
+    seeded.dispatch("reindex", {})  # index and vectors now current
+    calls: list[str] = []
+    embed = container.embedder.embed
+    monkeypatch.setattr(
+        container.embedder, "embed", lambda text: (calls.append(text), embed(text))[1]
+    )
+
+    seeded.dispatch("repair", {})
+
+    assert calls == []
 
 
 def test_reindex_skips_malformed_file(dispatcher: Dispatcher, settings: Settings) -> None:

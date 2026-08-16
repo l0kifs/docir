@@ -96,6 +96,45 @@ def test_it_clears_the_stale_build_finding(
     assert "stale-index-build" not in kinds
 
 
+def test_a_second_upgrade_does_not_rebuild_what_the_first_one_built(
+    settings: Settings, tmp_path
+) -> None:
+    """The command a user runs when it turns out there was nothing to upgrade.
+
+    The rebuild re-embeds every document it re-saves — 96% of the command's
+    runtime, ~58 s on a 315-document store — and running it against an index
+    this same build produced recomputes vectors identical to the ones already
+    stored. The first upgrade stamps the running version; the second one reads
+    that stamp and re-saves nothing.
+    """
+    _add()
+    assert _upgrade(str(tmp_path))["reindex"]["documents_indexed"] == 1
+
+    again = _upgrade(str(tmp_path))["reindex"]
+    assert again["documents_indexed"] == 0
+    assert not again.get("embeddings_recomputed")
+    # Cheap does not mean partial: the tag registry is still walked, and the two
+    # stamps are still written — that combination is what `reindex --embeddings`
+    # got wrong (adr-6a4718fa7a7d).
+    assert "stale-index-build" not in {
+        finding["kind"] for finding in _upgrade(str(tmp_path)).get("findings", [])
+    }
+
+
+def test_a_skipped_rebuild_says_so_rather_than_printing_a_bare_zero(
+    settings: Settings, tmp_path
+) -> None:
+    # "reindex 0 documents" reads like the rebuild failed. The package line
+    # already spells out "already the newest build" for the same reason.
+    _add()
+    _upgrade(str(tmp_path))
+    result = runner.invoke(
+        app, ["--no-daemon", "--pretty", "self", "upgrade", str(tmp_path), "--no-package"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "already built by this version" in result.stdout
+
+
 def test_it_refreshes_an_installed_skill_and_leaves_an_absent_one_alone(
     settings: Settings, tmp_path
 ) -> None:

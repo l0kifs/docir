@@ -1,0 +1,48 @@
+name: Feature request
+description: Something docir should do that it does not
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        docir records its design decisions as documents in its own store. Before writing,
+        it is worth checking whether the thing you want was already decided against and why —
+        [browse them](https://l0kifs.github.io/docir/index.html), or from a checkout run
+        `docir context "<what you want>"`.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: >
+        What you were trying to do, and where docir got in the way. Describe the situation
+        rather than the feature — the fix may not be the one you have in mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: What you do today instead
+      description: The workaround, if there is one, and what it costs.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like docir to do
+      description: If you have a command or flag in mind, write it out as you would type it.
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Does this fit docir's shape?
+      description: >
+        These are load-bearing properties, not preferences. A proposal that breaks one is
+        still worth filing — say so, and say why it is worth it.
+      options:
+        - label: The markdown files stay the source of truth; the index stays derived and rebuildable
+        - label: Every write still goes through the CLI, so frontmatter and ids cannot drift
+        - label: List reads still return skeletons without bodies — the context-saving contract
+        - label: It does not turn an advisory heuristic into a hard error

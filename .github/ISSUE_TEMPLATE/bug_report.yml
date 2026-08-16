@@ -1,0 +1,97 @@
+name: Bug report
+description: Something docir does that it should not, or does not do that it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Every docir command prints JSON when its output is captured, so `docir check | cat`
+        and friends paste straight in. Please do not attach screenshots of terminal output.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: The command you ran and what came back. Paste the output rather than describing it.
+      render: console
+      placeholder: |
+        $ docir context "auth" | cat
+        error: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: docir version
+      description: Output of `docir version`.
+      placeholder: "0.13.1"
+    validations:
+      required: true
+
+  - type: textarea
+    id: install
+    attributes:
+      label: How docir is installed
+      description: Output of `docir self status | cat` — it reports the install method, which changes what upgrade does.
+      render: json
+    validations:
+      required: true
+
+  - type: dropdown
+    id: daemon
+    attributes:
+      label: Does it still happen with `--no-daemon`?
+      description: >
+        A daemon holding old code answers from it, and a stale answer looks exactly like a
+        correct one. Re-run the same command with `--no-daemon` before reporting.
+      options:
+        - "Yes — same result with --no-daemon"
+        - "No — it only happens through the daemon"
+        - "Not applicable (the command does not use the daemon)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: embedder
+    attributes:
+      label: Which embedder
+      options:
+        - "Default (the real model)"
+        - "DOCIR_EMBEDDER=deterministic"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: store
+    attributes:
+      label: Which store
+      options:
+        - "A project-local .docir (created by docir init)"
+        - "The global ~/.docir"
+        - "An explicit --home or DOCIR_HOME"
+    validations:
+      required: true
+
+  - type: textarea
+    id: check
+    attributes:
+      label: What `docir check` reports
+      description: Output of `docir reindex && docir check | cat`. Findings here often explain the bug.
+      render: json
+
+  - type: input
+    id: platform
+    attributes:
+      label: OS and Python version
+      placeholder: "macOS 15.6, Python 3.12.4"
+    validations:
+      required: true

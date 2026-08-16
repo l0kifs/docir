@@ -1,0 +1,14 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question about using docir
+    url: https://github.com/l0kifs/docir/discussions/categories/q-a
+    about: Ask in Q&A — no reproduction needed, and the answer stays findable for the next person.
+  - name: Idea or proposal
+    url: https://github.com/l0kifs/docir/discussions/categories/ideas
+    about: Float a change here first. Issues are for reproducible bugs and work already agreed on.
+  - name: Design rationale (ADRs, architecture, runbooks)
+    url: https://l0kifs.github.io/docir/index.html
+    about: docir's own documentation, published from its own store. Most "why is it like this?" questions are answered here.
+  - name: Security vulnerability
+    url: https://github.com/l0kifs/docir/security/advisories/new
+    about: Report privately. Please do not open a public issue.

@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-08-16
+
+The release that lets a corpus rename its own vocabulary, and that tells you what a schema edit
+costs before it is history. Two defects in section addressing are fixed underneath, so a document
+that quotes markdown is finally read the way it is written.
+
+### Upgrade notes
+
+- **Run `docir self upgrade`, then `docir reindex --embeddings`.** The first rebuilds the index
+  and refreshes the generated agent files; the second is needed on top of it, because chunk
+  boundaries move for any document that quotes a fenced heading or has a short section sitting
+  before a long one, and a body whose text did not change is not otherwise re-embedded. Both are
+  index-only: no markdown is rewritten and no document's `updated` advances.
+- **Nothing else is required.** `update --type`, `disable_types:` and the widened
+  `schema validate` are all opt-in; a store that uses none of them behaves exactly as it did in
+  0.13.1. `schema validate`'s exit code has not moved — it still reports a valid file as valid.
+- **`docir schema validate` now prints a `conformance` block.** A script parsing its JSON gains a
+  key; nothing it already read has changed shape.
+
+### Added
+
+- **`docir update <id> --type <name>` retypes a document.** Renaming a corpus's vocabulary was
+  impossible through the CLI: `update` patched every frontmatter field except the one that selects
+  the grammar the others are checked against, so a rename meant hand-editing the markdown the
+  write path exists to own. The id is never re-minted, prefix included — it is the corpus's only
+  address and is spelled out in every `related` edge pointing at the document, so a prefix records
+  which type *minted* an id, never which type owns it now. Status is checked for membership in the
+  target type and a status it does not declare is refused naming the flag that fixes it, never
+  reset to `default_status` (which across a corpus rewrites every `accepted` to `draft` and reports
+  success). The existing edges are re-validated against the new type even when the call does not
+  supply them, the file moves into the new type's directory keeping its filename, and the vacated
+  directory is pruned. A retype is not a content change: nothing is queued for re-embedding.
+- **`disable_types:` subtracts a type from the resolved schema.** Merging only ever added — the
+  core is merged whenever a `profiles:` key is present, `profiles: []` included — so `decision`
+  and its `adr` prefix existed in every store forever, the name stayed addable beside a corpus's
+  own, and the prefix could not be reused. It is applied after core + profiles + inline resolve,
+  and it is refused when it names a type the schema does not define, one the same file also
+  declares inline, or all of them. It deliberately does not consult the corpus: stranding
+  documents on a disabled type is supported and reported as `unknown-type` beside the
+  `schema-drift` finding naming the cause.
 - **`docir lint --deep` reports `ambiguous-heading` and `unqualified-section-ref`.** The first is
   a heading used twice in one document: section reads resolve to the first match, so the rest is
   reachable only by fetching the whole body, and nothing said so. The second is prose naming a
@@ -19,25 +59,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the splitter and reports what it produced — which section, and how many pieces are unaddressable
   — so it has no threshold of its own to tune. Advisory, like every Tier 2 finding: a long
   reference table is frequently right as it is.
-
-### Fixed
-
-- **A short section before a long one no longer erases the long one's heading from the index.**
-  Merging a below-minimum section forward and then hard-splitting the result kept only the first
-  piece's heading, so the following section named no chunk at all — `docir get <id> --section`
-  still returned it, but `matched_section` could never point there. A merge that would overflow
-  the chunk ceiling is now declined: it saves no vector and costs an address.
-- **A `##` inside a fenced code block is no longer read as a section heading.** The chunker
-  already skipped fences; the section read/edit path did not, so a document quoting a markdown
-  template disagreed with itself. `docir get <id> --section` returned a fragment ending in an
-  *unclosed* fence, an unknown-heading error listed phantom headings as real, and
-  `docir update <id> --replace-section` ended the span at the phantom boundary — writing the
-  replacement and stranding the rest of the quote at top level, reporting success. All three
-  paths now read one shared fence-aware scanner. Run `docir reindex --embeddings` after
-  upgrading: chunk boundaries change for any document that quotes a fenced heading.
-
-### Added
-
 - **`docir agent install --agent claude-writing` — a second, opt-in skill covering how to write
   the documents**, beside the one covering how to drive the CLI. Four rules: name each concept
   the same way everywhere, give one document one purpose (its `type` says which), state each fact
@@ -48,6 +69,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`docir schema validate` measures the corpus, not just the file.** It answered one question —
+  does this file load? — about the file alone, so the command a person runs immediately after
+  editing `docs-schema.yaml` reported `valid: true` at the exact moment a corpus could have left
+  the type system. Disabling a type strands every document of it; adding a `required:` field
+  strands every document written before it. It now also reports how many documents carry a type,
+  status, required field or relation kind the schema no longer accepts, by kind, with a bounded
+  sample of ids. No rule is added: it runs the same four schema findings `docir check` does, from
+  one shared implementation. It reads the *files*, not the index — a schema edit is a hand edit,
+  which is when the index is behind — and it still opens no database, so a store too broken to
+  start stays diagnosable. The **exit code does not move**: gating here would fail during a
+  correct migration, which necessarily passes through the stranded state.
+- **A daemon-answered command no longer imports SQLAlchemy.** Such a command is a socket client
+  and never builds a container, so it was paying ~360 ms for SQLAlchemy and Alembic it does not
+  use. `python -m docir version` now loads 655 modules instead of 925. Warm-daemon p50 over 25
+  documents: `context` 0.86 → 0.53 s, `search` 0.87 → 0.55 s, `get` 0.83 → 0.53 s. `--no-daemon`
+  is unchanged, which is the control — that mode does build a container and correctly still pays.
 - **`AGENTS.md` now points at the Claude skill instead of inlining it.** The block used to
   hold the whole ~500-line guide, so a repo installing both targets committed the same text
   twice and only one copy was refreshed — the duplication docir exists to prevent, in docir's
@@ -58,6 +95,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`docir agent install --agent agents` also writes the skill it links.** Previously it wrote
   a block and no skill file at all. `docir agent update` expands the same way, so a block whose
   skill was deleted is repaired rather than left naming a file that is not there.
+
+### Fixed
+
+- **A `##` inside a fenced code block is no longer read as a section heading.** The chunker
+  already skipped fences; the section read/edit path did not, so a document quoting a markdown
+  template disagreed with itself. `docir get <id> --section` returned a fragment ending in an
+  *unclosed* fence, an unknown-heading error listed phantom headings as real, and
+  `docir update <id> --replace-section` ended the span at the phantom boundary — writing the
+  replacement and stranding the rest of the quote at top level, reporting success. All three
+  paths now read one shared fence-aware scanner.
+- **A short section before a long one no longer erases the long one's heading from the index.**
+  Merging a below-minimum section forward and then hard-splitting the result kept only the first
+  piece's heading, so the following section named no chunk at all — `docir get <id> --section`
+  still returned it, but `matched_section` could never point there. A merge that would overflow
+  the chunk ceiling is now declined: it saves no vector and costs an address.
+- **`docir schema validate` counts distinct documents.** `affected` summed the per-kind counts,
+  so a schema edit that stranded one document on both its status and a new required field printed
+  "14 of 8 document(s)".
+
+### Documentation
+
+- **The project has a CONTRIBUTING guide, a security policy and issue/PR templates.** `.github/`
+  held only workflows, so the gate suite, the module rules and the benchmark harnesses were
+  discoverable only by reading `CLAUDE.md` — written for an agent already working in the repo
+  rather than for someone arriving at it. The templates are project-specific: the bug form asks
+  for `docir self status` and whether the failure survives `--no-daemon`, because a daemon holding
+  old code answers from it and a stale answer imitates a correct one. `SECURITY.md` documents the
+  surface docir actually has — the daemon socket, whose only boundary is filesystem permissions;
+  the two narrow network calls; and that `docir build` passes raw HTML in a body through to the
+  page, which is safe for a reviewed corpus and worth knowing for anyone publishing contributed
+  documents.
+- **The README hoists the quickstart and the deep rationale moves into the store.** The
+  architecture note is split into the shape plus five documents — the write path, the read path,
+  the file format, the validation tiers and maintenance — and every long section is broken into
+  individually retrievable ones. docir's own corpus is now written to the rules the new writing
+  skill teaches.
+- **docir's own prose is machine-checked against the CLI.** Every `docir ...` invocation in the
+  README, `CLAUDE.md`, the packaged skill, the six `CONTRACT.md` files, every file in the store
+  and every docstring under `src/` must resolve to a real command with real flags. 37 stale
+  invocations survived in docstrings after the markdown side was already clean.
+- **New benchmark harnesses.** `benchmarks/latency.py` measures read latency by corpus size and
+  daemon mode, `benchmarks/chunking.py` measures the splitting rules against a corpus that
+  declares its real headings by hand, and `benchmarks/tokens.py` prices `context` against a grep
+  baseline. `benchmarks/run.py` is the wrong instrument for a chunking change — its corpus has no
+  section over the ceiling and none quoting a fenced heading, so a broken splitter scores what a
+  working one does.
 
 ## [0.13.1] - 2026-08-13
 
@@ -1409,7 +1492,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.13.1...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/l0kifs/docir/compare/v0.13.1...v0.14.0
 [0.13.1]: https://github.com/l0kifs/docir/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/l0kifs/docir/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/l0kifs/docir/compare/v0.11.0...v0.12.0

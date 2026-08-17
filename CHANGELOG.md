@@ -7,6 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-08-17
+
+Staleness measured a calendar and `orphan` measured `related:` frontmatter, so docir called a
+document suspect because a cadence elapsed and called it unconnected because its author had
+linked it the way most people do — by writing its id in a sentence. Both now read the corpus
+that is actually there.
+
+### Upgrade notes
+
+- **Run `docir self upgrade`.** Two migrations land (0007 adds `document_code.digest`, 0008
+  adds the `mentions` table) and the mention graph exists only after a reindex — until then
+  `orphan` keeps firing on documents that prose already links.
+- **Every peer in `.docir/stores.yaml` needs its own `docir reindex`.** A peer is opened
+  read-only and never migrated (adr-fb938175f72a), so this build skips one whose index
+  predates it, naming the store and the command that fixes it. That is the deliberate cost of
+  the federation fix below; reads still answer from the remaining stores rather than failing.
+- **Nothing is rewritten.** No document changes, no flag retired. The new digests are written
+  only when you run `docir update <id> --verified`.
+
+### Added
+
+- **`docir check` reports `code-changed`: the code under a verified document moved.**
+  `docir update <id> --verified` now fingerprints what each `code:` glob matched (contents and
+  paths, sha256 truncated), and `check` recomputes and compares. This is the evidence half of
+  staleness — the calendar answers "how long since somebody read this", this answers "has the
+  thing it describes changed since". It needs no parser and no history: hashing contents rather
+  than mtimes or a commit id means a clone, a checkout and a rebase are all silent. The digests
+  live in **frontmatter**, not the index, because the index is gitignored and the finding is
+  for whoever clones the repo. A warning, and not promotable: editing code before its docs is
+  the ordinary shape of a change. `check --fix` leaves it — clearing it is a judgement, and a
+  repair has nothing to read with. (adr-bd7c4f3c5764 named this as future work.)
+- **A second relation graph, derived from prose.** Ids named in a body are scanned into a
+  `mentions` table, rebuilt by `reindex` and never written back to frontmatter — `related:`
+  stays the authored, typed layer. On this repo's own corpus that surfaced 451 edges nobody had
+  hand-written. **`orphan` is the only check that reads it**, deliberately: `cycle` would report
+  mutual citation, `dangling` is an error that gates a merge and a body naming a
+  not-yet-written id is ordinary, `layering` needs a direction a mention does not assert, and
+  the delete guard would refuse to remove a document because a paragraph quotes its id.
+  `docir get` shows both directions (`mentions`, `mentioned_by`).
+- **`docir context` expansion follows mentions**, after authored edges and in both directions.
+  Measured before it shipped, which needed a new instrument — `benchmarks/run.py` allocates ids
+  at load time, so its bodies cannot name one and its mention graph is empty. On
+  `benchmarks/mentions.py`: recall@5 **0.84 → 0.93**, precision 0.33 → 0.37, MRR unchanged at
+  0.86. That last figure is a property of the budget rather than of expansion — `seed_budget =
+  limit - expand`, and the same sweep puts MRR at 0.83 for `expand=3`. `expand=1` and `expand=2`
+  were indistinguishable on that fixture, so the shipped default is undistinguished, not
+  measured-optimal.
+- **`docir lint --deep` gains `unresolved-mention`** — an id named in prose that no document
+  carries, one finding per document. Tier 2 and not promotable, measured first: all 47 in this
+  corpus are documentation *examples* (`adr-0007` and friends, in the documents explaining the
+  id format), so a Tier 1 warning would fire 47 times on a healthy corpus and never once on a
+  defect. Filtering code spans does not rescue it either — 20 of the 47 sit outside code, while
+  56 *resolved* mentions live only inside code spans.
+- **`benchmarks/mentions.py`** — a corpus whose bodies carry `{key}` placeholders substituted
+  after id allocation. It mints sequential ids, because random ones move ranking ties (the same
+  code scored 0.79 and 0.81 on consecutive runs), and derives its task grouping from the corpus
+  rather than a hand-written label — the first version's labels were wrong in the direction
+  that flattered the feature.
+
+### Fixed
+
+- **A federated read against a peer indexed by an older docir crashed the whole command.**
+  Every table or column a migration adds is one some peer will not have, and two were already
+  live: `mentions` (0008) took down `context` and `get` with `no such table`, and
+  `document_code.digest` (0007) took down every hydrate, which is `query` too. Through the
+  daemon the user saw only "daemon closed the connection without responding". `peer_status` now
+  compares the peer's `alembic_version` against this build's head, so **one rule covers every
+  past and future migration** — a guard per column worked and had to be remembered, which is
+  the failure mode itself. An *unknown* revision is from a newer docir and is allowed; a
+  missing one is skipped, since "cannot say" is not permission.
+- **`docir agent update` called a stamp-only rewrite an update.** Upgrading 0.14.0 → 0.16.0
+  reported both skill files as `updated  v0.14.0 → v0.16.0` although neither template had
+  changed in either release. A byte comparison cannot see that: the version stamp is written
+  into the file being compared, so it differs on every upgrade by construction. The comparison
+  now blanks the stamp, the action reports `unchanged`, and the misleading arrow is gone.
+  The file is still rewritten — the stamp is the module's only persisted state, so skipping the
+  write would repeat the same transition forever. (adr-9d2b4865689a)
+
 ## [0.16.0] - 2026-08-17
 
 `docir self upgrade` cost a minute on a 300-document store and spent 96% of it recomputing
@@ -1574,7 +1652,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/l0kifs/docir/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/l0kifs/docir/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/l0kifs/docir/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/l0kifs/docir/compare/v0.13.1...v0.14.0

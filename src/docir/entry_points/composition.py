@@ -180,7 +180,15 @@ def build_container(
     code_root = settings.code_root
     code_matcher = None if code_root is None else RepositoryCodeMatcher(code_root)
 
-    document_service = DocumentService(uow_factory, file_store, scheduler, embedder, clock, schema)
+    document_service = DocumentService(
+        uow_factory,
+        file_store,
+        scheduler,
+        embedder,
+        clock,
+        schema,
+        code_matcher=code_matcher,
+    )
     tag_service = TagService(uow_factory, tag_file_store, file_store)
     maintenance_service = MaintenanceService(
         uow_factory,

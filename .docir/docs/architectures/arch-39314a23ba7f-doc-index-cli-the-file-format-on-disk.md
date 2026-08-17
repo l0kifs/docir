@@ -11,7 +11,7 @@ tags:
 - architecture
 title: Doc-Index CLI — the file format on disk
 type: architecture
-updated: '2026-08-15'
+updated: '2026-08-17'
 ---
 
 ## File format
@@ -31,7 +31,7 @@ related:                          # typed edges: bare id = relates_to
 created: 2026-06-15
 updated: 2026-06-30
 owner: platform-team             # optional: staleness steward
-verified: 2026-06-30             # optional: last human re-confirmation
+verified: 2026-06-30             # optional: last re-confirmation
 code:                            # optional: the code this document governs
   - src/auth/**
   - tests/test_auth.py
@@ -74,7 +74,8 @@ field names the command that sets it; none is written by hand.
 | `created` | yes | `docir add` (auto) | Set once, never modified afterward; used for audit/sort queries |
 | `updated` | yes | `docir add` / `update` / `archive` / `unarchive` | Stamped whenever one of those calls actually changes something. Deliberately **not** advanced by the mechanical rewrites — `check --fix`, the unlinking half of `delete --force`, and `tag rename` / `tag rm --force` — because staleness falls back to `updated` when there is no `verified`, so a mechanical bump would launder the review clock. `TagService` has no `Clock` for exactly this reason |
 | `owner` | no | `docir add --owner`, `docir update --set-owner` | Optional steward, surfaced by the staleness check; written only when set |
-| `verified` | no | `docir update --verified` | Optional date a human last re-confirmed the doc is still correct; resets the staleness clock (staleness measures from `verified`, else `updated`) |
+| `verified` | no | `docir update --verified` | Optional date somebody last re-confirmed the doc is still correct; resets the staleness clock (staleness measures from `verified`, else `updated`) |
+| `verified_code` | no | `docir update --verified` | Written alongside `verified` when the store sits in a repository: one digest per `code` glob, of the files that glob matched at that moment. `docir check` recomputes them and reports `code-changed` when they differ. Keyed by pattern, so reordering the globs cannot re-point a digest; a pattern with no entry is *unverified*, never *unchanged*. In the file rather than the index because it is the document's review state and a clone has to see it (adr-d9e6d5ccd0b4) |
 | `archived` | no | `docir archive` / `docir unarchive` | Absent by default; `true` removes the document from active search (FTS, embeddings) while keeping the file and index rows |
 
 ### Field notes

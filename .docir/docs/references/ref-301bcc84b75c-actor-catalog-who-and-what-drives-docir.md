@@ -22,7 +22,7 @@ tags:
 - agents
 title: Actor catalog — who and what drives docir
 type: reference
-updated: '2026-08-15'
+updated: '2026-08-17'
 ---
 
 Reconstructed from the code and tests. `observed` means read off code or executed;
@@ -145,8 +145,8 @@ reported duplicate-id and dangling findings and no command could act on them. **
 now.** `docir check --fix` re-issues duplicate ids (the oldest file keeps the id, so existing
 edges stay valid) and drops dangling edges, reporting every change; `docir check --strict` is
 the pre-merge gate that catches both. `malformed` and `unknown-type` are still returned
-unrepaired in `RepairResult.remaining` — deliberately, because they need a human to decide
-what the file or the schema should say. The written procedures are `run-22e0a6ce6ae1` (AI
+unrepaired in `RepairResult.remaining` — deliberately, because each needs somebody to read
+something and decide what the file or the schema should say. The written procedures are `run-22e0a6ce6ae1` (AI
 code-check checklist) and `run-f4a756206fe0` (upgrading docir in a project).
 See issue-476b4e188fab for the argument.
 

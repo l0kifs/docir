@@ -164,6 +164,18 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
   read view, so a later session can see which decisions concern the files it is
   editing, and `docir check` warns (`unmatched-code`) once a pattern stops
   matching — repoint it with `--set-code` when you move the code it names.
+- **`docir update <id> --verified` records what that code looked like.** From
+  then on `docir check` warns (`code-changed`) as soon as the governed files
+  differ from what they were — the question a review cadence cannot answer.
+- **Verifying is a judgement, and you may make it.** Read the document against
+  the code as it now stands, decide whether it is still true, and stamp
+  `--verified` only if it is. If it is not, fix the document first. Nothing
+  mechanical clears the finding — `check --fix` deliberately leaves it, because
+  a repair has nothing to read with.
+- **Do not verify inside the task that moved the code.** If you edited
+  `src/auth.py` this session, stamping `--verified` on the decision that governs
+  it certifies your own change and turns the signal into "the check is green".
+  Report the finding instead and let the next reader — or the human — clear it.
 - **If a test enforces the decision, govern that test.** docir has no rule
   engine and will not gain one: the test already fails when the code
   contradicts the decision, and `--code tests/test_x.py` records which decision
@@ -250,7 +262,7 @@ Each `related` entry is a **typed edge**: a target id plus a relation *kind*.
 
 ## Staleness (`owner` / `verified`)
 
-For docs that need periodic human re-confirmation, set an `--owner` and, when you
+For docs that need periodic re-confirmation, set an `--owner` and, when you
 (or a human) confirm a doc is still correct, run `docir update <id> --verified`.
 A type's review cadence (`review_days` in the schema) drives a non-blocking
 `stale` warning in `docir check` and a `stale` flag on read views. Editing the
@@ -446,7 +458,7 @@ hand-edited corpus, this is the contract:
 | `type` | ❌ | Must be in the schema, and the id prefix already encodes it (`check` reports `unknown-type`). |
 | `id` | ❌ **never** | It is the primary key. Changing it orphans every inbound link and can duplicate a live id. |
 | `created` / `updated` | ❌ | `updated` is the staleness clock's fallback. |
-| `verified` | ❌ **never** | It means "a human re-read this and it is still true". Nothing can check that, so writing it by hand is simply a false statement. Use `docir update <id> --verified`. |
+| `verified` | ❌ **never** | It means "somebody re-read this and it is still true". Nothing can check that, so writing it by hand is simply a false statement. Use `docir update <id> --verified`. |
 
 **After any hand-edit: `docir reindex` then `docir check`.** Reindex reports
 `documents_skipped` for files whose frontmatter will not parse — those are

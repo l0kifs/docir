@@ -26,7 +26,7 @@ tags:
 - persistence
 title: Keep the corpus trustworthy (maintenance, CI, staleness)
 type: architecture
-updated: '2026-08-16'
+updated: '2026-08-17'
 ---
 
 ## Backbone
@@ -123,8 +123,9 @@ failure mode in this analysis terminated in a state the product could not exit.
 path. It repairs exactly what needs no guess: duplicate ids are re-issued (the *oldest*
 file keeps the id, so existing edges stay valid) and dangling edges are dropped. It
 reindexes first and does not advance `updated`. `malformed` and `unknown-type` are still
-left to a human deliberately and come back in `RepairResult.remaining` — those need
-someone to decide what the file or the schema should say. `run-22e0a6ce6ae1` and
+left unrepaired deliberately and come back in `RepairResult.remaining` — each needs
+somebody to read something and decide what the file or the schema should say, and a
+repair has nothing to read with. `run-22e0a6ce6ae1` and
 `run-f4a756206fe0` are the runbooks. → `issue-476b4e188fab`.
 
 ### H5 — staleness had no route to a human
@@ -136,7 +137,7 @@ view.
 *Closed* — `query --owner X --stale` is the review queue and `update <id> --verified`
 clears an entry. `--stale` is applied before `--limit`, so `--stale --limit 10` means ten
 overdue documents. Delivery stays **pull, not push**: there is deliberately no notifier or
-scheduler, because an automated nag a bot can clear is not a human vouching for content.
+scheduler, because an automated nag a bot can clear is not somebody vouching for content.
 → `issue-b4f441c7210f`.
 
 ### H6 — an administrative rename reset the trust clock
@@ -148,7 +149,7 @@ documents look freshly reviewed.
 
 *Closed* — `TagService` has **no `Clock`**: it was injected only to stamp the date it must
 not stamp (`tag_service.py`). The tag paths rewrite the classification and leave `updated`
-alone, alongside `check --fix` and `delete --force`. Only a human content edit moves
+alone, alongside `check --fix` and `delete --force`. Only a content edit moves
 `updated`. → `issue-9ed4905e0db8`.
 
 ### H7 — reindex --changed never removed deleted documents

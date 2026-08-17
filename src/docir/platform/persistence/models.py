@@ -92,6 +92,10 @@ class DocumentCodeRow(Base):
         String, ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True
     )
     pattern: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    # The digest of what this pattern matched when the document was last
+    # verified. Nullable and non-key: a pattern is declared long before anyone
+    # verifies against it, and NULL is the unknown answer `check` skips.
+    digest: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class EmbeddingRow(Base):

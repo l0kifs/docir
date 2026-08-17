@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 from datetime import date
+from pathlib import Path
 
 import pytest
 
@@ -14,6 +16,7 @@ from docir.platform.errors import (
     DuplicateDocumentIdError,
     ValidationError,
 )
+from docir.platform.filesystem.code_matcher import RepositoryCodeMatcher
 from docir.platform.filesystem.markdown_store import MarkdownDocumentFileStore
 from docir.platform.filesystem.tag_store import YamlTagFileStore
 
@@ -226,3 +229,77 @@ class TestTagFileStore:
         path = tmp_path / "tags.yaml"
         path.write_text("- a\n- b\n")
         assert YamlTagFileStore(path).load() == []
+
+
+class TestCodeFingerprint:
+    """`RepositoryCodeMatcher.fingerprint` — the evidence behind `--verified`.
+
+    Unit-level because the interesting cases are ones the integration tests
+    cannot reach without a hostile filesystem: an unreadable file, a glob the
+    engine refuses, a pattern that reaches into `.git`.
+    """
+
+    def _tree(self, root: Path) -> RepositoryCodeMatcher:
+        (root / "src" / "auth").mkdir(parents=True)
+        (root / "src" / "auth" / "login.py").write_text("a\n", encoding="utf-8")
+        (root / "src" / "auth" / "mfa.py").write_text("b\n", encoding="utf-8")
+        return RepositoryCodeMatcher(root)
+
+    def test_it_is_stable_and_moves_only_when_the_content_does(self, tmp_path: Path) -> None:
+        matcher = self._tree(tmp_path)
+        first = matcher.fingerprint("src/auth/**")
+        assert first is not None
+        assert matcher.fingerprint("src/auth/**") == first
+        (tmp_path / "src" / "auth" / "login.py").write_text("edited\n", encoding="utf-8")
+        assert matcher.fingerprint("src/auth/**") != first
+
+    def test_a_directory_glob_reaches_the_files_inside_it(self, tmp_path: Path) -> None:
+        # `**` yields directories, not files. Without the expansion the most
+        # natural way to write a pattern would digest nothing and silently
+        # record no evidence at all.
+        matcher = self._tree(tmp_path)
+        assert matcher.fingerprint("src/auth/**") == matcher.fingerprint("src/auth")
+
+    def test_renaming_a_file_registers_even_though_the_bytes_are_the_same(
+        self, tmp_path: Path
+    ) -> None:
+        matcher = self._tree(tmp_path)
+        before = matcher.fingerprint("src/auth/**")
+        (tmp_path / "src" / "auth" / "mfa.py").rename(tmp_path / "src" / "auth" / "totp.py")
+        assert matcher.fingerprint("src/auth/**") != before
+
+    def test_git_internals_are_never_part_of_the_answer(self, tmp_path: Path) -> None:
+        # `.git` rewrites itself on operations that touch no source line, so a
+        # broad pattern reaching it would report the code as changed after a
+        # checkout, a fetch, or a commit of something else entirely.
+        matcher = self._tree(tmp_path)
+        (tmp_path / ".git").mkdir()
+        (tmp_path / ".git" / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+        before = matcher.fingerprint("**")
+        (tmp_path / ".git" / "HEAD").write_text("ref: refs/heads/other\n", encoding="utf-8")
+        assert matcher.fingerprint("**") == before
+
+    @pytest.mark.parametrize(
+        ("pattern", "because"),
+        [
+            ("src/nothing/**", "matches nothing, so there is nothing to compare later"),
+            ("/absolute/path", "the glob engine refuses it, as Tier 0 already does"),
+        ],
+    )
+    def test_an_unresolvable_pattern_is_unknown_not_empty(
+        self, tmp_path: Path, pattern: str, because: str
+    ) -> None:
+        assert self._tree(tmp_path).fingerprint(pattern) is None
+
+    def test_an_unreadable_file_makes_the_whole_answer_unknown(self, tmp_path: Path) -> None:
+        # A digest over the part that could be read would compare a subset
+        # against a full set and call the difference a change.
+        matcher = self._tree(tmp_path)
+        locked = tmp_path / "src" / "auth" / "login.py"
+        locked.chmod(0o000)
+        try:
+            if os.access(locked, os.R_OK):  # pragma: no cover - running as root
+                pytest.skip("filesystem permissions are not enforced for this user")
+            assert matcher.fingerprint("src/auth/**") is None
+        finally:
+            locked.chmod(0o644)

@@ -49,7 +49,7 @@ from docir.platform.errors import (
     StaleWriteError,
     ValidationError,
 )
-from docir.platform.filesystem.ports import DocumentFileStore
+from docir.platform.filesystem.ports import CodeMatcher, DocumentFileStore
 from docir.platform.persistence.unit_of_work import UnitOfWork
 
 UnitOfWorkFactory = Callable[[], UnitOfWork]
@@ -110,6 +110,7 @@ class DocumentService:
         clock: Clock,
         schema: Schema,
         scorer: HybridScorer | None = None,
+        code_matcher: CodeMatcher | None = None,
     ) -> None:
         self._uow_factory = uow_factory
         self._file_store = file_store
@@ -119,6 +120,10 @@ class DocumentService:
         self._schema = schema
         self._validator = Tier0Validator(schema)
         self._scorer = scorer or HybridScorer()
+        # Optional for the same reason `check` treats it as optional: a global
+        # store has no repository above it, so there is no tree to fingerprint.
+        # Absent means the verification records a date and no evidence.
+        self._code_matcher = code_matcher
 
     # -- write path ---------------------------------------------------------
 
@@ -272,7 +277,7 @@ class DocumentService:
 
         `updated` is deliberately not advanced on the referencing documents —
         the same rule `check --fix` and the tag paths follow (issue-9ed4905e0db8
-        moved the tag side here). Staleness records when a human last vouched
+        moved the tag side here). Staleness records when somebody last vouched
         for the content, and having a link removed from underneath you is not
         that. A fourth mechanical rewrite does not set `updated` either.
         """
@@ -759,7 +764,53 @@ class DocumentService:
             changes["code"] = tuple(request.set_code)
         if request.mark_verified:
             changes["verified"] = self._clock.today()
+        self._apply_code_digests(request, base, changes)
         return content_changed
+
+    def _apply_code_digests(
+        self, request: UpdateDocumentRequest, base: Document, changes: dict[str, object]
+    ) -> None:
+        """Stage the per-pattern evidence that goes with a verification.
+
+        Runs after the code patterns are staged, and fingerprints the *resulting*
+        set: `--set-code` and `--verified` in one call means the human read the
+        document against the globs they just wrote, not the ones being replaced.
+
+        Two rules, both instances of "absent means unknown":
+
+        * With no matcher the digests are **dropped**, not carried over. A stale
+          digest under a fresh ``verified`` date is the one combination that
+          lies in the dangerous direction — it would report code as changed that
+          the verification already covered, or hold evidence from a review two
+          reviews ago.
+        * Changing the globs without verifying **prunes** the digests of the
+          patterns that went away and keeps the rest. Each surviving pattern was
+          genuinely verified on the recorded date; a pattern just added was not,
+          and gets no entry until someone verifies it.
+
+        This is a mechanical field, so nothing here touches ``updated`` — the
+        rule ``check --fix`` and the tag rewrites follow. It is deliberately not
+        an embedding-relevant change either: no vector reads a digest.
+        """
+        patterns = base.code if request.set_code is None else tuple(request.set_code)
+        if request.mark_verified:
+            changes["verified_code"] = self._fingerprint_all(patterns)
+        elif request.set_code is not None:
+            kept = set(patterns)
+            changes["verified_code"] = {
+                pattern: digest for pattern, digest in base.verified_code.items() if pattern in kept
+            }
+
+    def _fingerprint_all(self, patterns: tuple[str, ...]) -> dict[str, str]:
+        """Digest each pattern, dropping the ones that cannot be resolved."""
+        if self._code_matcher is None:
+            return {}
+        digests = {}
+        for pattern in patterns:
+            digest = self._code_matcher.fingerprint(pattern)
+            if digest is not None:
+                digests[pattern] = digest
+        return digests
 
     def _apply_type(
         self, request: UpdateDocumentRequest, base: Document, changes: dict[str, object]

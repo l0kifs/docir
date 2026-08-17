@@ -223,6 +223,237 @@ class TestTier1Check:
             container.close()
 
 
+class TestVerificationDigests:
+    """`--verified` records what the code looked like; `check` reports it moving.
+
+    The evidence half of staleness. Every test here injects the real defect —
+    an edit to the governed file — rather than asserting the shape of a digest,
+    because a fingerprint compared against itself agrees with itself.
+    """
+
+    def _governing(self, docs: Dispatcher, pattern: str, title: str = "Auth") -> str:
+        view = docs.dispatch(
+            "add", {"type": "decision", "title": title, "description": "d", "code": [pattern]}
+        )
+        return str(view["id"])
+
+    def _findings(self, docs: Dispatcher) -> list[dict]:
+        return [i for i in docs.dispatch("check", {}) if i["kind"] == "code-changed"]
+
+    def test_an_edit_to_the_governed_code_is_reported_after_a_verification(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        source = tmp_path / "src" / "auth.py"
+        source.parent.mkdir()
+        source.write_text("def login():\n    return True\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            doc_id = self._governing(docs, "src/*.py")
+            docs.dispatch("update", {"doc_id": doc_id, "mark_verified": True})
+            # Verified against the code as it stands: nothing has moved yet.
+            assert not self._findings(docs)
+
+            source.write_text("def login(mfa: bool):\n    return 'token'\n", encoding="utf-8")
+            findings = self._findings(docs)
+            assert [i["doc_ids"] for i in findings] == [(doc_id,)]
+            assert "src/*.py" in findings[0]["message"]
+            # A warning: a branch that edits code before its docs is the ordinary
+            # shape of a change, and failing its own CI is how a gate teaches
+            # people to stop reading `docir check`.
+            assert findings[0]["severity"] == "warning"
+        finally:
+            container.close()
+
+    def test_the_evidence_survives_a_rebuilt_index(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        # The digest lives in the frontmatter, not only in the index — which is
+        # what makes it visible to a teammate who clones the repo, where the
+        # index is gitignored and has to be rebuilt from the files alone.
+        source = tmp_path / "src" / "auth.py"
+        source.parent.mkdir()
+        source.write_text("original\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            doc_id = self._governing(docs, "src/*.py")
+            docs.dispatch("update", {"doc_id": doc_id, "mark_verified": True})
+            source.write_text("rewritten\n", encoding="utf-8")
+            docs.dispatch("reindex", {})
+            assert [i["doc_ids"] for i in self._findings(docs)] == [(doc_id,)]
+        finally:
+            container.close()
+
+    def test_re_verifying_clears_it(self, settings: Settings, tmp_path: Path) -> None:
+        source = tmp_path / "src" / "auth.py"
+        source.parent.mkdir()
+        source.write_text("original\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            doc_id = self._governing(docs, "src/*.py")
+            docs.dispatch("update", {"doc_id": doc_id, "mark_verified": True})
+            source.write_text("rewritten\n", encoding="utf-8")
+            assert self._findings(docs)
+            docs.dispatch("update", {"doc_id": doc_id, "mark_verified": True})
+            assert not self._findings(docs)
+        finally:
+            container.close()
+
+    def test_a_document_nobody_verified_reports_nothing(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        # Absent means unknown, never unchanged. Without this, every document
+        # that governs code would report as changed from the moment it was
+        # written — the `orphan`-on-a-healthy-corpus failure again.
+        source = tmp_path / "src" / "auth.py"
+        source.parent.mkdir()
+        source.write_text("original\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            self._governing(docs, "src/*.py")
+            source.write_text("rewritten\n", encoding="utf-8")
+            assert not self._findings(docs)
+        finally:
+            container.close()
+
+    def test_a_pattern_added_after_the_verification_is_unknown(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "auth.py").write_text("a\n", encoding="utf-8")
+        (tmp_path / "src" / "later.py").write_text("b\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            doc_id = self._governing(docs, "src/auth.py")
+            docs.dispatch("update", {"doc_id": doc_id, "mark_verified": True})
+            docs.dispatch("update", {"doc_id": doc_id, "set_code": ["src/auth.py", "src/later.py"]})
+            (tmp_path / "src" / "later.py").write_text("edited\n", encoding="utf-8")
+            # The new glob was never verified, so its edit says nothing about
+            # whether a human has read the document against it.
+            assert not self._findings(docs)
+        finally:
+            container.close()
+
+    def test_dropping_a_glob_drops_its_evidence(self, settings: Settings, tmp_path: Path) -> None:
+        # Re-adding a pattern must not resurrect a digest recorded before it was
+        # removed: the document was verified against a set that no longer
+        # includes it, and a stale digest under a live pattern reports a change
+        # nobody can date.
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "auth.py").write_text("a\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            doc_id = self._governing(docs, "src/auth.py")
+            docs.dispatch("update", {"doc_id": doc_id, "mark_verified": True})
+            docs.dispatch("update", {"doc_id": doc_id, "set_code": []})
+            docs.dispatch("update", {"doc_id": doc_id, "set_code": ["src/auth.py"]})
+            (tmp_path / "src" / "auth.py").write_text("edited\n", encoding="utf-8")
+            assert not self._findings(docs)
+        finally:
+            container.close()
+
+    def test_adding_a_file_under_a_directory_glob_counts_as_a_change(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        # The digest folds in each path beside its contents, so a file appearing
+        # or disappearing registers even when nothing that survived was edited.
+        pkg = tmp_path / "src" / "auth"
+        pkg.mkdir(parents=True)
+        (pkg / "login.py").write_text("a\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            doc_id = self._governing(docs, "src/auth/**")
+            docs.dispatch("update", {"doc_id": doc_id, "mark_verified": True})
+            (pkg / "mfa.py").write_text("b\n", encoding="utf-8")
+            assert [i["doc_ids"] for i in self._findings(docs)] == [(doc_id,)]
+        finally:
+            container.close()
+
+    def test_an_archived_document_is_skipped(self, settings: Settings, tmp_path: Path) -> None:
+        source = tmp_path / "src" / "auth.py"
+        source.parent.mkdir()
+        source.write_text("original\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            doc_id = self._governing(docs, "src/*.py")
+            docs.dispatch("update", {"doc_id": doc_id, "mark_verified": True})
+            docs.dispatch("archive", {"doc_id": doc_id})
+            source.write_text("rewritten\n", encoding="utf-8")
+            assert not self._findings(docs)
+        finally:
+            container.close()
+
+    def test_a_store_with_no_repository_records_no_evidence(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        # The global-store case. There is no tree to fingerprint, so the
+        # verification records a date and nothing else — rather than carrying
+        # forward a digest from an older review under a fresh date.
+        view = dispatcher.dispatch(
+            "add", {"type": "decision", "title": "T", "description": "d", "code": ["src/a.py"]}
+        )
+        dispatcher.dispatch("update", {"doc_id": view["id"], "mark_verified": True})
+        raw = (settings.docs_root / view["path"]).read_text(encoding="utf-8")
+        assert "verified:" in raw
+        assert "verified_code:" not in raw
+
+    def test_a_verified_document_that_round_tripped_is_not_diverged(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        # ``content_hash`` covers the digests, so the index and the file must
+        # agree about them after a rebuild. Unsorted or half-covered, a verified
+        # document would read as hand-edited and `--replace-body` would refuse a
+        # write that loses nothing.
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "auth.py").write_text("a\n", encoding="utf-8")
+        (tmp_path / "src" / "user.py").write_text("b\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            view = docs.dispatch(
+                "add",
+                {
+                    "type": "decision",
+                    "title": "T",
+                    "description": "d",
+                    "code": ["src/user.py", "src/auth.py"],
+                },
+            )
+            docs.dispatch("update", {"doc_id": view["id"], "mark_verified": True})
+            docs.dispatch("reindex", {})
+            rewritten = docs.dispatch(
+                "update", {"doc_id": view["id"], "replace_body": "new body", "force": True}
+            )
+            assert rewritten["body"] == "new body"
+        finally:
+            container.close()
+
+    def test_nothing_mechanical_repairs_it(self, settings: Settings, tmp_path: Path) -> None:
+        # Only a human can say whether the document still describes the code —
+        # which is precisely what re-verifying asserts. Like `unmatched-code`,
+        # it survives --fix and is reported as remaining.
+        source = tmp_path / "src" / "auth.py"
+        source.parent.mkdir()
+        source.write_text("original\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            doc_id = self._governing(docs, "src/*.py")
+            docs.dispatch("update", {"doc_id": doc_id, "mark_verified": True})
+            source.write_text("rewritten\n", encoding="utf-8")
+            result = docs.dispatch("repair", {})
+            assert any(i["kind"] == "code-changed" for i in result["remaining"])
+        finally:
+            container.close()
+
+
 class TestQueryByPath:
     """`query --code <path>` — which documents govern this file (step 3)."""
 

@@ -216,6 +216,7 @@ class MaintenanceService:
             self._clock.today(),
             known_tags=known_tags,
             code_matches=self._resolve_code(documents),
+            code_digests=self._resolve_code_digests(documents),
         )
         issues.extend(self._find_duplicate_ids())
         issues.extend(self._find_malformed())
@@ -316,6 +317,34 @@ class MaintenanceService:
         patterns = {pattern for document in documents for pattern in document.code}
         return {pattern: self._code_matcher.matches(pattern) for pattern in sorted(patterns)}
 
+    def _resolve_code_digests(self, documents: list[Document]) -> dict[str, str] | None:
+        """Fingerprint only the globs some document has actually been verified against.
+
+        Restricted to those on purpose. A fingerprint reads every file the
+        pattern matches, where :meth:`_resolve_code` stops at the first hit, so
+        digesting every declared glob would make `check` pay to hash whole
+        subtrees in order to compare them against nothing. A pattern nobody has
+        verified has no recorded value to differ from.
+
+        Unresolvable patterns are dropped rather than stored as a sentinel:
+        absent is already the unknown answer the check skips.
+        """
+        if self._code_matcher is None:
+            return None
+        verified = {
+            pattern
+            for document in documents
+            if not document.archived
+            for pattern in document.code
+            if pattern in document.verified_code
+        }
+        digests = {}
+        for pattern in sorted(verified):
+            digest = self._code_matcher.fingerprint(pattern)
+            if digest is not None:
+                digests[pattern] = digest
+        return digests
+
     def _find_malformed(self) -> list[CheckIssue]:
         """Report source files that do not parse (skipped by reindex/scan)."""
         return [
@@ -352,8 +381,9 @@ class MaintenanceService:
         * ``dangling`` — an edge resolves to nothing, so it is dropped.
 
         ``malformed`` and ``unknown-type`` are deliberately *not* touched: the
-        first needs a human to say what the file was meant to be, the second
-        needs a schema decision. They come back in ``remaining``.
+        first needs somebody to read the file and say what it was meant to be,
+        the second a schema decision. Both are judgements, and a repair has
+        nothing to read *with*. They come back in ``remaining``.
         """
         # Repair reads the files as the source of truth, so bring the index in
         # line first: id allocation consults it to find a free number. Both
@@ -419,9 +449,9 @@ class MaintenanceService:
                 dropped = tuple(
                     ref.target for ref in document.related if ref.target not in existing
                 )
-                # `updated` is deliberately left alone: staleness measures when a
-                # human last vouched for the content, and dropping a broken link
-                # is not that. Bumping it here would launder the review clock.
+                # `updated` is deliberately left alone: staleness measures when
+                # somebody last vouched for the content, and dropping a broken
+                # link is not that. Bumping it would launder the review clock.
                 repaired = document.with_updates(related=kept)
                 self._file_store.write(repaired)
                 uow.documents.save(repaired)

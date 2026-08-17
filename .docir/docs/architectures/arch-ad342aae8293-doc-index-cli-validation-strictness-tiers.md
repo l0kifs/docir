@@ -11,7 +11,7 @@ tags:
 - architecture
 title: Doc-Index CLI — validation strictness tiers
 type: architecture
-updated: '2026-08-15'
+updated: '2026-08-17'
 ---
 
 ## Validation strictness tiers
@@ -69,6 +69,7 @@ being added to `ERROR_KINDS` or not.
 | `cycle` | warning | a loop in the graph |
 | `layering` | warning | a higher-level type *depends on* a lower one |
 | `stale` | warning | past the type's `review_days`, measured from `verified` else `updated` |
+| `code-changed` | warning | the code a document governs differs from what it was when somebody last verified it |
 | `unmatched-code` | warning | a `code` glob that no longer names anything (only when the store sits in a repository) |
 | `unknown-type` / `unknown-status` / `unknown-tag` / `unknown-relation-kind` | warning | the file was written outside the CLI, or a profile was disabled under it |
 | `missing-required` | warning | the *rule* moved under a document that was valid when written |
@@ -79,6 +80,17 @@ being added to `ERROR_KINDS` or not.
 The last group must not be promoted to errors: the schema they measure against
 ships in the *package*, so a corpus that passed yesterday can fail today with no
 commit to point at, and nothing about the documents changed.
+
+**`stale` and `code-changed` are the two halves of one question** and neither
+replaces the other. `stale` is the calendar — how long since a human read this —
+and fires on documents nothing has touched. `code-changed` is the evidence — the
+code moved since they read it — and fires the day it moves. `code-changed` must
+stay a warning for a reason of its own: editing code before its documentation is
+the ordinary shape of a change, so an error kind would fail the CI of every
+correct commit. Clearing it is a judgement — read the document against the code
+and stamp `--verified` — and the one thing the rule forbids is making that
+judgement inside the task that moved the code, which certifies its own change.
+See adr-d9e6d5ccd0b4.
 
 **Layering is opt-in per relation kind.** The check reads only edges the schema
 marks `dependency: true` — `depends_on` and `refines` among the core six. It is
@@ -91,9 +103,10 @@ pairing in the quickstart a permanent warning.
 (the *oldest* file keeps the id, because existing edges were written against it
 and an edge cannot say which document it meant) and dangling edges are dropped.
 It reindexes first, and does **not** advance `updated` — a mechanical repair is
-not a human re-verification. `malformed` and `unknown-type` are deliberately left
-to a human and returned unrepaired: those need someone to decide what the file or
-the schema should say.
+not a re-verification. `malformed`, `unknown-type`, `unmatched-code` and
+`code-changed` are deliberately left alone and returned unrepaired: each needs
+somebody to *read* something and decide what the file, the schema, the pattern or
+the document should say, and a repair has nothing to read with.
 
 ## Tier 2 — advisory/style (opt-in only, via `docir lint --deep`)
 

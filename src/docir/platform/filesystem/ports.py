@@ -82,6 +82,20 @@ class CodeMatcher(ABC):
     def matches(self, pattern: str) -> bool:
         """Whether ``pattern`` matches at least one path in the tree."""
 
+    @abstractmethod
+    def fingerprint(self, pattern: str) -> str | None:
+        """A digest of the files ``pattern`` matches, or ``None`` if unresolvable.
+
+        Stamped into a document's frontmatter when a human verifies it, and
+        recomputed by `check` to answer the question the review cadence cannot:
+        *has the code this document governs moved since somebody last read it?*
+
+        ``None`` is the unknown answer — the pattern matches nothing, or the
+        tree refused to be read — and it is deliberately distinct from a digest
+        over an empty set. Absent means unknown everywhere in this codebase, and
+        a document verified against nothing must not later read as unchanged.
+        """
+
 
 class TagFileStore(ABC):
     """Reads and writes the canonical ``tags.yaml`` registry file."""

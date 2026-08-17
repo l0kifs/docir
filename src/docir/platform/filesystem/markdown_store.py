@@ -181,6 +181,13 @@ class MarkdownDocumentFileStore(DocumentFileStore):
         # so a document that governs no code carries no `code:` line at all.
         if document.code:
             metadata["code"] = list(document.code)
+        # In the file rather than the index, unlike the schema baseline and the
+        # build stamp: this is the document's review state, so a teammate who
+        # clones the repo has to see it. The index is gitignored, and a digest
+        # that lived only there would make "the code moved since somebody read
+        # this" a fact only the machine that stamped it could know.
+        if document.verified_code:
+            metadata["verified_code"] = dict(sorted(document.verified_code.items()))
         post = frontmatter.Post(content=document.body)
         post.metadata.update(metadata)
         return frontmatter.dumps(post) + "\n"
@@ -204,6 +211,7 @@ class MarkdownDocumentFileStore(DocumentFileStore):
                 owner=str(metadata.get("owner", "")),
                 verified=None if verified_raw is None else _as_date(verified_raw),
                 code=_as_str_tuple(metadata.get("code")),
+                verified_code=_as_str_map(metadata.get("verified_code")),
             )
         except (KeyError, ValueError) as exc:
             # KeyError: a required field is absent. ValueError: a field is present
@@ -225,6 +233,19 @@ def _as_str_tuple(value: object) -> tuple[str, ...]:
     if isinstance(value, list | tuple):
         return tuple(str(item) for item in value)
     return ()
+
+
+def _as_str_map(value: object) -> dict[str, str]:
+    """Coerce a frontmatter mapping value into a ``str -> str`` dict.
+
+    Anything that is not a mapping reads as absent rather than raising. A
+    hand-edited ``verified_code:`` is bookkeeping, not content: refusing to
+    parse the document over it would make a mistyped digest hide the title, the
+    body and every edge the file carries.
+    """
+    if isinstance(value, dict):
+        return {str(key): str(item) for key, item in value.items()}
+    return {}
 
 
 def _render_related(related: tuple[RelatedRef, ...]) -> list[object]:

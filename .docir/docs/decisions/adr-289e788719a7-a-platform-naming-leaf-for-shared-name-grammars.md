@@ -17,7 +17,7 @@ tags:
 - tags
 title: A platform.naming leaf for shared name grammars
 type: decision
-updated: '2026-08-06'
+updated: '2026-08-17'
 ---
 
 ## Context
@@ -63,6 +63,7 @@ from a `domain` layer at all, the same property that lets `platform.errors` and
 the `Embedding` value object be imported there.
 
 ## Consequences
+
 - One grammar, named once. The rejection message and the `check` finding quote
   the same `TAG_KEY_RULE` string.
 - `platform` grows a fifth pure capability. This is the ADR the architecture
@@ -77,8 +78,8 @@ the `Embedding` value object be imported there.
   now, so the only way to hold one is to predate the rule; failing a `--strict`
   build for that would repeat issue-9cb85759076d, where a gate that fired on a healthy
   corpus got switched off and took duplicate-id detection with it. `check --fix`
-  does not repair it either: the fix is a rename, and only a human knows whether
-  `Auth` meant `auth` or `authn`.
+  does not repair it either: the fix is a rename, and deciding whether `Auth`
+  meant `auth` or `authn` is a reading of the corpus, not a transformation of it.
 - Scoped out: the document-id grammar stays in
   `documents.domain.value_objects.identifiers`. It is used by one module, so it
   has no reason to move; if a second module ever needs it, this is where it goes.

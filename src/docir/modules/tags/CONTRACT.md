@@ -25,7 +25,7 @@ vocabulary consistent everywhere a tag is used.
   unless forced (then stripped from referencing documents)
 
 Neither `rename` nor `remove` advances a rewritten document's `updated`: a bulk
-classification edit is not a human re-verification (see the staleness invariant).
+classification edit is not a re-verification (see the staleness invariant).
 
 ## Events published
 - none (no event bus; see adr-d3e3616400bf)

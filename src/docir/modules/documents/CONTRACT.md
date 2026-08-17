@@ -71,7 +71,14 @@ files and the derived index never disagree.
   All warnings: the document stays readable and its edges resolve. Also `unmatched-code` — a
   governed glob that matches nothing — when the service was given a `CodeMatcher`; without one
   (no repository above the store) the finding is skipped rather than reported against a tree
-  that does not exist.
+  that does not exist. And `code-changed` — a governed glob whose files differ from what they
+  were when somebody last ran `update --verified` — the evidence half of staleness, where
+  `stale` is the calendar half. Only patterns carrying a recorded digest are fingerprinted, and
+  only for unarchived documents: absent means unverified, never unchanged. A warning and not
+  promotable, because a branch that edits code before its docs is the ordinary shape of a change
+  and would otherwise fail its own CI. Cleared only by re-reading the document against the code
+  and stamping `--verified` — a judgement, which is why `repair()` leaves it; and not by the
+  writer that moved the code in the same task, which would be certifying its own change.
 - `MaintenanceService.schema_drift() -> [str]` — the same difference as plain lines, for the
   opt-in `DOCIR_SCHEMA_NOTICE` stderr notice and the `docir_schema_drift` MCP tool. Empty when
   nothing moved *or* when the store has no baseline: absent means unknown, not unchanged.
@@ -105,8 +112,9 @@ files and the derived index never disagree.
   otherwise indistinguishable from a clean one. Advisory: it never changes an exit code.
 - `MaintenanceService.repair() -> RepairResult` — fix the mechanically-fixable Tier 1 damage:
   re-issue duplicate ids (oldest file keeps the id) and drop dead `related` edges. `malformed`,
-  `unknown-type` and `unmatched-code` need a human — only they know whether the glob is stale
-  or the document is — and come back in `RepairResult.remaining`. Does not advance
+  `unknown-type` and `unmatched-code` each need somebody to read something and decide — what the
+  file was meant to say, what the schema should declare, whether the glob is stale or the
+  document is — and come back in `RepairResult.remaining`. Does not advance
   `updated` — a repair is not a re-verification.
 - `render_schema_yaml(profiles, id_style) -> str` — a `docs-schema.yaml` body selecting
   `profiles` and a schema-wide `id_style` (`ID_STYLES`: `sequential` | `random`). A type
@@ -140,6 +148,18 @@ review clock). `MaintenanceService` requires a `Clock` (staleness needs "today")
 Tier 0 validates the **shape only** — absolute paths, `..` segments, backslash
 separators and empty entries are refused; a pattern that currently matches
 nothing is accepted, because a decision may precede the code it governs.
+
+`mark_verified` also records what each of those globs matched, when the service
+was given a `CodeMatcher` (`DocumentService(..., code_matcher=...)`, optional for
+the same reason `check`'s is). The digests live in the document's frontmatter,
+not the index — unlike the schema baseline and the build stamp, this is the
+document's own review state, and a teammate who clones the repo has to see it.
+Without a matcher the digests are dropped rather than carried forward: a stale
+digest under a fresh `verified` date is the one combination that misreports.
+Changing the globs without verifying prunes the digests of the patterns that went
+away and keeps the rest. None of this advances `updated` — it is bookkeeping, not
+a content edit — and none of it reaches `embedding_text`, so a verification
+never queues a re-embed.
 
 ## Events published
 - none (no event bus; see adr-d3e3616400bf)

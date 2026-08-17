@@ -84,7 +84,7 @@ class TypeSchema:
     # unconstrained (any registered kind, any target) — the permissive default.
     allowed_relations: dict[str, tuple[str, ...]] = field(default_factory=dict)
     # Review cadence in days for staleness. ``0`` means the type is never
-    # considered stale (no human re-verification is expected).
+    # considered stale (no re-verification is expected).
     review_days: int = 0
     # Body size (characters) past which Tier 2 suggests splitting the document.
     # ``None`` inherits the linter's default; ``0`` means never — which is the

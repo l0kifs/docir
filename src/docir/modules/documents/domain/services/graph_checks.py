@@ -45,7 +45,7 @@ ERROR_KINDS: frozenset[str] = frozenset({"duplicate-id", "dangling", "malformed"
 
 #: Everything else (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`,
 #: `unknown-status`, `unknown-tag`, `tag-key-format`, `unmatched-code`,
-#: `missing-required`, `unknown-relation-kind`, `schema-drift`,
+#: `code-changed`, `missing-required`, `unknown-relation-kind`, `schema-drift`,
 #: `stale-index-build`)
 #: describes shape or classification, not
 #: damage. `orphan` in particular fires for any document with no relations — the
@@ -110,6 +110,7 @@ class GraphChecker:
         today: date | None = None,
         known_tags: frozenset[str] | None = None,
         code_matches: Mapping[str, bool] | None = None,
+        code_digests: Mapping[str, str] | None = None,
     ) -> list[CheckIssue]:
         """Run every Tier 1 check over the indexed corpus.
 
@@ -117,7 +118,9 @@ class GraphChecker:
         same permissive-when-absent convention the relation-kind registry uses.
         ``code_matches`` says which ``code`` globs still name something on disk
         and is ``None`` when there is no repository to ask — a global store
-        would otherwise report every pattern in it as missing.
+        would otherwise report every pattern in it as missing. ``code_digests``
+        is the same shape for the *content* of what they match, and is compared
+        against what each document recorded when it was last verified.
         """
         issues: list[CheckIssue] = []
         issues.extend(self.check_schema_conformance(documents, relations))
@@ -132,6 +135,8 @@ class GraphChecker:
             issues.extend(self._find_stale(documents, today))
         if code_matches is not None:
             issues.extend(self._find_unmatched_code(documents, code_matches))
+        if code_digests is not None:
+            issues.extend(self._find_changed_code(documents, code_digests))
         return issues
 
     def check_schema_conformance(
@@ -177,7 +182,10 @@ class GraphChecker:
         somebody should look".
 
         Nothing repairs it either, which is why it stays out of ``check --fix``:
-        only a human knows whether the glob is stale or the document is.
+        the fix is a decision — repoint the pattern, or rewrite the document the
+        moved code has outdated — and a repair has nothing to read *with*.
+        Whoever drives the CLI makes that call, which is why the finding names
+        the pattern rather than just the document.
 
         ``code_matches`` is the resolved answer per pattern, computed against
         the working tree by the caller — the domain stays pure and testable
@@ -202,6 +210,68 @@ class GraphChecker:
                         f"{doc.id!r} governs {joined}, which matches nothing in the "
                         f"repository; update the pattern with `docir update {doc.id} "
                         f"--set-code ...` or re-verify the document"
+                    ),
+                    doc_ids=(doc.id,),
+                )
+            )
+        return issues
+
+    def _find_changed_code(
+        self, documents: list[Document], code_digests: Mapping[str, str]
+    ) -> list[CheckIssue]:
+        """Flag documents whose governed code has moved since they were verified.
+
+        The evidence half of staleness. ``stale`` measures a calendar — a review
+        cadence elapsed — and so fires on documents nothing has happened to
+        while staying silent on the one that was rewritten underneath yesterday.
+        This asks the other question, and it is the sharper one: the code this
+        document describes is not the code somebody read.
+
+        A warning, and it must stay one. It fires from a *comparison against the
+        working tree*, so a branch that legitimately edits the code before
+        updating the docs — the ordinary shape of a change — would fail its own
+        CI, which is how a gate teaches people to stop reading `docir check`.
+
+        Clearing it is a **judgement, not a rewrite**: somebody has to read the
+        document against the code as it now stands and decide it is still true.
+        That is why `check --fix` cannot touch it — a repair has nothing to read
+        *with* — and it is the whole of the rule. Not "a human did it": docir's
+        writer is an agent by design (thesis 2), so a signal only a human could
+        emit is a signal nothing would ever emit. What the rule excludes is the
+        writer that clears the finding *inside the task that moved the code*,
+        certifying its own change; that degrades `verified` from "somebody read
+        this" to "CI is green", which is the laundering adr-bd7c4f3c5764 guards
+        against, arriving by a different door.
+
+        Three absences are all read as *unknown*, never as unchanged. A pattern
+        missing from ``code_digests`` did not resolve (it matches nothing — the
+        `unmatched-code` finding covers that, and reporting both would name one
+        problem twice). A pattern with no recorded digest was never verified.
+        And a document with no digests at all has never been verified with a
+        matcher present.
+        """
+        issues: list[CheckIssue] = []
+        for doc in documents:
+            if doc.archived or not doc.verified_code:
+                continue
+            moved = [
+                pattern
+                for pattern in doc.code
+                if (current := code_digests.get(pattern)) is not None
+                and (recorded := doc.verified_code.get(pattern)) is not None
+                and current != recorded
+            ]
+            if not moved:
+                continue
+            joined = ", ".join(repr(pattern) for pattern in moved)
+            verified_on = "" if doc.verified is None else f" on {doc.verified.isoformat()}"
+            issues.append(
+                CheckIssue(
+                    kind="code-changed",
+                    message=(
+                        f"{doc.id!r} governs {joined}, which changed since it was "
+                        f"verified{verified_on}; re-read it and run `docir update "
+                        f"{doc.id} --verified`"
                     ),
                     doc_ids=(doc.id,),
                 )
@@ -368,7 +438,8 @@ class GraphChecker:
         the only way to hold one is to predate the rule, and an existing corpus
         must not start failing a `--strict` build for something its author
         could not have avoided. Nothing repairs it either: the fix is a rename,
-        and only a human knows whether `Auth` meant `auth` or `authn`.
+        and deciding whether `Auth` meant `auth` or `authn` is a reading of the
+        corpus, not a transformation of it.
         """
         offenders = sorted(key for key in known_tags if not is_valid_tag_key(key))
         return [
@@ -411,7 +482,7 @@ class GraphChecker:
     def _find_stale(self, documents: list[Document], today: date) -> list[CheckIssue]:
         """Flag documents past their type's review cadence (staleness as data).
 
-        Staleness is honest human re-verification, not a heuristic: a type opts
+        Staleness is honest re-verification, not a heuristic: a type opts
         in with a ``review_days`` cadence, and a document resets the clock by
         being ``--verified``. Types with no cadence are never flagged.
         """

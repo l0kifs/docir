@@ -109,7 +109,13 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
         # Deduped: the pattern is half the primary key, so a document listing
         # one glob twice would otherwise fail the insert rather than the write.
         for pattern in dict.fromkeys(document.code):
-            self._session.add(DocumentCodeRow(doc_id=document.id, pattern=pattern))
+            self._session.add(
+                DocumentCodeRow(
+                    doc_id=document.id,
+                    pattern=pattern,
+                    digest=document.verified_code.get(pattern),
+                )
+            )
         # At most one edge per ordered pair (kind is not in the primary key);
         # if the source lists a target twice, the last kind wins.
         edges: dict[str, str] = {ref.target: ref.kind for ref in document.related}
@@ -191,13 +197,20 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
         )
         return tuple(self._session.scalars(stmt).all())
 
-    def _code_for(self, doc_id: str) -> tuple[str, ...]:
+    def _code_for(self, doc_id: str) -> list[tuple[str, str | None]]:
+        """The document's globs with the digest each was last verified against.
+
+        Read together because they are stored together: the digest belongs to
+        the pattern, and a query that returned one without the other would let
+        the caller pair them up itself — the mistake keying the map by pattern
+        exists to prevent.
+        """
         stmt = (
-            select(DocumentCodeRow.pattern)
+            select(DocumentCodeRow.pattern, DocumentCodeRow.digest)
             .where(DocumentCodeRow.doc_id == doc_id)
             .order_by(DocumentCodeRow.pattern)
         )
-        return tuple(self._session.scalars(stmt).all())
+        return [(pattern, digest) for pattern, digest in self._session.execute(stmt).all()]
 
     def _outgoing_for(self, doc_id: str) -> list[str]:
         stmt = (
@@ -223,7 +236,7 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
         ids = [row.id for row in rows]
         tag_map: dict[str, list[str]] = {row.id: [] for row in rows}
         rel_map: dict[str, list[RelatedRef]] = {row.id: [] for row in rows}
-        code_map: dict[str, list[str]] = {row.id: [] for row in rows}
+        code_map: dict[str, list[tuple[str, str | None]]] = {row.id: [] for row in rows}
         for doc_id, key in self._session.execute(
             select(DocumentTagRow.doc_id, DocumentTagRow.tag_key)
             .where(DocumentTagRow.doc_id.in_(ids))
@@ -236,14 +249,14 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
             .order_by(RelationRow.target)
         ).all():
             rel_map[source].append(RelatedRef(target=target, kind=kind))
-        for doc_id, pattern in self._session.execute(
-            select(DocumentCodeRow.doc_id, DocumentCodeRow.pattern)
+        for doc_id, pattern, digest in self._session.execute(
+            select(DocumentCodeRow.doc_id, DocumentCodeRow.pattern, DocumentCodeRow.digest)
             .where(DocumentCodeRow.doc_id.in_(ids))
             .order_by(DocumentCodeRow.pattern)
         ).all():
-            code_map[doc_id].append(pattern)
+            code_map[doc_id].append((pattern, digest))
         return [
-            _to_document(row, tuple(tag_map[row.id]), rel_map[row.id], tuple(code_map[row.id]))
+            _to_document(row, tuple(tag_map[row.id]), rel_map[row.id], code_map[row.id])
             for row in rows
         ]
 
@@ -463,8 +476,9 @@ def _to_document(
     row: DocumentRow,
     tags: tuple[str, ...],
     related: list[RelatedRef],
-    code: tuple[str, ...] = (),
+    code: list[tuple[str, str | None]] | None = None,
 ) -> Document:
+    code = code or []
     return Document(
         id=row.id,
         title=row.title,
@@ -480,7 +494,8 @@ def _to_document(
         path=row.path,
         owner=row.owner,
         verified=None if row.verified is None else date.fromisoformat(row.verified),
-        code=code,
+        code=tuple(pattern for pattern, _ in code),
+        verified_code={pattern: digest for pattern, digest in code if digest is not None},
     )
 
 

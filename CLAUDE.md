@@ -202,6 +202,34 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   an unread decision and a false hit costs a glance. The forward check (`RepositoryCodeMatcher`,
   "does this pattern still name anything") stays `Path.glob`; the two answer different questions
   and only their *grammar* has to agree.
+- **Staleness has two halves: a calendar and evidence.** `verified`/`review_days` answer
+  "how long since a human read this"; `verified_code` answers "has the code moved since they
+  did". `update --verified` fingerprints what each `code:` glob matched
+  (`RepositoryCodeMatcher.fingerprint`, contents + paths, sha256 truncated to 12 hex) and
+  `check` recomputes and compares, reporting `code-changed`. Load-bearing details, most of
+  them the same rule stated once more: the digests live in **frontmatter, not the index** —
+  unlike `schema_baseline` and `index_build`, this is the document's review state, and the
+  index is gitignored, so a clone would see nothing (`test_the_evidence_survives_a_rebuilt_index`
+  pins it). It hashes **contents, not mtimes or a commit** — a clone, a checkout and a rebase
+  all move those without changing a line, and a finding that fires after `git clone` is one
+  nobody reads twice; it also means no history is needed. A pattern naming a **directory is
+  expanded to the files under it**, because `**` yields directories and the read path already
+  resolves `src/auth/**` that way — without it the most natural pattern records nothing and
+  says so silently. `.git` is never walked. **Absent means unverified**, never unchanged, in
+  all three places it can be absent (no digest recorded, pattern unresolvable, no matcher at
+  all), so a global store and a never-verified document report nothing. With **no matcher the
+  digests are dropped, not carried forward**: a digest from an older review under a fresh
+  `verified` date is the one combination that misreports. It is a **warning and must not be
+  promoted** — a branch that edits code before its docs is the ordinary shape of a change, so
+  an error kind fails the CI of every correct commit. **Clearing it is a judgement, not a
+  rewrite** — read the document against the code as it now stands and stamp `--verified` — so
+  `check --fix` leaves it (a repair has nothing to read *with*). The rule is *not* "only a
+  human": the writer here is an agent by design, and a signal only a human could emit is one
+  nothing would ever emit. What it excludes is verifying **inside the task that moved the
+  code**, which certifies its own change and degrades `verified` to "CI is green" — the
+  laundering adr-bd7c4f3c5764 guards against, by another door. Whitespace counts (no AST
+  normalisation, deliberately: a parser per language, and no answer at all for a language
+  without one) — this is where to start if the noise turns out to be real.
 - **The stale-write guard covers `--replace-body` only, and that is the rule, not an
   oversight.** `update` computes `disk_diverged` (index `content_hash` vs the file's) and
   consults it in one branch. Every edit is applied to the document *as it is on disk*, so a
@@ -214,7 +242,7 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   serializes requests; `--no-daemon` parallel writers have a small unguarded window).
   The variable is `disk_diverged`, not `stale` — in this codebase `stale` means a document
   past its review cadence, a different concept on a different clock.
-- **Only a human content edit may move `updated`.** Staleness falls back to `updated` when a
+- **Only a content edit may move `updated`.** Staleness falls back to `updated` when a
   document has no explicit `verified`, so any mechanical rewrite that bumps it launders the
   review clock — the one trust signal the product offers (adr-bd7c4f3c5764). Three write paths rewrite
   documents without touching `updated`: `check --fix`, `delete --force`, and `tag rename` /
@@ -227,7 +255,7 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   prints "unlinked from ..."), so it cannot leave a dangling reference — the pattern
   `tag rm --force` already used for tags. It deliberately does **not** advance those
   documents' `updated` — the same rule `check --fix` and the tag paths follow, because a link
-  removed from underneath you is not a human re-verification.
+  removed from underneath you is not a re-verification.
   Consequence for tests: `delete --force` can no longer manufacture a dangling
   edge, so the `drop_file_of` fixture builds one the way it really arises — remove the
   target's file as a merge would, then `reindex`.
@@ -236,9 +264,10 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   forbids. It repairs exactly what needs no guess: duplicate ids (re-issued; the *oldest* file
   keeps the id, because existing edges were written against it and an edge cannot say which
   document it meant) and dangling edges (dropped). `malformed`/`unknown-type` are deliberately
-  left to a human and returned in `RepairResult.remaining`. It reindexes first — id allocation
+  left unrepaired and returned in `RepairResult.remaining` — each needs somebody to read the
+  file and decide what it should say, and a repair has nothing to read *with*. It reindexes first — id allocation
   consults the index for a free number — and does **not** advance `updated`, since a mechanical
-  repair is not a human re-verification (that would launder the staleness clock).
+  repair is not a re-verification (that would launder the staleness clock).
 - **The schema loader also rejects a `required:` name no document can carry** — the allowed set is
   `REQUIRABLE_FIELDS`, derived from the `Document` dataclass (minus `path`, which the file store
   assigns *after* Tier 0 runs, so requiring it would reject every create). `required` is checked
@@ -333,7 +362,7 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   is intentionally *not* built — human `--verified` is the honest baseline; anchoring is a future
   additive layer. Delivery is **pull, not push**: `query --owner X --stale` is the review queue and
   `--verified` clears an entry; there is no notifier or scheduler, because an automated nag a bot
-  can clear is not a human vouching for content (the same argument as the detection side).
+  can clear is not somebody vouching for content (the same argument as the detection side).
   `--owner` is a SQL predicate on `DocumentFilter`; **`stale` deliberately is not** — it derives
   from the clock and the type's cadence, which the index stores neither of, so the service filters
   after the query and **before the limit** (`--stale --limit 10` means ten stale documents, not the
@@ -418,7 +447,7 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   profile after its docs exist leaves them with a type the schema no longer knows — `docir check`
   flags those as `unknown-type`, beside the `schema-drift` finding naming the cause (schema
   resolution does not re-key or migrate existing files — there is no document migration and
-  deliberately so: every change class needs a human decision, which is what `check --fix`
+  deliberately so: every change class needs somebody to decide, which is what `check --fix`
   already refuses to guess at).
 - **Merging only adds, so `disable_types:` is how a schema subtracts (adr-f8cce745d0d5).**
   It is applied *after* core+profiles+inline resolve, and the reason it exists is not the

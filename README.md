@@ -142,7 +142,7 @@ outside change — so hand-editing is supported, but not on every field:
 | `type` | ❌ | `docir update <id> --type <new>` — the id stays, the file moves |
 | `code` | ❌ | `docir update <id> --set-code "src/auth/**"` |
 | `id` | ❌ never | it is the primary key; changing it orphans every inbound link |
-| `verified` | ❌ never | `docir update <id> --verified` — it asserts a human re-read the doc |
+| `verified` | ❌ never | `docir update <id> --verified` — it asserts somebody re-read the doc |
 
 **Then run `docir reindex && docir check`** — or let the daemon do the reindex for you.
 It watches `.docir/docs/` and rebuilds what changed within a second of the edit, which

@@ -9,6 +9,7 @@ cases manipulate before persisting back to the file and the index.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import date
 
@@ -34,7 +35,7 @@ class Document:
     # Filesystem path relative to the docs root; ``None`` before persistence.
     path: str | None = field(default=None)
     # Optional stewardship metadata (staleness). ``owner`` is a free-form name;
-    # ``verified`` is the date a human last re-confirmed the doc is still true.
+    # ``verified`` is the date somebody last re-confirmed the doc is still true.
     owner: str = ""
     verified: date | None = None
     #: Repo-relative globs naming the code this document governs
@@ -42,6 +43,18 @@ class Document:
     #: patterns are matched against a working tree that is not this module's to
     #: read, so the entity carries them and judges nothing about them.
     code: tuple[str, ...] = ()
+    #: Per-pattern digest of what each ``code`` glob matched at the moment the
+    #: document was last verified — the evidence half of staleness. ``verified``
+    #: alone measures a calendar: a cadence elapses and the document is suspect
+    #: whether or not anything happened to the code. This says whether anything
+    #: happened.
+    #:
+    #: Keyed by pattern rather than paired positionally with :attr:`code`, so
+    #: reordering the globs cannot silently re-point a digest at a different
+    #: pattern. A pattern absent from the map is *unverified*, not *unchanged*:
+    #: it was added after the last verification, or matched nothing then, and
+    #: `check` reports nothing for it.
+    verified_code: Mapping[str, str] = field(default_factory=dict)
 
     def embedding_text(self) -> str:
         """The text embedded for semantic search: title + description + body.
@@ -92,6 +105,14 @@ class Document:
             "" if self.verified is None else self.verified.isoformat(),
             self.body.strip("\n"),
         ]
+        # Appended only when present, so every document that carries no
+        # verification digests hashes exactly as it did before the field
+        # existed. Including an empty part unconditionally would move every
+        # hash in every store, and the index holds the previous value: the whole
+        # corpus would read as edited out-of-band until the next reindex, and
+        # `--replace-body` would refuse writes that lose nothing.
+        if self.verified_code:
+            parts.append(",".join(f"{p}={d}" for p, d in sorted(self.verified_code.items())))
         digest = hashlib.sha256("\x1f".join(parts).encode("utf-8"))
         return digest.hexdigest()
 

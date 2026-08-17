@@ -541,9 +541,10 @@ def build_mcp_server(
 
         Re-issues the newer of two files sharing an id (the older keeps it —
         existing edges were written against it) and drops edges pointing at
-        nothing. Malformed files and unknown types are left to a human and
-        reported under `remaining`. Does not advance any `updated` date: a
-        mechanical repair is not a human re-verification.
+        nothing. Malformed files and unknown types are left alone and reported
+        under `remaining` — each needs somebody to read it and decide. Does not
+        advance any `updated` date: a mechanical repair is not a human
+        re-verification.
         """
         return run.one("repair", {})
 

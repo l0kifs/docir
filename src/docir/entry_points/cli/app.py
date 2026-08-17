@@ -453,7 +453,14 @@ def update(
         ),
     ] = None,
     verified: Annotated[
-        bool, typer.Option("--verified", help="Stamp today as the last-verified date.")
+        bool,
+        typer.Option(
+            "--verified",
+            help=(
+                "Stamp today as the last-verified date, and record what the "
+                "document's `code` globs match right now."
+            ),
+        ),
     ] = False,
     append_section: Annotated[str | None, typer.Option("--append-section")] = None,
     replace_section: Annotated[str | None, typer.Option("--replace-section")] = None,

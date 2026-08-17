@@ -134,7 +134,7 @@ class TagService:
         would make every document carrying the tag report as freshly reviewed —
         a bulk administrative edit silently forging the one trust signal the
         product offers. Same reasoning as `check --fix` and `delete --force`:
-        a mechanical rewrite is not a human re-verification.
+        a mechanical rewrite is not a re-verification.
         """
         if old == new:
             # A self-merge used to delete the tag and leave every document still

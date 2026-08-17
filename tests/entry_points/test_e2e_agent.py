@@ -103,7 +103,9 @@ class TestAgentInstall:
         result = run("agent", "update", str(tmp_path))
         assert result.exit_code == 0
         assert _skill(tmp_path).exists() and _writing(tmp_path).exists()
-        assert result.stdout.count("updated") == 2
+        # Both are rewritten, but this build shipped the same templates it just
+        # installed, so neither file says anything new.
+        assert result.stdout.count("unchanged") == 2
 
     def test_json_output(self, tmp_path: Path) -> None:
         result = run("--json", "agent", "install", str(tmp_path))
@@ -124,7 +126,8 @@ class TestAgentUpdate:
         assert run("agent", "install", str(tmp_path)).exit_code == 0
         result = run("agent", "update", str(tmp_path))
         assert result.exit_code == 0
-        assert "updated" in result.stdout
+        # Same build, same template: refreshed, and honest about shipping nothing.
+        assert "unchanged" in result.stdout
 
     def test_update_with_nothing_installed_is_ok(self, tmp_path: Path) -> None:
         result = run("agent", "update", str(tmp_path))

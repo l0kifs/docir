@@ -235,6 +235,27 @@ class TestHumanRenderers:
         out = capsys.readouterr().out
         assert "/p" in out and "0.0.9" in out and "bumped" in out
 
+    def test_render_setup_unchanged_prints_no_version_arrow(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        # `v0.14.0 → v0.16.0` beside a file whose content did not move is what
+        # read as "your skill changed" after an upgrade that shipped nothing.
+        rendering.render_setup(
+            [
+                {
+                    "target": "claude",
+                    "path": "/p",
+                    "action": "unchanged",
+                    "previous_version": "0.14.0",
+                    "new_version": "0.16.0",
+                    "note": None,
+                }
+            ]
+        )
+        out = capsys.readouterr().out
+        assert "unchanged" in out and "0.16.0" in out
+        assert "→" not in out and "0.14.0" not in out
+
     def test_render_setup_empty(self, capsys: pytest.CaptureFixture[str]) -> None:
         rendering.render_setup([])
         assert "nothing" in capsys.readouterr().out

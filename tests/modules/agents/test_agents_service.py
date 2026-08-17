@@ -28,8 +28,11 @@ AGENTS_PATH = PROJECT / "AGENTS.md"
 
 
 class FakeTemplates:
+    def __init__(self, templates: dict[str, str] | None = None) -> None:
+        self._templates = templates or TEMPLATES
+
     def template(self, name: str) -> str:
-        return TEMPLATES[name]
+        return self._templates[name]
 
 
 class FakeSink:
@@ -44,10 +47,12 @@ class FakeSink:
 
 
 def make(
-    version: str = "1.0.0", sink: FakeSink | None = None
+    version: str = "1.0.0",
+    sink: FakeSink | None = None,
+    templates: dict[str, str] | None = None,
 ) -> tuple[AgentSetupService, FakeSink]:
     sink = sink or FakeSink()
-    return AgentSetupService(FakeTemplates(), sink, version), sink
+    return AgentSetupService(FakeTemplates(templates), sink, version), sink
 
 
 def install_req(**kw: object) -> InstallRequest:
@@ -86,14 +91,32 @@ class TestInstall:
         assert sink.files[SKILL_PATH].startswith("---\nname: docir")
         assert "<!-- docir:v1.0.0" in sink.files[SKILL_PATH]
 
-    def test_reinstall_marks_updated_and_reads_previous_version(self) -> None:
+    def test_a_release_that_changed_nothing_reads_previous_version_and_says_unchanged(
+        self,
+    ) -> None:
+        """Guards the `v0.14.0 → v0.16.0` report over two releases that shipped
+        no template change at all: the stamp moves on every release whether or
+        not the content did, so a byte comparison calls every upgrade an update.
+        """
         svc, sink = make("1.0.0")
         svc.install(install_req())
         svc2, _ = make("2.0.0", sink=sink)
         result = svc2.install(install_req())
-        assert result.files[0].action is InstallAction.UPDATED
+        assert result.files[0].action is InstallAction.UNCHANGED
         assert result.files[0].previous_version == "1.0.0"
+        # Still rewritten: the stamp names the build that produced the content,
+        # so leaving it behind would report the same transition forever.
         assert "<!-- docir:v2.0.0" in sink.files[SKILL_PATH]
+
+    def test_a_release_that_changed_the_template_is_updated(self) -> None:
+        # The other half of the guard — `unchanged` must not swallow a real one.
+        svc, sink = make("1.0.0")
+        svc.install(install_req())
+        moved = dict(TEMPLATES, skill=TEMPLATE.replace("body line", "new body line"))
+        svc2, _ = make("2.0.0", sink=sink, templates=moved)
+        result = svc2.install(install_req())
+        assert result.files[0].action is InstallAction.UPDATED
+        assert "new body line" in sink.files[SKILL_PATH]
 
     def test_global_installs_under_home(self) -> None:
         svc, sink = make()
@@ -140,7 +163,9 @@ class TestInstall:
         svc2, _ = make("2.0.0", sink=sink)
         result = svc2.install(install_req(agents=("agents",)))
         assert sink.files[AGENTS_PATH].count("<!-- docir:start -->") == 1
-        assert by_target(result)["agents"].action is InstallAction.UPDATED
+        # The block is replaced, and its content is the same index it already
+        # held — only the stamp inside it moved.
+        assert by_target(result)["agents"].action is InstallAction.UNCHANGED
         assert by_target(result)["agents"].previous_version == "1.0.0"
 
     def test_global_agents_is_rejected(self) -> None:

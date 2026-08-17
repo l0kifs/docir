@@ -19,6 +19,9 @@ class InstallAction(enum.Enum):
     CREATED = "created"
     #: The file (or docir's block) existed and was refreshed.
     UPDATED = "updated"
+    #: The file existed and was rewritten, but only its version stamp moved —
+    #: this release shipped no change to what it says.
+    UNCHANGED = "unchanged"
     #: The file existed but was left untouched (e.g. a foreign ``AGENTS.md``).
     SKIPPED = "skipped"
 

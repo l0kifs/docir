@@ -20,7 +20,8 @@ the block carries only those templates' `description` plus the path to each file
 `InstallRequest`/`UpdateRequest` carry `project_root`, `global_root`, an `agents`
 tuple of target names (`AGENT_NAMES`), and `use_global`. `SetupResult.files` is a
 tuple of `InstalledFile{target, path, action, previous_version, new_version,
-note}` where `action` is an `InstallAction` (`created`/`updated`/`skipped`). A
+note}` where `action` is an `InstallAction`
+(`created`/`updated`/`unchanged`/`skipped`). A
 `--global` install of a target with no global location (e.g. `agents`) raises
 `AgentSetupError`.
 
@@ -41,6 +42,9 @@ note}` where `action` is an `InstallAction` (`created`/`updated`/`skipped`). A
   `update`, reported as a note on that file.
 - Generated files carry a parseable version stamp so `update` reports the
   installed→refreshed transition.
+- A release that ships no change to a target's content is reported as
+  `unchanged`, not `updated`: the file is still rewritten so its stamp names the
+  running build, but a stamp that moved on its own is not a content change.
 
 ## Events published
 - none (no event bus; see adr-d3e3616400bf)

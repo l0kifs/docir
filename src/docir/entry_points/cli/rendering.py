@@ -393,7 +393,7 @@ def render_setup(files: Sequence[Mapping[str, object]]) -> None:
     if not files:
         console.print("[dim]nothing to install or update[/]")
         return
-    colors = {"created": "green", "updated": "cyan", "skipped": "dim"}
+    colors = {"created": "green", "updated": "cyan", "unchanged": "dim", "skipped": "dim"}
     for file in files:
         action = str(file.get("action", ""))
         previous = file.get("previous_version")

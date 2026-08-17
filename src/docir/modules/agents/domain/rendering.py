@@ -36,7 +36,7 @@ MARK_END = "<!-- docir:end -->"
 #: what identifies one written before this form existed (:func:`has_inlined_guide`).
 MARK_POINTER = "<!-- docir:pointer -->"
 
-_STAMP_RE = re.compile(r"<!-- docir:v(\S+) ")
+_STAMP_RE = re.compile(r"<!-- docir:v(\S+) .*?-->")
 _FRONTMATTER_RE = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
 _BLOCK_RE = re.compile(re.escape(MARK_START) + r".*?" + re.escape(MARK_END), re.DOTALL)
 # ``description:`` plus any indented continuation lines (a YAML folded scalar).
@@ -65,6 +65,18 @@ def parse_version(text: str) -> str | None:
     """Read the docir version stamped into ``text``, or ``None`` if absent."""
     match = _STAMP_RE.search(text)
     return match.group(1) if match else None
+
+
+def differs_only_by_stamp(existing: str, rendered: str) -> bool:
+    """Whether two generated texts are the same file with a different stamp on it.
+
+    The stamp moves on every release whether or not the template did, so a byte
+    comparison calls a release that shipped no template change an update — which
+    is what ``docir self upgrade`` reported as ``v0.14.0 → v0.16.0`` over two
+    releases that never touched a skill. Blanking the stamp in both is what
+    separates "this file now says v0.16.0" from "this file says something new".
+    """
+    return _STAMP_RE.sub("", existing) == _STAMP_RE.sub("", rendered)
 
 
 def parse_description(template: str) -> str | None:

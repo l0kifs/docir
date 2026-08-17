@@ -173,6 +173,12 @@ class AgentSetupService:
             else:
                 action, note = InstallAction.UPDATED, "docir block appended to existing file"
 
+        # The file is still written — the stamp records which build produced this
+        # content, so skipping the write would leave `update` reporting the same
+        # transition forever. What changes is the claim made about it.
+        if existing is not None and rendering.differs_only_by_stamp(existing, content):
+            action = InstallAction.UNCHANGED
+
         previous = rendering.parse_version(existing) if existing is not None else None
         self._sink.write(path, content)
         return InstalledFile(

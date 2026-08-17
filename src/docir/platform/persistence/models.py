@@ -98,6 +98,29 @@ class DocumentCodeRow(Base):
     digest: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
+class MentionRow(Base):
+    """One document id named in another document's body. See adr-<mentions>.
+
+    Derived, like the FTS index and the vectors: recomputed from the body on
+    every save, never written back to frontmatter. Kept out of ``relations``
+    deliberately — that table is the *authored* graph, and the checks that read
+    it (dangling, cycle, layering) and the delete guard must not start seeing
+    edges nobody wrote.
+
+    ``target`` carries no foreign key: a body may name an id that does not
+    exist yet, and resolution is a read-time join, so a forward reference starts
+    resolving when its target is written rather than when the mentioning
+    document is next saved.
+    """
+
+    __tablename__ = "mentions"
+
+    source: Mapped[str] = mapped_column(
+        String, ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True
+    )
+    target: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+
+
 class EmbeddingRow(Base):
     __tablename__ = "embeddings"
 

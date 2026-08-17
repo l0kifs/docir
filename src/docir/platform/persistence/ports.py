@@ -72,6 +72,42 @@ class IndexBuildRepository(ABC):
         """Record ``version`` as the build that produced the current index."""
 
 
+class MentionRepository(ABC):
+    """The derived mention graph: which document ids each body names.
+
+    Separate from :class:`DocumentRepository` because it answers a different
+    question about a different graph. ``related:`` is authored and typed, and
+    the checks that police it — dangling, cycle, layering — plus the guard that
+    blocks a delete all read it. Mentions are inferred from prose, so none of
+    those may see them: a cycle nobody wrote is noise, and refusing a delete
+    because a paragraph quotes an id would make the corpus unmaintainable.
+
+    Every method resolves against the indexed documents, so a body naming an id
+    that does not exist is stored and simply not returned. Absent means
+    *unresolved*, and it starts resolving the moment the target is written.
+    """
+
+    @abstractmethod
+    def replace(self, source: str, targets: Sequence[str]) -> None:
+        """Set ``source``'s outgoing mentions, discarding what was there."""
+
+    @abstractmethod
+    def outgoing(self, source: str) -> list[str]:
+        """Ids ``source`` names that exist, sorted."""
+
+    @abstractmethod
+    def incoming(self, target: str) -> list[str]:
+        """Ids of the documents that name ``target``, sorted."""
+
+    @abstractmethod
+    def all_resolved(self) -> list[tuple[str, str]]:
+        """Every ``(source, target)`` pair where both documents are indexed.
+
+        The bulk read `docir check` needs: asking per document would be one
+        query per document, and the orphan check reads the whole graph anyway.
+        """
+
+
 class DocumentRepository(ABC):
     """Stores document metadata and the relation graph derived from it."""
 

@@ -202,6 +202,32 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   an unread decision and a false hit costs a glance. The forward check (`RepositoryCodeMatcher`,
   "does this pattern still name anything") stays `Path.glob`; the two answer different questions
   and only their *grammar* has to agree.
+- **There are two relation graphs, and only one of them is authored.** `related:` is typed,
+  hand-written and policed by `dangling`/`cycle`/`layering` and the delete guard. **Mentions**
+  are derived: `Document.mentioned_ids(prefixes)` scans the body for ids and
+  `uow.mentions.replace` stores them (table `mentions`, migration `0008`), rebuilt by
+  `reindex`, never written to frontmatter. **Exactly one check reads them — `orphan`** — which
+  is the whole point: it fired for every document whose author linked it by writing its id in
+  a sentence, and that false positive is half of why `--strict` had to stop failing on
+  warnings. Do not feed them to any other check: a cycle nobody wrote is noise, a `dangling`
+  *error* on a forward reference gates a merge, and a delete refused because a paragraph
+  quotes an id is a corpus nobody can maintain. Load-bearing details: the grammar lives in
+  `platform.naming` beside the tag-key rule (adr-289e788719a7) because `DocId` mints what the
+  scanner must recognise, and `DocId` now uses it — two copies would let a document be
+  addressable by one and invisible to the other. The scan is restricted to the **schema's
+  prefixes**, or `sha-1beef` in a sentence about hashing is an edge. `target` carries **no
+  foreign key** and resolution is a read-time join, so an ADR naming the issue it will produce
+  starts resolving when that issue is written rather than when the ADR is next saved; a
+  self-mention is excluded in the entity, where the id is known. Derivation sits in
+  `domain`+`application`, not in the repository: `platform.persistence` may not import
+  `platform.naming` (tach), and deriving meaning from prose is not a translation of rows.
+  `tags` writes documents without recomputing — a rename never touches a body — and
+  `test_a_tag_rename_does_not_disturb_it` fails if that stops being true.
+  **Not wired into `context` expansion, and `benchmarks/run.py` cannot decide whether it
+  should be**: that corpus allocates ids at load time, so its bodies cannot name one and the
+  mention graph is empty there — the same "wrong instrument" trap as issue-b1a6e57deeec.
+  Wiring it would be a blind change to ranked output; it needs a fixture whose documents cite
+  each other, like `benchmarks/chunking.py` needed one with real headings.
 - **Staleness has two halves: a calendar and evidence.** `verified`/`review_days` answer
   "how long since a human read this"; `verified_code` answers "has the code moved since they
   did". `update --verified` fingerprints what each `code:` glob matched

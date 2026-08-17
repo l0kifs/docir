@@ -29,6 +29,7 @@ from docir.platform.persistence.models import (
     DocumentTagRow,
     EmbeddingRow,
     IndexBuildRow,
+    MentionRow,
     RelationRow,
     SchemaBaselineRow,
     TagRow,
@@ -38,6 +39,7 @@ from docir.platform.persistence.ports import (
     DocumentRepository,
     EmbeddingRepository,
     IndexBuildRepository,
+    MentionRepository,
     SchemaBaselineRepository,
     SearchIndex,
     StoredChunk,
@@ -259,6 +261,57 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
             _to_document(row, tuple(tag_map[row.id]), rel_map[row.id], code_map[row.id])
             for row in rows
         ]
+
+
+class SqlAlchemyMentionRepository(MentionRepository):
+    """The derived mention graph, backed by SQLAlchemy.
+
+    Reads join against ``documents`` so an id a body names but the store does
+    not hold is stored and never returned — the same absent-means-unresolved
+    rule the rest of the index follows. Writes do not, so a mention written
+    before its target starts resolving the moment that target exists.
+    """
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def replace(self, source: str, targets: Sequence[str]) -> None:
+        self._session.execute(delete(MentionRow).where(MentionRow.source == source))
+        self._session.flush()
+        # Deduped for the primary key's sake — `target` is half of it, so a
+        # repeated id would fail the insert rather than the write. Excluding a
+        # self-mention is the *entity's* rule and is applied there; this is a
+        # data-integrity guard, not a second opinion about what an edge means.
+        for target in dict.fromkeys(targets):
+            self._session.add(MentionRow(source=source, target=target))
+        self._session.flush()
+
+    def outgoing(self, source: str) -> list[str]:
+        stmt = (
+            select(MentionRow.target)
+            .join(DocumentRow, DocumentRow.id == MentionRow.target)
+            .where(MentionRow.source == source)
+            .order_by(MentionRow.target)
+        )
+        return list(self._session.scalars(stmt).all())
+
+    def incoming(self, target: str) -> list[str]:
+        stmt = (
+            select(MentionRow.source)
+            .join(DocumentRow, DocumentRow.id == MentionRow.source)
+            .where(MentionRow.target == target)
+            .order_by(MentionRow.source)
+        )
+        return list(self._session.scalars(stmt).all())
+
+    def all_resolved(self) -> list[tuple[str, str]]:
+        indexed = set(self._session.scalars(select(DocumentRow.id)).all())
+        rows = self._session.execute(
+            select(MentionRow.source, MentionRow.target).order_by(
+                MentionRow.source, MentionRow.target
+            )
+        ).all()
+        return [(src, tgt) for src, tgt in rows if src in indexed and tgt in indexed]
 
 
 class SqlAlchemyTagRepository(TagRepository):

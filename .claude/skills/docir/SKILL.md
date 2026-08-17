@@ -177,6 +177,13 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
   `src/auth.py` this session, stamping `--verified` on the decision that governs
   it certifies your own change and turns the signal into "the check is green".
   Report the finding instead and let the next reader — or the human — clear it.
+- **Naming a document's id in a body links to it.** `docir check` reads those
+  mentions, so a document you cite in a paragraph is not reported as an orphan,
+  and `docir get` shows both directions (`mentions`, `mentioned_by`) — including
+  the useful one, who cites *this* document. It is derived: it never appears in
+  frontmatter, and `docir reindex` rebuilds it. Use `--related` when the link is
+  a claim worth typing (`supersedes`, `refines`); prose is enough when you are
+  simply referring to something.
 - **If a test enforces the decision, govern that test.** docir has no rule
   engine and will not gain one: the test already fails when the code
   contradicts the decision, and `--code tests/test_x.py` records which decision

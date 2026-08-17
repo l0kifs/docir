@@ -9,12 +9,13 @@ cases manipulate before persisting back to the file and the index.
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import date
 
 from docir.modules.documents.domain.services.chunking import EmbeddableChunk, split_body
 from docir.modules.documents.domain.value_objects.relations import RelatedRef
+from docir.platform.naming import scan_document_ids
 
 
 @dataclass
@@ -78,6 +79,26 @@ class Document:
         return tuple(
             EmbeddableChunk(chunk.ordinal, chunk.heading, chunk.embedding_text(self.title))
             for chunk in split_body(self.body)
+        )
+
+    def mentioned_ids(self, prefixes: Collection[str]) -> tuple[str, ...]:
+        """The document ids this body names — the derived half of the graph.
+
+        The entity owns this for the same reason it owns
+        :meth:`embedding_chunks`: it is a pure function of the content, and the
+        layer that persists it may not import the grammar that recognises an id
+        (tach enforces both halves of that sentence).
+
+        A document naming its own id is describing itself, not linking to
+        itself, so it is excluded here — where the id is known — rather than
+        left for each caller to remember.
+
+        ``prefixes`` comes from the schema. Without it any hyphenated word with
+        a hex tail would read as an id, and the point of the derived graph is
+        that it is quieter than `related:`, not noisier.
+        """
+        return tuple(
+            target for target in scan_document_ids(self.body, prefixes) if target != self.id
         )
 
     def content_hash(self) -> str:

@@ -11,7 +11,7 @@ warnings rather than failing an agent mid-task:
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 
@@ -111,6 +111,7 @@ class GraphChecker:
         known_tags: frozenset[str] | None = None,
         code_matches: Mapping[str, bool] | None = None,
         code_digests: Mapping[str, str] | None = None,
+        mentions: Sequence[tuple[str, str]] = (),
     ) -> list[CheckIssue]:
         """Run every Tier 1 check over the indexed corpus.
 
@@ -121,6 +122,9 @@ class GraphChecker:
         would otherwise report every pattern in it as missing. ``code_digests``
         is the same shape for the *content* of what they match, and is compared
         against what each document recorded when it was last verified.
+        ``mentions`` are the resolved derived edges — ids one body names in
+        another — and are read by the orphan check alone, never by the checks
+        that police the authored graph.
         """
         issues: list[CheckIssue] = []
         issues.extend(self.check_schema_conformance(documents, relations))
@@ -129,7 +133,7 @@ class GraphChecker:
             issues.extend(self._find_tag_key_format(known_tags))
         issues.extend(self._find_dangling(documents, relations))
         issues.extend(self._find_cycles(relations))
-        issues.extend(self._find_orphans(documents, relations))
+        issues.extend(self._find_orphans(documents, relations, mentions))
         issues.extend(self._find_layering_violations(documents, relations))
         if today is not None:
             issues.extend(self._find_stale(documents, today))
@@ -581,12 +585,33 @@ class GraphChecker:
         return issues
 
     def _find_orphans(
-        self, documents: list[Document], relations: list[Relation]
+        self,
+        documents: list[Document],
+        relations: list[Relation],
+        mentions: Sequence[tuple[str, str]] = (),
     ) -> list[CheckIssue]:
+        """Flag documents nothing connects to, by either graph.
+
+        ``mentions`` are the derived edges — ids one body names in another's
+        prose. They count here and nowhere else. The finding is meant to mean
+        "nobody has connected this to anything", and for most of this project's
+        life it meant "nobody edited its `related:` frontmatter", which fires on
+        a document whose author linked it three times in a paragraph. That made
+        `orphan` the loudest finding in a healthy corpus and is half the reason
+        the `--strict` gate had to stop failing on warnings.
+
+        Only the *resolved* pairs arrive here: an id named in prose that no
+        document carries is not a connection to anything. And the check reads
+        both directions, as it always has — being cited is as much a connection
+        as citing.
+        """
         connected: set[str] = set()
         for rel in relations:
             connected.add(rel.source)
             connected.add(rel.target)
+        for source, target in mentions:
+            connected.add(source)
+            connected.add(target)
         issues: list[CheckIssue] = []
         for doc in documents:
             if doc.archived:
@@ -595,7 +620,10 @@ class GraphChecker:
                 issues.append(
                     CheckIssue(
                         kind="orphan",
-                        message=f"orphan document {doc.id!r} has no relations",
+                        message=(
+                            f"orphan document {doc.id!r} has no relations and is "
+                            f"named by no other document"
+                        ),
                         doc_ids=(doc.id,),
                     )
                 )

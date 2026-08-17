@@ -18,6 +18,7 @@ from docir.platform.persistence.repositories import (
     SqlAlchemyDocumentRepository,
     SqlAlchemyEmbeddingRepository,
     SqlAlchemyIndexBuildRepository,
+    SqlAlchemyMentionRepository,
     SqlAlchemySchemaBaselineRepository,
     SqlAlchemySearchIndex,
     SqlAlchemyTagRepository,
@@ -36,6 +37,7 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
         session = self._session_factory()
         self._session = session
         self.documents = SqlAlchemyDocumentRepository(session)
+        self.mentions = SqlAlchemyMentionRepository(session)
         self.tags = SqlAlchemyTagRepository(session)
         self.search = SqlAlchemySearchIndex(session)
         self.embeddings = SqlAlchemyEmbeddingRepository(session)

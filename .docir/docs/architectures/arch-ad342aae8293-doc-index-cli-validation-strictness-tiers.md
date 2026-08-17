@@ -53,10 +53,13 @@ else is a `warning` about shape or age. `docir check --strict` exits 1 on errors
 only and is the pre-merge gate; `--strict-all` makes every finding fatal for
 anyone who wants that.
 
-The distinction is not cosmetic. `orphan` fires for every document with no
-relations — the default state of a new one — so a fail-on-any-finding gate went
+The distinction is not cosmetic. `orphan` used to fire for every document with
+no `related:` edges — the default state of a new one, and of any document linked
+only by someone writing its id in a sentence — so a fail-on-any-finding gate went
 red on a healthy corpus, and the only way to keep CI green was to drop the gate,
-which also dropped the duplicate-id detection that was its actual purpose.
+which also dropped the duplicate-id detection that was its actual purpose. It now
+reads the derived mention graph too (adr-e86c5040d626), which removes most of
+that noise; the severity split stays, because the finding is still about shape.
 `CheckIssue` derives `severity` from `kind`, so a new check classifies itself by
 being added to `ERROR_KINDS` or not.
 
@@ -65,7 +68,7 @@ being added to `ERROR_KINDS` or not.
 | `duplicate-id` | error | two files claim one id; the index dedupes, so one document is invisible. Found by scanning the *files*, not the index |
 | `dangling` | error | a `related` edge points at nothing |
 | `malformed` | error | a file the loader cannot parse — absent from every read path |
-| `orphan` | warning | no relations either way |
+| `orphan` | warning | nothing connects to it — no `related` edge either way, and no other document names its id in prose |
 | `cycle` | warning | a loop in the graph |
 | `layering` | warning | a higher-level type *depends on* a lower one |
 | `stale` | warning | past the type's `review_days`, measured from `verified` else `updated` |

@@ -10,15 +10,18 @@ git branches. Ids are always allocated by the CLI, never chosen by hand.
 
 from __future__ import annotations
 
-import re
 import secrets
 from dataclasses import dataclass
 
 from docir.platform.errors import ValidationError
+from docir.platform.naming import DOC_ID_RE
 
 # Suffix is 4+ lowercase hex chars — covers both decimal sequential numbers
-# (digits are a subset of hex) and random hex tokens.
-_ID_RE = re.compile(r"^(?P<prefix>[a-z][a-z0-9]*)-(?P<suffix>[0-9a-f]{4,})$")
+# (digits are a subset of hex) and random hex tokens. The pattern itself lives
+# in `platform.naming`, because the mention scanner has to recognise inside
+# prose exactly what this mints (adr-289e788719a7): two copies would let a
+# document be addressable by one reader and invisible to the other.
+_ID_RE = DOC_ID_RE
 
 # Bytes of entropy for random ids: 6 bytes = 48 bits = 12 hex chars, giving a
 # negligible collision probability at this scale (thousands of documents).

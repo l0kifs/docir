@@ -62,6 +62,16 @@ class DocumentView:
     #: file: docir has no actors (adr-90e994d931cc), so "who overrode this" has no
     #: answer worth storing, and git already records the status change itself.
     forced_transition: str | None = None
+    #: Ids this document's *body* names, and the documents whose bodies name it —
+    #: the derived graph, resolved against the index. Untyped and unauthored, so
+    #: they sit beside ``related`` rather than in it: a reader must be able to
+    #: tell an edge somebody wrote from one docir inferred.
+    #:
+    #: On ``get`` only. The list paths return skeletons, and two more id arrays
+    #: per hit is exactly the context cost that contract exists to avoid — while
+    #: on ``get`` the body they were derived from is already in the response.
+    mentions: tuple[str, ...] = ()
+    mentioned_by: tuple[str, ...] = ()
 
     @classmethod
     def from_document(
@@ -72,6 +82,8 @@ class DocumentView:
         score: float | None = None,
         via_graph: bool = False,
         forced_transition: str | None = None,
+        mentions: tuple[str, ...] = (),
+        mentioned_by: tuple[str, ...] = (),
     ) -> DocumentView:
         return cls(
             id=document.id,
@@ -93,6 +105,8 @@ class DocumentView:
             score=score,
             via_graph=via_graph,
             forced_transition=forced_transition,
+            mentions=mentions,
+            mentioned_by=mentioned_by,
         )
 
 

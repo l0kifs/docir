@@ -17,6 +17,7 @@ from docir.platform.persistence.ports import (
     DocumentRepository,
     EmbeddingRepository,
     IndexBuildRepository,
+    MentionRepository,
     SchemaBaselineRepository,
     SearchIndex,
     TagRepository,
@@ -27,6 +28,7 @@ class UnitOfWork(ABC):
     """A context-managed atomic transaction exposing the repositories."""
 
     documents: DocumentRepository
+    mentions: MentionRepository
     tags: TagRepository
     search: SearchIndex
     embeddings: EmbeddingRepository

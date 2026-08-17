@@ -112,8 +112,19 @@ class MaintenanceService:
         #: nothing to resolve a ``code`` glob against, and the finding is
         #: skipped rather than reported against a tree that does not exist.
         self._code_matcher = code_matcher
+        self._prefixes = schema.prefixes()
         self._graph_checker = GraphChecker(schema)
         self._linter = SimilarityLinter()
+
+    def _save(self, uow: UnitOfWork, document: Document) -> None:
+        """Persist a document and the mention edges its body implies.
+
+        The same pairing `DocumentService._save` makes, for the same reason:
+        a rebuild that refreshed metadata and left the derived graph behind
+        would make `docir reindex` the command that *creates* stale mentions.
+        """
+        uow.documents.save(document)
+        uow.mentions.replace(document.id, document.mentioned_ids(self._prefixes))
 
     def reindex(self, *, changed_only: bool = False) -> ReindexResult:
         """Rebuild the index from the canonical files (``docir reindex``).
@@ -210,6 +221,7 @@ class MaintenanceService:
             documents = uow.documents.all()
             relations = uow.documents.relations()
             known_tags = frozenset(tag.key for tag in uow.tags.all())
+            mentions = uow.mentions.all_resolved()
         issues = self._graph_checker.check(
             documents,
             relations,
@@ -217,6 +229,7 @@ class MaintenanceService:
             known_tags=known_tags,
             code_matches=self._resolve_code(documents),
             code_digests=self._resolve_code_digests(documents),
+            mentions=mentions,
         )
         issues.extend(self._find_duplicate_ids())
         issues.extend(self._find_malformed())
@@ -454,7 +467,7 @@ class MaintenanceService:
                 # link is not that. Bumping it would launder the review clock.
                 repaired = document.with_updates(related=kept)
                 self._file_store.write(repaired)
-                uow.documents.save(repaired)
+                self._save(uow, repaired)
                 uow.search.index(repaired)
                 actions.append(
                     RepairAction(
@@ -554,7 +567,7 @@ class MaintenanceService:
                 current = uow.documents.get(document.id)
                 if current is not None and current.content_hash() == (document.content_hash()):
                     continue
-            uow.documents.save(document)
+            self._save(uow, document)
             if document.archived:
                 uow.search.remove(document.id)
                 uow.embeddings.remove(document.id)

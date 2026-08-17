@@ -253,6 +253,14 @@ class Schema:
     def prefix_for(self, doc_type: str) -> str:
         return self.get(doc_type).prefix
 
+    def prefixes(self) -> frozenset[str]:
+        """Every declared type prefix — the alphabet an id can start with.
+
+        What the mention scanner needs to tell ``adr-1beef`` from ``sha-1beef``.
+        Unique by construction: ``__post_init__`` refuses two types sharing one.
+        """
+        return frozenset(type_schema.prefix for type_schema in self.types.values())
+
     def default_status_for(self, doc_type: str) -> str:
         return self.get(doc_type).default_status
 

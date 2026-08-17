@@ -119,11 +119,34 @@ class DocumentService:
         self._clock = clock
         self._schema = schema
         self._validator = Tier0Validator(schema)
+        # Resolved once: every save scans a body against it.
+        self._prefixes = schema.prefixes()
         self._scorer = scorer or HybridScorer()
         # Optional for the same reason `check` treats it as optional: a global
         # store has no repository above it, so there is no tree to fingerprint.
         # Absent means the verification records a date and no evidence.
         self._code_matcher = code_matcher
+
+    def _save(self, uow: UnitOfWork, document: Document) -> None:
+        """Persist a document and the derived edges its body implies.
+
+        One helper rather than two calls at each write site, for the reason the
+        embedding queue does the opposite and gets away with it: a missed
+        `mark_dirty` leaves a vector stale until the next write, while a missed
+        mention silently makes `orphan` report a document whose author *did*
+        link it — the exact false positive this graph exists to remove.
+
+        The scan is derivation, not storage, so it happens here and not in the
+        repository: `platform.persistence` translates rows and entities and has
+        no business knowing what a body means (it may not import
+        `platform.naming` either, which is tach saying the same thing).
+
+        `tags` writes documents too and deliberately does not call this: a tag
+        rename rewrites frontmatter and never the body, so the mentions it would
+        recompute are the ones already stored.
+        """
+        uow.documents.save(document)
+        uow.mentions.replace(document.id, document.mentioned_ids(self._prefixes))
 
     # -- write path ---------------------------------------------------------
 
@@ -164,7 +187,7 @@ class DocumentService:
             self._validator.validate_required_fields(document)
             path = self._file_store.write(document, create=True)
             document = document.with_updates(path=path)
-            uow.documents.save(document)
+            self._save(uow, document)
             uow.search.index(document)
             uow.embeddings.mark_dirty(document.id)
             uow.commit()
@@ -219,7 +242,7 @@ class DocumentService:
                 path = self._file_store.write(updated)
             updated = updated.with_updates(path=path)
 
-            uow.documents.save(updated)
+            self._save(uow, updated)
             uow.search.index(updated)
             if content_changed:
                 uow.embeddings.mark_dirty(updated.id)
@@ -242,7 +265,7 @@ class DocumentService:
                 return DocumentView.from_document(document, stale=self._is_stale(document))
             updated = document.with_updates(archived=True, updated=self._clock.today())
             self._file_store.write(updated)
-            uow.documents.save(updated)
+            self._save(uow, updated)
             uow.search.remove(doc_id)
             uow.embeddings.remove(doc_id)
             uow.commit()
@@ -256,7 +279,7 @@ class DocumentService:
                 return DocumentView.from_document(document, stale=self._is_stale(document))
             updated = document.with_updates(archived=False, updated=self._clock.today())
             self._file_store.write(updated)
-            uow.documents.save(updated)
+            self._save(uow, updated)
             uow.search.index(updated)
             uow.embeddings.mark_dirty(doc_id)
             uow.commit()
@@ -297,7 +320,7 @@ class DocumentService:
                 kept = tuple(ref for ref in referrer.related if ref.target != doc_id)
                 stripped = referrer.with_updates(related=kept)
                 self._file_store.write(stripped)
-                uow.documents.save(stripped)
+                self._save(uow, stripped)
                 uow.search.index(stripped)
             if document.path:
                 self._file_store.delete(document.path)
@@ -325,7 +348,16 @@ class DocumentService:
         """
         with self._uow_factory() as uow:
             document = self._require(uow, doc_id)
-            view = DocumentView.from_document(document, stale=self._is_stale(document))
+            view = DocumentView.from_document(
+                document,
+                stale=self._is_stale(document),
+                # Both directions, because the useful question is usually the
+                # backwards one: "what did anyone say about this decision" is
+                # answered by who names it, and nothing else in the CLI answers
+                # it — `related` only records what its own author wrote down.
+                mentions=tuple(uow.mentions.outgoing(doc_id)),
+                mentioned_by=tuple(uow.mentions.incoming(doc_id)),
+            )
             if section is None:
                 return view
             return replace(view, body=extract_section(document.body, section), section=section)

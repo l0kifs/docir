@@ -20,7 +20,12 @@ files and the derived index never disagree.
   against the type being *entered*. A status the new type does not declare is refused rather
   than reset, and the source type is never looked up — so a retype is the way out of a type
   `disable_types:` has removed. A retype is not a status transition and not a content change.
-- `DocumentService.get(id) -> DocumentView` — one document in full (with body)
+- `DocumentService.get(id) -> DocumentView` — one document in full (with body).
+  Carries `mentions` / `mentioned_by`: the ids this body names and the documents whose bodies
+  name it, resolved against the index. Derived, untyped and unauthored, so they sit beside
+  `related` rather than in it — a reader must be able to tell an edge somebody wrote from one
+  docir inferred. On `get` only: the list paths are skeletons, and the body these were derived
+  from is already in this response.
 - `DocumentService.query(QueryRequest) -> [DocumentSummary]` — structured filtering (skeleton, no body).
   Pages with `limit`/`offset`, applied as a SQL window so the cost of a page does not grow with the
   corpus. `code_paths` answers "which documents govern this file": each path is matched against
@@ -68,6 +73,9 @@ files and the derived index never disagree.
   the registry is empty, as it is for any schema predating typed edges), and `schema-drift` —
   how the active schema differs from the one the index was last rebuilt against, one finding per
   change.
+  `orphan` reads the derived mention graph as well as `related`, so a document linked only by
+  someone writing its id in a paragraph is not reported. It is the **only** check that does:
+  `dangling`, `cycle`, `layering` and the delete guard read the authored graph alone.
   All warnings: the document stays readable and its edges resolve. Also `unmatched-code` — a
   governed glob that matches nothing — when the service was given a `CodeMatcher`; without one
   (no repository above the store) the finding is skipped rather than reported against a tree
@@ -160,6 +168,14 @@ Changing the globs without verifying prunes the digests of the patterns that wen
 away and keeps the rest. None of this advances `updated` — it is bookkeeping, not
 a content edit — and none of it reaches `embedding_text`, so a verification
 never queues a re-embed.
+
+`mentions` is the derived relation graph — ids one body names in another, stored in the index
+and never in frontmatter. `DocumentService`/`MaintenanceService` write it beside every document
+save (`Document.mentioned_ids(schema.prefixes())`), `reindex` rebuilds it from the files, and
+`UnitOfWork.mentions` reads it. A mention whose target is not indexed is stored and not
+returned: a body routinely names a document that does not exist yet, so resolution is a
+read-time join rather than a foreign key. Self-mentions are excluded. `tags` writes documents
+without recomputing, because a tag rename never touches a body.
 
 ## Events published
 - none (no event bus; see adr-d3e3616400bf)

@@ -8,11 +8,15 @@ table in one place.
 
 from __future__ import annotations
 
+import sqlite3
+from contextlib import closing
+from functools import cache
 from pathlib import Path
 from typing import Any
 
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -48,7 +52,47 @@ def create_session_factory(engine: Engine) -> sessionmaker[Session]:
 
 def run_migrations(database_url: str) -> None:
     """Upgrade the index database to the latest Alembic revision."""
+    command.upgrade(_alembic_config(database_url), "head")
+
+
+def _alembic_config(database_url: str = "") -> Config:
     config = Config()
     config.set_main_option("script_location", str(_ALEMBIC_DIR))
-    config.set_main_option("sqlalchemy.url", database_url)
-    command.upgrade(config, "head")
+    if database_url:
+        config.set_main_option("sqlalchemy.url", database_url)
+    return config
+
+
+@cache
+def known_revisions() -> frozenset[str]:
+    """Every migration revision this build ships.
+
+    Cached: the answer is a property of the installed package, and the peer
+    check asks it once per peer per command.
+    """
+    scripts = ScriptDirectory.from_config(_alembic_config())
+    return frozenset(script.revision for script in scripts.walk_revisions())
+
+
+@cache
+def head_revision() -> str:
+    """The revision a freshly migrated index sits at."""
+    return str(ScriptDirectory.from_config(_alembic_config()).get_current_head())
+
+
+def index_revision(db_path: Path) -> str | None:
+    """The revision an index database is stamped with, or ``None`` if unknown.
+
+    Read with a bare read-only sqlite connection rather than through the engine:
+    this is asked of *peer* stores, before deciding whether to open one at all,
+    and building an engine to find out whether a store is usable inverts the
+    order. ``None`` covers a database with no ``alembic_version`` row and one
+    that will not open — both mean "cannot say", and the caller treats that as a
+    reason to skip rather than as permission to proceed.
+    """
+    try:
+        with closing(sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)) as conn:
+            row = conn.execute("SELECT version_num FROM alembic_version").fetchone()
+    except sqlite3.Error:
+        return None
+    return None if row is None else str(row[0])

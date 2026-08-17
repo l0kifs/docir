@@ -223,20 +223,21 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   `platform.naming` (tach), and deriving meaning from prose is not a translation of rows.
   `tags` writes documents without recomputing — a rename never touches a body — and
   `test_a_tag_rename_does_not_disturb_it` fails if that stops being true.
-  **Mention *reads* tolerate the table being absent; writes do not.** Peers are opened
-  read-only and never migrated by us (adr-fb938175f72a), so a peer last indexed before
-  migration `0008` has no `mentions` table and every federated read raised `no such table`
-  until this guard — one un-reindexed repository became an outage for everyone pointing at
-  it. The check asks `sqlite_master` rather than catching `OperationalError`, which would
-  swallow real corruption, and a *write* still raises, since the local store is migrated on
-  every startup. This applies to **every derived column or table a migration adds**, and it had
-  already happened once: `document_code.digest` (migration `0007`) is selected by every hydrate,
-  so a peer built before it broke `query` and `get` outright — `_has_code_digest` guards that
-  the same way. Both are pinned in `test_federation.py::TestPeerIndexedByOlderDocir`. **The
-  per-column guards are a patch, not the fix**: nothing stops the next migration repeating it,
-  and the general answer is for `peer_status` to compare the peer's `alembic_version` against
-  this build's head and skip with an actionable message — at the cost of an upgrade taking
-  every un-reindexed peer dark until it is rebuilt.
+  **A peer whose index is older than this build is skipped, not read.** Peers are opened
+  read-only and never migrated by us (adr-fb938175f72a), so every table or column a migration
+  adds is one some peer will not have — and it had already broken twice: `mentions` (`0008`)
+  took down `context`/`get` with `no such table`, and `document_code.digest` (`0007`) took down
+  every hydrate, which is `query` too. Through the daemon that surfaced as "daemon closed the
+  connection without responding". `peer_status` now compares the peer's `alembic_version`
+  against `head_revision()` (`_peer_schema_status`), so **one rule covers every past and future
+  migration** — a guard per column worked and had to be remembered, which is the failure mode
+  itself. Three properties are load-bearing: an **unknown** revision is from a *newer* docir and
+  is **allowed**, because every query names its columns and refusing it would make upgrading one
+  repo break every repo that had not (backwards from what this protects); **no** recorded
+  revision is skipped, since "cannot say" is not permission; and the skip reuses the existing
+  warn-and-carry-on path, so an unreadable peer never fails the caller's own query. The cost is
+  deliberate and stated in the message: upgrading docir darkens every peer until each is
+  reindexed.
   **An unresolved mention is deliberately not a finding, and that was measured** (adr-e86c5040d626):
   all 47 in this corpus are documentation *examples* (`adr-0007`, `adr-3f9a2b1c7d4e` — the ids
   the architecture documents use to explain the id format), not typos. Ignoring code spans

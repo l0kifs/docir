@@ -238,6 +238,45 @@ def peer_status(home: Path) -> str:
         return "no index — run `docir reindex` in that store"
     if not settings.schema_path.is_file():
         return f"no {settings.schema_path.name}"
+    return _peer_schema_status(settings.db_path)
+
+
+def _peer_schema_status(db_path: Path) -> str:
+    """Why a peer's index schema is unusable by this build, or ``""``.
+
+    A peer is opened read-only and never migrated — it is someone else's
+    repository — so its index can be at any revision this or any other docir
+    ever shipped. Reads assumed the current one, and every table or column a
+    migration added was one an older peer did not have: `mentions` (0008) took
+    down `context` and `get` with ``no such table``, and `document_code.digest`
+    (0007) took down every hydrate, which is `query` as well. One un-reindexed
+    repository became an outage for everyone pointing at it.
+
+    Guarding each column as it was added did work and did not scale: the next
+    migration reintroduces the bug by default, and the guard has to be
+    remembered rather than enforced. Comparing the revision instead covers every
+    past and future migration with one rule.
+
+    **Only a peer this build knows to be older is skipped.** A revision absent
+    from :func:`known_revisions` is from a *newer* docir, and that direction is
+    safe: every query names its columns, so a table with extra ones reads fine.
+    Refusing it would make an upgrade in one repository break every repository
+    that had not upgraded yet — backwards from what this protects.
+
+    The cost is real and deliberate: upgrading docir takes every peer dark until
+    each is reindexed. The message says exactly that, because the alternative
+    was a stack trace that named a column.
+    """
+    from docir.platform.persistence.engine import head_revision, index_revision, known_revisions
+
+    revision = index_revision(db_path)
+    if revision is None:
+        return "index has no schema version — run `docir reindex` in that store"
+    if revision != head_revision() and revision in known_revisions():
+        return (
+            f"index was built at schema {revision}, this docir expects "
+            f"{head_revision()} — run `docir reindex` in that store"
+        )
     return ""
 
 

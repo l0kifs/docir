@@ -334,74 +334,89 @@ class TestUnavailablePeers:
 
 
 class TestPeerIndexedByOlderDocir:
-    """A peer whose index predates a migration must still be readable.
+    """A peer whose index predates a migration is skipped, not read.
 
-    Peers are opened read-only and deliberately *not* migrated — a peer is
-    another repository, and docir does not rewrite one it was merely pointed at
-    (adr-fb938175f72a). So every derived table added by a migration is a table
-    some peer will not have, and a read that assumes it is present turns one
-    un-reindexed repository into an outage for everyone pointing at it.
+    Peers are opened read-only and never migrated — a peer is another repository
+    (adr-fb938175f72a). So every table or column a migration adds is one some
+    peer will not have, and a read that assumes it is present turns one
+    un-reindexed repository into an outage for everyone pointing at it. It had
+    already happened twice: `mentions` (0008) broke `context` and `get`,
+    `document_code.digest` (0007) broke every hydrate and so `query` too.
 
-    Injected the way it actually arises: the table is dropped, which is what a
-    peer last built before migration 0008 looks like.
+    The rule is one revision comparison rather than a guard per column, because
+    the guard has to be remembered and the comparison does not. The cost is that
+    upgrading docir darkens every peer until it is reindexed — which is what the
+    message tells the user to do.
+
+    Injected the way it really arises: the schema is rolled back *and* stamped
+    with the older revision, which is what an index built by that docir is.
     """
 
-    def test_a_missing_mentions_table_does_not_break_a_federated_read(
-        self, tmp_path: Path, container: Container, peer: Container
-    ) -> None:
+    @staticmethod
+    def _roll_back_to_0007(home: Path) -> None:
+        """Make the index look exactly like one built before migration 0008."""
         import sqlite3
 
+        with sqlite3.connect(home / "index.db") as raw:
+            raw.execute("DROP TABLE mentions")
+            raw.execute("UPDATE alembic_version SET version_num = '0007'")
+
+    def test_such_a_peer_is_skipped_with_an_actionable_reason(
+        self, tmp_path: Path, peer: Container
+    ) -> None:
         peer_home = tmp_path / "peer"
         peer.close()
-        with sqlite3.connect(peer_home / "index.db") as raw:
-            raw.execute("DROP TABLE mentions")
+        self._roll_back_to_0007(peer_home)
+
+        reason = peer_status(peer_home)
+        assert "0007" in reason and "0008" in reason
+        assert "docir reindex" in reason
+
+    def test_the_local_store_still_answers(
+        self, tmp_path: Path, container: Container, peer: Container
+    ) -> None:
+        # The established behaviour for an unreadable peer: warn and carry on.
+        # A peer that cannot be read must never fail the caller's own query.
+        peer_home = tmp_path / "peer"
+        peer.close()
+        self._roll_back_to_0007(peer_home)
 
         _declare(container.settings.home, peer_home)
-        rows = container.dispatcher.dispatch(
-            "context", {"task": "mutual tls between services", "limit": 5}
-        )
-        titles = {row["title"] for row in rows}
-        assert _PEER_DOC["title"] in titles, "the peer's documents became unreachable"
+        container.dispatcher.dispatch("add", _LOCAL_DOC)
+        titles = {row["title"] for row in container.dispatcher.dispatch("query", {"limit": 10})}
+        assert _LOCAL_DOC["title"] in titles
+        assert _PEER_DOC["title"] not in titles
 
-    def test_a_missing_code_digest_column_does_not_break_a_federated_read(
+    def test_a_peer_from_a_newer_docir_is_still_read(
         self, tmp_path: Path, container: Container, peer: Container
     ) -> None:
-        # The same defect one migration earlier: `document_code.digest` arrived
-        # in 0007, and every hydrate selects it — so a peer built before that
-        # broke `query` and `get`, not just expansion. Rebuilt the way SQLite
-        # forces a column drop, which is what the older schema literally was.
+        # The asymmetry is the point. A revision this build does not know is
+        # from a *newer* docir, and every query names its columns, so extra ones
+        # read fine. Refusing it would make upgrading one repository break every
+        # repository that had not upgraded yet — backwards from what this
+        # protects against.
         import sqlite3
 
         peer_home = tmp_path / "peer"
         peer.close()
         with sqlite3.connect(peer_home / "index.db") as raw:
-            raw.execute("ALTER TABLE document_code RENAME TO document_code_old")
-            raw.execute(
-                "CREATE TABLE document_code (doc_id TEXT NOT NULL "
-                "REFERENCES documents(id) ON DELETE CASCADE, pattern TEXT NOT NULL, "
-                "PRIMARY KEY (doc_id, pattern))"
-            )
-            raw.execute("INSERT INTO document_code SELECT doc_id, pattern FROM document_code_old")
-            raw.execute("DROP TABLE document_code_old")
+            raw.execute("UPDATE alembic_version SET version_num = '0099'")
 
+        assert peer_status(peer_home) == ""
         _declare(container.settings.home, peer_home)
         titles = {row["title"] for row in container.dispatcher.dispatch("query", {"limit": 10})}
-        assert _PEER_DOC["title"] in titles, "the peer's documents became unreachable"
+        assert _PEER_DOC["title"] in titles
 
-    def test_get_against_such_a_peer_reports_no_mentions_rather_than_failing(
-        self, tmp_path: Path, container: Container, peer: Container
+    def test_an_index_with_no_recorded_revision_is_skipped(
+        self, tmp_path: Path, peer: Container
     ) -> None:
-        # Absent means unknown, the rule the whole index follows: no table is
-        # the same answer as an empty one, not an error.
+        # Cannot say is not permission to proceed: this is either corruption or
+        # a build old enough to predate Alembic, and both need a rebuild.
         import sqlite3
 
         peer_home = tmp_path / "peer"
-        doc_id = peer.dispatcher.dispatch("query", {"limit": 1})[0]["id"]
         peer.close()
         with sqlite3.connect(peer_home / "index.db") as raw:
-            raw.execute("DROP TABLE mentions")
+            raw.execute("DELETE FROM alembic_version")
 
-        _declare(container.settings.home, peer_home)
-        view = container.dispatcher.dispatch("get", {"doc_id": doc_id})
-        assert view["title"] == _PEER_DOC["title"]
-        assert view.get("mentions", ()) == ()
+        assert "docir reindex" in peer_status(peer_home)

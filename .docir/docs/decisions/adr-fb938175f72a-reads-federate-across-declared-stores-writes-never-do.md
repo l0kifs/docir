@@ -15,7 +15,7 @@ tags:
 - retrieval
 title: Reads federate across declared stores; writes never do
 type: decision
-updated: '2026-08-15'
+updated: '2026-08-17'
 ---
 
 ## Context
@@ -185,3 +185,25 @@ Why single-store is the right answer rather than a flag:
 
 `check`, `reindex` and every write were already local; this closes the one read
 path whose *output is written to disk* rather than answered to a caller.
+
+## A peer older than this build is skipped
+
+Peers are never migrated, so an index can be at any revision docir ever shipped, and every
+table or column a migration adds is one some peer will not have. It broke twice before anyone
+noticed the pattern: `mentions` (0008) took down `context` and `get`, `document_code.digest`
+(0007) took down every hydrate and so `query` as well. Through the daemon the user saw only
+"daemon closed the connection without responding".
+
+`peer_status` compares the peer's `alembic_version` against this build's head, so one rule
+covers every past and future migration. Guarding each column as it was added also worked, and
+had to be remembered — which is the failure mode itself.
+
+Three properties hold it up. A revision this build does not recognise is from a **newer** docir
+and is allowed: every query names its columns, so extra ones read fine, and refusing would make
+upgrading one repository break every repository that had not upgraded yet. A **missing**
+revision is skipped, because "cannot say" is not permission to proceed. And the skip reuses the
+existing warn-and-carry-on path, so an unreadable peer still never fails the caller's own query.
+
+The cost is real: upgrading docir darkens every peer until each is reindexed. The message names
+both revisions and the command that fixes it, which is the trade against a stack trace naming a
+column.

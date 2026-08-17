@@ -56,22 +56,6 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def _has_code_digest(self) -> bool:
-        """Whether this index carries ``document_code.digest`` (migration 0007).
-
-        The same rule the mention table follows, for the same reason: a
-        federated peer is opened read-only and never migrated by us, so an index
-        built before that migration has the column missing and every hydrate —
-        that is, every `query` and every `get` — raised ``no such column``.
-        Absent means the peer has no verification digests, which is exactly what
-        an un-verified corpus looks like anyway.
-
-        Asked of ``PRAGMA table_info`` rather than by catching the error, so
-        real corruption still surfaces.
-        """
-        rows = self._session.execute(sql_text("PRAGMA table_info(document_code)")).all()
-        return any(row[1] == "digest" for row in rows)
-
     def next_number(self, prefix: str) -> int:
         """Atomically claim the next number for ``prefix``.
 
@@ -223,13 +207,6 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
         the caller pair them up itself — the mistake keying the map by pattern
         exists to prevent.
         """
-        if not self._has_code_digest():
-            stmt = (
-                select(DocumentCodeRow.pattern)
-                .where(DocumentCodeRow.doc_id == doc_id)
-                .order_by(DocumentCodeRow.pattern)
-            )
-            return [(pattern, None) for pattern in self._session.scalars(stmt).all()]
         stmt = (
             select(DocumentCodeRow.pattern, DocumentCodeRow.digest)
             .where(DocumentCodeRow.doc_id == doc_id)
@@ -274,16 +251,12 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
             .order_by(RelationRow.target)
         ).all():
             rel_map[source].append(RelatedRef(target=target, kind=kind))
-        columns = [DocumentCodeRow.doc_id, DocumentCodeRow.pattern]
-        if self._has_code_digest():
-            columns.append(DocumentCodeRow.digest)
-        for row in self._session.execute(
-            select(*columns)
+        for doc_id, pattern, digest in self._session.execute(
+            select(DocumentCodeRow.doc_id, DocumentCodeRow.pattern, DocumentCodeRow.digest)
             .where(DocumentCodeRow.doc_id.in_(ids))
             .order_by(DocumentCodeRow.pattern)
         ).all():
-            doc_id, pattern = row[0], row[1]
-            code_map[doc_id].append((pattern, row[2] if len(row) > 2 else None))
+            code_map[doc_id].append((pattern, digest))
         return [
             _to_document(row, tuple(tag_map[row.id]), rel_map[row.id], code_map[row.id])
             for row in rows
@@ -298,34 +271,16 @@ class SqlAlchemyMentionRepository(MentionRepository):
     rule the rest of the index follows. Writes do not, so a mention written
     before its target starts resolving the moment that target exists.
 
-    **Reads tolerate the table being absent; writes do not.** A federated peer
-    is another repository, opened read-only and *not* migrated by us
-    (adr-fb938175f72a), so a peer last indexed by a docir that predates
-    migration ``0008`` has no ``mentions`` table at all — and every federated
-    read would otherwise crash with ``no such table``, taking a working peer
-    down over a derived table nobody asked it for. No table means no mentions,
-    which is the same answer an empty one gives. A *write* against a missing
-    table is a broken local install and must still raise: the local store is
-    migrated on every startup, so it cannot happen by accident.
+    Every query here assumes the table exists, and that assumption is enforced
+    one level up: a federated peer whose index predates migration ``0008`` is
+    refused by ``peer_status`` before it is opened, not tolerated column by
+    column here (`_peer_schema_status`). Guarding each table as it was added
+    worked and did not scale — the next migration reintroduces the bug by
+    default — so the revision is compared once instead.
     """
 
     def __init__(self, session: Session) -> None:
         self._session = session
-
-    def _available(self) -> bool:
-        """Whether this store's index has the mention table.
-
-        Asked of ``sqlite_master`` rather than by catching ``OperationalError``
-        around each query: a catch that broad would also swallow real
-        corruption, and the question here is specifically "is this index older
-        than the feature".
-        """
-        return (
-            self._session.execute(
-                sql_text("SELECT 1 FROM sqlite_master WHERE type='table' AND name='mentions'")
-            ).first()
-            is not None
-        )
 
     def replace(self, source: str, targets: Sequence[str]) -> None:
         self._session.execute(delete(MentionRow).where(MentionRow.source == source))
@@ -339,8 +294,6 @@ class SqlAlchemyMentionRepository(MentionRepository):
         self._session.flush()
 
     def outgoing(self, source: str) -> list[str]:
-        if not self._available():
-            return []
         stmt = (
             select(MentionRow.target)
             .join(DocumentRow, DocumentRow.id == MentionRow.target)
@@ -350,8 +303,6 @@ class SqlAlchemyMentionRepository(MentionRepository):
         return list(self._session.scalars(stmt).all())
 
     def incoming(self, target: str) -> list[str]:
-        if not self._available():
-            return []
         stmt = (
             select(MentionRow.source)
             .join(DocumentRow, DocumentRow.id == MentionRow.source)
@@ -361,8 +312,6 @@ class SqlAlchemyMentionRepository(MentionRepository):
         return list(self._session.scalars(stmt).all())
 
     def unresolved(self) -> list[tuple[str, str]]:
-        if not self._available():
-            return []
         indexed = set(self._session.scalars(select(DocumentRow.id)).all())
         rows = self._session.execute(
             select(MentionRow.source, MentionRow.target).order_by(
@@ -372,8 +321,6 @@ class SqlAlchemyMentionRepository(MentionRepository):
         return [(src, tgt) for src, tgt in rows if src in indexed and tgt not in indexed]
 
     def all_resolved(self) -> list[tuple[str, str]]:
-        if not self._available():
-            return []
         indexed = set(self._session.scalars(select(DocumentRow.id)).all())
         rows = self._session.execute(
             select(MentionRow.source, MentionRow.target).order_by(

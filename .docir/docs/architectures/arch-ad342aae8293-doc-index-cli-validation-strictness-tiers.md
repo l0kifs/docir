@@ -120,6 +120,12 @@ Heuristic, never CI-blocking, run only when a human chooses to:
   suggestion, never an error. Chunk vectors are deliberately not used here: they
   would answer "do these share a section", not "are these the same document"
 - Document size / scope creep (one document covering several unrelated decisions)
+- Unresolved mentions — ids a body names that no document carries, one finding per
+  document. It lives here and cannot be promoted: measured on this corpus, all 47 were
+  documentation *examples* (`adr-0007` and the rest, in the documents explaining the id
+  format), so a Tier 1 warning would fire only on correct usage. Ignoring code spans does
+  not rescue it — 20 of the 47 sit outside code anyway, and 56 *resolved* mentions live
+  only inside code spans (adr-e86c5040d626)
 
 ## Why this split
 

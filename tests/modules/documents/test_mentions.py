@@ -344,3 +344,167 @@ def test_a_write_still_fails_loudly_when_the_body_is_unreadable(
         dispatcher.dispatch(
             "add", {"type": "nosuchtype", "title": "T", "description": "d", "body": "adr-0001"}
         )
+
+
+class TestContextExpansion:
+    """`context` follows prose citations as well as authored edges.
+
+    Measured before it shipped: `benchmarks/mentions.py` puts recall@5 at 0.93
+    against 0.84 for authored edges alone, precision 0.37 against 0.33, MRR
+    unchanged — expansion only fills the neighbour slots, so it cannot displace
+    the top ranked hit. One of its fifteen tasks regresses, which is the honest
+    shape of a ranking change rather than a reason to withhold one.
+    """
+
+    def _cited_pair(self, dispatcher: Dispatcher) -> tuple[str, str]:
+        """A seed with distinctive words, citing a target that shares none.
+
+        Six documents compete for the ranked slots, each sharing some of the
+        task's vocabulary, so the target cannot arrive by ranking: it is about
+        settlement and the task is about telemetry. Without the filler the store
+        was smaller than `limit` and every document came back regardless, which
+        made the `--expand 0` assertion pass against a result set the graph had
+        not touched at all.
+        """
+        target = dispatcher.dispatch(
+            "add",
+            {
+                "type": "decision",
+                "title": "Nightly settlement batch",
+                "description": "Ledger reconciliation runs overnight.",
+                "body": "Ledger totals are reconciled once a day against the bank file.",
+            },
+        )["id"]
+        for index, subject in enumerate(
+            (
+                "telemetry sampling rates",
+                "buffer sizing for the telemetry ring",
+                "kangaroo enclosure sensors",
+                "overflow handling in the telemetry writer",
+                "telemetry buffer metrics",
+                "kangaroo tracking collars",
+            )
+        ):
+            dispatcher.dispatch(
+                "add",
+                {
+                    "type": "issue",
+                    "title": f"Notes on {subject}",
+                    "description": f"Working notes about {subject}.",
+                    "body": f"Observations about {subject} number {index}.",
+                },
+            )
+        seed = dispatcher.dispatch(
+            "add",
+            {
+                "type": "issue",
+                "title": "Kangaroo telemetry overflows the buffer",
+                "description": "Kangaroo telemetry floods the ring buffer on overflow.",
+                "body": f"The kangaroo telemetry buffer overflow path is bounded by {target}.",
+            },
+        )["id"]
+        return str(seed), str(target)
+
+    def test_a_document_reached_only_through_prose_is_returned(
+        self, dispatcher: Dispatcher
+    ) -> None:
+        seed, target = self._cited_pair(dispatcher)
+        rows = dispatcher.dispatch(
+            "context", {"task": "kangaroo telemetry buffer overflow", "limit": 5}
+        )
+        found = {row["id"]: row for row in rows}
+        assert seed in found
+        assert target in found, "the cited document was not reached"
+        # Marked as graph-reached, not as a ranked hit: it did not match the
+        # task, it was pulled in by a neighbour that did.
+        assert found[target]["via_graph"] is True
+
+    def test_expand_zero_still_means_no_neighbours(self, dispatcher: Dispatcher) -> None:
+        # The flag is a budget for graph slots, and mentions spend from it like
+        # everything else. Zero has to keep meaning zero.
+        _, target = self._cited_pair(dispatcher)
+        rows = dispatcher.dispatch(
+            "context", {"task": "kangaroo telemetry buffer overflow", "limit": 5, "expand": 0}
+        )
+        assert target not in {row["id"] for row in rows}
+
+    def test_a_closed_document_is_not_reached_through_a_mention(
+        self, dispatcher: Dispatcher
+    ) -> None:
+        # The visibility predicate applies to every path into the result set.
+        # Expansion once checked only `archived`, which let a resolved issue back
+        # in through a neighbour edge; a second graph must not reopen that.
+        _, target = self._cited_pair(dispatcher)
+        dispatcher.dispatch("update", {"doc_id": target, "status": "accepted"})
+        dispatcher.dispatch("update", {"doc_id": target, "status": "superseded"})
+        rows = dispatcher.dispatch(
+            "context", {"task": "kangaroo telemetry buffer overflow", "limit": 5}
+        )
+        assert target not in {row["id"] for row in rows}
+
+
+class TestUnresolvedReport:
+    """`lint --deep` lists ids named in prose that nothing carries.
+
+    Tier 2 and not Tier 1, measured: every unresolved mention in docir's own
+    corpus is a documentation example, so a warning would fire 47 times on a
+    healthy corpus and never once on a defect (adr-e86c5040d626).
+    """
+
+    def _findings(self, dispatcher: Dispatcher) -> list[dict]:
+        return [f for f in dispatcher.dispatch("lint", {}) if f["kind"] == "unresolved-mention"]
+
+    def test_an_id_nothing_carries_is_reported(self, dispatcher: Dispatcher) -> None:
+        source = dispatcher.dispatch(
+            "add",
+            {
+                "type": "decision",
+                "title": "T",
+                "description": "d",
+                "body": "Supersedes adr-deadbeefcafe.",
+            },
+        )["id"]
+        findings = self._findings(dispatcher)
+        assert [f["doc_ids"] for f in findings] == [(source,)]
+        assert "adr-deadbeefcafe" in findings[0]["message"]
+
+    def test_a_resolved_mention_is_not_reported(self, dispatcher: Dispatcher) -> None:
+        target = dispatcher.dispatch(
+            "add", {"type": "decision", "title": "T", "description": "d", "body": "x"}
+        )["id"]
+        dispatcher.dispatch(
+            "add", {"type": "issue", "title": "I", "description": "d", "body": f"See {target}."}
+        )
+        assert self._findings(dispatcher) == []
+
+    def test_one_finding_per_document_not_per_id(self, dispatcher: Dispatcher) -> None:
+        # A document explaining the id format names five examples. Five
+        # identical lines would bury the one document that has a real typo.
+        source = dispatcher.dispatch(
+            "add",
+            {
+                "type": "architecture",
+                "title": "The id format",
+                "description": "d",
+                "body": "Ids look like adr-0001, adr-0002, adr-0003 or issue-0007.",
+            },
+        )["id"]
+        findings = self._findings(dispatcher)
+        assert len(findings) == 1
+        assert findings[0]["doc_ids"] == (source,)
+        for example in ("adr-0001", "adr-0002", "adr-0003", "issue-0007"):
+            assert example in findings[0]["message"]
+
+    def test_it_never_reaches_the_blocking_tier(self, dispatcher: Dispatcher) -> None:
+        # The whole argument for building it in Tier 2. If this kind ever
+        # appears in `check`, it gates a merge on a document quoting an example.
+        dispatcher.dispatch(
+            "add",
+            {
+                "type": "decision",
+                "title": "T",
+                "description": "d",
+                "body": "Supersedes adr-deadbeefcafe.",
+            },
+        )
+        assert "unresolved-mention" not in {i["kind"] for i in dispatcher.dispatch("check", {})}

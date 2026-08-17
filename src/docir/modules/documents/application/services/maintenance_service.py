@@ -495,7 +495,12 @@ class MaintenanceService:
             # A pair the author has linked has already been explained; only the
             # unnoticed similarity is worth reporting (issue-08437ba704ff).
             linked = {frozenset((rel.source, rel.target)) for rel in uow.documents.relations()}
+            # Tier 2 and not Tier 1, measured: every unresolved mention in this
+            # project's own corpus is a documentation example, so a warning
+            # would fire only on correct usage (adr-e86c5040d626).
+            unresolved = uow.mentions.unresolved()
         findings = self._linter.find_duplicates(vectors, linked)
+        findings.extend(self._linter.find_unresolved_mentions(unresolved))
         findings.extend(self._linter.find_scope_creep(documents, self._schema))
         # Reads the bodies already loaded above, not the stored chunks: the
         # answer must describe the document as it is now, not as it was when

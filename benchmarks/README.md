@@ -18,6 +18,77 @@ recall, precision, MRR and the size of the payload an agent receives.
 **It is a measurement, not a test.** It prints numbers and exits 0. Do not wire a
 threshold around it until the numbers below are understood and stable.
 
+## Mention expansion
+
+`mentions.py` — does `docir context` gain from following ids cited in prose, or dilute?
+
+```bash
+uv run python benchmarks/mentions.py
+DOCIR_EMBEDDER=deterministic uv run python benchmarks/mentions.py
+```
+
+`run.py` **cannot** answer this: it allocates ids at load time, so no body in `corpus.yaml`
+can name one and the mention graph is empty for the whole run — a broken expansion and a
+working one score identically. `mentions_corpus.yaml` carries `{key}` placeholders substituted
+after allocation instead, which is how a real author writes a citation.
+
+19 documents, 15 tasks, `k=5`, `expand=2`. Default (`fastembed`), 2026-08-17:
+
+| task group | strategy | recall@5 | precision | MRR |
+|---|---|---|---|---|
+| all (15) | authored edges only | 0.84 | 0.33 | 0.86 |
+| all (15) | **+ mention edges** | **0.93** | **0.37** | 0.86 |
+| prose-linked (7) | authored edges only | 0.74 | 0.40 | 0.86 |
+| prose-linked (7) | + mention edges | 0.86 | 0.46 | 0.86 |
+| not prose-linked (8) | authored edges only | 0.94 | 0.28 | 0.85 |
+| not prose-linked (8) | + mention edges | 1.00 | 0.30 | 0.85 |
+
+One task of fifteen regresses (M15, recall 1.00 -> 0.67).
+
+### The neighbour budget, swept
+
+`expand` had never been measured either — it was chosen before any instrument could see graph
+expansion at all. Same fixture, same run:
+
+| expand | authored only | + mentions |
+|---|---|---|
+| 0 | 0.79 / 0.31 / 0.86 | identical (no budget) |
+| 1 | 0.84 / 0.33 / 0.86 | **0.93 / 0.37 / 0.86** |
+| 2 | 0.84 / 0.33 / 0.86 | **0.93 / 0.37 / 0.86** |
+| 3 | 0.84 / 0.33 / 0.86 | 0.93 / 0.40 / **0.83** |
+
+recall@5 / precision / MRR. Two things fall out.
+
+**`expand=1` captures the whole gain here.** 1 and 2 are indistinguishable on this fixture, so
+the shipped default of 2 is not evidenced against — it is simply not distinguished. Do not read
+it as measured-optimal.
+
+**MRR holds because of the budget, not because of expansion.** `seed_budget = limit - expand`,
+so at `expand=2` with `limit=5` the top three ranked hits keep their positions and neighbours
+fill what is left. At `expand=3` only two do, a relevant document that ranked third gets pushed
+behind the graph, and MRR drops to 0.83 while precision rises. That is the trade to watch, and
+it is a property of the budget — not, as first claimed here, of expansion being unable to
+displace a ranked hit.
+
+The gain in the *not* prose-linked group is not the fixture leaking. Mentions are followed in
+both directions, so they restore backwards reachability for authored kinds that are not
+successors (`refines`, `relates_to`) — a second real effect, found only because the grouping is
+derived from the corpus rather than hand-labelled.
+
+Two properties of this benchmark are load-bearing:
+
+- **Sequential ids.** `run.py` mints random ones to price what they cost to read; nothing here
+  measures tokens, and random ids move ranking ties — the same code scored 0.79 and 0.81 on
+  consecutive runs before the switch. A baseline that wanders cannot settle a small difference.
+- **A derived grouping.** Which tasks need a prose-only hop is computed from the corpus, not
+  read from a label. The first version asked the fixture's author to label the fixture, and the
+  labels were wrong in the direction that flattered the feature.
+
+**LIMITATION:** single-annotator ground truth, authored alongside the corpus, by the author of
+the feature under test. Weaker evidence than judgments from someone with no stake in the
+answer. The fixture deliberately includes tasks with one relevant document, where expansion has
+only precision to lose.
+
 ## Results
 
 `recall@5`, 26 documents, 20 tasks. Confirmed 2026-08-06 on docir 0.10.0.

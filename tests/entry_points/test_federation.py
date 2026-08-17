@@ -331,3 +331,77 @@ class TestUnavailablePeers:
         """The negative assertions above are only worth anything if this passes:
         otherwise every peer reads as unavailable and nothing is being tested."""
         assert peer_status(peer.settings.home) == ""
+
+
+class TestPeerIndexedByOlderDocir:
+    """A peer whose index predates a migration must still be readable.
+
+    Peers are opened read-only and deliberately *not* migrated — a peer is
+    another repository, and docir does not rewrite one it was merely pointed at
+    (adr-fb938175f72a). So every derived table added by a migration is a table
+    some peer will not have, and a read that assumes it is present turns one
+    un-reindexed repository into an outage for everyone pointing at it.
+
+    Injected the way it actually arises: the table is dropped, which is what a
+    peer last built before migration 0008 looks like.
+    """
+
+    def test_a_missing_mentions_table_does_not_break_a_federated_read(
+        self, tmp_path: Path, container: Container, peer: Container
+    ) -> None:
+        import sqlite3
+
+        peer_home = tmp_path / "peer"
+        peer.close()
+        with sqlite3.connect(peer_home / "index.db") as raw:
+            raw.execute("DROP TABLE mentions")
+
+        _declare(container.settings.home, peer_home)
+        rows = container.dispatcher.dispatch(
+            "context", {"task": "mutual tls between services", "limit": 5}
+        )
+        titles = {row["title"] for row in rows}
+        assert _PEER_DOC["title"] in titles, "the peer's documents became unreachable"
+
+    def test_a_missing_code_digest_column_does_not_break_a_federated_read(
+        self, tmp_path: Path, container: Container, peer: Container
+    ) -> None:
+        # The same defect one migration earlier: `document_code.digest` arrived
+        # in 0007, and every hydrate selects it — so a peer built before that
+        # broke `query` and `get`, not just expansion. Rebuilt the way SQLite
+        # forces a column drop, which is what the older schema literally was.
+        import sqlite3
+
+        peer_home = tmp_path / "peer"
+        peer.close()
+        with sqlite3.connect(peer_home / "index.db") as raw:
+            raw.execute("ALTER TABLE document_code RENAME TO document_code_old")
+            raw.execute(
+                "CREATE TABLE document_code (doc_id TEXT NOT NULL "
+                "REFERENCES documents(id) ON DELETE CASCADE, pattern TEXT NOT NULL, "
+                "PRIMARY KEY (doc_id, pattern))"
+            )
+            raw.execute("INSERT INTO document_code SELECT doc_id, pattern FROM document_code_old")
+            raw.execute("DROP TABLE document_code_old")
+
+        _declare(container.settings.home, peer_home)
+        titles = {row["title"] for row in container.dispatcher.dispatch("query", {"limit": 10})}
+        assert _PEER_DOC["title"] in titles, "the peer's documents became unreachable"
+
+    def test_get_against_such_a_peer_reports_no_mentions_rather_than_failing(
+        self, tmp_path: Path, container: Container, peer: Container
+    ) -> None:
+        # Absent means unknown, the rule the whole index follows: no table is
+        # the same answer as an empty one, not an error.
+        import sqlite3
+
+        peer_home = tmp_path / "peer"
+        doc_id = peer.dispatcher.dispatch("query", {"limit": 1})[0]["id"]
+        peer.close()
+        with sqlite3.connect(peer_home / "index.db") as raw:
+            raw.execute("DROP TABLE mentions")
+
+        _declare(container.settings.home, peer_home)
+        view = container.dispatcher.dispatch("get", {"doc_id": doc_id})
+        assert view["title"] == _PEER_DOC["title"]
+        assert view.get("mentions", ()) == ()

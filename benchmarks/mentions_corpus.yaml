@@ -1,0 +1,241 @@
+# Benchmark corpus — a plausible shipping/fulfilment service, written to
+# exercise the *derived* mention graph.
+#
+# `run.py`'s corpus cannot: its ids are allocated at load time, so no body in it
+# can name one and the mention graph is empty for the whole run. Here bodies
+# cite other documents with a `{key}` placeholder, substituted with the real
+# allocated id after the first pass — which is how a real corpus reads, because
+# a real author writes the id they can see.
+#
+# Three linking styles on purpose, so the measurement is not rigged:
+#
+#   * `related` only  — the authored graph, which expansion already follows
+#   * prose only      — no frontmatter edge at all; invisible before mentions
+#   * both            — the common real case
+#
+# And several documents cite many others without being *about* them, so
+# expanding along mentions has something to dilute. A fixture where every
+# citation is relevant would prove only that the fixture was written to agree.
+
+- key: adr-carrier-split
+  type: decision
+  title: Route parcels by carrier at pick time, not at checkout
+  description: The carrier is chosen when the parcel is picked, so stock location can influence it.
+  body: |
+    Choosing a carrier at checkout fixes it before we know which warehouse will
+    pick the order. We defer the choice to pick time, where the origin postcode
+    is known and the cheapest compliant carrier can be selected per parcel. The
+    checkout quote becomes an estimate rather than a commitment.
+  related: []
+
+- key: adr-label-cache
+  type: decision
+  title: Buy shipping labels lazily and cache them for 24 hours
+  description: A label is purchased on first print and reused for repeat prints within a day.
+  body: |
+    Labels cost money per purchase, and a warehouse commonly reprints one after
+    a jam. We buy on first print, store the PDF and the tracking number, and
+    serve any reprint within 24 hours from that cache. After that the carrier
+    may have voided the label, so the next print buys a fresh one.
+  related: []
+
+- key: adr-address-normalise
+  type: decision
+  title: Normalise addresses against the carrier's own validator
+  description: Addresses are rewritten to the carrier's canonical form before a label is bought.
+  body: |
+    Each carrier rejects slightly different address shapes. We send the address
+    through the chosen carrier's validation endpoint and store the canonical
+    form it returns, so the same order does not fail at label purchase after
+    passing checkout. The customer sees their original text; the label carries
+    the normalised one.
+  related: []
+
+- key: issue-split-cost
+  type: issue
+  title: Multi-parcel orders quote one carrier and get billed for three
+  description: The checkout estimate assumes a single parcel, so split shipments under-quote badly.
+  body: |
+    An order picked from three warehouses becomes three parcels, each billed
+    separately, while the customer was quoted one. Deferring carrier choice to
+    pick time as decided in {adr-carrier-split} is what makes this visible — the
+    quote is now an estimate, and nothing reconciles the estimate against the
+    parcels actually bought. Worst observed gap is 4x on a bulky order.
+  related: []
+
+- key: issue-reprint-storm
+  type: issue
+  title: A jammed printer can buy a hundred labels in a minute
+  description: Reprint loops bypass the cache when the cached PDF fails to render.
+  body: |
+    When a cached PDF is corrupt the print service falls back to purchasing a
+    new label, and the operator's retry loop turns that into a purchase per
+    attempt. The 24-hour cache from {adr-label-cache} is doing its job for
+    healthy PDFs and nothing at all for broken ones. We need the fallback to be
+    rate limited per order.
+  related: []
+
+- key: issue-address-loop
+  type: issue
+  title: Normalisation flips an address back and forth between two carriers
+  description: Two carriers disagree on the canonical form, so re-routing rewrites the address each time.
+  body: |
+    A parcel re-routed from one carrier to another gets its address normalised
+    again, and the second carrier returns a different canonical form. Re-routing
+    back produces the first form again. Both {adr-address-normalise} and
+    {adr-carrier-split} are involved: normalisation is per carrier, and the
+    carrier is no longer fixed at checkout.
+  related: []
+
+- key: arch-fulfilment-overview
+  type: architecture
+  title: How an order becomes parcels
+  description: The path from a paid order through allocation, picking, labelling and handover.
+  body: |
+    A paid order is allocated to one or more warehouses, each allocation becomes
+    a pick list, and each completed pick list becomes a parcel. Carrier
+    selection happens per parcel at that point, per {adr-carrier-split}; label
+    purchase follows, per {adr-label-cache}, and the address used is the
+    normalised one from {adr-address-normalise}. Handover scans close the
+    parcel and start tracking.
+  related:
+    - adr-carrier-split:refines
+
+- key: arch-tracking
+  type: architecture
+  title: Tracking events and how they reach the customer
+  description: Carrier webhooks are normalised into our own event vocabulary and pushed to the customer.
+  body: |
+    Each carrier posts its own event names. We map them onto seven internal
+    states and emit one customer-visible notification per state change, not per
+    webhook. Duplicate and out-of-order webhooks are common and are deduplicated
+    on carrier reference plus state.
+  related: []
+
+- key: run-carrier-outage
+  type: runbook
+  title: When a carrier's API is down
+  description: How to fail parcels over to another carrier without losing labels already bought.
+  body: |
+    Disable the carrier in the routing table first, so new picks stop selecting
+    it. Parcels that already hold a bought label keep it — see
+    {adr-label-cache} — and are handed over normally if the carrier's physical
+    network is still running. Re-routing a parcel re-normalises its address and
+    can trigger {issue-address-loop}, so re-route only what has not been
+    labelled.
+  related: []
+
+- key: run-label-reconcile
+  type: runbook
+  title: Reconciling a day of label spend against parcels shipped
+  description: The nightly comparison of carrier invoices to parcels, and what to do when they disagree.
+  body: |
+    Pull the carrier invoice, join on tracking number, and list parcels billed
+    more than once. Repeat purchases are expected within the cache window and
+    are usually {issue-reprint-storm}; a purchase with no matching parcel means
+    a label was bought and the pick was cancelled. Anything unexplained above
+    fifty pounds goes to the fulfilment lead.
+  related: []
+
+- key: ref-carrier-matrix
+  type: reference
+  title: Carrier capability matrix
+  description: Which carriers accept which parcel sizes, destinations and dangerous-goods classes.
+  body: |
+    A table of the six carriers we hold contracts with, their maximum parcel
+    dimensions and weight, the destinations each covers, and which dangerous
+    goods classes they will accept. Routing reads this table; it is maintained
+    by hand and reviewed each quarter when contracts renew.
+  related: []
+
+- key: ref-event-vocabulary
+  type: reference
+  title: The seven internal tracking states
+  description: The internal event names, what each means, and which customer notification it triggers.
+  body: |
+    booked, collected, in transit, out for delivery, delivered, attempted,
+    returned. Each has one customer notification, except `in transit`, which is
+    silent because carriers emit it dozens of times per parcel.
+  related: []
+
+- key: adr-quote-estimate
+  type: decision
+  title: Show checkout shipping as a range, not a price
+  description: Because the carrier is not chosen yet, checkout displays an estimated range.
+  body: |
+    The quote at checkout cannot be exact once carrier choice moves to pick
+    time. We display a range derived from the cheapest and dearest compliant
+    carrier for the destination, and we absorb the difference rather than
+    re-charging the customer. This is the customer-facing half of
+    {issue-split-cost}.
+  related:
+    - issue-split-cost:relates_to
+
+- key: adr-parcel-merge
+  type: decision
+  title: Merge parcels picked from the same warehouse within an hour
+  description: Two picks from one warehouse inside an hour become a single parcel and a single label.
+  body: |
+    Splitting an order across pick lists from the same warehouse produces two
+    parcels and two labels for goods sitting on the same bench. We hold a
+    completed pick for up to an hour and merge anything else picked for the same
+    order at the same site. This directly reduces the spend
+    {run-label-reconcile} exists to police.
+  related: []
+
+- key: postmortem-black-friday
+  type: postmortem
+  title: Black Friday label spend was 3x forecast
+  description: A reprint loop and unmerged parcels combined to triple label cost over one weekend.
+  body: |
+    Two causes compounded. A batch of corrupt PDFs triggered the fallback
+    described in {issue-reprint-storm} across four sites, and the merge window
+    from {adr-parcel-merge} had been disabled a week earlier to reduce pick
+    latency. Neither alone would have exceeded the forecast. The merge window is
+    back on and the fallback is now rate limited.
+  related:
+    - issue-reprint-storm:relates_to
+
+- key: ref-warehouse-sites
+  type: reference
+  title: Warehouse sites and their catchments
+  description: The eight sites, their addresses, cut-off times and the postcodes each normally serves.
+  body: |
+    Eight sites with their cut-off times for same-day handover and the postcode
+    ranges each normally serves. Allocation prefers the nearest site holding
+    stock; ties break on cut-off time remaining.
+  related: []
+
+- key: run-onboard-carrier
+  type: runbook
+  title: Adding a new carrier
+  description: Contract, credentials, capability rows, event mapping and the first live parcel.
+  body: |
+    Add the carrier's rows to the capability matrix, store credentials, map its
+    event names onto the internal vocabulary, and run a single live parcel end
+    to end before enabling it in routing. The address validator has to be wired
+    before the first label, or every parcel fails at purchase.
+  related: []
+
+- key: issue-notification-flood
+  type: issue
+  title: Customers get six notifications for one parcel
+  description: Out-of-order webhooks re-trigger state changes that had already been notified.
+  body: |
+    Deduplication keys on carrier reference plus state, but a carrier that
+    re-sends an earlier state after a later one causes the parcel to move
+    backwards and then forwards again, notifying twice each way. The
+    architecture assumes monotonic states and nothing enforces it.
+  related: []
+
+- key: adr-notification-monotonic
+  type: decision
+  title: Tracking states only move forwards
+  description: A tracking event that would move a parcel backwards is recorded but never notified.
+  body: |
+    We keep every carrier event for audit but only notify when the new state is
+    later than the parcel's current one. A backwards event is stored with a flag
+    and is visible in support tooling. This closes {issue-notification-flood}
+    without dropping data.
+  related:
+    - issue-notification-flood:relates_to

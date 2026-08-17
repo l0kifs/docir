@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 
 from docir.modules.documents.domain.entities.document import Document
@@ -43,6 +43,43 @@ class SimilarityLinter:
     def __init__(self, similarity_threshold: float = 0.9, size_threshold_chars: int = 8000) -> None:
         self._similarity_threshold = similarity_threshold
         self._size_threshold = size_threshold_chars
+
+    def find_unresolved_mentions(self, unresolved: Sequence[tuple[str, str]]) -> list[LintFinding]:
+        """Report ids named in prose that no document carries.
+
+        Tier 2, and it can never be promoted. Measured on this project's own
+        corpus: all 47 were documentation *examples* — `adr-0007`,
+        `adr-3f9a2b1c7d4e` and the rest, sitting in the architecture documents
+        that explain what an id looks like. A Tier 1 warning would fire 47 times
+        on a healthy corpus, every one a false positive, loudest on the
+        documents doing their job (adr-e86c5040d626).
+
+        Ignoring ids inside code spans does not rescue it, and was measured too:
+        20 of the 47 sit outside code anyway, while 56 *resolved* mentions live
+        only inside code spans — so the filter would keep most of the noise and
+        delete 12% of the working graph.
+
+        What is left is a genuine but low-yield question — "is this a typo?" —
+        which is exactly what Tier 2 is: opt-in, advisory, never an exit code.
+        One finding per document rather than per id, because the answer a reader
+        wants is "which of my documents cite something missing", and a document
+        explaining the id format would otherwise produce five identical lines.
+        """
+        by_source: dict[str, list[str]] = {}
+        for source, target in unresolved:
+            by_source.setdefault(source, []).append(target)
+        return [
+            LintFinding(
+                kind="unresolved-mention",
+                message=(
+                    f"{source!r} names {', '.join(repr(t) for t in sorted(set(targets)))}, "
+                    f"which no document carries — a typo, a deleted document, or an "
+                    f"example id written on purpose"
+                ),
+                doc_ids=(source,),
+            )
+            for source, targets in sorted(by_source.items())
+        ]
 
     def find_duplicates(
         self,

@@ -100,6 +100,17 @@ class MentionRepository(ABC):
         """Ids of the documents that name ``target``, sorted."""
 
     @abstractmethod
+    def unresolved(self) -> list[tuple[str, str]]:
+        """Every ``(source, target)`` pair whose target is not indexed.
+
+        The complement of :meth:`all_resolved`, and read by exactly one caller:
+        the Tier 2 advisory report. It is deliberately **not** a Tier 1 finding
+        — measured on this project's own corpus, all 47 unresolved mentions were
+        documentation examples (`adr-0007` and friends, in the documents that
+        explain the id format), so a warning would fire only on correct usage.
+        """
+
+    @abstractmethod
     def all_resolved(self) -> list[tuple[str, str]]:
         """Every ``(source, target)`` pair where both documents are indexed.
 

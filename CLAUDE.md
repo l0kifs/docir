@@ -223,11 +223,45 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   `platform.naming` (tach), and deriving meaning from prose is not a translation of rows.
   `tags` writes documents without recomputing — a rename never touches a body — and
   `test_a_tag_rename_does_not_disturb_it` fails if that stops being true.
-  **Not wired into `context` expansion, and `benchmarks/run.py` cannot decide whether it
-  should be**: that corpus allocates ids at load time, so its bodies cannot name one and the
-  mention graph is empty there — the same "wrong instrument" trap as issue-b1a6e57deeec.
-  Wiring it would be a blind change to ranked output; it needs a fixture whose documents cite
-  each other, like `benchmarks/chunking.py` needed one with real headings.
+  **Mention *reads* tolerate the table being absent; writes do not.** Peers are opened
+  read-only and never migrated by us (adr-fb938175f72a), so a peer last indexed before
+  migration `0008` has no `mentions` table and every federated read raised `no such table`
+  until this guard — one un-reindexed repository became an outage for everyone pointing at
+  it. The check asks `sqlite_master` rather than catching `OperationalError`, which would
+  swallow real corruption, and a *write* still raises, since the local store is migrated on
+  every startup. This applies to **every derived column or table a migration adds**, and it had
+  already happened once: `document_code.digest` (migration `0007`) is selected by every hydrate,
+  so a peer built before it broke `query` and `get` outright — `_has_code_digest` guards that
+  the same way. Both are pinned in `test_federation.py::TestPeerIndexedByOlderDocir`. **The
+  per-column guards are a patch, not the fix**: nothing stops the next migration repeating it,
+  and the general answer is for `peer_status` to compare the peer's `alembic_version` against
+  this build's head and skip with an actionable message — at the cost of an upgrade taking
+  every un-reindexed peer dark until it is rebuilt.
+  **An unresolved mention is deliberately not a finding, and that was measured** (adr-e86c5040d626):
+  all 47 in this corpus are documentation *examples* (`adr-0007`, `adr-3f9a2b1c7d4e` — the ids
+  the architecture documents use to explain the id format), not typos. Ignoring code spans
+  makes it worse: 20 of the 47 sit outside code anyway, and 56 **resolved** mentions live only
+  inside code spans, so the filter would delete 12% of the working graph. Naming an id without
+  linking to it is a correct thing for a document to do. It *is* reported by `lint --deep` as
+  `unresolved-mention`, one finding per document — Tier 2 is where opt-in, never-gating noise
+  belongs, and "is this a typo?" is a real if low-yield question.
+  **`context` expansion follows them, last and both ways, and that was measured before it
+  shipped.** `benchmarks/run.py` could not decide it — that corpus allocates ids at load time,
+  so its bodies cannot name one and the mention graph is empty there, the same wrong-instrument
+  trap as issue-b1a6e57deeec — so `benchmarks/mentions.py` exists, with a corpus whose bodies
+  carry `{key}` placeholders substituted after allocation. Result: recall@5 **0.84 -> 0.93**,
+  precision 0.33 -> 0.37, MRR unchanged at 0.86, one task of fifteen regressing. **MRR holds
+  because of the budget, not because of expansion**: `seed_budget = limit - expand`, so at the
+  shipped `expand=2` the top three ranked hits keep their positions — the same sweep shows MRR
+  falling to 0.83 at `expand=3`, where only two do. The sweep also found `expand=1` and
+  `expand=2` identical on that fixture (0.93/0.37 both), so the shipped default is not
+  evidenced *against*, merely not distinguished; do not read 2 as measured-optimal. Authored edges are still ordered first: a `supersedes` is a
+  claim about correctness, a citation is a claim about nothing. Two details of that benchmark
+  are load-bearing: it mints **sequential** ids (random ones move ranking ties, and the same
+  code scored 0.79 and 0.81 on consecutive runs), and it **derives** the prose-vs-authored task
+  grouping from the corpus rather than reading a hand-written label — the first version's
+  labels were wrong in the direction that flattered the feature, hiding that mentions also
+  restore *backwards* reachability for non-successor edges like `refines`.
 - **Staleness has two halves: a calendar and evidence.** `verified`/`review_days` answer
   "how long since a human read this"; `verified_code` answers "has the code moved since they
   did". `update --verified` fingerprints what each `code:` glob matched
@@ -315,7 +349,8 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   hard, synchronous compiler-style gate (missing field, bad status/transition, unknown tag/related,
   unknown/disallowed relation kind); Tier 1 (`docir check`) is non-blocking structural graph warnings
   (incl. **staleness**, **unknown-type** and **schema drift**); Tier 2 (`docir lint --deep`) is advisory heuristics (embedding similarity,
-  scope creep, oversized sections, ambiguous headings, unqualified section references).
+  scope creep, oversized sections, ambiguous headings, unqualified section references,
+  unresolved mentions).
   Never promote a heuristic to a hard error.
   **`oversized-section` has no threshold of its own**: it runs `split_body` and reports what came
   out — which section was cut and how many pieces nothing can name — so the number behind it stays

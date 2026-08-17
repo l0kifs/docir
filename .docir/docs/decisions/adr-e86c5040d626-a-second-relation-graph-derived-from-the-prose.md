@@ -6,7 +6,8 @@ code:
 - src/docir/modules/documents/domain/services/graph_checks.py
 created: '2026-08-17'
 description: Why ids named in a body become mention edges, why only the orphan check
-  reads them, and why they are not in frontmatter.
+  reads them, why they stay out of frontmatter, and what following them cost in the
+  benchmark.
 id: adr-e86c5040d626
 owner: maintainer
 related:
@@ -79,14 +80,74 @@ Derivation sits in the entity and the application services, not in the repositor
 `platform.persistence` may not import `platform.naming` — tach says so, and it is right:
 translating rows into entities is not the same job as deciding what a paragraph means.
 
-## Not wired into context expansion
+## Context expansion follows them, and that was measured
 
-Graph expansion in `docir context` still follows authored edges only, and this is a deferral
-rather than a judgement. `benchmarks/run.py` cannot measure the alternative: its corpus
-allocates ids at load time, so no fixture body can name one and the mention graph is empty
-throughout the run. Wiring expansion to it would be a blind change to ranked output.
+Graph expansion in `docir context` follows mentions as well as authored edges. That was not
+obvious, and it was measured rather than assumed.
 
-Deciding it needs a fixture whose documents cite each other in prose, the way
-`benchmarks/chunking.py` needed one with real headings and sections over the model window
-(issue-b1a6e57deeec). Until that exists, the honest answer is that nobody knows whether
-expanding along mentions helps or dilutes.
+`benchmarks/run.py` could not measure it: its corpus allocates ids at load time, so no fixture
+body can name one and the mention graph is empty for the whole run — the wrong-instrument trap
+issue-b1a6e57deeec describes. `benchmarks/mentions.py` is the instrument, with a corpus whose
+bodies carry `{key}` placeholders substituted once every document has an id.
+
+## What it measured
+
+Against the shipped embedder, over 19 documents and 15 tasks at the default `expand=2`:
+recall@5 rose from 0.84 to 0.93 and precision from 0.33 to 0.37, with MRR unchanged at 0.86.
+One task of fifteen regressed.
+
+Authored edges are still ordered first. A `supersedes` is a claim about correctness; a citation
+in a paragraph is a claim about nothing, so it yields when the budget is tight.
+
+## The budget, and a claim this corrected
+
+Sweeping `expand` over 0..3 on the same fixture showed `expand=1` capturing the entire gain —
+1 and 2 are indistinguishable at 0.93/0.37 — so the shipped default of 2 is undistinguished
+rather than evidenced.
+
+It also corrected the reason MRR held. The first version of this decision said expansion could
+never displace a ranked hit. It can: `seed_budget = limit - expand`, so at `expand=3` with
+`limit=5` only two ranked hits precede the neighbours, a relevant document that ranked third is
+pushed behind the graph, and MRR falls to 0.83 while precision rises to 0.40. MRR holding at
+`expand=2` is a property of the budget, not of expansion.
+
+## Two things the benchmark had to fix about itself
+
+It mints sequential ids, unlike `run.py`, which prices what random ones cost to read. Random
+ids move ranking ties, and the same code scored 0.79 and 0.81 on consecutive runs — a baseline
+that wanders cannot settle a small difference.
+
+And it derives the prose-linked/not grouping from the corpus rather than from a hand-written
+label. The first version asked the fixture's author to label the fixture, and the labels were
+wrong in the direction that flattered the feature: they hid that mentions also restore
+*backwards* reachability for non-successor edges like `refines`, which is a second real effect
+and was being read as the fixture leaking.
+
+## An unresolved mention is not a finding, and this was measured
+
+The obvious next check is a Tier 1 warning for an id named in prose that resolves to nothing —
+a typo, or a document deleted since. It was measured against this corpus before being built,
+and the measurement rejected it.
+
+47 mentions here are unresolved, across 12 distinct ids. **All twelve are documentation
+examples**: `adr-0001`, `adr-0002`, `adr-0003`, `adr-0007` and `issue-0001` are the canonical
+sequential ids used in prose that explains the id format, and `adr-3f9a2b1c7d4e`,
+`adr-012345678901` and the rest are the example random ones. Not one is a typo or a dead
+reference.
+
+So the check would fire 47 times on a healthy corpus, every time a false positive, and its
+loudest sources would be the architecture documents that explain what an id looks like — the
+documents doing their job. That is issue-9cb85759076d's failure exactly: a warning that fires
+on correct usage teaches people to stop reading `docir check`, and the gate that gets switched
+off takes duplicate-id detection with it.
+
+### The obvious discriminator makes it worse
+
+Ignoring ids inside code spans and fenced blocks sounds like it separates an example from a
+citation. Measured on the same corpus: 20 of the 47 unresolved mentions sit outside code
+anyway, so the noise survives — and 56 **resolved** mentions exist only inside code spans, so
+the filter would delete 12% of the working graph and hand back the `orphan` false positives
+those edges are there to prevent.
+
+The check is not blocked on a better filter. It is blocked on the fact that naming an id
+without linking to it is a normal, correct thing for a document to do.

@@ -111,6 +111,7 @@ class DocumentService:
         schema: Schema,
         scorer: HybridScorer | None = None,
         code_matcher: CodeMatcher | None = None,
+        expand_mentions: bool = True,
     ) -> None:
         self._uow_factory = uow_factory
         self._file_store = file_store
@@ -126,6 +127,12 @@ class DocumentService:
         # store has no repository above it, so there is no tree to fingerprint.
         # Absent means the verification records a date and no evidence.
         self._code_matcher = code_matcher
+        # Whether `context` expansion follows the derived mention graph as well
+        # as the authored one. On, measured: `benchmarks/mentions.py` puts recall@5
+        # at 0.93 against 0.84 for authored edges alone, with precision up and MRR
+        # unchanged. The parameter stays so that benchmark can still build both
+        # object graphs in one run (adr-e86c5040d626).
+        self._expand_mentions = expand_mentions
 
     def _save(self, uow: UnitOfWork, document: Document) -> None:
         """Persist a document and the derived edges its body implies.
@@ -735,17 +742,30 @@ class DocumentService:
                 added += 1
 
     def _neighbours_of(self, uow: UnitOfWork, seed: str) -> list[str]:
-        """One-hop neighbours of ``seed``: successors first, then outgoing links.
+        """One-hop neighbours of ``seed``: successors, then outgoing, then mentions.
 
         Expansion used to follow outgoing edges only, which left the graph unable
         to answer the question it exists for — *is this decision still current?*
         A ``supersedes`` edge points from the new document to the old one, so the
         replacement sits one hop away *backwards* and was never reachable from
         the document it replaces.
+
+        Mentions come last and only when ``expand_mentions`` is set. They are
+        inferred rather than asserted, so an authored edge outranks them
+        whenever the budget is tight — a `supersedes` is a claim about
+        correctness, a citation in a paragraph is a claim about nothing.
         """
         successors = uow.documents.incoming(seed, kinds=self._schema.successor_relation_kinds())
         outgoing = uow.documents.outgoing(seed)
-        return [*successors, *(t for t in outgoing if t not in set(successors))]
+        ordered = [*successors, *(t for t in outgoing if t not in set(successors))]
+        if not self._expand_mentions:
+            return ordered
+        seen = set(ordered)
+        # Both directions, as with the authored graph: being cited is as much a
+        # connection as citing, and the backwards one is what answers "what did
+        # anyone else say about this".
+        inferred = [*uow.mentions.outgoing(seed), *uow.mentions.incoming(seed)]
+        return [*ordered, *(t for t in dict.fromkeys(inferred) if t not in seen)]
 
     def _is_visible(self, document: Document, *, include_inactive: bool) -> bool:
         """The single visibility predicate every ``context`` path must apply.

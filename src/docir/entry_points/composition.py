@@ -145,11 +145,17 @@ def build_container(
     *,
     background_embeddings: bool,
     clock: Clock | None = None,
+    expand_mentions: bool = True,
 ) -> Container:
     """Construct the full object graph for one process.
 
     ``clock`` is injectable so tests can freeze the date; production passes the
     default :class:`SystemClock`.
+
+    ``expand_mentions`` decides whether `context` expansion follows the derived
+    mention graph as well as the authored one. On by default, measured; the
+    parameter remains so ``benchmarks/mentions.py`` can build both object graphs
+    in one run — the rule adr-ab9c454b760c set for anything that moves ranking.
     """
     from docir.platform.persistence.engine import (
         create_index_engine,
@@ -188,6 +194,7 @@ def build_container(
         clock,
         schema,
         code_matcher=code_matcher,
+        expand_mentions=expand_mentions,
     )
     tag_service = TagService(uow_factory, tag_file_store, file_store)
     maintenance_service = MaintenanceService(

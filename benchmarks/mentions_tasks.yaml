@@ -1,0 +1,103 @@
+# Retrieval tasks for the mention-expansion measurement.
+#
+# Judgments follow `tasks.yaml`: a document is relevant if not reading it would
+# change what you write, not merely if it shares a topic.
+#
+# `reachable_by` records how each relevant document is connected to the ones a
+# ranked search plausibly surfaces first. It is documentation of the fixture's
+# shape, not an input to scoring — the point of writing it down is that a
+# benchmark built to answer "does mention expansion help" can be rigged by
+# choosing only tasks it wins, and this makes the mix auditable.
+#
+#   ranked   — the document should be found by the ranking itself
+#   related  — reachable one hop along an authored edge
+#   mention  — reachable one hop along a prose citation only
+#
+# LIMITATION: single-annotator ground truth, authored alongside the corpus, by
+# the same author as the feature under test. Weaker evidence than judgments from
+# someone with no stake in the answer.
+
+# --- the case mentions exist for: cited in prose, no authored edge ------------
+
+- id: M01
+  task: stop multi-parcel orders from being under-quoted at checkout
+  relevant: [issue-split-cost, adr-carrier-split, adr-quote-estimate]
+  reachable_by: [ranked, mention, related]
+
+- id: M02
+  task: rate limit the label purchase fallback when a PDF will not render
+  relevant: [issue-reprint-storm, adr-label-cache]
+  reachable_by: [ranked, mention]
+
+- id: M03
+  task: an address keeps changing every time we re-route a parcel
+  relevant: [issue-address-loop, adr-address-normalise, adr-carrier-split]
+  reachable_by: [ranked, mention, mention]
+
+- id: M04
+  task: work out why we spent three times the forecast on labels over one weekend
+  relevant: [postmortem-black-friday, issue-reprint-storm, adr-parcel-merge]
+  reachable_by: [ranked, related, mention]
+
+- id: M05
+  task: safely move parcels to another carrier while one carrier's api is down
+  relevant: [run-carrier-outage, adr-label-cache, issue-address-loop]
+  reachable_by: [ranked, mention, mention]
+
+- id: M06
+  task: check the nightly invoice against what we actually shipped
+  relevant: [run-label-reconcile, issue-reprint-storm]
+  reachable_by: [ranked, mention]
+
+# --- the authored graph already handles these --------------------------------
+
+- id: M07
+  task: customers are getting six notifications for a single parcel
+  relevant: [issue-notification-flood, adr-notification-monotonic]
+  reachable_by: [ranked, related]
+
+- id: M08
+  task: explain end to end how a paid order turns into parcels
+  relevant: [arch-fulfilment-overview, adr-carrier-split]
+  reachable_by: [ranked, related]
+
+# --- single-document answers: expansion has only dilution to offer -----------
+
+- id: M09
+  task: which carriers will take lithium batteries to ireland
+  relevant: [ref-carrier-matrix]
+  reachable_by: [ranked]
+
+- id: M10
+  task: what are the internal tracking state names
+  relevant: [ref-event-vocabulary]
+  reachable_by: [ranked]
+
+- id: M11
+  task: what time does each warehouse stop for same day handover
+  relevant: [ref-warehouse-sites]
+  reachable_by: [ranked]
+
+- id: M12
+  task: how do we map a new carrier's event names onto ours
+  relevant: [run-onboard-carrier, arch-tracking]
+  reachable_by: [ranked, ranked]
+
+# --- documents that cite many others without being about them ----------------
+# The dilution cases: `arch-fulfilment-overview` and `run-carrier-outage` are
+# hubs, so anything that surfaces them drags their citations along.
+
+- id: M13
+  task: decide where carrier selection should happen in the pipeline
+  relevant: [adr-carrier-split, arch-fulfilment-overview]
+  reachable_by: [ranked, ranked]
+
+- id: M14
+  task: reduce the number of parcels we ship per order
+  relevant: [adr-parcel-merge]
+  reachable_by: [ranked]
+
+- id: M15
+  task: audit what a corrupt label pdf costs us
+  relevant: [issue-reprint-storm, run-label-reconcile, postmortem-black-friday]
+  reachable_by: [ranked, mention, mention]

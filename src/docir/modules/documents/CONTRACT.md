@@ -93,7 +93,10 @@ files and the derived index never disagree.
   `reindex` is the only writer of that baseline.
 - `MaintenanceService.lint_deep() -> [LintFinding]` — Tier 2 advisory findings
   (`duplicate`, `scope-creep`, `oversized-section`, `ambiguous-heading`,
-  `unqualified-section-ref`); never blocking
+  `unqualified-section-ref`, `unresolved-mention`); never blocking.
+  `unresolved-mention` lists ids a body names that no document carries, one finding per
+  document. Tier 2 and not promotable: measured on this repo's corpus, all 47 were
+  documentation examples, so a Tier 1 warning would fire only on correct usage.
 - `MaintenanceService.flush_embeddings() -> DrainResult` — drain the dirty queue
   (`docir embed --flush`). Both counts, because the caller is reporting to a human who
   just waited for it, and what they waited for was the vectors.
@@ -168,6 +171,11 @@ Changing the globs without verifying prunes the digests of the patterns that wen
 away and keeps the rest. None of this advances `updated` — it is bookkeeping, not
 a content edit — and none of it reaches `embedding_text`, so a verification
 never queues a re-embed.
+
+`DocumentService.context` expands along mentions as well as authored edges, ordered last and
+followed in both directions; `expand_mentions=False` restores the authored-only behaviour and
+exists so `benchmarks/mentions.py` can measure the difference (recall@5 0.93 vs 0.84, MRR
+unchanged — expansion fills neighbour slots and never displaces a ranked hit).
 
 `mentions` is the derived relation graph — ids one body names in another, stored in the index
 and never in frontmatter. `DocumentService`/`MaintenanceService` write it beside every document

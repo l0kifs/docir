@@ -9,7 +9,7 @@ owner: maintainer
 related:
 - ref-a6db21f52427
 - adr-ab9c454b760c
-status: open
+status: resolved
 tags:
 - retrieval
 - testing
@@ -46,10 +46,31 @@ Reporting recall@k, MRR and precision@k against at least two configurations (wit
 graph expansion) is what makes a result readable, since ref-e7534f1c812d shows expansion lifts
 both embedders and hides the difference between them.
 
-## What is not decided
+## How it shipped
 
-- Whether it ships as a command or as a documented recipe over existing output.
-- Whether the fixture format is a new file type in the store or a plain JSON path argument.
-  A store document would be validated and retrievable, and would also put test data in a corpus
-  that is meant to hold decisions.
-- Whether a fixture naming a document that no longer exists is an error or a skipped row.
+Shipped in `b1d4bb5` as `docir bench <fixture.yaml>`, with the three questions above answered
+rather than deferred.
+
+- **A command, not a recipe.** Writing the scoring yourself is the barrier this issue is about,
+  so a documented recipe over existing output would have left it in place.
+- **A plain file, not a store document.** `yaml.safe_load` parses the JSON spelling too, so one
+  loader covers both, and judgments stay out of a corpus meant to hold decisions.
+- **An unresolved id is neither an error nor a silent skip.** It is reported under `unresolved`
+  and excluded from the judgments. Erroring makes one archived document fail the whole run;
+  skipping quietly shrinks recall's denominator, which *raises* the score — a fixture rotting
+  would read as retrieval improving. `StrategyScore.tasks` says how many tasks each mean
+  covered, for the same reason. A task left with no resolvable ids is returned under `dropped`.
+
+## What it reports, and why three rows
+
+`context` is the shipped read path. `context --expand 0` removes graph expansion, which lifts
+every embedder and hides the difference between them (ref-e7534f1c812d) — the pair is what
+isolates the semantic signal. `search` is full-text alone, the floor anything semantic must beat.
+
+`benchmarks/example_fixture.yaml` judges eight tasks against docir's own store and scores
+`context` 0.88 recall@5 / 0.63 MRR, `--expand 0` 0.75, `search` 0.62. That ordering is the
+design working on a real corpus rather than a fixture built to show it.
+
+Two properties follow from what a fixture is. It names document **ids**, not paths, because a
+retitle moves the filename and a retype moves the directory. And it does not federate: a
+fixture judges ids in one store, and the score is a property of that store's read path.

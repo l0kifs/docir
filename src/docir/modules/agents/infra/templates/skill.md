@@ -521,6 +521,14 @@ to leave alone.
   read reaches only the first), and **unqualified section references** (prose naming a
   section that lives in another document). All advisory — a long reference table is often
   right as it is.
+- `docir bench <fixture.yaml>` — score this store's retrieval against tasks whose answers
+  you already know. The fixture is a list of `{id, task, relevant: [<doc ids>]}`; ids, not
+  paths, so it survives a retitle and a retype. Three rows come back — `context`, `context
+  --expand 0` and `search` — and the pair is the point: expansion lifts every embedder, so
+  removing it is what shows whether the *semantic* half is working. An id no document
+  carries is reported under `unresolved` rather than dropped, because dropping one shrinks
+  recall's denominator and raises the score for the wrong reason. A measurement, not a
+  check: it never fails, and a fixture is one annotator's opinion of what is relevant.
 - `docir reindex [--changed]` — after a doc file was hand-edited, merged, or freshly cloned.
   `--changed` only skips re-saving files whose content is unchanged; deleted files are swept
   from the index either way, so both modes leave the index agreeing with the filesystem.

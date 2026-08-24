@@ -556,6 +556,33 @@ def build_mcp_server(
         """
         return run.many("lint", {})
 
+    @mcp.tool(annotations=_READ_ONLY)
+    def docir_bench(
+        tasks: list[dict[str, Any]],
+        limit: int = 5,
+        expand: int = 2,
+    ) -> dict[str, Any]:
+        """Score this store's retrieval against tasks whose answers you know.
+
+        Each task is `{"id": ..., "task": "...", "relevant": ["adr-...", ...]}`
+        — the document **ids** a reader would need. Ids rather than paths,
+        because a retitle moves the filename and a retype moves the directory.
+
+        Three rows come back. `context` is the shipped read path; `context
+        --expand 0` removes graph expansion, which lifts every embedder and
+        hides the difference between them, so the pair isolates the semantic
+        signal; `search` is full-text alone, the floor semantics must beat.
+
+        Ids no document carries come back under `unresolved`, and a task whose
+        ids were all unknown under `dropped`. Neither is scored: removing an id
+        quietly would shrink recall's denominator and raise the score for the
+        wrong reason.
+
+        A measurement, not a check. Nothing here blocks a write, and a fixture
+        is one annotator's opinion of what is relevant.
+        """
+        return run.one("bench", {"tasks": tasks, "limit": limit, "expand": expand})
+
     @mcp.tool
     def docir_reindex(changed_only: bool = False) -> dict[str, Any]:
         """Rebuild the derived index from the markdown files.

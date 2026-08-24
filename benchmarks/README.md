@@ -293,6 +293,37 @@ Verified by injecting each defect: restoring the fence-blind scanner invents a
 `Credentials` heading out of a quoted template, and restoring the unconditional
 merge leaves `Failover sequence` naming no chunk at all.
 
+## The shipped instrument (`docir bench`)
+
+Everything above measures docir on docir's fixtures. `docir bench` is the same
+three measures pointed at *your* corpus, and it ships in the package
+(issue-c6d184704682) — because a number an adopter cannot reproduce is a claim,
+not evidence.
+
+```bash
+uv run docir bench benchmarks/example_fixture.yaml
+```
+
+`example_fixture.yaml` judges eight tasks against **this repository's** store, so
+it is a worked example of the shape rather than a portable benchmark. On the
+corpus as of 2026-08-24:
+
+| strategy | recall@5 | prec@5 | MRR |
+|---|---|---|---|
+| `context` | 0.88 | 0.20 | 0.63 |
+| `context --expand 0` | 0.75 | 0.18 | 0.60 |
+| `search` | 0.62 | 0.15 | 0.54 |
+
+The ordering is the design working: graph expansion beats ranking alone, and
+ranking alone beats full-text. Precision is low because the judgments are tight
+— one or two documents per task against a result set of five — which is the
+same convention `tasks.yaml` uses and the reason recall is the readable column.
+
+Unlike the scripts here it takes **ids**, not corpus keys, so a fixture survives
+a retitle and a retype. An id no document carries is reported under `unresolved`
+rather than dropped: dropping one shrinks recall's denominator and *raises* the
+score, which is the one failure a benchmark must not have.
+
 ## Multilingual: does a non-English corpus need a different model (`multilingual.py`)
 
 ```bash

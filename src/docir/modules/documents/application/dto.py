@@ -310,3 +310,61 @@ class ContextRequest:
     include_inactive: bool = False
     expand: int = DEFAULT_CONTEXT_EXPAND
     min_score: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class BenchTask:
+    """One judged retrieval task: a query, and the ids a reader would need.
+
+    ``relevant`` holds document **ids**, not paths, which is what makes a
+    fixture survive the edits a corpus actually receives — a retitle moves the
+    filename, a retype moves the directory, and neither touches the id.
+    """
+
+    id: str
+    task: str
+    relevant: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class BenchRequest:
+    """Input for ``docir bench``: the judged tasks, and the result-set size."""
+
+    tasks: tuple[BenchTask, ...]
+    limit: int = 5
+    expand: int = DEFAULT_CONTEXT_EXPAND
+
+
+@dataclass(frozen=True, slots=True)
+class StrategyScore:
+    """One retrieval strategy's means over every task that could be scored."""
+
+    #: The strategy as a user would invoke it, e.g. ``context --expand 0``.
+    name: str
+    recall: float
+    precision: float
+    mrr: float
+    #: Tasks this strategy was scored over, so a mean is never read as covering
+    #: more than it did.
+    tasks: int
+
+
+@dataclass(frozen=True, slots=True)
+class BenchResult:
+    """What ``docir bench`` measured, and what it could not.
+
+    ``unresolved`` and ``dropped`` are reported rather than counted away. A
+    fixture outlives the corpus it judges, so ids go missing; silently removing
+    them shrinks the recall denominator and *improves* the score for the wrong
+    reason, which is the one failure mode a benchmark must not have.
+    """
+
+    strategies: tuple[StrategyScore, ...]
+    limit: int
+    expand: int
+    #: Tasks actually scored.
+    scored: int
+    #: Ids named by the fixture that no document carries, sorted and deduped.
+    unresolved: tuple[str, ...]
+    #: Task ids dropped because every id they named was unresolved.
+    dropped: tuple[str, ...]

@@ -44,6 +44,13 @@ files and the derived index never disagree.
   `ContextRequest.limit` is a hard ceiling on the response; `ContextRequest.expand`
   (default `DEFAULT_CONTEXT_EXPAND`) is how many of those slots may go to graph-reached
   neighbours, with unused neighbour slots backfilled by ranked hits.
+- `DocumentService.bench(BenchRequest) -> BenchResult` — score the read path against judged
+  tasks (`docir bench`). Reports `context`, `context --expand 0` and `search`; the pair is
+  what isolates the semantic signal, since graph expansion lifts every embedder. A
+  `BenchTask.relevant` entry naming no document is returned under `BenchResult.unresolved`
+  and excluded from the judgments — never dropped quietly, because a shrinking recall
+  denominator *raises* the score. A task left with no resolvable ids is returned under
+  `dropped` and not scored. `StrategyScore.tasks` says how many tasks each mean covered.
 - `DocumentService.archive(id)/unarchive(id) -> DocumentView` — toggle active search
 - `DocumentService.delete(id, force) -> tuple[str, ...]` — remove file and index rows;
   blocked while referenced unless `force`, which strips the edge from each referencing

@@ -14,6 +14,8 @@ from dataclasses import asdict
 from docir.modules.documents.api import (
     DEFAULT_CONTEXT_EXPAND,
     AddDocumentRequest,
+    BenchRequest,
+    BenchTask,
     ContextRequest,
     DocumentService,
     MaintenanceService,
@@ -22,7 +24,7 @@ from docir.modules.documents.api import (
     UpdateDocumentRequest,
 )
 from docir.modules.tags.api import DEFAULT_TAG_PAGE, TagService
-from docir.platform.errors import DocirError
+from docir.platform.errors import DocirError, ValidationError
 
 Payload = dict[str, object]
 Handler = Callable[[Payload], object]
@@ -60,6 +62,7 @@ class Dispatcher:
             "schema_drift": self._schema_drift,
             "repair": self._repair,
             "lint": self._lint,
+            "bench": self._bench,
             "embed_flush": self._embed_flush,
         }
 
@@ -218,6 +221,31 @@ class Dispatcher:
     def _repair(self, _payload: Payload) -> object:
         return asdict(self._maintenance.repair())
 
+    def _bench(self, payload: Payload) -> object:
+        """Score the read path against judged tasks carried in the payload.
+
+        The fixture is parsed by the caller, not here: the CLI reads a file, an
+        MCP client sends the tasks inline, and the dispatcher stays the one
+        place that knows the command vocabulary rather than gaining a second
+        job reading paths off a disk it may not share with the client.
+        """
+        raw = payload.get("tasks")
+        if not isinstance(raw, list) or not raw:
+            raise ValidationError("bench needs a non-empty 'tasks' list")
+        tasks = tuple(_bench_task(index, entry) for index, entry in enumerate(raw))
+        request = BenchRequest(
+            tasks=tasks,
+            limit=_int(payload, "limit", default=5),
+            expand=_int(payload, "expand", default=DEFAULT_CONTEXT_EXPAND),
+        )
+        result = asdict(self._documents.bench(request))
+        # Lists, not the dataclass's tuples: over the socket and over MCP these
+        # are JSON and arrive as lists anyway, so leaving them as tuples would
+        # make an in-process caller see a shape no other transport produces.
+        for key in ("strategies", "unresolved", "dropped"):
+            result[key] = list(result[key])
+        return result
+
     def _lint(self, _payload: Payload) -> object:
         return [asdict(finding) for finding in self._maintenance.lint_deep()]
 
@@ -229,6 +257,30 @@ class Dispatcher:
 
 
 # -- payload coercion helpers ----------------------------------------------
+
+
+def _bench_task(index: int, entry: object) -> BenchTask:
+    """One fixture entry, validated where the caller can still fix it.
+
+    Reported with the entry's position as well as its id, because a fixture is
+    hand-written and the id is exactly what may be missing.
+    """
+    if not isinstance(entry, dict):
+        raise ValidationError(f"bench task #{index + 1} must be a mapping")
+    task = entry.get("task")
+    if not isinstance(task, str) or not task.strip():
+        raise ValidationError(f"bench task #{index + 1} needs a non-empty 'task'")
+    relevant = entry.get("relevant")
+    if not isinstance(relevant, list) or not relevant:
+        raise ValidationError(f"bench task {task[:40]!r} needs a non-empty 'relevant' list")
+    if any(not isinstance(ref, str) or not ref.strip() for ref in relevant):
+        raise ValidationError(f"bench task {task[:40]!r} has a 'relevant' entry that is not an id")
+    identifier = entry.get("id")
+    return BenchTask(
+        id=str(identifier) if identifier is not None else f"#{index + 1}",
+        task=task.strip(),
+        relevant=tuple(str(ref).strip() for ref in relevant),
+    )
 
 
 def _str(payload: Payload, key: str, *, default: str | None = None) -> str:

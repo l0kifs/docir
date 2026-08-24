@@ -143,6 +143,10 @@ class TestVocabulary:
             "schema_drift",
             "repair",
             "lint",
+            # A fixture judges ids in *this* store, and the score is a property
+            # of this store's read path. Fanning it out would mix a peer's
+            # documents into results the judgments cannot speak for.
+            "bench",
             "embed_flush",
         }
 

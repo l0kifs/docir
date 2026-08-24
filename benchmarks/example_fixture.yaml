@@ -1,0 +1,50 @@
+# An example `docir bench` fixture, judged against docir's own corpus.
+#
+#   uv run docir bench benchmarks/example_fixture.yaml
+#
+# It runs against **this repository's** store, so it is a worked example rather
+# than a portable benchmark: copy the shape, judge your own documents. Every
+# entry is `{id, task, relevant}`, and `relevant` holds document **ids** — not
+# paths, because a retitle moves the filename and a retype moves the directory,
+# and a fixture has to outlive both.
+#
+# Judged the way tasks.yaml is: a document is relevant when *not* reading it
+# would change what you write, not when it merely shares a topic. Tight
+# judgments are what make precision mean anything.
+#
+# This fixture will rot as the corpus changes, and that is the point of the
+# `unresolved` line in the output — an id no document carries is reported, never
+# dropped, because dropping one shrinks recall's denominator and raises the
+# score for the wrong reason.
+
+- id: E01
+  task: why is a real embedding model the default instead of the hashing one
+  relevant: [adr-ab9c454b760c, ref-e7534f1c812d]
+
+- id: E02
+  task: how does retrieval reach a long document's individual sections
+  relevant: [adr-927aa43d9635]
+
+- id: E03
+  task: what makes a document count as stale, and who clears it
+  relevant: [adr-bd7c4f3c5764]
+
+- id: E04
+  task: reading decisions that live in another repository
+  relevant: [adr-fb938175f72a]
+
+- id: E05
+  task: changing what kind of document something is without breaking its links
+  relevant: [adr-f8cce745d0d5]
+
+- id: E06
+  task: how a task turns into a ranked set of documents
+  relevant: [arch-f220a644d654]
+
+- id: E07
+  task: keeping the corpus trustworthy in CI
+  relevant: [arch-0a3c2d6d54a6]
+
+- id: E08
+  task: naming an id in a paragraph instead of linking it
+  relevant: [adr-e86c5040d626]

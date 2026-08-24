@@ -55,6 +55,7 @@ COMMAND_TOOLS = {
     "schema_drift": "docir_schema_drift",
     "repair": "docir_check_fix",
     "lint": "docir_lint",
+    "bench": "docir_bench",
     "embed_flush": "docir_embed_flush",
 }
 
@@ -149,6 +150,7 @@ def test_read_tools_are_annotated_read_only(server) -> None:
         "docir_query",
         "docir_get",
         "docir_schema",
+        "docir_bench",
         "docir_tag_list",
         "docir_check",
         "docir_schema_drift",

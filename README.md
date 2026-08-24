@@ -163,6 +163,7 @@ never watch, so CI still needs the explicit command.
 | `docir check` | Structural findings — duplicate ids, dangling edges, staleness (`--strict` gates CI on errors, `--fix` repairs them) |
 | `docir agent install` | Teach this repo's AI agent to drive docir |
 | `docir self upgrade` | Upgrade docir, then resync this store: reindex, refresh the agent files, report what `check` finds |
+| `docir bench fixture.yaml` | Score this store's retrieval against tasks whose answers you know |
 | `docir build --out site/` | Render the store as a self-contained static site for humans |
 | `docir mcp serve` | Serve the same commands as MCP tools, for a client that speaks MCP |
 
@@ -170,7 +171,7 @@ never watch, so CI still needs the explicit command.
 
 ```
 init · add · update · archive · unarchive · delete
-get · query · search · context · build
+get · query · search · context · build · bench
 tag {add, list, rename, rm}
 agent {install, update}
 schema {show, validate}

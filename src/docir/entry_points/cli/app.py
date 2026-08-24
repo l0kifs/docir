@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import typer
+import yaml
 from typer.main import get_command
 
 from docir import __version__
@@ -1016,6 +1017,74 @@ def lint(
 
 
 @app.command()
+def bench(
+    fixture: Annotated[Path, typer.Argument(help="YAML or JSON file of judged tasks.")],
+    limit: Annotated[int, typer.Option("--limit", help="Result-set size to score at.")] = 5,
+    expand: Annotated[
+        int,
+        typer.Option("--expand", help="Neighbour slots for the `context` row."),
+    ] = DEFAULT_CONTEXT_EXPAND,
+) -> None:
+    """Score this store's retrieval against a fixture of judged tasks.
+
+    docir publishes retrieval numbers measured on its own corpus. This is the
+    same instrument pointed at yours, so "is retrieval any good here?" has an
+    answer you produced rather than one you inherited.
+
+    The fixture is a list of tasks, each with the document **ids** a reader
+    would need. Ids rather than paths, because a retitle moves the filename and
+    a retype moves the directory, and a fixture has to outlive both:
+
+        - id: T01
+          task: how do we authenticate API clients
+          relevant: [adr-3f9a2b1c7d4e, issue-90aea6d1b891]
+
+    Three rows, and the pair is the point. `context` is the shipped default.
+    `context --expand 0` removes graph expansion, which lifts every embedder and
+    hides the difference between them, so the two together isolate the semantic
+    signal. `search` is full-text alone — the floor anything semantic must beat.
+
+    Ids no document carries are reported, never dropped quietly: removing one
+    shrinks recall's denominator and raises the score for the wrong reason.
+
+    It prints numbers and exits 0. Do not gate CI on it until the numbers are
+    understood — a fixture is one annotator's opinion of what is relevant.
+    """
+    # via run_local, so a bad fixture is a domain error with an exit code rather
+    # than a traceback — the same escape `load_schema` had to be given, on the
+    # other file docir asks a human to write by hand.
+    tasks = run_local(lambda: _read_fixture(fixture))
+    data = execute("bench", {"tasks": tasks, "limit": limit, "expand": expand})
+    state = get_state()
+    if use_json(state):
+        rendering.emit_json(data, trim=state.trim)
+    else:
+        rendering.render_bench(_as_mapping(data))
+
+
+def _read_fixture(path: Path) -> list[object]:
+    """Load a bench fixture. YAML, which also parses the JSON spelling.
+
+    Read here rather than in the dispatcher: with the daemon the dispatcher runs
+    in another process, and over MCP in another machine's, so a path argument
+    would be resolved against a filesystem the caller never named.
+    """
+    if not path.exists():
+        raise ValidationError(f"no fixture at {path}")
+    try:
+        loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise ValidationError(f"{path} is not valid YAML or JSON: {exc}") from exc
+    # A mapping with a `tasks:` key is accepted too, so a fixture can carry a
+    # description beside its tasks without a second format to document.
+    if isinstance(loaded, dict):
+        loaded = loaded.get("tasks")
+    if not isinstance(loaded, list) or not loaded:
+        raise ValidationError(f"{path} must hold a non-empty list of tasks, or a 'tasks:' key")
+    return loaded
+
+
+@app.command()
 def embed(
     flush: Annotated[bool, typer.Option("--flush")] = False,
 ) -> None:
@@ -1170,6 +1239,11 @@ def _emit_init(result: InitResult) -> None:
         rendering.emit_json(data, trim=state.trim)
     else:
         rendering.render_init(data)
+
+
+def _as_mapping(data: object) -> dict[str, object]:
+    """One response object, or an empty mapping if the payload was not one."""
+    return {str(key): value for key, value in data.items()} if isinstance(data, dict) else {}
 
 
 def _as_mappings(data: object) -> list[dict[str, object]]:

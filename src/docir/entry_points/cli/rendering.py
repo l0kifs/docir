@@ -433,6 +433,54 @@ def render_release_status(status: Mapping[str, object]) -> None:
         console.print(f"[dim]embedder:[/] {embedder}")
 
 
+def render_bench(result: Mapping[str, object]) -> None:
+    """Render ``docir bench``: one row per strategy, then what was not scored."""
+    strategies = result.get("strategies")
+    rows = list(strategies) if isinstance(strategies, Sequence) else []
+    if not rows:
+        console.print("[dim]nothing scored — every task named only unknown ids[/]")
+    else:
+        limit = result.get("limit")
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("strategy")
+        table.add_column(f"recall@{limit}", justify="right")
+        table.add_column(f"prec@{limit}", justify="right")
+        table.add_column("MRR", justify="right")
+        table.add_column("tasks", justify="right")
+        for row in rows:
+            if not isinstance(row, Mapping):
+                continue
+            table.add_row(
+                str(row.get("name", "")),
+                f"{_as_float(row.get('recall')):.2f}",
+                f"{_as_float(row.get('precision')):.2f}",
+                f"{_as_float(row.get('mrr')):.2f}",
+                str(row.get("tasks", 0)),
+            )
+        console.print(table)
+        console.print(
+            "[dim]`context` is the shipped default; `--expand 0` removes graph expansion, "
+            "and the pair is what isolates the semantic signal from it.[/]"
+        )
+
+    # Named, never counted away: a fixture outlives the corpus it judges, and
+    # dropping an id quietly shrinks recall's denominator — which *raises* the
+    # score for the wrong reason.
+    unresolved = result.get("unresolved")
+    if isinstance(unresolved, Sequence) and not isinstance(unresolved, str) and unresolved:
+        listed = ", ".join(str(item) for item in unresolved)
+        console.print(f"[yellow]no document carries[/] {listed}")
+    dropped = result.get("dropped")
+    if isinstance(dropped, Sequence) and not isinstance(dropped, str) and dropped:
+        listed = ", ".join(str(item) for item in dropped)
+        console.print(f"[yellow]not scored, every id unknown:[/] {listed}")
+
+
+def _as_float(value: object) -> float:
+    """A score as a float; ``0.0`` for anything the payload did not carry."""
+    return float(value) if isinstance(value, int | float) else 0.0
+
+
 def render_upgrade(
     reindex: Mapping[str, object],
     agents: Sequence[Mapping[str, object]],

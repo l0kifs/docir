@@ -94,6 +94,33 @@ exists for — issue-c6d184704682 in miniature, and the reason a non-English fix
 measurement rather than a nicety. And fastembed 0.8.0 warns this model moved from CLS to mean
 pooling since 0.5.1, so the figures are bound to that version.
 
+## What it buys a Russian corpus, measured
+
+`benchmarks/multilingual.py`, 2026-08-24 — the same 26 documents and 20 tasks as `run.py`,
+translated. `multilingual_corpus.yaml` keeps identical keys, edges and judgments, so the
+English run is the control and language is the only variable. Two runs, byte-identical.
+
+| corpus | model | recall@5 | MRR | same words | paraphrased |
+|---|---|---|---|---|---|
+| English | `bge-small-en` | 0.97 | 0.97 | 1.00 | 0.95 |
+| English | multilingual | 0.95 | 0.91 | 0.95 | 0.95 |
+| Russian | `bge-small-en` | 0.75 | 0.63 | 1.00 | **0.50** |
+| Russian | multilingual | 0.86 | 0.90 | 0.92 | **0.80** |
+
+## Why those two rows settle it
+
+The paraphrased column decides: a lexical task shares vocabulary with the documents, so FTS5
+carries it in either language and the embedder is not what is being measured.
+
+The Russian default row **is** this issue's opening claim in numbers. Same-words recall of a
+perfect 1.00 — FTS5 doing the whole lexical half unaided — beside a paraphrased 0.50. That gap
+is "retrieves no better than full-text search", visible for the first time. The multilingual
+model closes it to 0.80, and MRR with it, 0.63 -> 0.90.
+
+Both halves of the shipped design are now evidenced, by different numbers: the *setting* by the
+Russian rows, the *unchanged default* by the English ones, where the same swap costs ranking
+and buys nothing.
+
 ## What shipped, and what did not
 
 Shipped in `695a794` — three of the four, and none of them needed the machinery above.
@@ -141,12 +168,17 @@ All three questions this section carried are answered.
   A name it knows and docir has not measured is accepted with a warning, so
   `add_custom_model` and any of fastembed's other models stay reachable.
 
-## What is still open
+## What is left
 
-**Nobody has measured whether the alternatives actually help.** Both multilingual
-entries were benchmarked on docir's *English* corpus, where they cost ranking and buy nothing —
-which is why the default did not move. The claim this issue rests on, that a Russian or Kazakh
-corpus retrieves better with one of them, is still an argument from the model cards. A store can
-now act on that argument, and the failure this issue opened with — retrieval quietly worse with
-nothing to report it — is unchanged for anyone who picks wrong. issue-c6d184704682 is the
-instrument that would settle it.
+Nothing this issue was opened for. It existed because a non-English corpus retrieved no better
+than full-text search with nothing to report it. A store can now name a model, the model
+measurably helps, and `docir self status` reports which one is in force.
+
+One item that was never central stays open: `Embedder.dimension` is consumed nowhere outside
+the embedding package, and fastembed exposes `get_embedding_size()`, so the self-correcting
+`_dimension` field is dead weight. Removing it is a port change and nothing depends on the
+answer.
+
+The constraint in *Not every model is a drop-in* is documentation rather than debt — a model
+needing asymmetric prefixes is accepted with a warning naming what it costs. Growing the port a
+role-aware call would admit those models properly, and nothing measured here requires it.

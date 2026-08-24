@@ -1,0 +1,120 @@
+# Русские задачи — перевод `tasks.yaml`, судейства не изменены.
+#
+# `lexical: true` keeps the same 10/10 split: the task reuses corpus
+# vocabulary, so full-text search should bite. `lexical: false` shares no terms
+# with the documents, which is the column an embedder has to earn.
+- id: T01
+  lexical: true
+  task: внедрить ключи идемпотентности на эндпоинте списания платежа
+  relevant:
+  - adr-idempotency
+  - issue-duplicate-charges
+- id: T02
+  lexical: true
+  task: добавить проверку подписи HMAC для входящих вебхуков
+  relevant:
+  - adr-webhook-hmac
+  - issue-webhook-flood
+- id: T03
+  lexical: true
+  task: починить расхождение итогов сверки расчётов
+  relevant:
+  - issue-settlement-drift
+  - adr-currency-rounding
+  - adr-settlement-batch
+- id: T04
+  lexical: true
+  task: повторять таймауты шлюза с экспоненциальной задержкой
+  relevant:
+  - adr-gateway-retries
+  - issue-checkout-timeout
+- id: T05
+  lexical: true
+  task: заняться частичными возвратами по архивированным заказам
+  relevant:
+  - adr-refunds-partial
+  - issue-refund-archived
+- id: T06
+  lexical: true
+  task: повтор из очереди недоставленных и топология очередей
+  relevant:
+  - adr-dlq-manual
+  - arch-queue-topology
+  - issue-webhook-flood
+- id: T07
+  lexical: false
+  task: сделать так, чтобы с покупателей не брали деньги дважды, когда они долбят по кнопке
+  relevant:
+  - adr-idempotency
+  - issue-duplicate-charges
+- id: T08
+  lexical: false
+  task: нам нельзя держать номера банковских карт на своих машинах
+  relevant:
+  - adr-card-tokens
+- id: T09
+  lexical: false
+  task: деньги где-то в расчётах теряются на доли
+  relevant:
+  - adr-currency-rounding
+  - issue-settlement-drift
+- id: T10
+  lexical: false
+  task: двое правят одну корзину одновременно и затирают друг друга
+  relevant:
+  - adr-optimistic-locking
+  - issue-stale-order-status
+- id: T11
+  lexical: false
+  task: какой команде разрешено писать в платёжные таблицы
+  relevant:
+  - arch-payment-boundaries
+- id: T12
+  lexical: false
+  task: что происходит между оплатой и моментом, когда деньги реально пришли
+  relevant:
+  - arch-payment-events
+  - adr-settlement-batch
+- id: T13
+  lexical: true
+  task: изменить хранение сессий оформления заказа в redis
+  relevant:
+  - adr-sessions-redis
+  - adr-sessions-postgres
+- id: T14
+  lexical: false
+  task: где живёт корзина покупателя между заходами на сайт
+  relevant:
+  - adr-sessions-redis
+  - adr-sessions-postgres
+- id: T15
+  lexical: true
+  task: ротация клиентского сертификата, который мы предъявляем платёжному провайдеру
+  relevant:
+  - arch-provider-integration
+- id: T16
+  lexical: false
+  task: у нас скоро протухают доступы к шлюзу и никто не знает, что отвалится
+  relevant:
+  - arch-provider-integration
+- id: T17
+  lexical: true
+  task: настроить порог скоринга мошенничества, отклоняющий оформление
+  relevant:
+  - arch-checkout-runtime
+- id: T18
+  lexical: false
+  task: покупатель попросил стереть всё, что мы о нём храним
+  relevant:
+  - arch-data-lifecycle
+- id: T19
+  lexical: true
+  task: наложить юридическую заморозку на платёжные записи одного счёта
+  relevant:
+  - arch-data-lifecycle
+- id: T20
+  lexical: false
+  task: сбрасывать трафик при перегрузке вместо того, чтобы падать целиком
+  relevant:
+  - arch-checkout-runtime
+  - issue-checkout-timeout

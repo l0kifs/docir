@@ -9,7 +9,7 @@ id: issue-6618d3a9e868
 owner: maintainer
 related:
 - issue-a24f404dd106
-status: open
+status: resolved
 tags:
 - embeddings
 title: Embedder.dimension is declared and never read
@@ -40,10 +40,25 @@ from a port touches every implementation, and that issue was about a corpus nobo
 retrieve. Nothing depends on the answer either way, which is exactly why it is a cleanup rather
 than a defect.
 
-## What is not decided
+## How it was resolved
 
-- **Delete it, or wire it properly.** Deleting is smaller and honest — an unread property is
-  not an interface. Wiring it to `get_embedding_size()` would make it correct before first use,
-  for a caller that does not exist.
-- Whether anything *should* read it. A store that could report its vector width in
-  `docir self status` beside the model name is the one plausible caller, and it is speculative.
+Deleted, not wired. `Embedder.dimension` is gone from the port and from both implementations,
+along with the fastembed adapter's `_DEFAULT_DIMENSION` and the `self._dimension = len(values)`
+assignment that kept it honest.
+
+An unread property is not an interface. Wiring it to `get_embedding_size()` would have made it
+correct before first use, for a caller that does not exist — and left the port carrying a claim
+about vector *shape* that nothing in the system needs, since storage is width-agnostic and the
+one place two widths could disagree is checked inside `Embedding` where both are in hand.
+
+## What the deterministic embedder kept
+
+The deterministic embedder keeps its `dimension` **constructor argument**: that one is read, by
+the hashing itself and by `model_id`, so two configurations cannot share a vector namespace.
+Only the public accessor went. `test_the_configured_width_reaches_the_vector_and_the_model_id`
+now asserts the width through the vector and the id rather than through an accessor — the two
+things it still has to do.
+
+Left undecided on purpose: whether `docir self status` should report the vector width beside
+the model name. It was the one plausible caller and it is still speculative — the width is
+knowable from the model, and nobody has asked.

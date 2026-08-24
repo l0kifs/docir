@@ -20,10 +20,6 @@ from docir.platform.embedding.vector import Embedding
 
 _DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
 
-#: Output width of the default model. Only a starting value — :meth:`embed`
-#: replaces it with what the model actually returned.
-_DEFAULT_DIMENSION = 384
-
 
 class _TextEmbedding(Protocol):
     """The slice of ``fastembed.TextEmbedding`` this adapter depends on.
@@ -42,7 +38,6 @@ class FastEmbedEmbedder(Embedder):
     def __init__(self, model_name: str = _DEFAULT_MODEL) -> None:
         self._model_name = model_name
         self._model: _TextEmbedding | None = None
-        self._dimension = _DEFAULT_DIMENSION
 
     def _ensure_model(self) -> _TextEmbedding:
         if self._model is None:
@@ -57,15 +52,10 @@ class FastEmbedEmbedder(Embedder):
         return self._model
 
     @property
-    def dimension(self) -> int:
-        return self._dimension
-
-    @property
     def model_id(self) -> str:
         return f"fastembed:{self._model_name}"
 
     def embed(self, text: str) -> Embedding:
         vectors = list(self._ensure_model().embed([text]))
         values = tuple(float(component) for component in vectors[0])
-        self._dimension = len(values)
         return Embedding(values)

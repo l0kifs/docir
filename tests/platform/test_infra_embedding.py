@@ -26,10 +26,14 @@ class TestDeterministicEmbedder:
         embedder = DeterministicEmbedder()
         assert embedder.embed("hello world").values == embedder.embed("hello world").values
 
-    def test_dimension_and_model_id(self) -> None:
+    def test_the_configured_width_reaches_the_vector_and_the_model_id(self) -> None:
+        # Through the vector and the id, not an accessor: the embedder no longer
+        # advertises a width, because nothing outside it ever asked
+        # (issue-6618d3a9e868). What the width still has to do is shape the
+        # output and distinguish two configurations' vectors.
         embedder = DeterministicEmbedder(dimension=128)
-        assert embedder.dimension == 128
         assert embedder.embed("x").dimension == 128
+        assert "128" in embedder.model_id
         assert "128" in embedder.model_id
 
     def test_lexical_overlap_scores_higher(self) -> None:
@@ -115,7 +119,6 @@ class TestFastEmbedEmbedder:
         embedder = FastEmbedEmbedder()
         vector = embedder.embed("payment capture idempotency")
         assert vector.dimension == 384
-        assert embedder.dimension == 384
         # A real model returns a dense unit-ish vector, not zeros.
         assert any(component != 0.0 for component in vector.values)
 

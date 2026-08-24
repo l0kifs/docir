@@ -29,10 +29,6 @@ class DeterministicEmbedder(Embedder):
         self._dimension = dimension
 
     @property
-    def dimension(self) -> int:
-        return self._dimension
-
-    @property
     def model_id(self) -> str:
         return f"deterministic-hash-{self._dimension}-v1"
 

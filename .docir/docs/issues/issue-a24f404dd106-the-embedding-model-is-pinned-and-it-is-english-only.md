@@ -70,6 +70,30 @@ The first alternative is a true drop-in — same 384 width, +153 MB, symmetric. 
 not in the supported set. Gap 10 of ref-a6db21f52427 says install weight and ranking quality are
 one decision rather than two, and this table is that decision priced.
 
+## What the drop-in costs, measured
+
+`benchmarks/run.py`, 2026-08-24, fastembed 0.8.0 — 26 documents, 20 tasks. Two runs per model,
+byte-identical output, so the deltas are not run-to-run noise.
+
+| metric | `bge-small-en-v1.5` | `paraphrase-multilingual-MiniLM-L12-v2` |
+|---|---|---|
+| `context` recall@5 | 0.97 | 0.95 |
+| `context` MRR | 0.97 | 0.91 |
+| `context --expand 0` recall@5 | 0.88 | 0.88 |
+| paraphrased recall@5 | 0.95 | 0.95 |
+| same-words recall@5 | 1.00 | 0.95 |
+
+The two figures that isolate the embedding signal — `--expand 0` and the paraphrased split —
+are **identical**. The multilingual model is not worse at meaning on this corpus. What it loses
+is ordering, and one *same-words* task, which is the lexically easy case an English-specialised
+model should win. So the default does not move, and the deliverable is the setting rather than
+a swap.
+
+Two caveats bind these numbers. The corpus is English, so it cannot measure the thing the model
+exists for — issue-c6d184704682 in miniature, and the reason a non-English fixture is the next
+measurement rather than a nicety. And fastembed 0.8.0 warns this model moved from CLS to mean
+pooling since 0.5.1, so the figures are bound to that version.
+
 ## What is still missing
 
 1. **A setting.** `Settings` is pydantic-settings with `env_prefix="DOCIR_"`, so a field would
@@ -101,17 +125,16 @@ which the drop-in above happens to be.
 
 ## What is not decided
 
-Narrowed by the survey. Still open:
+Narrowed by the survey, then by the measurement — which settled the fourth of these: the
+default does not move.
 
 - **Where the setting lives.** A `docs-schema.yaml` key is committed and travels with the
   corpus, which matters because the index is gitignored: with a per-machine env var two clones
   can hold different models, and each re-embeds the whole corpus whenever the other's value is
-  in effect. The cost of putting it there is that a model change would surface as
-  `schema-drift`, which is the right *mechanism* under a name that does not describe it.
+  in effect. The cost is that a model change would surface as `schema-drift` — the right
+  *mechanism* under a name that does not describe it.
 - **Whether the port grows a role-aware call** (`embed_query` beside `embed`) or the supported
-  set is restricted to symmetric models. The first is the general answer and touches every
-  implementation of the port. The second ships the multilingual drop-in and defers the rest.
+  set is restricted to symmetric models. The first is general and touches every implementation
+  of the port. The second ships the drop-in and defers the rest.
 - **Whether an unknown model name is refused at construction** — checkable against
   `list_supported_models()` — or accepted on trust so `add_custom_model` stays reachable.
-- **Whether the default moves.** Nothing here argues it should before the English corpus is
-  measured against the drop-in.

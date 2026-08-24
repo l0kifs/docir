@@ -43,18 +43,75 @@ until somebody writes documents in their own language, and then it costs them th
 
 ## Why the fix is smaller than it looks
 
-The machinery for *changing* embedder already exists, because adr-ab9c454b760c had to build it:
-`embeddings.model_id` is written with every vector, `active_vectors(model_id)` returns only
-matching rows, and a foreign or NULL id reads as dirty rather than as a dimension mismatch. A
-switch therefore recomputes on the next write or `embed --flush` instead of raising.
+Surveyed 2026-08-24 against fastembed 0.8.0, and the answer is: most of it is already built,
+because adr-ab9c454b760c had to build it to survive a *change* of embedder.
 
-What is missing is the setting that would let anyone flip it, and a documented set of known-good
-models with their dimensions and install weight.
+`FastEmbedEmbedder.__init__` already takes a `model_name` — nothing has ever passed one.
+`model_id` is already `fastembed:<name>`, so two models cannot share a vector namespace.
+`Embedding.to_bytes`/`from_bytes` are width-agnostic and the columns are BLOBs, so a
+different dimension needs no migration. `dirty_ids(model_id)` treats a foreign or NULL id as
+dirty and `active_vectors(model_id)` filters, for document *and* chunk vectors — so a switch
+recomputes on the next write or `embed --flush` rather than raising.
+
+What is missing is the setting that would let anyone pass a name, and the guard rails around it.
+
+## What a replacement model costs
+
+fastembed 0.8.0 supports 30 models. The four that matter here, against the current default:
+
+| model | dim | download |
+|---|---|---|
+| `BAAI/bge-small-en-v1.5` (current) | 384 | 67 MB |
+| `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` | 384 | 220 MB |
+| `sentence-transformers/paraphrase-multilingual-mpnet-base-v2` | 768 | 1.0 GB |
+| `intfloat/multilingual-e5-large` | 1024 | 2.24 GB |
+
+The first alternative is a true drop-in — same 384 width, +153 MB, symmetric. `BAAI/bge-m3` is
+not in the supported set. Gap 10 of ref-a6db21f52427 says install weight and ranking quality are
+one decision rather than two, and this table is that decision priced.
+
+## What is still missing
+
+1. **A setting.** `Settings` is pydantic-settings with `env_prefix="DOCIR_"`, so a field would
+   pick up an env var for free — but `_build_embedder()` takes no `Settings` and reads
+   `os.environ` directly.
+2. **Nothing surfaces the active model.** `self status` does not report it, so a switch cannot
+   be confirmed and the current state cannot be read.
+3. **A bad name fails late and quietly.** `TextEmbedding(...)` raises on first use, which is
+   inside the scheduler thread, where `DocsWatcher._reindex` swallows failures on purpose. A
+   typo therefore yields a daemon that looks healthy and has stopped embedding.
+4. **`Embedder.dimension` is consumed nowhere** outside the embedding package, and fastembed
+   exposes `get_embedding_size()`, so the self-correcting `_dimension` field is dead weight.
+
+## Not every model is a drop-in
+
+`Embedder.embed(text)` is symmetric: `document_service` embeds the query through the same call
+that embedded the documents. For the shipped model that is correct — measured, not assumed:
+`query_embed` and `embed` return a bit-identical vector for `bge-small-en-v1.5`, because
+fastembed's base `query_embed` is a passthrough and only its multitask class overrides it.
+
+It stops being correct for two of the multilingual candidates. E5 is trained on `query: ` /
+`passage: ` prefixes that neither docir nor fastembed applies, and `jina-embeddings-v3` selects
+a task-specific adapter through `query_embed`/`passage_embed`, which docir never calls. Both
+would load, embed, and silently score below their published numbers.
+
+So the selector cannot be a bare model name for exactly the models this issue exists to enable.
+Either the port grows a role-aware call, or the setting is restricted to the symmetric models —
+which the drop-in above happens to be.
 
 ## What is not decided
 
-- Whether the selector is an env var, a `docs-schema.yaml` key, or store config. A schema key
-  is committed and travels with the corpus, which is the property that matters here.
-- Whether an unknown model id is refused at load or accepted on trust.
-- Whether the default moves. Gap 10 in ref-a6db21f52427 says install weight and ranking quality
-  are one decision rather than two, and a multilingual model is larger than the current default.
+Narrowed by the survey. Still open:
+
+- **Where the setting lives.** A `docs-schema.yaml` key is committed and travels with the
+  corpus, which matters because the index is gitignored: with a per-machine env var two clones
+  can hold different models, and each re-embeds the whole corpus whenever the other's value is
+  in effect. The cost of putting it there is that a model change would surface as
+  `schema-drift`, which is the right *mechanism* under a name that does not describe it.
+- **Whether the port grows a role-aware call** (`embed_query` beside `embed`) or the supported
+  set is restricted to symmetric models. The first is the general answer and touches every
+  implementation of the port. The second ships the multilingual drop-in and defers the rest.
+- **Whether an unknown model name is refused at construction** — checkable against
+  `list_supported_models()` — or accepted on trust so `add_custom_model` stays reachable.
+- **Whether the default moves.** Nothing here argues it should before the English corpus is
+  measured against the drop-in.

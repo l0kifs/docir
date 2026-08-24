@@ -148,6 +148,7 @@ class Dispatcher:
         request = SearchRequest(
             text=_str(payload, "text"),
             limit=_int(payload, "limit", default=20),
+            explain=_bool(payload, "explain"),
             include_inactive=_bool(payload, "include_inactive"),
             offset=_int(payload, "offset", default=0),
         )
@@ -160,6 +161,7 @@ class Dispatcher:
             include_inactive=_bool(payload, "include_inactive"),
             expand=_int(payload, "expand", default=DEFAULT_CONTEXT_EXPAND),
             min_score=_opt_float(payload, "min_score"),
+            explain=_bool(payload, "explain"),
         )
         return [asdict(view) for view in self._documents.context(request)]
 

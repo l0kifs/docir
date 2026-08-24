@@ -39,6 +39,7 @@ from docir.modules.documents.domain.value_objects.identifiers import DocId
 from docir.modules.documents.domain.value_objects.queries import DocumentFilter
 from docir.modules.documents.domain.value_objects.relations import RelatedRef
 from docir.modules.indexing.api import (
+    DEFAULT_RRF_K,
     EmbeddingScheduler,
     FusedScore,
     HybridScorer,
@@ -90,6 +91,33 @@ def _require_non_negative_offset(offset: int) -> None:
     """Reject a negative offset before it reaches SQL, where it is ignored."""
     if offset < 0:
         raise ValidationError(f"offset must be zero or greater, got {offset}")
+
+
+def _ranking_trace(fscore: FusedScore) -> dict[str, object]:
+    """The terms behind one fused score, for ``--explain``.
+
+    Keys are **omitted rather than nulled**: a document the FTS index never
+    returned carries no ``lexical_rank``, and that absence is the most useful
+    single fact about a hit that ranked badly. A ``null`` there would read as a
+    rank the reader has to interpret.
+
+    Both the rank and its RRF component are reported. The component alone
+    cannot be read back — it is ``1/(k+rank+1)``, so a reader holding 0.0156
+    would have to know ``k`` to learn the document placed third — and the rank
+    alone loses the weight the fusion actually summed.
+    """
+    trace: dict[str, object] = {"rrf_k": DEFAULT_RRF_K}
+    if fscore.lexical_rank is not None:
+        trace["lexical_rank"] = fscore.lexical_rank
+        trace["lexical_rrf"] = round(fscore.lexical, 6)
+    if fscore.semantic_rank is not None:
+        trace["semantic_rank"] = fscore.semantic_rank
+        trace["semantic_rrf"] = round(fscore.semantic, 6)
+    if fscore.similarity is not None:
+        trace["similarity"] = round(fscore.similarity, 6)
+    if fscore.section is not None:
+        trace["matched_section"] = fscore.section
+    return trace
 
 
 def _require_positive_limit(limit: int) -> None:
@@ -567,7 +595,21 @@ class DocumentService:
                         continue
                     if not request.include_inactive and document.status in inactive:
                         continue
-                    views.append(self._summary(document, score=-hit.bm25))
+                    views.append(
+                        self._summary(
+                            document,
+                            score=-hit.bm25,
+                            # Thinner than `context`'s by nature — there is one
+                            # backend and no fusion — but present, because a
+                            # flag that works on one read path and not its
+                            # sibling is an asymmetry an agent cannot infer.
+                            explain=(
+                                {"lexical_rank": len(views) + 1, "bm25": round(hit.bm25, 6)}
+                                if request.explain
+                                else None
+                            ),
+                        )
+                    )
                     if len(views) >= wanted:
                         break
                 # Enough, or the index had fewer matches than we asked for and
@@ -617,18 +659,24 @@ class DocumentService:
 
             seed_budget = request.limit - expand
             selected: dict[str, DocumentSummary] = {
-                document.id: self._ranked_summary(document, fscore)
+                document.id: self._ranked_summary(document, fscore, explain=request.explain)
                 for document, fscore in ranked[:seed_budget]
             }
             if expand:
                 self._augment_with_related(
-                    uow, selected, budget=expand, include_inactive=request.include_inactive
+                    uow,
+                    selected,
+                    budget=expand,
+                    include_inactive=request.include_inactive,
+                    explain=request.explain,
                 )
             # Give back neighbour slots the graph did not use.
             for document, fscore in ranked[seed_budget:]:
                 if len(selected) >= request.limit:
                     break
-                selected.setdefault(document.id, self._ranked_summary(document, fscore))
+                selected.setdefault(
+                    document.id, self._ranked_summary(document, fscore, explain=request.explain)
+                )
 
         return list(selected.values())
 
@@ -681,6 +729,7 @@ class DocumentService:
         similarity: float | None = None,
         matched_section: str | None = None,
         via_graph: bool = False,
+        explain: dict[str, object] | None = None,
     ) -> DocumentSummary:
         return DocumentSummary.from_document(
             document,
@@ -688,16 +737,20 @@ class DocumentService:
             score=score,
             similarity=similarity,
             matched_section=matched_section,
+            explain=explain,
             via_graph=via_graph,
         )
 
-    def _ranked_summary(self, document: Document, fscore: FusedScore) -> DocumentSummary:
+    def _ranked_summary(
+        self, document: Document, fscore: FusedScore, *, explain: bool = False
+    ) -> DocumentSummary:
         """The skeleton for a ranked hit, carrying everything the ranking knew."""
         return self._summary(
             document,
             score=fscore.score,
             similarity=fscore.similarity,
             matched_section=fscore.section,
+            explain=_ranking_trace(fscore) if explain else None,
         )
 
     def _allocate_id(self, request: AddDocumentRequest, uow: UnitOfWork) -> DocId:
@@ -794,6 +847,7 @@ class DocumentService:
         *,
         budget: int,
         include_inactive: bool,
+        explain: bool = False,
     ) -> None:
         """Pull up to ``budget`` of the selected documents' neighbours one hop out.
 
@@ -806,14 +860,19 @@ class DocumentService:
         one neighbour that can invalidate the seed the agent is about to act on.
         """
         edges = {seed: self._neighbours_of(uow, seed) for seed in selected}
+        # `selected` is mutated as neighbours land, so the seeds are captured
+        # first: a document pulled in by expansion must not become a seed whose
+        # own neighbours are attributed to it.
+        seeds = list(edges)
         added = 0
         for depth in range(max((len(targets) for targets in edges.values()), default=0)):
-            for targets in edges.values():
+            for seed in seeds:
+                targets = edges[seed]
                 if added >= budget:
                     return
                 if depth >= len(targets):
                     continue
-                neighbour_id = targets[depth]
+                neighbour_id, route = targets[depth]
                 if neighbour_id in selected:
                     continue
                 neighbour = uow.documents.get(neighbour_id)
@@ -821,10 +880,14 @@ class DocumentService:
                     continue
                 if not self._is_visible(neighbour, include_inactive=include_inactive):
                     continue
-                selected[neighbour_id] = self._summary(neighbour, via_graph=True)
+                selected[neighbour_id] = self._summary(
+                    neighbour,
+                    via_graph=True,
+                    explain={"via_graph_from": seed, "via_graph_route": route} if explain else None,
+                )
                 added += 1
 
-    def _neighbours_of(self, uow: UnitOfWork, seed: str) -> list[str]:
+    def _neighbours_of(self, uow: UnitOfWork, seed: str) -> list[tuple[str, str]]:
         """One-hop neighbours of ``seed``: successors, then outgoing, then mentions.
 
         Expansion used to follow outgoing edges only, which left the graph unable
@@ -840,15 +903,27 @@ class DocumentService:
         """
         successors = uow.documents.incoming(seed, kinds=self._schema.successor_relation_kinds())
         outgoing = uow.documents.outgoing(seed)
-        ordered = [*successors, *(t for t in outgoing if t not in set(successors))]
+        seen_successors = set(successors)
+        # The route rides along with the id. Which *kind* of edge produced a
+        # neighbour is the difference between "this may replace what you were
+        # reading" and "these are related", and `--explain` is the only reader
+        # that can say so — the walk itself has always treated them alike apart
+        # from the ordering below (issue-d3278330eb63).
+        ordered: list[tuple[str, str]] = [
+            *((target, "successor") for target in successors),
+            *((target, "related") for target in outgoing if target not in seen_successors),
+        ]
         if not self._expand_mentions:
             return ordered
-        seen = set(ordered)
+        seen = {target for target, _route in ordered}
         # Both directions, as with the authored graph: being cited is as much a
         # connection as citing, and the backwards one is what answers "what did
         # anyone else say about this".
         inferred = [*uow.mentions.outgoing(seed), *uow.mentions.incoming(seed)]
-        return [*ordered, *(t for t in dict.fromkeys(inferred) if t not in seen)]
+        return [
+            *ordered,
+            *((t, "mention") for t in dict.fromkeys(inferred) if t not in seen),
+        ]
 
     def _is_visible(self, document: Document, *, include_inactive: bool) -> bool:
         """The single visibility predicate every ``context`` path must apply.

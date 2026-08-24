@@ -56,6 +56,14 @@ class FusedScore:
     #: did. ``None`` for a lexical-only hit, and for a document matched by its
     #: own vector — in both cases the match is not addressable as a section.
     section: str | None = None
+    #: Where the document placed in each input list, 1-based, or ``None`` when
+    #: that backend did not return it at all. Kept because the RRF component
+    #: alone cannot be read back: ``lexical`` is ``1/(k+rank+1)``, so a reader
+    #: holding 0.0156 has to invert the constant to learn it placed third
+    #: (issue-d3278330eb63). Absent means *this backend did not find it*, which
+    #: is the most useful single fact about a hit that ranked badly.
+    lexical_rank: int | None = None
+    semantic_rank: int | None = None
 
 
 class HybridScorer:
@@ -109,14 +117,21 @@ class HybridScorer:
         ``semantic`` is ordered best-first by cosine similarity.
         """
         lexical_component: dict[str, float] = {}
+        lexical_rank: dict[str, int] = {}
         for rank, hit in enumerate(lexical):
             lexical_component[hit.doc_id] = 1.0 / (self._k + rank + 1)
+            lexical_rank[hit.doc_id] = rank + 1
 
         semantic_component: dict[str, float] = {}
+        semantic_rank: dict[str, int] = {}
         similarity: dict[str, float] = {}
         section: dict[str, str | None] = {}
         for rank, semantic_hit in enumerate(semantic):
             semantic_component[semantic_hit.doc_id] = 1.0 / (self._k + rank + 1)
+            # The *collapsed* rank: `semantic_ranking` already kept each
+            # document's best chunk, so this is where the document placed, not
+            # where one of its sections did.
+            semantic_rank.setdefault(semantic_hit.doc_id, rank + 1)
             similarity[semantic_hit.doc_id] = semantic_hit.similarity
             section[semantic_hit.doc_id] = semantic_hit.section
 
@@ -129,6 +144,8 @@ class HybridScorer:
                 semantic=semantic_component.get(doc_id, 0.0),
                 similarity=similarity.get(doc_id),
                 section=section.get(doc_id),
+                lexical_rank=lexical_rank.get(doc_id),
+                semantic_rank=semantic_rank.get(doc_id),
             )
             for doc_id in all_ids
         ]

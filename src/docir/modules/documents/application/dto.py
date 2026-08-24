@@ -156,6 +156,12 @@ class DocumentSummary:
     #: concepts (issue-d8295c5c76d1).
     matched_section: str | None = None
     via_graph: bool = False
+    #: How this document reached the result, when ``--explain`` asked. Absent
+    #: otherwise, and absent from every write path: a trace is a diagnostic, and
+    #: paying for it on every read would tax the skeleton contract it explains
+    #: (issue-d3278330eb63). Keys are omitted rather than nulled — a hit the FTS
+    #: index never returned carries no ``lexical_rank``, which is the fact.
+    explain: dict[str, object] | None = None
 
     @classmethod
     def from_document(
@@ -167,6 +173,7 @@ class DocumentSummary:
         similarity: float | None = None,
         matched_section: str | None = None,
         via_graph: bool = False,
+        explain: dict[str, object] | None = None,
     ) -> DocumentSummary:
         return cls(
             id=document.id,
@@ -187,6 +194,7 @@ class DocumentSummary:
             similarity=similarity,
             matched_section=matched_section,
             via_graph=via_graph,
+            explain=explain,
         )
 
 
@@ -283,6 +291,9 @@ class SearchRequest:
     limit: int = 20
     include_inactive: bool = False
     offset: int = 0
+    #: Attach the retrieval trace to every hit. Off by default: it is a
+    #: diagnostic, and the skeleton contract exists to keep a read cheap.
+    explain: bool = False
 
 
 #: How many of a context result's slots are reserved for graph-reached
@@ -310,6 +321,9 @@ class ContextRequest:
     include_inactive: bool = False
     expand: int = DEFAULT_CONTEXT_EXPAND
     min_score: float | None = None
+    #: Attach the retrieval trace to every hit. Off by default: it is a
+    #: diagnostic, and the skeleton contract exists to keep a read cheap.
+    explain: bool = False
 
 
 @dataclass(frozen=True, slots=True)

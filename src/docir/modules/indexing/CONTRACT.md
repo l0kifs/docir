@@ -18,8 +18,13 @@ since the model reads only the first ~512 tokens of a body (adr-927aa43d9635).
   earned a document its rank is what `get --section` should be asked for next
   (issue-afd25273ff1f).
 - `FusedScore` — one fused ranking (`doc_id`, `score`, `lexical`, `semantic`, `similarity`,
-  `section`). Exported as a type so consumers can hold a ranked list before resolving it to
-  documents.
+  `section`, `lexical_rank`, `semantic_rank`). Exported as a type so consumers can hold a
+  ranked list before resolving it to documents. The two ranks are 1-based and `None` when
+  that backend did not return the document at all — kept because an RRF component cannot be
+  read back without `DEFAULT_RRF_K`, and absence is the useful fact about a hit that ranked
+  badly (issue-d3278330eb63).
+- `DEFAULT_RRF_K` — the fusion constant, exported so a trace can name the `k` it used rather
+  than restate it.
 - `build_scheduler(uow_factory, embedder, *, background) -> EmbeddingScheduler`
   — construct the deferred embedding-recompute scheduler for one process
 - `EmbeddingScheduler.schedule(id) / flush() -> DrainResult` — queue and drain recomputes

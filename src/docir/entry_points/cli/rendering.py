@@ -115,6 +115,24 @@ def render_warning(message: str) -> None:
     error_console.print(f"[yellow]warning:[/] {message}")
 
 
+def _render_traces(views: Sequence[Mapping[str, object]]) -> None:
+    """The ``--explain`` traces, one dim line per document, under the table.
+
+    Not a column: the trace is a mapping of five to seven keys and a table cell
+    cannot hold it legibly. Not rendered at all when nothing carries one, so the
+    default read is unchanged.
+    """
+    traced = [(view, view.get("explain")) for view in views]
+    if not any(isinstance(trace, Mapping) for _view, trace in traced):
+        return
+    console.print()
+    for view, trace in traced:
+        if not isinstance(trace, Mapping):
+            continue
+        terms = " ".join(f"{key}={value}" for key, value in trace.items())
+        console.print(f"[dim]{view.get('id')}[/]  [dim]{terms}[/]")
+
+
 def render_document(view: Mapping[str, object]) -> None:
     """Render one full document (frontmatter fields + body)."""
     header = (
@@ -188,6 +206,7 @@ def render_document_list(views: Sequence[Mapping[str, object]]) -> None:
             row.append(str(view.get("matched_section") or "-"))
         table.add_row(*row)
     console.print(table)
+    _render_traces(views)
 
 
 def render_tags(tags: Sequence[Mapping[str, object]]) -> None:

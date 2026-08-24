@@ -661,13 +661,23 @@ def search(
         typer.Option("--include-inactive", help="Also return documents in an inactive status."),
     ] = False,
     include_resolved: Annotated[bool, typer.Option("--include-resolved", hidden=True)] = False,
+    explain: Annotated[
+        bool,
+        typer.Option("--explain", help="Attach the retrieval trace to every hit."),
+    ] = False,
 ) -> None:
-    """Full-text search."""
+    """Full-text search over title, description and body — not tags.
+
+    `--explain` attaches each hit's rank and its raw BM25 score. Thinner than
+    `context --explain` by nature: one backend, no fusion, nothing to weigh
+    against anything.
+    """
     payload: dict[str, object] = {
         "text": text,
         "limit": limit,
         "offset": offset,
         "include_inactive": _include_inactive(include_inactive, include_resolved),
+        "explain": explain,
     }
     _warn_on_global_fallback()
     _emit_document_list(execute("search", payload))
@@ -696,6 +706,10 @@ def context(
             help="Drop ranked hits whose `similarity` is below this (0.0-1.0).",
         ),
     ] = None,
+    explain: Annotated[
+        bool,
+        typer.Option("--explain", help="Attach the retrieval trace to every hit."),
+    ] = False,
 ) -> None:
     """Ranked, minimal relevant document set (hybrid + graph traversal).
 
@@ -709,6 +723,12 @@ def context(
     cannot tell you whether anything relevant exists. `--min-score` filters on
     `similarity`, so an empty result is a real answer: nothing was close enough.
 
+    `--explain` attaches the trace behind each hit — where it placed in the
+    full-text and vector rankings, each RRF term, the raw cosine, and for a
+    graph-reached document the seed it came from and whether that edge was a
+    successor, an ordinary relation or a mention. Off by default: it is a
+    diagnostic, and a skeleton read is meant to be cheap.
+
     Two things it does not filter: documents with no current vector (a
     lexical-only hit, whose similarity is unknown rather than zero — run `docir
     embed --flush` if you need the floor to cover everything) and graph-reached
@@ -721,6 +741,7 @@ def context(
         "expand": expand,
         "include_inactive": _include_inactive(include_inactive, include_resolved),
         "min_score": min_score,
+        "explain": explain,
     }
     _warn_on_global_fallback()
     _emit_document_list(execute("context", payload))

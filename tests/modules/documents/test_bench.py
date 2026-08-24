@@ -153,3 +153,83 @@ class TestBenchDispatch:
         # the position does not already give the reader.
         result = dispatcher.dispatch("bench", {"tasks": [{"task": "hi", "relevant": ["adr-x"]}]})
         assert result["dropped"] == ["#1"]
+
+
+class TestExplain:
+    """`--explain`: the terms behind a rank, present only when asked for."""
+
+    def _seed(self, dispatcher) -> str:
+        view = dispatcher.dispatch(
+            "add",
+            {
+                "type": "decision",
+                "title": "Auth strategy",
+                "description": "How clients authenticate.",
+                "body": "Clients present a short-lived bearer token.",
+            },
+        )
+        return str(view["id"])
+
+    def test_absent_unless_asked_for(self, dispatcher) -> None:
+        # The skeleton contract: a read must not pay for a diagnostic.
+        self._seed(dispatcher)
+        rows = dispatcher.dispatch("context", {"task": "authenticate", "limit": 3})
+        assert all(row.get("explain") is None for row in rows)
+
+    def test_a_ranked_hit_carries_its_terms(self, dispatcher) -> None:
+        self._seed(dispatcher)
+        rows = dispatcher.dispatch("context", {"task": "authenticate", "limit": 3, "explain": True})
+        trace = rows[0]["explain"]
+        assert trace["rrf_k"] == 60
+        # At least one backend found it, and whichever did reports both its rank
+        # and its RRF term: the term alone cannot be read back without k.
+        assert ("lexical_rank" in trace) or ("semantic_rank" in trace)
+        for side in ("lexical", "semantic"):
+            assert (f"{side}_rank" in trace) == (f"{side}_rrf" in trace)
+
+    def test_a_backend_that_missed_omits_its_key_rather_than_nulling_it(self, dispatcher) -> None:
+        """Absence is the finding.
+
+        A `null` rank reads as a rank the caller has to interpret; a missing key
+        says plainly that this backend never returned the document, which is the
+        most useful single fact about a hit that ranked badly.
+        """
+        self._seed(dispatcher)
+        rows = dispatcher.dispatch(
+            "context", {"task": "zzzz-nothing-shares-this", "limit": 3, "explain": True}
+        )
+        for row in rows:
+            trace = row.get("explain") or {}
+            assert None not in trace.values()
+
+    def test_search_carries_its_thinner_trace(self, dispatcher) -> None:
+        self._seed(dispatcher)
+        rows = dispatcher.dispatch("search", {"text": "bearer", "limit": 3, "explain": True})
+        assert rows, "the seeded document should match"
+        assert rows[0]["explain"]["lexical_rank"] == 1
+        assert "bm25" in rows[0]["explain"]
+
+    def test_a_graph_hit_names_the_seed_and_the_route(self, dispatcher) -> None:
+        # The distinction the trace exists to make: a document pulled in because
+        # it supersedes the hit is a different claim from a plain relation.
+        # The successor shares no vocabulary with the query, so it cannot rank
+        # its own way in — it is reachable only backwards, through the edge.
+        first = self._seed(dispatcher)
+        dispatcher.dispatch(
+            "add",
+            {
+                "type": "decision",
+                "title": "Quarterly warehouse rotation",
+                "description": "Pallets rotate on a ninety-day cycle.",
+                "body": "Stock older than one quarter moves to the outer aisles.",
+                "related": [f"{first}:supersedes"],
+            },
+        )
+        rows = dispatcher.dispatch(
+            "context", {"task": "authenticate", "limit": 2, "expand": 1, "explain": True}
+        )
+        graph = [row for row in rows if row.get("via_graph")]
+        assert graph, "the successor is reachable only through the edge"
+        trace = graph[0]["explain"]
+        assert trace["via_graph_from"] == first
+        assert trace["via_graph_route"] == "successor"

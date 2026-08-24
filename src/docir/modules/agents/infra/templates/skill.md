@@ -119,6 +119,17 @@ ordinary links, which means: if a hit arrives with another doc marked
 before acting on the hit. It does not mean the old doc is wrong to read, only
 that it is not the last word.
 
+**When a result looks wrong, ask why with `--explain`.** `docir context "<task>" --explain`
+attaches the trace behind each hit: where it placed in the full-text and vector rankings, each
+RRF term, the raw cosine, and — for a graph-reached document — the seed it came from and
+whether that edge was a `successor`, an ordinary `related` or a `mention`. `docir search
+"<text>" --explain` gives the thinner version: rank and BM25.
+
+It answers the question `--min-score` cannot: not "is anything relevant here" but "why did *this*
+outrank *that*". A hit with a `semantic_rank` and no `lexical_rank` shares no vocabulary with
+your wording and was found by meaning alone; the reverse means the embedder contributed nothing.
+Off by default — it is a diagnostic, and a skeleton read is meant to be cheap.
+
 **Judge relevance by `similarity`, never by `score`.** `score` is a rank fusion:
 it tells you the order and nothing else, so the top hit of a query nothing
 matches scores about the same as a perfect match. `similarity` is the raw cosine

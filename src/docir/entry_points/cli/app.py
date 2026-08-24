@@ -1002,6 +1002,10 @@ def check(
     only when the store sits in a repository — there is nothing to resolve a
     pattern against otherwise).
 
+    One warning reports good news: `unblocked` names a live document whose every
+    `depends_on` target has closed, so the work is ready to start. Nothing else
+    reads that edge — without this it stays true and unnoticed.
+
     Pass --strict to gate a pre-merge / CI job: it exits 1 on errors only, which
     is what catches the duplicate ids and dangling references a branch merge
     introduces. Warnings do not fail the build — `orphan` fires for every

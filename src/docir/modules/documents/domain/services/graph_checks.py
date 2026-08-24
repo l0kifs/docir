@@ -6,6 +6,7 @@ warnings rather than failing an agent mid-task:
 * cycles in the relation graph,
 * orphan documents (no incoming or outgoing relations),
 * layering violations — a higher-level type *depending on* a lower-level one,
+* unblocked documents — every dependency they declared is now closed,
 * stale documents — past their type's review cadence (when a date is supplied).
 """
 
@@ -46,7 +47,7 @@ ERROR_KINDS: frozenset[str] = frozenset({"duplicate-id", "dangling", "malformed"
 #: Everything else (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`,
 #: `unknown-status`, `unknown-tag`, `tag-key-format`, `unmatched-code`,
 #: `code-changed`, `missing-required`, `unknown-relation-kind`, `schema-drift`,
-#: `stale-index-build`)
+#: `stale-index-build`, `unblocked`)
 #: describes shape or classification, not
 #: damage. `orphan` in particular fires for any document with no relations — the
 #: default state of a new one — so treating these as build failures made the gate
@@ -135,6 +136,7 @@ class GraphChecker:
         issues.extend(self._find_cycles(relations))
         issues.extend(self._find_orphans(documents, relations, mentions))
         issues.extend(self._find_layering_violations(documents, relations))
+        issues.extend(self._find_unblocked(documents, relations))
         if today is not None:
             issues.extend(self._find_stale(documents, today))
         if code_matches is not None:
@@ -627,6 +629,72 @@ class GraphChecker:
                         doc_ids=(doc.id,),
                     )
                 )
+        return issues
+
+    def _find_unblocked(
+        self, documents: list[Document], relations: list[Relation]
+    ) -> list[CheckIssue]:
+        """Live documents whose every declared dependency has since closed.
+
+        The one finding here that reports *good* news, and it exists because
+        nothing else does. A ``depends_on`` edge is a claim that this work waits
+        on that work, and until now only ``context`` expansion ever read it —
+        and only if a caller happened to query nearby. So a blocker could clear
+        and the thing it blocked would sit there, with the graph holding the
+        answer and no reader asking (issue-fd086c0c6ab0 waited on a resolved
+        issue for two commits before anyone noticed).
+
+        "Closed" is the type's own ``inactive_statuses``, or archived — the same
+        definition the read paths use to hide a document, so a corpus cannot
+        disagree with itself about what done means. A document with **no**
+        dependencies is not unblocked, it is unconstrained, and reporting it
+        would fire on most of the corpus.
+
+        Which kinds count is schema data, not a name: ``is_dependency_relation``
+        is exactly the property "the source relies on the target", so a custom
+        kind declared ``dependency: true`` behaves like ``depends_on``
+        (adr-234b956a48d8). A warning, never an error — nothing is broken, this
+        is a scheduling fact, and like ``stale`` it is cleared by doing
+        something real rather than by a flag: start the work, or drop an edge
+        that is no longer true.
+        """
+        inactive = self._schema.inactive_statuses()
+        by_id = {doc.id: doc for doc in documents}
+
+        def closed(doc_id: str) -> bool:
+            target = by_id.get(doc_id)
+            # A target nothing carries is `dangling`, reported there. Treating
+            # it as closed would turn a broken edge into a green light.
+            return target is not None and (target.archived or target.status in inactive)
+
+        blockers: dict[str, list[str]] = {}
+        for rel in relations:
+            # Every dependency edge, including one whose target is missing.
+            # Filtering those out here looked defensive and was the opposite: a
+            # document depending on one resolved issue and one *dangling* edge
+            # would have arrived with a single satisfied blocker and been
+            # announced as ready to start.
+            if self._schema.is_dependency_relation(rel.kind):
+                blockers.setdefault(rel.source, []).append(rel.target)
+
+        issues: list[CheckIssue] = []
+        for source, targets in sorted(blockers.items()):
+            document = by_id.get(source)
+            if document is None or document.archived or document.status in inactive:
+                continue
+            if not all(closed(target) for target in targets):
+                continue
+            listed = ", ".join(repr(target) for target in sorted(set(targets)))
+            issues.append(
+                CheckIssue(
+                    kind="unblocked",
+                    message=(
+                        f"{source!r} is ready to start: everything it depends on "
+                        f"has closed ({listed})"
+                    ),
+                    doc_ids=(source, *sorted(set(targets))),
+                )
+            )
         return issues
 
     def _find_layering_violations(

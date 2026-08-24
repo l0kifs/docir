@@ -170,7 +170,7 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   guard; `docir check --strict` exits 1 for CI.
 - **Tier 1 findings carry a severity, and `--strict` gates on `error` only.** `ERROR_KINDS`
   (`graph_checks.py`) is `duplicate-id`/`dangling`/`malformed` — the corpus is *broken*.
-  Everything else (`orphan`, `cycle`, `layering`, `stale`, `unmatched-code`, `tag-key-format`,
+  Everything else (`orphan`, `cycle`, `layering`, `stale`, `unblocked`, `unmatched-code`, `tag-key-format`,
   the three `unknown-type`/`unknown-status`/`unknown-tag`, plus `unknown-relation-kind`,
   `missing-required` and `schema-drift`) is
   a `warning` about shape or age. This is load-bearing: `orphan` fires for every document with no relations — the

@@ -66,6 +66,30 @@ class FusedScore:
     semantic_rank: int | None = None
 
 
+def _turn_order(rankings: list[list[FusedScore]]) -> list[str]:
+    """The ids of per-query rankings merged by taking turns, first query first.
+
+    A structural floor rather than a weight: with N queries the caller's task
+    holds every Nth slot no matter what the others rank. That is what makes it
+    survive a bad phrasing where weighting could not — weighting suppresses an
+    extra query everywhere, including the documents only it can find, while
+    taking turns bounds its *share* and leaves its best pick intact.
+
+    Measured on docir's own corpus with one deliberately wrong hypothetical
+    (adr-4c21693aac55): pooled RRF scored 0.25 recall@5 against this at 0.75,
+    and neither lost anything on the correct hypothetical, which both take from
+    0.88 to 1.00.
+    """
+    order: list[str] = []
+    seen: set[str] = set()
+    for depth in range(max((len(ranking) for ranking in rankings), default=0)):
+        for ranking in rankings:
+            if depth < len(ranking) and ranking[depth].doc_id not in seen:
+                seen.add(ranking[depth].doc_id)
+                order.append(ranking[depth].doc_id)
+    return order
+
+
 class HybridScorer:
     """Combines lexical (BM25) and semantic (cosine) rankings via RRF."""
 
@@ -131,15 +155,20 @@ class HybridScorer:
         document, which is the signal several queries exist to produce
         (issue-fd086c0c6ab0).
 
-        Every query weighs the same. qmd doubles the caller's literal query
-        against its own machine-generated expansions, which is a correction for
-        expansions being worse; here every string comes from the caller and
-        docir has no basis for ranking one above another.
+        Every query weighs the same, and with more than one they **take turns**
+        rather than pooling their scores. Weighting was tried first and answered
+        (adr-b23dae55666f): it removes the gain along with the risk, because an
+        extra query is powerful exactly to the degree it can outvote the task.
+        Interleaving separates the two — the caller's task holds every Nth slot
+        whatever the others rank, so a bad phrasing costs a bounded share of the
+        result instead of most of it, while a good one keeps every document only
+        it found.
 
         The reported ranks are the **best** each document achieved in any pass,
         because a rank is only meaningful against one list and "it placed first
         for one of your queries" is the fact a reader wants.
         """
+
         lexical_component: dict[str, float] = {}
         lexical_rank: dict[str, int] = {}
         semantic_component: dict[str, float] = {}
@@ -192,4 +221,12 @@ class HybridScorer:
             for doc_id in all_ids
         ]
         fused.sort(key=lambda f: (f.score, f.doc_id), reverse=True)
-        return fused
+        if len(passes) == 1:
+            return fused
+        # Pooling decides each document's *numbers*; taking turns decides the
+        # *order*. Keeping both is what lets a document found by two queries
+        # still report its best similarity while no single query fills the head
+        # of the result (adr-4c21693aac55).
+        by_id = {score.doc_id: score for score in fused}
+        per_query = [self.fuse(lexical, semantic) for lexical, semantic in passes]
+        return [by_id[doc_id] for doc_id in _turn_order(per_query) if doc_id in by_id]

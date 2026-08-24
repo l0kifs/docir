@@ -132,12 +132,11 @@ docir context "how do clients authenticate" \
   --also "Clients present a short-lived bearer token issued by the identity provider."
 ```
 
-**Use it only when you could defend the answer you are guessing.** This is measured in both
-directions and the two are not symmetric: on docir's own corpus a *correct* hypothetical took
-recall@5 from 0.88 to 1.00, and a confident *wrong* one — fluent, in the right register, about
-the wrong part of the system — took it to **0.25**. Your task string does not anchor the
-result; a bad `--also` replaces it rather than adding to it, and a second good phrasing does
-not rescue it (adr-b23dae55666f).
+**Use it when you could defend the answer you are guessing.** Measured on docir's own corpus:
+a *correct* hypothetical takes recall@5 from 0.88 to 1.00, a confident *wrong* one — fluent, in
+the right register, about the wrong part of the system — takes it to 0.75. Queries take turns
+filling the result rather than pooling their scores, so your task always holds its share and a
+bad phrasing costs a bounded slice instead of the whole read (adr-4c21693aac55).
 
 So: reach for it when you know roughly what the answer says and only its wording is uncertain —
 you have read the code, or the topic is one you have already retrieved once. If you are

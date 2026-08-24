@@ -112,3 +112,54 @@ class TestFuseMany:
 
     def test_no_passes_ranks_nothing(self) -> None:
         assert HybridScorer().fuse_many([]) == []
+
+
+class TestInterleaving:
+    """Several queries take turns; one query is untouched (adr-4c21693aac55)."""
+
+    def test_one_pass_still_pools_exactly_as_before(self) -> None:
+        scorer = HybridScorer()
+        lexical = [SearchHit("a", 1.0), SearchHit("b", 2.0)]
+        semantic = [SemanticHit("b", 0.9)]
+        assert scorer.fuse_many([(lexical, semantic)]) == scorer.fuse(lexical, semantic)
+
+    def test_the_first_query_holds_the_first_slot_whatever_the_other_ranks(self) -> None:
+        """The property weighting could not buy.
+
+        Pooled, a confident wrong query wins slot 1 by having more support.
+        Taking turns, it cannot win more than its turn.
+        """
+        scorer = HybridScorer()
+        fused = scorer.fuse_many(
+            [
+                ([SearchHit("mine", 1.0)], []),
+                ([SearchHit("theirs", 1.0), SearchHit("theirs2", 2.0)], []),
+            ]
+        )
+        assert [f.doc_id for f in fused][:2] == ["mine", "theirs"]
+
+    def test_a_second_query_cannot_take_two_slots_before_the_first_takes_one(self) -> None:
+        # Injected bug: concatenating the rankings instead of interleaving gives
+        # whichever query ranks more documents the whole head of the result.
+        scorer = HybridScorer()
+        fused = scorer.fuse_many(
+            [
+                ([SearchHit("mine", 1.0), SearchHit("mine2", 2.0)], []),
+                ([SearchHit("t1", 1.0), SearchHit("t2", 2.0), SearchHit("t3", 3.0)], []),
+            ]
+        )
+        assert [f.doc_id for f in fused] == ["mine", "t1", "mine2", "t2", "t3"]
+
+    def test_a_document_both_queries_find_appears_once_at_its_earliest_turn(self) -> None:
+        scorer = HybridScorer()
+        fused = scorer.fuse_many(
+            [([SearchHit("shared", 1.0)], []), ([SearchHit("shared", 1.0)], [])]
+        )
+        assert [f.doc_id for f in fused] == ["shared"]
+
+    def test_an_exhausted_query_stops_taking_turns(self) -> None:
+        scorer = HybridScorer()
+        fused = scorer.fuse_many(
+            [([SearchHit("only", 1.0)], []), ([SearchHit("a", 1.0), SearchHit("b", 2.0)], [])]
+        )
+        assert [f.doc_id for f in fused] == ["only", "a", "b"]

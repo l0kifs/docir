@@ -87,7 +87,7 @@ def scan_document_ids(text: str, prefixes: Collection[str]) -> tuple[str, ...]:
     and a stable order keeps a rebuild from rewriting rows that did not change.
 
     Deliberately scans the whole text, fenced code blocks included. A body that
-    shows ``docir get adr-1cfb1b212237`` in an example is naming that document
+    shows ``docir get adr-3f9a2b1c7d4e`` in an example is naming that document
     as surely as a sentence would — the heading scanner has to treat a fence as
     opaque because a ``##`` inside one is not a heading, but an id inside one is
     still an id.

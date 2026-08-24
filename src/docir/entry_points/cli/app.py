@@ -741,8 +741,8 @@ def context(
 
     Use it when you could defend the answer you are guessing. Measured on
     docir's own corpus: a correct hypothetical takes recall@5 from 0.88 to
-    1.00, a confidently wrong one takes it to 0.25. The task does not anchor
-    the result — a bad --also replaces it rather than adding to it.
+    1.00, a confidently wrong one takes it to 0.75. Queries take turns filling
+    the result rather than pooling scores, so the task keeps its share.
 
     `--explain` attaches the trace behind each hit — where it placed in the
     full-text and vector rankings, each RRF term, the raw cosine, and for a

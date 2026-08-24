@@ -9,11 +9,14 @@ since the model reads only the first ~512 tokens of a body (adr-927aa43d9635).
 ## Public operations
 - `HybridScorer.semantic_ranking(query, candidates) -> [SemanticHit]` — cosine ranking,
   collapsing a document's candidates to its best one
-- `HybridScorer.fuse_many(passes) -> [FusedScore]` — reciprocal-rank fusion over N queries'
-  backend lists at once (2N lists), not each query fused then combined: the latter normalises
-  away how *many* queries found a document, which is the signal several queries produce. Every
-  query weighs the same. Reported ranks, `similarity` and `section` come from each document's
-  **best** pass, because they describe one match rather than an average.
+- `HybridScorer.fuse_many(passes) -> [FusedScore]` — N queries' backend lists. Pooling decides
+  each document's *numbers* (RRF over all 2N lists; ranks, `similarity` and `section` from its
+  **best** pass, since they describe one match rather than an average); taking turns decides the
+  *order*, so the first query holds every Nth slot whatever the others rank (adr-4c21693aac55).
+  Weighting was tried instead and removes the gain along with the risk (adr-b23dae55666f).
+  One pass is unchanged: pooled and ordered by score, exactly as `fuse` always was.
+  **Consequence**: with several queries the result is not sorted by `score` — a document in an
+  earlier slot may carry a lower one. `similarity` is unaffected.
 - `HybridScorer.fuse(lexical, semantic) -> [FusedScore]` — reciprocal-rank fusion
 - `VectorCandidate(doc_id, vector, section=None)` — one vector to rank. `section` is the
   heading it came from; `None` means the vector describes the whole document, or the chunk

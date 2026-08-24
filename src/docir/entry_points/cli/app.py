@@ -262,6 +262,15 @@ def build(
     beside the pages and drawn from there — no CDN, so the site still works from
     file://. The runtime is megabytes, so it is yours to supply and is only
     written when some document actually draws a diagram.
+
+    It must be a UMD build, loaded as a classic script. mermaid 11 ships only ES
+    modules, so 10.x is the last line that has one — fetch it once with:
+
+        curl -o mermaid.min.js \\
+          https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js
+
+    An .mjs runtime is refused with that URL in the message, rather than copied
+    into a page whose script never runs.
     """
     _warn_on_global_fallback()
     state = get_state()

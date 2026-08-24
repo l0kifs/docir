@@ -597,7 +597,15 @@ regenerated each build, and a directory docir did not build is refused unless
 you pass `--force`.
 
 A ` ```mermaid ` fence in a body publishes as its own source unless you pass
-`--mermaid` pointing at mermaid's browser bundle; docir writes it beside the
+`--mermaid` pointing at a **UMD** mermaid bundle — mermaid 11 ships only ES modules and docir
+loads the runtime as a classic script, so 10.x is the last line that has one. Fetch it once:
+
+```bash
+curl -o mermaid.min.js https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js
+docir build --out site/ --title "<project>" --mermaid mermaid.min.js
+```
+
+An `.mjs` runtime is refused with that URL in the error; docir writes it beside the
 pages and loads it from there, so the site still opens from `file://`. docir
 does not ship the bundle — it is megabytes — and writes it only when a document
 actually draws something.
@@ -617,6 +625,19 @@ mints readable numbers (`adr-0007`) that are collision-free *within one store* �
 but two branches each have their own index and can mint the same number, which
 `docir check` reports as `duplicate-id` after the merge. Set `id_style` at the top
 of `docs-schema.yaml` for the whole schema, or per type to override it.
+
+## When the answers look wrong
+
+A long-lived daemon serves your reads, and it loads docir once. After an upgrade or a change to
+docir's own source it can keep answering from the code it started with — a stale answer imitates
+a correct one, so nothing looks broken.
+
+- `docir daemon status` — whether it is running and **which build it is serving**.
+- Re-run the command with `docir --no-daemon <cmd>` to answer in-process from the installed
+  code. Two different answers to the same command means the daemon is the stale half; it is
+  disposable, so `docir daemon stop` and let the next command respawn it.
+
+Reach for this when results contradict what you can see in the files, not as a routine step.
 
 ## Notes
 

@@ -182,7 +182,8 @@ daemon serve · mcp serve
 
 **Publishing.** `docir build --out site/` renders the store as a self-contained static site.
 `--title` names it (without it every page reads "Documentation"), `--logo` sets the mark and
-favicon, `--mermaid vendor/mermaid.min.js` draws fenced diagrams, `--include-archived` adds
+favicon, `--mermaid mermaid.min.js` draws fenced diagrams (a **UMD** build — mermaid 11 is ESM-only, so
+fetch `https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js`), `--include-archived` adds
 archived documents, `--force` overwrites a directory docir did not build.
 
 ## Conventions

@@ -114,8 +114,21 @@ class TestRuntimeWiring:
 
 class TestRuntimeValidation:
     def test_a_non_javascript_path_is_refused_by_name(self) -> None:
-        with pytest.raises(ValidationError, match="browser build"):
+        with pytest.raises(ValidationError, match="UMD bundle"):
             diagrams.resolve_runtime(Path("mermaid.tar.gz"))
+
+    def test_the_refusal_names_a_build_that_still_exists(self) -> None:
+        """The obvious next step must be one the reader can take.
+
+        The message used to say "point it at mermaid's browser build
+        (mermaid.min.js)" — a file mermaid stopped publishing at 11, so the
+        error sent an adopter to a package that does not contain it.
+        """
+        with pytest.raises(ValidationError) as exc:
+            diagrams.resolve_runtime(Path("mermaid.core.mjs"))
+        message = str(exc.value)
+        assert "mermaid@10" in message
+        assert "https://" in message
 
     def test_a_missing_file_is_refused(self, tmp_path: Path) -> None:
         with pytest.raises(ValidationError, match="not found"):

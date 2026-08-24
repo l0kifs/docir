@@ -25,6 +25,20 @@ Two properties are preserved on purpose:
   framed and copyable exactly like a code block. Nothing is hidden behind a
   script that did not load, and no page is worse than it is today.
 
+mermaid 11 dropped its classic bundle: the npm package now ships only ES
+modules, and a ``type="module"`` script would break the ``file://`` guarantee
+above. So the runtime to supply is a **UMD** build — mermaid 10.x is the last
+line that publishes one::
+
+    curl -o mermaid.min.js \
+      https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js
+    docir build --out site/ --mermaid mermaid.min.js
+
+An ``.mjs`` runtime is refused rather than copied, because the fallback above
+would otherwise absorb it: the page would publish, the script would never run,
+and the result would be indistinguishable from passing no flag. The refusal
+names the version, since "mermaid's browser build" stopped being obtainable.
+
 The fallback is also why the source lives in the element's text rather than in
 a ``data-`` attribute: the unrendered state *is* the source, so there is one
 copy of it, and the bootstrap captures it in JavaScript before the first draw
@@ -170,8 +184,9 @@ def resolve_runtime(runtime: Path | None) -> str | None:
     path = Path(runtime)
     if path.suffix.lower() != ".js":
         raise ValidationError(
-            f"--mermaid expects a JavaScript bundle, got '{path.name}'; "
-            "point it at mermaid's browser build (mermaid.min.js)"
+            f"--mermaid expects a UMD bundle loaded as a classic script, got '{path.name}'; "
+            "mermaid 11 ships only ES modules, so fetch the last UMD build: "
+            "https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js"
         )
     if not path.is_file():
         raise ValidationError(f"mermaid runtime not found: {path}")

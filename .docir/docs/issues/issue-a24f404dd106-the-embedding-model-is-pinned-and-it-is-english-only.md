@@ -9,9 +9,11 @@ description: bge-small-en-v1.5 is compiled in as the only real embedder, so a co
 id: issue-a24f404dd106
 owner: maintainer
 related:
-- ref-a6db21f52427
 - adr-ab9c454b760c
+- ref-a6db21f52427
 - ref-e7534f1c812d
+- issue-c6d184704682
+- issue-fd086c0c6ab0
 status: open
 tags:
 - embeddings

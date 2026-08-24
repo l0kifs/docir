@@ -7,8 +7,10 @@ description: The caller's task string reaches both backends unmodified, and adr-
 id: issue-fd086c0c6ab0
 owner: maintainer
 related:
-- ref-a6db21f52427
 - adr-d657a09b8c4a
+- ref-a6db21f52427
+- kind: depends_on
+  to: issue-c6d184704682
 status: open
 tags:
 - retrieval

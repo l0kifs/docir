@@ -2,20 +2,21 @@
 code:
 - src/docir/modules/indexing/**
 created: '2026-08-24'
-description: HyDE and LLM-authored query variants are untested and now blocked on
-  whether docir may ship a generative model at all; the model-free half was measured
-  and rejected.
+description: 'Both halves are answered: the model-free rewrite measured worse, and
+  generation is closed by adr-27c63ad02695 — what remains is accepting caller-supplied
+  queries.'
 id: issue-fd086c0c6ab0
 owner: maintainer
 related:
 - ref-a6db21f52427
 - adr-d657a09b8c4a
 - adr-46b69a581c65
+- adr-27c63ad02695
 status: open
 tags:
 - retrieval
 - embeddings
-title: No query expansion and no HyDE
+title: context takes one query, and the caller has better ones
 type: issue
 updated: '2026-08-24'
 ---
@@ -43,23 +44,38 @@ Different mechanism, same diagnosis. Reopening this is not re-litigating adr-d65
 
 ## What was measured, and what is left
 
-Narrowed on 2026-08-24. The half that needed no generative model was built, measured on three
-corpora and rejected — adr-46b69a581c65. Pseudo-relevance feedback cost 0.13 recall@5 on
-docir's own corpus, because the first pass is already good enough that rewriting only drifts.
+Answered on 2026-08-24, in two halves and not the way this issue expected.
 
-What remains is the half that **does** need one: HyDE, and LLM-authored query variants. Both
-are now blocked on a question larger than ranking — whether docir may depend on a generative
-model at all. That is a decision about the offline promise, a bounded install and no network at
-query time, and nothing measured so far bears on it: the feedback failure is specific to
-feeding the corpus back to itself, and says nothing about a rewrite that comes from outside it.
+The model-free half was built, measured on three corpora and rejected — adr-46b69a581c65.
+Pseudo-relevance feedback cost 0.13 recall@5 on docir's own corpus: the first pass is already
+right 88% of the time, so rewriting from the top hits mostly amplifies the 12% where it was not.
 
-So the honest state is not "untested" any more. One mechanism is answered. The other cannot be
-tested until somebody decides docir is allowed to ship a generative model, which is an ADR
-nobody has written and which this issue should not pretend to settle.
+The half that needs a generative model is **closed by adr-27c63ad02695**, and the reason is
+not cost. docir's caller is already a frontier model that has read the code and knows the task;
+a 0.5-1.5B quantized rewriter underneath it would be guessing at context the caller had and did
+not send. So docir generates nothing.
+
+## What this issue becomes
+
+Not "add HyDE" but **accept it**: several query strings in one `context` call, fused the way
+the two backends already are. An agent that writes a hypothetical answer and passes it beside
+the literal task is doing HyDE, with a better model and no dependency.
+
+That is a ranking change and ships like one — measured with `docir bench` first, on a corpus
+that matters, and dropped if the numbers say so. Two mechanisms have already been dropped that
+way, which is the point of having the instrument.
 
 ## What is not decided
 
-- Whether expansion and HyDE are one feature or two. They share a model and nothing else.
-- Whether the rewrite is cached per query string, and where that cache lives.
-- Whether a store without the optional model degrades silently to today's behaviour or refuses
-  the flag. Silent degradation is the failure mode the deterministic embedder already has.
+All three questions this section carried assumed a model docir now will not ship, so they are
+moot rather than answered. What replaces them is smaller:
+
+- **How several queries fuse.** RRF already fuses two *backends*; fusing N queries is the same
+  operation one level out, and whether each query's lists fuse first or all lists fuse at once
+  changes which document wins a tie.
+- **Whether one query is weighted above the others.** qmd gives the caller's literal query
+  double weight against its own expansions. Here every string comes from the caller, so there
+  may be no reason to rank them — or the first may still deserve to be the anchor.
+- **What a caller sends.** An agent that passes five paraphrases of one question will retrieve
+  five times and fuse noise. Whether that is docir's problem to bound, or the caller's to not
+  do, is unanswered and worth answering before the flag exists.

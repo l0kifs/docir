@@ -754,6 +754,16 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   recall goes **0.50 -> 0.80** and MRR 0.63 -> 0.90; the default's *same-words* 1.00 beside
   its paraphrased 0.50 is FTS5 carrying the lexical half unaided, which is what "no better
   than full-text search" means as a number.
+- **docir generates nothing, and that is a decision rather than an omission
+  (adr-27c63ad02695).** No generative model, not as a dependency and not as an extra. The
+  reason is not install weight: docir's caller *is* a frontier model that has read the code,
+  so a 0.5-1.5B quantized rewriter underneath it would be guessing at context the caller had
+  and did not send. Two mechanisms that would have needed one are already closed by
+  measurement — cross-encoder reranking (adr-d657a09b8c4a) and pseudo-relevance feedback
+  (adr-46b69a581c65, which cost 0.13 recall@5 on this corpus because the first pass is already
+  right 88% of the time). What replaces HyDE is **accepting** it: several caller-supplied
+  query strings fused in one `context` call, which needs no model and uses a better one. That
+  is unbuilt and ships like any ranking change — measured with `docir bench` first.
 - **Vectors record which model produced them, and mismatches are recomputed, not compared
   (adr-ab9c454b760c).**
   `set_vector` writes `embeddings.model_id`; `active_vectors(model_id)` returns only matching

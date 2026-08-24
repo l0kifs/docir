@@ -185,6 +185,18 @@ class Schema:
     # registered", while properties resolve for any kind — including one in a
     # permissive schema that registers nothing at all.
     relation_kinds: dict[str, RelationKindSchema] = field(default_factory=dict)
+    # The embedding model this corpus is vectorised with, or ``None`` for the
+    # default. Only its *shape* is checked here and in the loader: whether the
+    # name is a model that exists is a question only ``fastembed`` can answer,
+    # and importing it to load a schema would put an ONNX runtime behind every
+    # command. ``entry_points.composition.verify_embed_model`` asks it, once,
+    # where the embedder is built.
+    #
+    # Deliberately absent from ``schema_shape.describe``: the drift check
+    # reports what ``git diff`` cannot show you — a type, cadence or required
+    # field the *package* moved under a file nobody edited — and this key only
+    # ever changes when somebody edits that file.
+    embed_model: str | None = None
 
     def __post_init__(self) -> None:
         prefixes: dict[str, str] = {}

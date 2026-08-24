@@ -428,6 +428,9 @@ def render_release_status(status: Mapping[str, object]) -> None:
         console.print(f"[dim]{status.get('method')}:[/] `{rendered}`")
     else:
         console.print(f"[dim]{status.get('method')}: {status.get('explanation')}[/]")
+    embedder = status.get("embedder")
+    if embedder:
+        console.print(f"[dim]embedder:[/] {embedder}")
 
 
 def render_upgrade(

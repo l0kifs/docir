@@ -35,6 +35,7 @@ from docir.modules.indexing.api import EmbeddingScheduler, build_scheduler
 from docir.modules.tags.api import TagService
 from docir.platform.clock import Clock, SystemClock
 from docir.platform.embedding import Embedder
+from docir.platform.embedding.catalogue import DEFAULT_EMBED_MODEL, VERIFIED_EMBED_MODELS
 from docir.platform.embedding.deterministic import DeterministicEmbedder
 from docir.platform.errors import DocirError, SchemaError
 from docir.platform.filesystem.code_matcher import RepositoryCodeMatcher
@@ -110,8 +111,54 @@ class InProcessExecutor(RequestExecutor):
             )
 
 
-def _build_embedder() -> Embedder:
+def verify_embed_model(model_name: str | None) -> None:
+    """Check a schema's ``embed_model:`` names a real model, and warn if unvetted.
+
+    A recommendation, not a gate (see
+    :mod:`docir.platform.embedding.catalogue`). A verified name returns
+    silently and — the reason the fast path is written first — without importing
+    ``fastembed`` at all, which is most of a cold start. Any other name is
+    checked against what ``fastembed`` actually supports: known but unmeasured
+    is accepted with one warning, and a name nothing supports is refused here
+    rather than at first use, which is the scheduler thread, where a swallowed
+    exception leaves a daemon that looks healthy and has stopped embedding.
+
+    The warning is worth its noise because the failure it describes is silent:
+    a model trained on asymmetric query/passage prefixes will embed, rank and
+    score below its own published numbers with no finding to name it.
+    """
+    if model_name is None or model_name in VERIFIED_EMBED_MODELS:
+        return
+    try:
+        from fastembed import TextEmbedding
+    except ImportError:  # pragma: no cover - dependency is required
+        return
+    supported = {str(entry["model"]) for entry in TextEmbedding.list_supported_models()}
+    if model_name not in supported:
+        verified = ", ".join(VERIFIED_EMBED_MODELS)
+        raise SchemaError(
+            f"embed_model {model_name!r} is not a model fastembed supports; "
+            f"docir has measured: {verified} — any other fastembed model is "
+            f"accepted with a warning"
+        )
+    warnings.warn(
+        f"embed_model {model_name!r} is supported by fastembed but not measured by docir: "
+        "`docir context` treats queries and documents identically, so a model trained on "
+        "asymmetric query/passage prefixes will rank below its published numbers. "
+        "Run benchmarks/run.py against your corpus before trusting it.",
+        RuntimeWarning,
+        stacklevel=2,
+    )
+
+
+def _build_embedder(model_name: str | None = None) -> Embedder:
     """Pick the embedder: the real model unless asked for, or unable to, do otherwise.
+
+    ``model_name`` is the store's ``embed_model:`` schema key, or ``None`` for
+    the default. It is validated when the schema loads, so an unsupported name
+    never reaches here — which is the point: the alternative failed inside
+    ``TextEmbedding`` on first use, in the scheduler thread, where a swallowed
+    exception leaves a daemon that looks healthy and has stopped embedding.
 
     ``fastembed`` is a hard dependency and the default, because the hashing
     embedder scores shared vocabulary rather than meaning — with it, ``docir
@@ -126,6 +173,7 @@ def _build_embedder() -> Embedder:
     choice = os.environ.get(EMBEDDER_ENV, "").lower()
     if choice in ("deterministic", "hash"):
         return DeterministicEmbedder()
+    verify_embed_model(model_name)
     if importlib.util.find_spec("fastembed") is None:
         warnings.warn(
             "fastembed is not installed, falling back to the hashing embedder: "
@@ -137,7 +185,18 @@ def _build_embedder() -> Embedder:
         return DeterministicEmbedder()
     from docir.platform.embedding.fastembed import FastEmbedEmbedder
 
-    return FastEmbedEmbedder()
+    return FastEmbedEmbedder(model_name or DEFAULT_EMBED_MODEL)
+
+
+def active_embedder_id(model_name: str | None = None) -> str:
+    """The ``model_id`` a command would embed with, without loading the model.
+
+    Goes through :func:`_build_embedder` rather than repeating its branch: the
+    two disagreeing would make ``self status`` report a model no read actually
+    uses. Cheap because both embedders load lazily — constructing one costs no
+    download and no ONNX session.
+    """
+    return _build_embedder(model_name).model_id
 
 
 def build_container(
@@ -174,7 +233,7 @@ def build_container(
     def uow_factory() -> UnitOfWork:
         return SqlAlchemyUnitOfWork(session_factory)
 
-    embedder = _build_embedder()
+    embedder = _build_embedder(schema.embed_model)
     scheduler = build_scheduler(uow_factory, embedder, background=background_embeddings)
 
     file_store = MarkdownDocumentFileStore(settings.docs_root)
@@ -384,6 +443,9 @@ def validate_schema(settings: Settings) -> SchemaValidation:
     files is all it does.
     """
     schema = load_schema(settings.schema_path)
+    # The command run immediately after editing the key has to be the one that
+    # checks it; the loader cannot, since answering costs a fastembed import.
+    verify_embed_model(schema.embed_model)
     corpus = check_schema_conformance(schema, MarkdownDocumentFileStore(settings.docs_root))
     return SchemaValidation(path=settings.schema_path, types=len(schema.types), corpus=corpus)
 

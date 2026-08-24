@@ -92,6 +92,7 @@ def parse_schema(raw: object) -> Schema:
         ),
         relation_types=frozenset(_parse_relation_types(raw.get("relation_types"))),
         relation_kinds=_parse_relation_kinds(raw.get("relation_types")),
+        embed_model=_parse_embed_model(raw.get("embed_model")),
     )
 
 
@@ -140,7 +141,26 @@ def _merge_profiled(raw: object) -> Schema:
         types=_apply_disabled_types(merged_types, raw.get("disable_types"), raw.get("types")),
         relation_types=frozenset(merged_kinds),
         relation_kinds=merged_props,
+        # From the file's own key, never a profile's: which model a corpus is
+        # embedded with is the store's choice, and a package upgrade that could
+        # move it would silently re-embed every document in every store.
+        embed_model=_parse_embed_model(raw.get("embed_model")),
     )
+
+
+def _parse_embed_model(raw: object) -> str | None:
+    """The store's embedding model, or ``None`` for the default.
+
+    Shape only. Membership is checked in :class:`Schema`, beside every other
+    rule a schema must satisfy, so a store whose model was removed from the
+    supported set fails the same way an unknown status does — at load, naming
+    what would have worked.
+    """
+    if raw is None:
+        return None
+    if not isinstance(raw, str) or not raw.strip():
+        raise SchemaError("'embed_model' must be a non-empty string naming a supported model")
+    return raw.strip()
 
 
 def _apply_disabled_types(

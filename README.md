@@ -241,6 +241,20 @@ schema no longer accepts. It reads the files rather than the index, so it works 
 fresh clone, and it never changes the exit code: the schema is valid, and the documents
 are what moved.
 
+**Not writing in English?** The default embedding model, `bge-small-en-v1.5`, is
+English-only, so a corpus in another language ranks no better than full-text search.
+Name another with a top-level `embed_model:` key — measured alternatives are
+`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (384 dim, 220 MB, the
+drop-in) and `…-mpnet-base-v2` (768 dim, 1.0 GB). Any other model
+[fastembed](https://github.com/qdrant/fastembed) supports is accepted with one warning:
+docir embeds queries and documents through the same call, so a model trained on
+asymmetric `query:` / `passage:` prefixes ranks below its published numbers. It lives in
+the schema rather than an environment variable because the index is gitignored — two
+clones holding different models would each re-embed the corpus behind the other. Changing
+it re-embeds on the next write or `docir embed --flush`; vectors record which model made
+them, so nothing is ever compared across models. `docir self status` reports the one in
+force.
+
 Ids are random by default (`adr-3f9a2b1c7d4e`), which two branches can never mint
 identically. `--id-style sequential` trades that for human-friendly `adr-0007` numbering,
 collision-free within one store — a merge can bring two branches that allocated the same

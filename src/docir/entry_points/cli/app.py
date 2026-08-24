@@ -37,6 +37,7 @@ from docir.entry_points.composition import (
     InitResult,
     SchemaValidation,
     UpgradeResult,
+    active_embedder_id,
     initialize_store,
     upgrade_store,
     validate_schema,
@@ -1263,6 +1264,7 @@ def _restart_as_the_new_build() -> None:
 
 
 def _emit_release_status(status: ReleaseStatus) -> None:
+    state = get_state()
     payload: dict[str, object] = {
         "installed": status.installed,
         "latest": status.latest,
@@ -1271,12 +1273,28 @@ def _emit_release_status(status: ReleaseStatus) -> None:
         "method": status.method,
         "upgrade_command": list(status.upgrade_command),
         "explanation": status.explanation,
+        "embedder": _active_embedder(state.settings),
     }
-    state = get_state()
     if use_json(state):
         rendering.emit_json(payload, trim=state.trim)
     else:
         rendering.render_release_status(payload)
+
+
+def _active_embedder(settings: Settings) -> str:
+    """Which model this store's reads would embed with.
+
+    Reported here because nothing else says it: a store can be configured for a
+    different model, or fall back to the hashing embedder, and every read is
+    quietly worse with no finding to name it.
+
+    The schema file is read only if it already exists — ``load_schema`` writes
+    the default when it does not, and a status command must not create a store
+    as a side effect of reporting on one.
+    """
+    schema_path = settings.schema_path
+    model = load_schema(schema_path).embed_model if schema_path.exists() else None
+    return active_embedder_id(model)
 
 
 def _emit_upgrade(result: UpgradeResult) -> None:

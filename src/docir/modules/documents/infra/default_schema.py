@@ -119,6 +119,22 @@ _SCHEMA_FOOTER = """
 #                              becomes a strict whitelist — every kind you still
 #                              want, including `relates_to`, must be listed.
 #
+# embed_model:
+#   # Top-level, like id_style. The model `docir context` vectorises this
+#   # corpus with. Absent means BAAI/bge-small-en-v1.5 -- English-only, so a
+#   # corpus written in another language should name another. Measured:
+#   #   sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2  (384d, 220MB)
+#   #   sentence-transformers/paraphrase-multilingual-mpnet-base-v2  (768d, 1.0GB)
+#   # Any other model fastembed supports is accepted, with one warning: docir
+#   # embeds queries and documents through the same call, so a model trained on
+#   # asymmetric query/passage prefixes will rank below its published numbers.
+#   # Benchmark yours before trusting it.
+#   # It lives here rather than in an environment variable because the index is
+#   # gitignored: two clones holding different models would each re-embed the
+#   # whole corpus behind the other. Changing it re-embeds on the next write or
+#   # `docir embed --flush` -- vectors record which model made them, so nothing
+#   # compares across models.
+#
 # relation_types:
 #   # Registers additional edge kinds on top of the core six (relates_to,
 #   # supersedes, depends_on, implements, contradicts, refines). Using a kind

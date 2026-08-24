@@ -668,3 +668,67 @@ class TestRequiredNamesRealFields:
         # the file store assigns the path after Tier 0 has run.
         with pytest.raises(SchemaError):
             parse_schema(self._spec(["path"]))
+
+
+class TestEmbedModel:
+    """The store's ``embed_model:`` key — shape here, existence elsewhere.
+
+    The loader deliberately does *not* check that the name is a model anyone
+    supports: answering costs a ``fastembed`` import, and the schema loads on
+    every command. That half is
+    ``entry_points.composition.verify_embed_model``, and
+    ``TestVerifyEmbedModel`` covers it.
+    """
+
+    def _spec(self, embed_model: object) -> dict[str, object]:
+        return {
+            "profiles": ["software"],
+            "embed_model": embed_model,
+        }
+
+    def test_absent_means_the_default_rather_than_a_name(self) -> None:
+        # None, not the default string: "nobody chose" and "somebody chose the
+        # default" differ once a future release moves the default.
+        assert parse_schema({"profiles": ["software"]}).embed_model is None
+
+    def test_a_name_is_carried_through_the_profile_merge(self) -> None:
+        schema = parse_schema(self._spec("BAAI/bge-small-en-v1.5"))
+        assert schema.embed_model == "BAAI/bge-small-en-v1.5"
+
+    def test_an_inline_schema_carries_it_too(self) -> None:
+        schema = parse_schema(
+            {
+                "embed_model": "BAAI/bge-small-en-v1.5",
+                "types": {
+                    "probe": {
+                        "prefix": "pr",
+                        "statuses": {"active": []},
+                        "default_status": "active",
+                    }
+                },
+            }
+        )
+        assert schema.embed_model == "BAAI/bge-small-en-v1.5"
+
+    @pytest.mark.parametrize("value", [42, [], {}, "", "   "])
+    def test_a_non_string_or_blank_name_is_refused_at_load(self, value: object) -> None:
+        # Injected bug: a schema whose key is a list would otherwise reach the
+        # embedder as an unusable value and fail on first embed, in the
+        # scheduler thread where the exception is swallowed.
+        with pytest.raises(SchemaError) as exc:
+            parse_schema(self._spec(value))
+        assert "embed_model" in str(exc.value)
+
+    def test_surrounding_whitespace_is_stripped(self) -> None:
+        # A hand-edited YAML value picks these up, and the name is compared by
+        # equality against the verified set and written into `model_id`.
+        assert parse_schema(self._spec("  BAAI/bge-small-en-v1.5 ")).embed_model == (
+            "BAAI/bge-small-en-v1.5"
+        )
+
+    def test_it_stays_out_of_the_drift_payload(self) -> None:
+        # Drift reports what `git diff` cannot show — a type or cadence the
+        # *package* moved. This key only changes when somebody edits the file,
+        # so reporting it would make every deliberate switch look like drift.
+        described = describe_schema(parse_schema(self._spec("BAAI/bge-small-en-v1.5")))
+        assert "embed_model" not in described

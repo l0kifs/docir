@@ -819,6 +819,35 @@ tests/
   `--type decision --status open` filter parses, runs, and matches nothing forever.
 - The coverage gate is **90%** (`--cov-fail-under=90`); `alembic/` and `fastembed.py` are omitted.
 
+## Shipping a business feature (adr-7d9fbbf976e8)
+
+The gates prove a feature *works*. They cannot prove anybody can find it, and docir's user is
+an agent that will never read this repository. So a business feature is not done until an agent
+holding **only the installed package** can tell what it is, when to reach for it, and how to
+invoke it — including how to obtain any input it needs.
+
+Three surfaces carry that, and all three are part of the change, not a follow-up:
+
+- **The packaged skill** (`modules/agents/infra/templates/skill.md`) — what the feature is and
+  *when* to reach for it. Edit the template, never `.claude/skills/**`, then run `docir agent
+  update` so this repo's own copies match what an adopter installs.
+- **The CLI docstring** — *how*, with a worked example. `docir <cmd> --help` is JSON when piped,
+  so it is the one surface an agent can parse without guessing; a docstring that describes the
+  shape without showing it leaves the agent to invent one.
+- **`README.md`** — for the human deciding whether to adopt docir at all.
+
+**Then verify by use, from the state an adopter is in.** Not by re-reading what you wrote and
+judging it sufficient — follow the shipped instructions and run the feature. If a step needs
+data (ids, a path, a name), the instructions have to say where that data comes from, and
+following them has to produce it.
+
+This is the same rule the testing section states for guards, one level out: a test that has
+never failed has not been shown to work, and instructions nobody has followed have not been
+shown to be followable. `docir bench` shipped its only worked fixture as
+`benchmarks/example_fixture.yaml` — a path the wheel does not contain (213 entries, zero
+benchmark files) — and the skill named the fixture's *shape* without showing it or saying where
+the ids come from. Both read as complete until somebody followed them with no repo checked out.
+
 ## Known rough edges / recorded deviations
 
 Real, documented, not stylistic — don't be surprised, and don't paper over them silently:

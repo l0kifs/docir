@@ -522,6 +522,38 @@ to leave alone.
   read reaches only the first), and **unqualified section references** (prose naming a
   section that lives in another document). All advisory — a long reference table is often
   right as it is.
+- `docir bench <fixture.yaml>` — score this store's retrieval against tasks whose answers you
+  already know. Reach for it when someone asks whether `docir context` is any good on *this*
+  corpus, when you have changed something that affects ranking, or before reporting that
+  retrieval is underperforming — the answer should be a number you produced.
+
+  **Collect the ids first.** A fixture judges document ids in this store, so run
+  `docir query --limit 200` or `docir search "<topic>"` and read the real ids out of the
+  result before writing anything. Never invent one that looks plausible: `bench` cannot find a
+  document that does not exist, so it reports the id under `unresolved`, drops the task, and
+  the run measures nothing.
+
+  Then write a YAML file — a list of tasks, each naming the documents a reader would actually
+  need. Ids, not paths, so it survives a retitle and a retype:
+
+  ```yaml
+  - id: T01
+    task: how do clients authenticate against the API
+    relevant: [adr-3f9a2b1c7d4e, issue-90aea6d1b891]
+  - id: T02
+    task: what happens when the payment gateway times out
+    relevant: [adr-0a1b2c3d4e5f]
+  ```
+
+  Judge tightly: a document is relevant when *not* reading it would change what you write, not
+  when it merely shares a topic. Pass the path — `docir bench fixture.yaml` — and read the
+  three rows against each other. `context` is the shipped read path; `context --expand 0`
+  removes graph expansion, which lifts every embedder and hides the difference between them,
+  so the pair is what shows whether the *semantic* half is working; `search` is full-text
+  alone, the floor anything semantic must beat.
+
+  A measurement, not a check. It always exits 0, and a fixture is one annotator's opinion of
+  what is relevant — do not gate CI on it.
 - `docir reindex [--changed]` — after a doc file was hand-edited, merged, or freshly cloned.
   `--changed` only skips re-saving files whose content is unchanged; deleted files are swept
   from the index either way, so both modes leave the index agreeing with the filesystem.

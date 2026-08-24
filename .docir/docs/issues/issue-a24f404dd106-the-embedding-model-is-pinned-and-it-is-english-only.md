@@ -94,47 +94,59 @@ exists for — issue-c6d184704682 in miniature, and the reason a non-English fix
 measurement rather than a nicety. And fastembed 0.8.0 warns this model moved from CLS to mean
 pooling since 0.5.1, so the figures are bound to that version.
 
-## What is still missing
+## What shipped, and what did not
 
-1. **A setting.** `Settings` is pydantic-settings with `env_prefix="DOCIR_"`, so a field would
-   pick up an env var for free — but `_build_embedder()` takes no `Settings` and reads
-   `os.environ` directly.
-2. **Nothing surfaces the active model.** `self status` does not report it, so a switch cannot
-   be confirmed and the current state cannot be read.
-3. **A bad name fails late and quietly.** `TextEmbedding(...)` raises on first use, which is
-   inside the scheduler thread, where `DocsWatcher._reindex` swallows failures on purpose. A
-   typo therefore yields a daemon that looks healthy and has stopped embedding.
+Shipped in `695a794` — three of the four, and none of them needed the machinery above.
+
+1. ~~**A setting.**~~ A top-level `embed_model:` key in `docs-schema.yaml`, beside `id_style`,
+   which is the precedent: a store-wide policy that is not a type concept. It lives in the
+   committed file rather than an environment variable because the index is gitignored — two
+   clones holding different models would each re-embed the corpus behind the other.
+2. ~~**Nothing surfaces the active model.**~~ `docir self status` reports it, resolved rather
+   than requested: `active_embedder_id` calls `_build_embedder`, so status cannot name a model
+   the reads do not use.
+3. ~~**A bad name fails late and quietly.**~~ `verify_embed_model` runs where the embedder is
+   built and where `schema validate` runs, so a name nothing supports exits 3 at command time.
 4. **`Embedder.dimension` is consumed nowhere** outside the embedding package, and fastembed
-   exposes `get_embedding_size()`, so the self-correcting `_dimension` field is dead weight.
+   exposes `get_embedding_size()`, so the self-correcting `_dimension` field is still dead
+   weight. Untouched: removing it is a port change, and nothing depends on the answer.
 
 ## Not every model is a drop-in
 
 `Embedder.embed(text)` is symmetric: `document_service` embeds the query through the same call
-that embedded the documents. For the shipped model that is correct — measured, not assumed:
+that embedded the documents. For the default that is correct — measured, not assumed:
 `query_embed` and `embed` return a bit-identical vector for `bge-small-en-v1.5`, because
 fastembed's base `query_embed` is a passthrough and only its multitask class overrides it.
 
-It stops being correct for two of the multilingual candidates. E5 is trained on `query: ` /
-`passage: ` prefixes that neither docir nor fastembed applies, and `jina-embeddings-v3` selects
-a task-specific adapter through `query_embed`/`passage_embed`, which docir never calls. Both
-would load, embed, and silently score below their published numbers.
+It stops being correct elsewhere. E5 is trained on `query: ` / `passage: ` prefixes that neither
+docir nor fastembed applies, and `jina-embeddings-v3` selects a task-specific adapter through
+`query_embed`/`passage_embed`, which docir never calls. Both load, embed, and score below their
+published numbers.
 
-So the selector cannot be a bare model name for exactly the models this issue exists to enable.
-Either the port grows a role-aware call, or the setting is restricted to the symmetric models —
-which the drop-in above happens to be.
+**Resolved as a warning rather than an exclusion**, which was neither option this section
+originally posed. Refusing them would have made the catalogue a gate, and a hardcoded tuple is
+worse placed to choose a model than somebody writing in a language docir has never benchmarked.
+So a model fastembed supports is accepted, with one line saying what it may cost, and only a
+name nothing supports is refused. Growing the port a role-aware call stays open and is now
+optional rather than blocking.
 
-## What is not decided
+## What was decided
 
-Narrowed by the survey, then by the measurement — which settled the fourth of these: the
-default does not move.
+All three questions this section carried are answered.
 
-- **Where the setting lives.** A `docs-schema.yaml` key is committed and travels with the
-  corpus, which matters because the index is gitignored: with a per-machine env var two clones
-  can hold different models, and each re-embeds the whole corpus whenever the other's value is
-  in effect. The cost is that a model change would surface as `schema-drift` — the right
-  *mechanism* under a name that does not describe it.
-- **Whether the port grows a role-aware call** (`embed_query` beside `embed`) or the supported
-  set is restricted to symmetric models. The first is general and touches every implementation
-  of the port. The second ships the drop-in and defers the rest.
-- **Whether an unknown model name is refused at construction** — checkable against
-  `list_supported_models()` — or accepted on trust so `add_custom_model` stays reachable.
+- **Where the setting lives** — `docs-schema.yaml`, top-level, beside `id_style`.
+- **Whether the port grows a role-aware call** — neither of the two options posed. See
+  *Not every model is a drop-in*: warn, do not refuse. The port change is optional now.
+- **Whether an unknown name is refused** — yes, but only a name *fastembed* does not know.
+  A name it knows and docir has not measured is accepted with a warning, so
+  `add_custom_model` and any of fastembed's other models stay reachable.
+
+## What is still open
+
+**Nobody has measured whether the alternatives actually help.** Both multilingual
+entries were benchmarked on docir's *English* corpus, where they cost ranking and buy nothing —
+which is why the default did not move. The claim this issue rests on, that a Russian or Kazakh
+corpus retrieves better with one of them, is still an argument from the model cards. A store can
+now act on that argument, and the failure this issue opened with — retrieval quietly worse with
+nothing to report it — is unchanged for anyone who picks wrong. issue-c6d184704682 is the
+instrument that would settle it.

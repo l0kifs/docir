@@ -492,7 +492,7 @@ def update(
     """Update a document (metadata patch and/or a body edit).
 
     --type retypes the document. Its id is left alone, prefix included: the id is
-    the only address the corpus has for it, so `adr-3f9a2b1c` stays `adr-3f9a2b1c`
+    the only address the corpus has for it, so `adr-3f9a2b1c7d4e` stays `adr-3f9a2b1c7d4e`
     under a type whose prefix is something else. A prefix records which type
     minted an id, not which type owns it now. The file moves into the new type's
     directory, keeping its filename.

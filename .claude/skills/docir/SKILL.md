@@ -224,7 +224,7 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
   contradicts the decision, and `--code tests/test_x.py` records which decision
   it enforces, so `check` notices when that test is deleted.
 - `--type` retypes a document. Its **id never changes**, prefix included — the id
-  is the only address every `related` edge has for it, so `adr-3f9a2b1c` stays
+  is the only address every `related` edge has for it, so `adr-3f9a2b1c7d4e` stays
   itself under a type whose prefix is something else. The file moves into the new
   type's directory. The status carries over if the new type declares it and the
   write is refused if it does not, so pass `--status` too when they differ.

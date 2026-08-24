@@ -54,6 +54,7 @@ from docir.entry_points.cli.app import app
 from docir.modules.agents.infra.template_provider import PackagedTemplateProvider
 from docir.modules.documents.infra.profiles import PROFILE_NAMES
 from docir.modules.documents.infra.schema_loader import parse_schema
+from docir.platform import naming
 
 _REPO = pathlib.Path(__file__).resolve().parents[2]
 
@@ -714,3 +715,121 @@ def test_packaged_markdown_invocation_exists_in_the_cli(source: str, invocation:
 def test_no_packaged_markdown_invokes_a_retired_binary_name(source: str) -> None:
     hits = _retired_binary_hits(_PACKAGED_MD[source])
     assert not hits, f"{source} invokes `{hits[0]}` — the binary is `docir`"
+
+
+# --- document ids: prose may not name one the corpus does not carry ---------
+#
+# The commands above are checked against the CLI; the *ids* were checked against
+# nothing. Both halves of this file's premise apply to them equally — a
+# `related` edge is validated at write time, but an id written into a docstring
+# or the packaged skill is prose, and prose is where a fabricated one survives.
+# Two were written in consecutive changes: an ADR cited before it was recorded,
+# so it never resolved at all.
+#
+# Scope is the **package** prose only. The corpus's own unresolved mentions are
+# already decided: adr-e86c5040d626 measured all 47 of them as documentation
+# examples and deliberately made them a `lint --deep` advisory rather than a
+# gate. This covers what ships in the wheel, where nothing looked before.
+
+#: Ids that must not resolve, and why. Same contract as `_DELIBERATELY_UNREAL`:
+#: an entry that stops appearing is removed by the test below, so a stale
+#: exemption cannot shadow a real fabrication.
+_EXAMPLE_IDS: dict[str, str] = {
+    # The random-id shape, in prose explaining what ids look like.
+    "adr-3f9a2b1c7d4e": "the id the docs use to show the random format",
+    "adr-0a1b2c3d4e5f": "a second one, in the bench fixture's shape",
+    "tp-3f9a2b1c7d4e": "the same shape under the schema docs' example type `tp`",
+    # The sequential shape. This store mints `random`, so a four-digit suffix
+    # is visibly an example — which is exactly why the docstrings reach for it.
+    "adr-0001": "sequential-style example",
+    "adr-0007": "sequential-style example, the one most prose uses",
+    "arch-0002": "sequential-style example, in a `--related` illustration",
+    "issue-0003": "sequential-style example, in a `--related` illustration",
+    "tp-0001": "sequential-style example under the schema docs' `tp` type",
+    "tp-0007": "sequential-style example under the schema docs' `tp` type",
+    # Not an example of an id at all: the pair that explains why the scanner is
+    # restricted to known prefixes.
+    "adr-1beef": "the foil in `adr-1beef` vs `sha-1beef`",
+}
+
+
+#: The id prefixes docir can mint, from the core plus every bundled profile —
+#: the same reasoning `_shipped_vocabulary` uses. Restricting the scan to these
+#: is what keeps `sha-1beef` in a sentence about hashing from reading as an id.
+_KNOWN_PREFIXES = frozenset(
+    schema.prefix for schema in parse_schema({"profiles": list(PROFILE_NAMES)}).types.values()
+)
+
+
+def _corpus_ids() -> frozenset[str]:
+    """Every id the store actually carries, read from frontmatter.
+
+    From the files rather than the index: this test runs in CI on a fresh
+    clone, where the index is gitignored and does not exist yet.
+    """
+    found: set[str] = set()
+    for path in (_REPO / ".docir" / "docs").rglob("*.md"):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.startswith("id:"):
+                found.add(line.split(":", 1)[1].strip())
+                break
+    return frozenset(found)
+
+
+CORPUS_IDS = _corpus_ids()
+
+#: Prose that ships in the wheel or governs the repo, keyed for a readable
+#: failure. `REPO_PROSE` (README, CLAUDE.md, the corpus) is deliberately absent:
+#: its corpus half is adr-e86c5040d626's, and its two files are covered here.
+_ID_PROSE: dict[str, str] = {
+    "skill.md": GUIDE,
+    "README.md": (_REPO / "README.md").read_text(encoding="utf-8"),
+    "CLAUDE.md": (_REPO / "CLAUDE.md").read_text(encoding="utf-8"),
+    **_PACKAGED_MD,
+    **{f"docstring:{name}": text for name, text in SOURCE_PROSE.items()},
+}
+
+ID_MENTIONS = [
+    (name, doc_id)
+    for name, text in _ID_PROSE.items()
+    for doc_id in sorted(set(naming.scan_document_ids(text, _KNOWN_PREFIXES)))
+]
+
+
+def test_the_corpus_has_ids_to_check_against() -> None:
+    """A guard on the guard: an empty corpus would pass every case below."""
+    assert len(CORPUS_IDS) > 50, f"only {len(CORPUS_IDS)} ids read — the sweep found nothing"
+
+
+def test_the_id_extractor_finds_a_known_mention() -> None:
+    assert any(doc_id == "adr-927aa43d9635" for _name, doc_id in ID_MENTIONS), (
+        "extractor no longer finds a known ADR citation — under-checking"
+    )
+
+
+@pytest.mark.parametrize(
+    ("source", "doc_id"), ID_MENTIONS, ids=lambda v: v if isinstance(v, str) else str(v)
+)
+def test_prose_names_no_document_the_corpus_lacks(source: str, doc_id: str) -> None:
+    if doc_id in _EXAMPLE_IDS:
+        return
+    assert doc_id in CORPUS_IDS, (
+        f"{source} names {doc_id!r}, which no document carries. Either the id is "
+        f"fabricated, or it is an example and belongs in _EXAMPLE_IDS."
+    )
+
+
+@pytest.mark.parametrize("doc_id", sorted(_EXAMPLE_IDS))
+def test_every_example_id_is_still_used(doc_id: str) -> None:
+    """A stale exemption is a hole: it would silently excuse a real fabrication
+    that happened to reuse the id."""
+    assert any(found == doc_id for _name, found in ID_MENTIONS), (
+        f"{doc_id!r} is exempted as an example and no longer appears — drop it "
+        f"from _EXAMPLE_IDS ({_EXAMPLE_IDS[doc_id]})"
+    )
+
+
+def test_an_example_id_must_not_be_a_real_one(doc_id: str = "") -> None:
+    """The exemption list may not quietly cover a document that exists."""
+    overlap = sorted(set(_EXAMPLE_IDS) & CORPUS_IDS)
+    assert not overlap, f"exempted as examples but real: {overlap}"

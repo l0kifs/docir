@@ -293,6 +293,47 @@ Verified by injecting each defect: restoring the fence-blind scanner invents a
 `Credentials` heading out of a quoted template, and restoring the unconditional
 merge leaves `Failover sequence` naming no chunk at all.
 
+## Multilingual: does a non-English corpus need a different model (`multilingual.py`)
+
+```bash
+uv run python benchmarks/multilingual.py
+```
+
+`run.py` priced the multilingual models in the catalogue and answered the wrong
+question, because its corpus is in English: they lose ranking there and buy
+nothing, which is why the default did not move. Whether they help the corpus
+they exist for was untestable with that fixture — the wrong-instrument trap
+issue-b1a6e57deeec named, one language over.
+
+`multilingual_corpus.yaml` is `corpus.yaml` translated into Russian with
+identical `key` handles, identical `related` edges and identical judgments in
+`multilingual_tasks.yaml`. The mirror is asserted before the run, so the English
+row is a control and language is the only variable between the two.
+
+Read the **paraphrased** column and nothing else. A lexical task shares
+vocabulary with the documents, so FTS5 carries it in either language and the
+embedder is not what is being measured:
+
+| corpus | model | recall@5 | MRR | same words | paraphrased |
+|---|---|---|---|---|---|
+| English | `bge-small-en-v1.5` | 0.97 | 0.97 | 1.00 | 0.95 |
+| English | multilingual-MiniLM | 0.95 | 0.91 | 0.95 | 0.95 |
+| Russian | `bge-small-en-v1.5` | 0.75 | 0.63 | 1.00 | **0.50** |
+| Russian | multilingual-MiniLM | 0.86 | 0.90 | 0.92 | **0.80** |
+
+The Russian default row is the whole argument for the `embed_model:` key. A
+perfect 1.00 on same-words — FTS5 doing the lexical half unaided — beside a
+paraphrased 0.50 is "retrieves no better than full-text search", stated as a
+number. The multilingual model closes it to 0.80.
+
+Both halves of the shipped design are evidenced here, by different rows: the
+setting by the Russian pair, the unchanged default by the English one.
+
+**LIMITATION**: one translator, and the same one who wrote the comparison. It
+measures whether a model retrieves Russian documents from Russian tasks. It does
+not measure translation quality, and it says nothing about a language outside
+the Latin and Cyrillic scripts.
+
 ## Federation: what a split corpus costs (`federation.py`)
 
 ```bash

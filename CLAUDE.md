@@ -728,6 +728,32 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   (headings addressable, phantom headings) as the gate with retrieval as context, because which
   section wins a query is the embedder's judgement and tuning prose until it matches would measure
   the tuning.
+- **A store may name its embedding model, and `run.py` is the wrong instrument for that
+  too (issue-a24f404dd106).** A top-level `embed_model:` key in `docs-schema.yaml` — beside
+  `id_style`, which is the precedent for a store-wide policy that is not a type concept —
+  selects any model `fastembed` supports. It lives in the committed file rather than an env
+  var because the index is gitignored: two clones holding different models would each
+  re-embed the corpus behind the other. **The catalogue
+  (`platform/embedding/catalogue.py`) is a recommendation, not a gate**: a name docir has
+  measured passes silently *and without importing fastembed at all* — that import is most
+  of a cold start and the schema loads on every command, so the short-circuit is load-bearing
+  and `test_embed_model.py` asserts the model list was never consulted, not merely that
+  nothing warned. Any other supported name is accepted with one warning, because a hardcoded
+  tuple is worse placed to choose than somebody writing in a language docir never
+  benchmarked; only a name fastembed does not know is refused. `verify_embed_model` is
+  called by **both** `_build_embedder` and `validate_schema` — `schema validate` is the
+  command run right after editing the key, and two checkers would disagree — and it lives in
+  the composition root rather than in `Schema`, since answering costs that import and the
+  domain must stay pure. The key is **absent from `schema_shape.describe`**, so a deliberate
+  switch is not reported as `schema-drift`: drift exists to report what `git diff` cannot
+  show you. `docir self status` reports the model in force, because nothing else did.
+  **For a change of model `run.py` measures the wrong corpus** — it is in English, where the
+  multilingual models lose ranking and buy nothing, which is why the default did not move.
+  `benchmarks/multilingual.py` is the one that moves: `corpus.yaml` translated with
+  identical keys, edges and judgments, so language is the only variable. Russian paraphrased
+  recall goes **0.50 -> 0.80** and MRR 0.63 -> 0.90; the default's *same-words* 1.00 beside
+  its paraphrased 0.50 is FTS5 carrying the lexical half unaided, which is what "no better
+  than full-text search" means as a number.
 - **Vectors record which model produced them, and mismatches are recomputed, not compared
   (adr-ab9c454b760c).**
   `set_vector` writes `embeddings.model_id`; `active_vectors(model_id)` returns only matching

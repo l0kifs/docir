@@ -14,7 +14,7 @@ related:
 - ref-e7534f1c812d
 - issue-c6d184704682
 - issue-fd086c0c6ab0
-status: open
+status: resolved
 tags:
 - embeddings
 - retrieval
@@ -174,10 +174,9 @@ Nothing this issue was opened for. It existed because a non-English corpus retri
 than full-text search with nothing to report it. A store can now name a model, the model
 measurably helps, and `docir self status` reports which one is in force.
 
-One item that was never central stays open: `Embedder.dimension` is consumed nowhere outside
-the embedding package, and fastembed exposes `get_embedding_size()`, so the self-correcting
-`_dimension` field is dead weight. Removing it is a port change and nothing depends on the
-answer.
+One item that was never central to it moved to its own issue: `Embedder.dimension` is declared
+on the port and read nowhere outside the embedding package — issue-6618d3a9e868. A cleanup, not
+a defect, and nothing depends on the answer.
 
 The constraint in *Not every model is a drop-in* is documentation rather than debt — a model
 needing asymmetric prefixes is accepted with a warning naming what it costs. Growing the port a

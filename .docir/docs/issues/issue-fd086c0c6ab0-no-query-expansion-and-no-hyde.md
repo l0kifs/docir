@@ -12,6 +12,7 @@ related:
 - adr-d657a09b8c4a
 - adr-46b69a581c65
 - adr-27c63ad02695
+- adr-b23dae55666f
 status: resolved
 tags:
 - retrieval
@@ -86,9 +87,16 @@ it rewrote *from the corpus's top hits*, inheriting the first pass's mistakes; a
 comes from outside the ranking can rescue the queries the first pass got wrong.
 
 **The third row is the uncomfortable one.** On these eight tasks the literal question adds
-nothing once a good hypothetical exists. The task is still sent, because a *bad* hypothetical
-alone would be catastrophic while a bad one fused with the question degrades gracefully — but
-nothing here measures that, and it is the case worth measuring next.
+nothing once a good hypothetical exists.
+
+## The claim that was wrong
+
+**And the sentence that stood here was wrong.** It said the task is still sent because a bad
+hypothetical fused with it would degrade gracefully — argued, not measured. Measured the next
+day, it does not: a confidently wrong phrasing takes recall@5 from 0.88 to **0.25**, a correct
+one beside it recovers only to 0.69, and weighting the task removes the gain along with the
+risk. The tables and the weight sweep are in adr-b23dae55666f, and the guidance changed rather
+than the machinery: `--also` is for a caller that could defend the answer it is guessing.
 
 **Limitation, and it is not small.** One annotator wrote the corpus, the judgments and the
 hypotheticals, knowing all three. That shows the mechanism works; it does not size the gain a

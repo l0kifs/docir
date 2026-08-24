@@ -157,7 +157,7 @@ never watch, so CI still needs the explicit command.
 | `docir init` | Scope docs to a project-local `./.docir` store (like `git init`) |
 | `docir add` | Create a document — the single write path |
 | `docir update` | Edit content, metadata, or relations of an existing document |
-| `docir context <query>` | Ranked relevant set (skeletons) — full-text + vector, fused (`--also` to add your own phrasing, `--min-score` to filter noise, `--explain` for the trace) |
+| `docir context <query>` | Ranked relevant set (skeletons) — full-text + vector, fused (`--also` to add a phrasing you could defend, `--min-score` to filter noise, `--explain` for the trace) |
 | `docir search` / `query` | Full-text search (title/description/body — **not tags**) / structured filter. Both page with `--limit`/`--offset`; `query --owner X --stale` is a review queue, `query --code <path>` the decisions governing a file |
 | `docir get <id>` | Full document with body — or one section with `--section "<heading>"` |
 | `docir check` | Structural findings — duplicate ids, dangling edges, staleness (`--strict` gates CI on errors, `--fix` repairs them) |

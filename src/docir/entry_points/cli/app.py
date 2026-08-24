@@ -739,6 +739,11 @@ def context(
         docir context "how do clients authenticate" \\
           --also "Clients present a short-lived bearer token."
 
+    Use it when you could defend the answer you are guessing. Measured on
+    docir's own corpus: a correct hypothetical takes recall@5 from 0.88 to
+    1.00, a confidently wrong one takes it to 0.25. The task does not anchor
+    the result — a bad --also replaces it rather than adding to it.
+
     `--explain` attaches the trace behind each hit — where it placed in the
     full-text and vector rankings, each RRF term, the raw cosine, and for a
     graph-reached document the seed it came from and whether that edge was a

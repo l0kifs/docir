@@ -133,10 +133,17 @@ docir context "how do clients authenticate" \
   --also "Clients present a short-lived bearer token issued by the identity provider."
 ```
 
-Write it from the question, in the declarative voice the documents use, and do not worry about
-being right: a wrong hypothetical still lands in the right neighbourhood. Measured on docir's
-own corpus, adding one took recall@5 from 0.88 to 1.00 and MRR from 0.63 to 0.75. Two or three
-phrasings are useful; five paraphrases of one question retrieve five times and fuse noise.
+**Use it only when you could defend the answer you are guessing.** This is measured in both
+directions and the two are not symmetric: on docir's own corpus a *correct* hypothetical took
+recall@5 from 0.88 to 1.00, and a confident *wrong* one — fluent, in the right register, about
+the wrong part of the system — took it to **0.25**. Your task string does not anchor the
+result; a bad `--also` replaces it rather than adding to it, and a second good phrasing does
+not rescue it (adr-b23dae55666f).
+
+So: reach for it when you know roughly what the answer says and only its wording is uncertain —
+you have read the code, or the topic is one you have already retrieved once. If you are
+exploring and could not say what the document will claim, send the task alone. One or two
+phrasings; five paraphrases of one question retrieve five times and fuse noise.
 
 **When a result looks wrong, ask why with `--explain`.** `docir context "<task>" --explain`
 attaches the trace behind each hit: where it placed in the full-text and vector rankings, each

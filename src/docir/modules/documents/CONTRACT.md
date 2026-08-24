@@ -44,6 +44,11 @@ files and the derived index never disagree.
   `ContextRequest.limit` is a hard ceiling on the response; `ContextRequest.expand`
   (default `DEFAULT_CONTEXT_EXPAND`) is how many of those slots may go to graph-reached
   neighbours, with unused neighbour slots backfilled by ranked hits.
+  `ContextRequest.also` carries extra caller-supplied phrasings, retrieved beside `task` and
+  fused with it (duplicates dropped, so a repeated string is not two votes). docir writes none
+  of them — rewriting belongs at the caller, which is already a model (adr-27c63ad02695).
+  `ContextRequest.explain` attaches the retrieval trace to each hit; absent otherwise, since a
+  skeleton read must stay cheap.
 - `DocumentService.bench(BenchRequest) -> BenchResult` — score the read path against judged
   tasks (`docir bench`). Reports `context`, `context --expand 0` and `search`; the pair is
   what isolates the semantic signal, since graph expansion lifts every embedder. A

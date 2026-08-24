@@ -111,29 +111,71 @@ class HybridScorer:
         lexical: list[SearchHit],
         semantic: list[SemanticHit],
     ) -> list[FusedScore]:
-        """Fuse two ranked lists into a single descending ranking.
+        """Fuse one query's two ranked lists into a single descending ranking.
 
         ``lexical`` is ordered best-first as returned by the FTS index;
         ``semantic`` is ordered best-first by cosine similarity.
         """
+        return self.fuse_many([(lexical, semantic)])
+
+    def fuse_many(
+        self,
+        passes: Sequence[tuple[list[SearchHit], list[SemanticHit]]],
+    ) -> list[FusedScore]:
+        """Fuse every backend list of every query into one ranking.
+
+        RRF is defined over any number of ranked lists, so N queries is the same
+        operation one query already was — 2N lists rather than 2, summed per
+        document. Fusing each query separately and then fusing the results would
+        be a different function: it normalises away how *many* queries found a
+        document, which is the signal several queries exist to produce
+        (issue-fd086c0c6ab0).
+
+        Every query weighs the same. qmd doubles the caller's literal query
+        against its own machine-generated expansions, which is a correction for
+        expansions being worse; here every string comes from the caller and
+        docir has no basis for ranking one above another.
+
+        The reported ranks are the **best** each document achieved in any pass,
+        because a rank is only meaningful against one list and "it placed first
+        for one of your queries" is the fact a reader wants.
+        """
         lexical_component: dict[str, float] = {}
         lexical_rank: dict[str, int] = {}
-        for rank, hit in enumerate(lexical):
-            lexical_component[hit.doc_id] = 1.0 / (self._k + rank + 1)
-            lexical_rank[hit.doc_id] = rank + 1
-
         semantic_component: dict[str, float] = {}
         semantic_rank: dict[str, int] = {}
         similarity: dict[str, float] = {}
         section: dict[str, str | None] = {}
-        for rank, semantic_hit in enumerate(semantic):
-            semantic_component[semantic_hit.doc_id] = 1.0 / (self._k + rank + 1)
-            # The *collapsed* rank: `semantic_ranking` already kept each
-            # document's best chunk, so this is where the document placed, not
-            # where one of its sections did.
-            semantic_rank.setdefault(semantic_hit.doc_id, rank + 1)
-            similarity[semantic_hit.doc_id] = semantic_hit.similarity
-            section[semantic_hit.doc_id] = semantic_hit.section
+
+        def better(current: dict[str, int], doc_id: str, rank: int) -> None:
+            existing = current.get(doc_id)
+            if existing is None or rank < existing:
+                current[doc_id] = rank
+
+        for lexical, semantic in passes:
+            for rank, hit in enumerate(lexical):
+                lexical_component[hit.doc_id] = lexical_component.get(hit.doc_id, 0.0) + 1.0 / (
+                    self._k + rank + 1
+                )
+                better(lexical_rank, hit.doc_id, rank + 1)
+
+            seen_here: set[str] = set()
+            for rank, semantic_hit in enumerate(semantic):
+                # `semantic_ranking` already collapsed each document to its best
+                # chunk, so a repeat inside one pass cannot happen; across
+                # passes it can, and only the first (best) one counts per pass.
+                if semantic_hit.doc_id in seen_here:
+                    continue
+                seen_here.add(semantic_hit.doc_id)
+                semantic_component[semantic_hit.doc_id] = semantic_component.get(
+                    semantic_hit.doc_id, 0.0
+                ) + 1.0 / (self._k + rank + 1)
+                better(semantic_rank, semantic_hit.doc_id, rank + 1)
+                # The similarity and section of the *best* pass, for the same
+                # reason the rank is: they describe one match, not an average.
+                if semantic_hit.similarity > similarity.get(semantic_hit.doc_id, -1.0):
+                    similarity[semantic_hit.doc_id] = semantic_hit.similarity
+                    section[semantic_hit.doc_id] = semantic_hit.section
 
         all_ids = set(lexical_component) | set(semantic_component)
         fused = [

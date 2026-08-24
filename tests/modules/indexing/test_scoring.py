@@ -60,3 +60,55 @@ class TestSimilarityIsCarriedThrough:
         scorer = HybridScorer(rrf_k=1)
         fused = scorer.fuse([], [SemanticHit("a", 0.0)])
         assert fused[0].similarity == 0.0
+
+
+class TestFuseMany:
+    """N queries is the same RRF one query already was, 2N lists instead of 2."""
+
+    def test_one_pass_is_what_fuse_already_did(self) -> None:
+        scorer = HybridScorer()
+        lexical = [SearchHit("a", 1.0), SearchHit("b", 2.0)]
+        semantic = [SemanticHit("b", 0.9), SemanticHit("a", 0.4)]
+        assert scorer.fuse_many([(lexical, semantic)]) == scorer.fuse(lexical, semantic)
+
+    def test_a_document_two_queries_find_outranks_one_only_one_finds(self) -> None:
+        # The whole point of several queries: agreement across them is signal,
+        # and fusing each pass separately before combining would normalise it
+        # away.
+        scorer = HybridScorer()
+        fused = scorer.fuse_many(
+            [
+                ([SearchHit("both", 1.0), SearchHit("solo", 2.0)], []),
+                ([SearchHit("both", 1.0)], []),
+            ]
+        )
+        assert [f.doc_id for f in fused] == ["both", "solo"]
+
+    def test_the_reported_rank_is_the_best_across_passes(self) -> None:
+        # A rank only means something against one list, so "it placed first for
+        # one of your queries" is the fact worth reporting.
+        scorer = HybridScorer()
+        fused = scorer.fuse_many(
+            [
+                ([SearchHit("x", 1.0), SearchHit("a", 2.0)], []),
+                ([SearchHit("a", 1.0)], []),
+            ]
+        )
+        by_id = {f.doc_id: f for f in fused}
+        assert by_id["a"].lexical_rank == 1
+
+    def test_similarity_and_section_come_from_the_best_pass(self) -> None:
+        # Not an average: they describe one match. A weaker pass must not
+        # overwrite the section that actually won.
+        scorer = HybridScorer()
+        fused = scorer.fuse_many(
+            [
+                ([], [SemanticHit("a", 0.4, section="Context")]),
+                ([], [SemanticHit("a", 0.9, section="Decision")]),
+            ]
+        )
+        assert fused[0].similarity == 0.9
+        assert fused[0].section == "Decision"
+
+    def test_no_passes_ranks_nothing(self) -> None:
+        assert HybridScorer().fuse_many([]) == []

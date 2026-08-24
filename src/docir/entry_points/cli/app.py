@@ -706,6 +706,13 @@ def context(
             help="Drop ranked hits whose `similarity` is below this (0.0-1.0).",
         ),
     ] = None,
+    also: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--also",
+            help="Another phrasing of the same need (repeatable); fused with the task.",
+        ),
+    ] = None,
     explain: Annotated[
         bool,
         typer.Option("--explain", help="Attach the retrieval trace to every hit."),
@@ -722,6 +729,15 @@ def context(
     roughly the same for a perfect match and the only document in the store, and
     cannot tell you whether anything relevant exists. `--min-score` filters on
     `similarity`, so an empty result is a real answer: nothing was close enough.
+
+    `--also` takes another phrasing of the same need, repeatable, retrieved
+    alongside the task and fused with it. docir writes none of them — rewriting
+    belongs with you, who has read the code. Passing a hypothetical *answer* is
+    the useful case: a question and an answer do not look alike to an embedder,
+    and searching with the answer's shape is what finds the document:
+
+        docir context "how do clients authenticate" \\
+          --also "Clients present a short-lived bearer token."
 
     `--explain` attaches the trace behind each hit — where it placed in the
     full-text and vector rankings, each RRF term, the raw cosine, and for a
@@ -742,6 +758,7 @@ def context(
         "include_inactive": _include_inactive(include_inactive, include_resolved),
         "min_score": min_score,
         "explain": explain,
+        "also": list(also or ()),
     }
     _warn_on_global_fallback()
     _emit_document_list(execute("context", payload))

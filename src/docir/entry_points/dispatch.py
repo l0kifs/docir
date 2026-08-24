@@ -162,6 +162,7 @@ class Dispatcher:
             expand=_int(payload, "expand", default=DEFAULT_CONTEXT_EXPAND),
             min_score=_opt_float(payload, "min_score"),
             explain=_bool(payload, "explain"),
+            also=tuple(_str_list(payload, "also")),
         )
         return [asdict(view) for view in self._documents.context(request)]
 
@@ -259,6 +260,20 @@ class Dispatcher:
 
 
 # -- payload coercion helpers ----------------------------------------------
+
+
+def _str_list(payload: Payload, key: str) -> list[str]:
+    """A repeated string option, absent-tolerant and blank-tolerant.
+
+    Blanks are dropped rather than refused: a shell loop that expands to
+    nothing should retrieve as if the flag were absent, not fail the read.
+    """
+    raw = payload.get(key)
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise ValidationError(f"{key!r} must be a list of strings")
+    return [str(item).strip() for item in raw if str(item).strip()]
 
 
 def _bench_task(index: int, entry: object) -> BenchTask:

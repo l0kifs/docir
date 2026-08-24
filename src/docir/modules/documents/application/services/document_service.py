@@ -630,7 +630,11 @@ class DocumentService:
         # Always leave room for at least one ranked hit — a result made purely of
         # neighbours would have nothing to be a neighbour of.
         expand = min(max(request.expand, 0), request.limit - 1)
-        query_vector = self._embedder.embed(request.task)
+        # Every phrasing the caller supplied, its own first. Duplicates are
+        # dropped: the same string twice would double its RRF contribution and
+        # quietly weight it, which is a decision this does not make.
+        queries = list(dict.fromkeys([request.task, *request.also]))
+        vectors = [self._embedder.embed(query) for query in queries]
 
         with self._uow_factory() as uow:
             hits = uow.search.search(request.task, limit=_CONTEXT_CANDIDATES)
@@ -651,8 +655,14 @@ class DocumentService:
                 VectorCandidate(doc_id=doc_id, vector=vector, section=heading or None)
                 for doc_id, heading, vector in uow.chunks.active_vectors(model_id)
             ]
-            semantic = self._scorer.semantic_ranking(query_vector, candidates)
-            fused = self._scorer.fuse(hits, semantic)
+            passes = [
+                (
+                    uow.search.search(query, limit=_CONTEXT_CANDIDATES) if index else hits,
+                    self._scorer.semantic_ranking(vector, candidates),
+                )
+                for index, (query, vector) in enumerate(zip(queries, vectors, strict=True))
+            ]
+            fused = self._scorer.fuse_many(passes)
 
             # Rank order, visible only, capped at what could ever be returned.
             ranked = self._visible_ranked(uow, fused, request, limit=request.limit)

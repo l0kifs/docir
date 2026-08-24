@@ -119,6 +119,24 @@ ordinary links, which means: if a hit arrives with another doc marked
 before acting on the hit. It does not mean the old doc is wrong to read, only
 that it is not the last word.
 
+**You write the rewrites; docir writes none.** `--also` takes another phrasing of the same
+need, repeatable, retrieved alongside the task and fused with it. docir ships no generative
+model precisely because you are one and you have read the code (adr-27c63ad02695).
+
+The case that pays is a hypothetical **answer**. A question and an answer do not look alike to
+an embedder — "how do clients authenticate" sits nowhere near "clients present a short-lived
+bearer token" — so searching with the answer's *shape* is what finds the document:
+
+```bash
+docir context "how do clients authenticate" \
+  --also "Clients present a short-lived bearer token issued by the identity provider."
+```
+
+Write it from the question, in the declarative voice the documents use, and do not worry about
+being right: a wrong hypothetical still lands in the right neighbourhood. Measured on docir's
+own corpus, adding one took recall@5 from 0.88 to 1.00 and MRR from 0.63 to 0.75. Two or three
+phrasings are useful; five paraphrases of one question retrieve five times and fuse noise.
+
 **When a result looks wrong, ask why with `--explain`.** `docir context "<task>" --explain`
 attaches the trace behind each hit: where it placed in the full-text and vector rankings, each
 RRF term, the raw cosine, and — for a graph-reached document — the seed it came from and

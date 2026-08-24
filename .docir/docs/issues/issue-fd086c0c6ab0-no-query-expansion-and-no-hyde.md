@@ -12,7 +12,7 @@ related:
 - adr-d657a09b8c4a
 - adr-46b69a581c65
 - adr-27c63ad02695
-status: open
+status: resolved
 tags:
 - retrieval
 - embeddings
@@ -65,17 +65,42 @@ That is a ranking change and ships like one — measured with `docir bench` firs
 that matters, and dropped if the numbers say so. Two mechanisms have already been dropped that
 way, which is the point of having the instrument.
 
-## What is not decided
+## How it shipped
 
-All three questions this section carried assumed a model docir now will not ship, so they are
-moot rather than answered. What replaces them is smaller:
+Shipped as `docir context "<task>" --also "<phrasing>"`, repeatable. adr-27c63ad02695 decided
+docir generates nothing; this is the half that replaces what it closed.
 
-- **How several queries fuse.** RRF already fuses two *backends*; fusing N queries is the same
-  operation one level out, and whether each query's lists fuse first or all lists fuse at once
-  changes which document wins a tie.
-- **Whether one query is weighted above the others.** qmd gives the caller's literal query
-  double weight against its own expansions. Here every string comes from the caller, so there
-  may be no reason to rank them — or the first may still deserve to be the anchor.
-- **What a caller sends.** An agent that passes five paraphrases of one question will retrieve
-  five times and fuse noise. Whether that is docir's problem to bound, or the caller's to not
-  do, is unanswered and worth answering before the flag exists.
+## Measured
+
+`benchmarks/example_fixture.yaml` against docir's own corpus, one hypothetical answer added per
+task:
+
+| queries | recall@5 | prec@5 | MRR |
+|---|---|---|---|
+| task only | 0.88 | 0.20 | 0.63 |
+| task + hypothetical | **1.00** | 0.23 | **0.75** |
+| hypothetical only | 1.00 | 0.23 | 0.75 |
+
+This is what pseudo-relevance feedback could not be. adr-46b69a581c65 lost 0.13 recall because
+it rewrote *from the corpus's top hits*, inheriting the first pass's mistakes; a rewrite that
+comes from outside the ranking can rescue the queries the first pass got wrong.
+
+**The third row is the uncomfortable one.** On these eight tasks the literal question adds
+nothing once a good hypothetical exists. The task is still sent, because a *bad* hypothetical
+alone would be catastrophic while a bad one fused with the question degrades gracefully — but
+nothing here measures that, and it is the case worth measuring next.
+
+**Limitation, and it is not small.** One annotator wrote the corpus, the judgments and the
+hypotheticals, knowing all three. That shows the mechanism works; it does not size the gain a
+stranger would see.
+
+## The three questions this section carried
+
+- **How several queries fuse** — all lists at once, `fuse_many`. Fusing each query and then
+  combining normalises away how *many* queries found a document, which is the signal.
+- **Whether the first is weighted** — no. qmd doubles the caller's literal query against its
+  own machine-written expansions, a correction for expansions being worse. Here every string
+  comes from the caller and docir has no basis for ranking them.
+- **What a caller sends** — unbounded, and documented rather than enforced. The skill says two
+  or three phrasings help and five paraphrases fuse noise. A cap would be docir guessing at a
+  budget the caller can see and it cannot.

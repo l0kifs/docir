@@ -324,6 +324,12 @@ class ContextRequest:
     #: Attach the retrieval trace to every hit. Off by default: it is a
     #: diagnostic, and the skeleton contract exists to keep a read cheap.
     explain: bool = False
+    #: Extra phrasings of the same need, retrieved alongside ``task`` and fused
+    #: with it. docir writes none of them: rewriting belongs at the caller,
+    #: which is already a model that has read the code (adr-27c63ad02695). An
+    #: agent passing a hypothetical *answer* here is doing HyDE, with a better
+    #: model than docir could ship and no dependency.
+    also: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

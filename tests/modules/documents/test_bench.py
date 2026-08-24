@@ -233,3 +233,73 @@ class TestExplain:
         trace = graph[0]["explain"]
         assert trace["via_graph_from"] == first
         assert trace["via_graph_route"] == "successor"
+
+
+class TestAlso:
+    """`--also`: the caller supplies the rewrites, docir writes none."""
+
+    def _seed(self, dispatcher) -> str:
+        return str(
+            dispatcher.dispatch(
+                "add",
+                {
+                    "type": "decision",
+                    "title": "Auth strategy",
+                    "description": "How clients authenticate.",
+                    "body": "Clients present a short-lived bearer token.",
+                },
+            )["id"]
+        )
+
+    def test_an_extra_phrasing_reorders_toward_what_it_describes(self, dispatcher) -> None:
+        """The mechanism, in the smallest corpus that can show it.
+
+        The task's own words match the distractor; the extra phrasing matches
+        the document the caller actually wants, so fusing the two must raise
+        that document's score. That is what a hypothetical answer buys.
+        """
+        wanted = self._seed(dispatcher)
+        dispatcher.dispatch(
+            "add",
+            {
+                "type": "decision",
+                "title": "Warehouse rotation policy",
+                "description": "How pallets rotate.",
+                "body": "Pallets rotate on a ninety-day cycle in the warehouse.",
+            },
+        )
+        bare = dispatcher.dispatch("context", {"task": "warehouse rotation", "limit": 2})
+        fused = dispatcher.dispatch(
+            "context",
+            {"task": "warehouse rotation", "limit": 2, "also": ["bearer token clients"]},
+        )
+        before = {row["id"]: row["score"] for row in bare}
+        after = {row["id"]: row["score"] for row in fused}
+        # The property RRF actually guarantees. Asserting a *rank flip* would
+        # be asserting more: with symmetric evidence the two tie and the id
+        # breaks it, so a passing flip would mean the tie-break, not the fusion.
+        assert after[wanted] > before[wanted]
+
+    def test_the_same_string_twice_is_not_two_votes(self, dispatcher) -> None:
+        """Injected bug: keeping duplicates doubles a string's RRF contribution
+        and silently weights it, which is a decision `fuse_many` deliberately
+        does not make."""
+        self._seed(dispatcher)
+        once = dispatcher.dispatch("context", {"task": "bearer token", "limit": 3})
+        twice = dispatcher.dispatch(
+            "context", {"task": "bearer token", "limit": 3, "also": ["bearer token"]}
+        )
+        assert [r["score"] for r in once] == [r["score"] for r in twice]
+
+    def test_blank_extras_retrieve_as_if_absent(self, dispatcher) -> None:
+        # A shell loop that expands to nothing should read, not fail.
+        self._seed(dispatcher)
+        bare = dispatcher.dispatch("context", {"task": "bearer", "limit": 3})
+        padded = dispatcher.dispatch("context", {"task": "bearer", "limit": 3, "also": ["", "   "]})
+        assert [r["id"] for r in bare] == [r["id"] for r in padded]
+
+    def test_absent_behaves_exactly_as_before(self, dispatcher) -> None:
+        self._seed(dispatcher)
+        assert dispatcher.dispatch("context", {"task": "bearer", "limit": 3}) == (
+            dispatcher.dispatch("context", {"task": "bearer", "limit": 3, "also": []})
+        )

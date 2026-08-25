@@ -8,7 +8,9 @@ related:
 - kind: supersedes
   to: ref-a6db21f52427
 - issue-9b2d2ab09060
-- issue-fd086c0c6ab0
+- adr-7316abc6be93
+- adr-27c63ad02695
+- rel-0c8d261640f6
 status: active
 tags:
 - docs
@@ -16,7 +18,7 @@ tags:
 - agents
 title: Competitive landscape — docir vs. the alternatives (2026-08-24)
 type: reference
-updated: '2026-08-24'
+updated: '2026-08-25'
 ---
 
 *A fresh compile, not an edit of ref-a6db21f52427. That document is the 2026-08-03 snapshot and
@@ -28,8 +30,11 @@ work. This one carries the state of the market on 2026-08-24 and the gaps still 
 Repository metadata read from the GitHub API on 2026-08-24. Feature claims come from each
 project's own README and docs, not from hands-on use — where a claim rests on their
 documentation being accurate, it is a documentation claim. Where a source is silent a cell
-reads `?` rather than `no`. docir's own column is read from the 0.17.0 working tree and this
-store.
+reads `?` rather than `no`. docir's own column was read from the 0.17.0 working tree and
+re-read at **0.18.0** on 2026-08-25; the competitor columns are unchanged from the dates above.
+Re-verifying docir's own cells in place is this document's standing practice — they are the one
+column its author can check against a working tree, and freezing them would make the comparison
+wrong in the only direction it is able to correct.
 
 ## What moved since 2026-08-03
 
@@ -63,7 +68,9 @@ from the 2026-08-03 compile and are marked `?` where a row postdates them.*
 | Index | SQLite (metadata + FTS5 + graph + vectors) | SQLite **or Postgres** + vectors | SQLite (FTS5 + sqlite-vec) | single SQLite |
 | Lexical + vector + fusion | ✅ RRF | ✅ hybrid | ✅ RRF, weighted | ⚙️ weighted blend |
 | Embedding model | ✅ **swappable** (`embed_model:`, any fastembed model) | ✅ FastEmbed | ✅ swappable per role | ? |
-| Query expansion / HyDE | ❌ (issue-fd086c0c6ab0) | ❌ | ✅ fine-tuned 1.7B | ? |
+| Query expansion / HyDE | ⚙️ **the caller supplies them** (`context --also`); docir generates none, by decision (adr-27c63ad02695) | ❌ | ✅ fine-tuned 1.7B | ? |
+| Score explainability | ✅ `--explain`: ranks, RRF terms, cosine, graph provenance | ? | ✅ `--explain` | ? |
+| Expression over the corpus | ✅ `query --expr` (JMESPath over fields + resolved edges) | ❌ | ❌ | ❌ |
 | Reranking | ❌ **measured worse, rejected** (adr-d657a09b8c4a) | ⚙️ cross-encoder, **default off for latency** | ✅ LLM cross-encoder | ❌ |
 | Retrieval unit | ✅ document **+ every `##` section** | note | chunk (~900 tok, overlapped) | chunk |
 | Passage citation | ✅ `matched_section`, feeds `get --section` | ❌ | ✅ passage + location | ⚙️ |
@@ -112,21 +119,49 @@ Unchanged from the last compile, and now better evidenced:
 
 ## Open gaps
 
-Six of the eighteen in ref-a6db21f52427 remain open or deliberately unbuilt. The rest closed —
-that document holds the analysis that produced the work.
+Five of the eighteen in ref-a6db21f52427 remain open or deliberately unbuilt, and one of those
+five is half-closed. The rest closed — that document holds the analysis that produced the work,
+and rel-0c8d261640f6 links what 0.18.0 did about the two below.
 
 ### 14. No expression language over the corpus
 
-Still the most credible open gap and unstarted. docir has typed edges, staleness, `code` globs
-and a schema, and exactly one way to interrogate them: the filters `query` ships with. "Which
-decisions are older than their cadence and govern code nobody owns?" is not expressible, and
-every question of that shape becomes a feature request. Tracked as issue-9b2d2ab09060.
+**Half-closed on 2026-08-25, and the open half is the one that carries the risk.**
+
+`docir query --expr '<JMESPath>'` ships: an expression over each document's own fields plus its
+edges resolved in both directions, applied before the limit (adr-7316abc6be93). Three of the
+four questions this gap was opened with are now askable —
+`stale && owner == null`, `related[?status=='superseded']`,
+`length(related_by[?kind!='relates_to']) == 0`. The fourth is an aggregate across documents and
+is out of reach of a per-document predicate.
+
+What DocHub still has and docir does not is the *second* use of the same grammar: an expression
+a store **declares** and the tool runs unasked, which is what turns a query language into a
+validator. That half is deliberately unbuilt, because it is where adr-b2cfed9d5888's refusal
+actually gets tested — an expression docir runs on your behalf is much closer to a rule than one
+you type — and because the grammar should be exercised by hand before anything runs it
+unattended. Tracked in issue-9b2d2ab09060, with the severity question it needs settled first.
+
+So this is no longer the most credible open gap. It is a gap with its risky half left, on
+purpose.
 
 ### 16. No query expansion and no HyDE
 
-Open, measured as untested rather than rejected. issue-fd086c0c6ab0 carries the argument and
-depends on issue-c6d184704682, which has now shipped — so the blocker is cleared and the work
-is not.
+**Closed on 2026-08-25, in both halves and neither the expected way.**
+
+The model-free half was built and measured and lost: pseudo-relevance feedback cost 0.13
+recall@5 on docir's own corpus, because the first pass is already right 88% of the time and
+rewriting from its own top hits mostly amplifies the 12% where it was not (adr-46b69a581c65).
+
+The generative half is closed by adr-27c63ad02695, and the reason is positional rather than
+about cost. docir's caller is already a frontier model that has read the code; shipping a
+0.5-1.5B rewriter underneath it would add a weaker generator below a stronger one and ask it to
+guess at context the caller had and did not send. So docir generates nothing, and `context
+--also` accepts the rewrite instead — which is HyDE done by the better model, measured at
+recall@5 0.88 -> 1.00 for a correct hypothetical.
+
+The cell against qmd stays ⚙️ rather than ✅ and that is honest: qmd expands a query the caller
+never has to think about, and docir requires the caller to do it. Which is right depends on
+whether the caller is a model, and for qmd it may be a shell.
 
 ### 10. Packaging weight
 

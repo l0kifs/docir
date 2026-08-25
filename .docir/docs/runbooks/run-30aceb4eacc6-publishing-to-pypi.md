@@ -7,13 +7,14 @@ description: How to publish docir to PyPI with uv and GitHub Actions trusted pub
 id: run-30aceb4eacc6
 owner: maintainer
 related:
-- arch-1cfb1b212237
+- run-f4a756206fe0
+- rel-0c8d261640f6
 status: active
 tags:
 - release
 title: Publishing to PyPI
 type: runbook
-updated: '2026-08-09'
+updated: '2026-08-25'
 ---
 
 This project uses [UV](https://docs.astral.sh/uv/) as the package manager and GitHub Actions for automated publishing to PyPI.
@@ -43,7 +44,7 @@ gh release list --limit 10 2>&1 | cat
    version = "0.2.0"  # Update to your new version
    ```
 
-2. **Update CHANGELOG.md** (required): move entries from `[Unreleased]` into a new version section and update the compare links at the bottom.
+2. **Update CHANGELOG.md** (required): move entries from `[Unreleased]` into a new version section and update the compare links at the bottom. A section per Keep-a-Changelog heading, plus **Measured and rejected** for anything built and removed — the measurement is the artifact, not the code.
 
 3. **Refresh the generated agent instructions** (required): `docir agent update`
    stamps the files from the *running* `__version__`, so it has to run after the bump
@@ -97,6 +98,29 @@ gh release list --limit 10 2>&1 | cat
    - Build the package using UV
    - Publish to PyPI using trusted publishing
    - You can monitor the progress in the Actions tab
+
+7. **Record the release in the store** (required): a `release_note` document, linked to the
+   decisions the release is made of.
+
+   ```bash
+   docir add --type release_note --status published \
+     --title "0.X.0 — <the thesis, same as the release title>" \
+     --description "<one sentence: what the release made possible>" \
+     --related adr-...,adr-...,ref-... \
+     --stdin < notes.md
+   ```
+
+   **Not a second changelog.** `CHANGELOG.md` and the GitHub release carry the full text; this
+   carries what neither can — the edges. Link every decision the release contains, especially
+   the ones recording work that was *built and thrown away*: those are what a later reader most
+   needs, because they are what somebody will otherwise propose again, and a changelog has
+   nowhere to put them.
+
+   Carry the upgrade note too. It is the actionable half, and `docir context "what shipped in
+   0.X.0"` is where somebody will look for it.
+
+   Status `published`, since the release is. Commit it separately from `chore(release)`: the
+   version bump is the release, and this describes it.
 
 ## Manual Publishing
 

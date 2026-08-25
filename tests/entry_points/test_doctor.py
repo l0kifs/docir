@@ -163,6 +163,45 @@ def test_an_index_merely_behind_its_files_stays_a_warning(settings: Settings) ->
     assert code == 0, "one unparseable file must not fail a gate twice"
 
 
+def test_doctor_and_check_agree_that_a_store_is_unreadable(settings: Settings) -> None:
+    """One store, one condition, two commands — and they must not disagree.
+
+    `check` reports `empty-index` because its structural checks read that blank
+    graph (adr-1cccd77cb023); `doctor` reports it because every read does. Both
+    go through `index_is_empty`, and this is the assertion that the sharing
+    survives from the CLI side: a caller told by one command that a store is
+    unusable must not be told by the other that it is fine.
+
+    Both are errors, so both gate. That pairing is the whole point — a warning on
+    either side leaves a green gate over a corpus nobody read.
+    """
+    _add()
+    _add("B")
+    settings.db_path.unlink()
+    _doctor()  # doctor's own dispatch leaves an index that exists and is empty
+
+    code, report = _doctor("--strict")
+    assert "empty-index" in _kinds(report)
+    assert code == 1
+
+    result = runner.invoke(app, ["--no-daemon", "check", "--strict"])
+    findings = json.loads(result.stdout)
+    kinds = {finding["kind"] for finding in findings}
+    assert "empty-index" in kinds, "check must not call this store readable"
+    assert result.exit_code == 1, "and must not pass a gate over a graph it never read"
+
+
+def test_neither_reports_it_for_a_store_with_no_documents(settings: Settings) -> None:
+    """A freshly initialised store has no files either, so the counts agree at
+    zero. Firing here would greet every new store with an error from both."""
+    settings.ensure_directories()
+    _, report = _doctor()
+    assert "empty-index" not in _kinds(report)
+
+    findings = json.loads(runner.invoke(app, ["--no-daemon", "check"]).stdout)
+    assert "empty-index" not in {finding["kind"] for finding in findings}
+
+
 def test_an_index_built_by_another_version_is_reported(settings: Settings, uow_factory) -> None:
     _add()
     with uow_factory() as uow:

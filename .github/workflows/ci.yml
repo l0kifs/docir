@@ -20,12 +20,17 @@ jobs:
       # had nothing to save, and every run re-downloaded ~64 MB while the step
       # claimed it was downloading them once.
       #
-      # An expression rather than `~/.cache/fastembed`: a job-level `env:` value
-      # is not shell-expanded, so a literal `~` would have fastembed create a
-      # directory actually called `~`. `actions/cache` *does* expand `~` in its
-      # `path:`, which is how the two came to disagree in the first place —
-      # using one expression on both sides is what stops them disagreeing again.
-      FASTEMBED_CACHE_PATH: ${{ runner.temp }}/fastembed-cache
+      # A plain literal on both sides, and deliberately so. It may not be
+      # `~/.cache/fastembed`: a job-level `env:` value is not shell-expanded, so
+      # a literal `~` would have fastembed create a directory actually named
+      # `~`, while `actions/cache` *does* expand `~` in its `path:` — one side
+      # expanding and the other not is how they came to name different
+      # directories. And it may not be `${{ runner.temp }}` either: the `runner`
+      # context is not available in a job-level `env:` (only github / needs /
+      # strategy / matrix / vars / inputs are), which is a workflow-file error,
+      # so the whole run fails before a single job starts. A literal needs
+      # neither rule to be remembered.
+      FASTEMBED_CACHE_PATH: /tmp/fastembed-cache
 
     steps:
       - name: Checkout code
@@ -49,11 +54,11 @@ jobs:
         # fastembed is a hard dependency and the default embedder, so the test
         # suite exercises the real model. The weights are ~64 MB and never
         # change for a pinned model name — download them once, not every run.
-        # The path is FASTEMBED_CACHE_PATH above; see there for why it is an
-        # expression and not `~/.cache/fastembed`.
+        # The path is FASTEMBED_CACHE_PATH above, spelled identically; see
+        # there for why it is a literal and not `~/.cache/fastembed`.
         uses: actions/cache@v6
         with:
-          path: ${{ runner.temp }}/fastembed-cache
+          path: /tmp/fastembed-cache
           key: fastembed-${{ runner.os }}-bge-small-en-v1.5
 
       - name: Install dependencies

@@ -686,11 +686,13 @@ regenerated each build, and a directory docir did not build is refused unless
 you pass `--force`.
 
 A ` ```mermaid ` fence in a body publishes as its own source unless you pass
-`--mermaid` pointing at a **UMD** mermaid bundle — mermaid 11 ships only ES modules and docir
-loads the runtime as a classic script, so 10.x is the last line that has one. Fetch it once:
+`--mermaid` pointing at mermaid's **classic-script** bundle — docir loads the runtime with a
+plain `<script src>`, so it needs the file that sets `window.mermaid` rather than the ESM
+entry. That is `dist/mermaid.min.js`, which mermaid still ships on the 11 line even though its
+package `exports` name only the `.mjs` module. Fetch it once:
 
 ```bash
-curl -o mermaid.min.js https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js
+curl -o mermaid.min.js https://cdn.jsdelivr.net/npm/mermaid@11.16.1/dist/mermaid.min.js
 docir build --out site/ --title "<project>" --mermaid mermaid.min.js
 ```
 

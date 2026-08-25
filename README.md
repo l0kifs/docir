@@ -190,8 +190,9 @@ rather than failing the read.
 
 **Publishing.** `docir build --out site/` renders the store as a self-contained static site.
 `--title` names it (without it every page reads "Documentation"), `--logo` sets the mark and
-favicon, `--mermaid mermaid.min.js` draws fenced diagrams (a **UMD** build — mermaid 11 is ESM-only, so
-fetch `https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js`), `--include-archived` adds
+favicon, `--mermaid mermaid.min.js` draws fenced diagrams (the classic-script bundle, which sets
+`window.mermaid`: fetch `https://cdn.jsdelivr.net/npm/mermaid@11.16.1/dist/mermaid.min.js` —
+the `.mjs` module entry is refused), `--include-archived` adds
 archived documents, `--force` overwrites a directory docir did not build.
 
 ## Conventions

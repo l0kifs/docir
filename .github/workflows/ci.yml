@@ -12,6 +12,21 @@ jobs:
     name: Lint, type-check, boundaries, tests
     runs-on: ubuntu-latest
 
+    env:
+      # Where fastembed puts the model, pinned so the cache step below can name
+      # the same directory. Without it fastembed 0.8 resolves its cache to
+      # `tempfile.gettempdir()/fastembed_cache` — NOT `~/.cache/fastembed`,
+      # which the cache step used to name — so the key never hit, the post-step
+      # had nothing to save, and every run re-downloaded ~64 MB while the step
+      # claimed it was downloading them once.
+      #
+      # An expression rather than `~/.cache/fastembed`: a job-level `env:` value
+      # is not shell-expanded, so a literal `~` would have fastembed create a
+      # directory actually called `~`. `actions/cache` *does* expand `~` in its
+      # `path:`, which is how the two came to disagree in the first place —
+      # using one expression on both sides is what stops them disagreeing again.
+      FASTEMBED_CACHE_PATH: ${{ runner.temp }}/fastembed-cache
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -34,9 +49,11 @@ jobs:
         # fastembed is a hard dependency and the default embedder, so the test
         # suite exercises the real model. The weights are ~64 MB and never
         # change for a pinned model name — download them once, not every run.
+        # The path is FASTEMBED_CACHE_PATH above; see there for why it is an
+        # expression and not `~/.cache/fastembed`.
         uses: actions/cache@v6
         with:
-          path: ~/.cache/fastembed
+          path: ${{ runner.temp }}/fastembed-cache
           key: fastembed-${{ runner.os }}-bge-small-en-v1.5
 
       - name: Install dependencies

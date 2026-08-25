@@ -561,7 +561,7 @@ to leave alone.
 - **`unblocked`** — a live document whose every `depends_on` target has closed. The one
   finding that is good news: it means the work is ready to start. Act on it by starting the
   work or by dropping an edge that is no longer true; nothing clears it mechanically.
-- `docir check --strict` — exits nonzero on **error**-severity findings only (`duplicate-id`, `dangling`, `malformed` — the corpus is broken). Use as a **CI / pre-merge gate**. Warnings (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`, `unknown-status`, `unknown-tag`, `missing-required`, `unknown-relation-kind`, `schema-drift`, `stale-index-build`) are reported but never fail the build; `--strict-all` makes them fatal too.
+- `docir check --strict` — exits nonzero on **error**-severity findings only (`duplicate-id`, `dangling`, `malformed` — the corpus is broken; plus `empty-index`, which means `check` could not look). Use as a **CI / pre-merge gate**, and **run `docir reindex` first**: the index is derived and gitignored, so a fresh clone has none and every structural check reads a blank graph. `empty-index` is what says so rather than letting the gate pass by reading nothing. Warnings (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`, `unknown-status`, `unknown-tag`, `missing-required`, `unknown-relation-kind`, `schema-drift`, `stale-index-build`) are reported but never fail the build; `--strict-all` makes them fatal too.
 - **Recovering from `missing-required`**: the schema now requires a field the document was
   written without — usually because `docs-schema.yaml` gained a `required:` entry, or an upgrade
   brought one in through a profile. Supply it (`docir update <id> --set-owner ...`) or drop the
@@ -732,7 +732,8 @@ Each finding carries a `kind`, a `severity` and the command that closes it:
 - `no-index` / `empty-index` — the index is derived and **gitignored**, so a fresh clone has
   none and every read answers nothing. Both are errors, and `empty-index` is the one that
   survives: opening the store creates the file, so the *second* command finds an empty index
-  rather than a missing one. → `docir reindex`
+  rather than a missing one. `docir check` reports `empty-index` too, for the same reason —
+  its structural checks read that empty graph. → `docir reindex`
 - `index-behind-files` — the index holds fewer documents than `docs/` does. A warning: usually
   one file that will not parse, which `docir check` names as `malformed`.
 - `stale-index-build` — the index was built by a docir that is no longer installed.

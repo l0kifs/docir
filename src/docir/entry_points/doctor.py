@@ -53,7 +53,7 @@ from docir.entry_points.composition import (
 )
 from docir.entry_points.daemon import lifecycle
 from docir.entry_points.federation import PEER_FILE, peer_homes
-from docir.modules.documents.api import load_schema
+from docir.modules.documents.api import index_is_empty, load_schema
 from docir.modules.release.api import ReleaseStatus, build_release_service
 from docir.platform.errors import DocirError
 
@@ -434,6 +434,11 @@ def _store_findings(
 def _projection_findings(store: Mapping[str, object]) -> list[DoctorFinding]:
     """The index against the files it projects — one comparison, two severities.
 
+    The empty case is decided by ``index_is_empty``, shared with ``check`` —
+    which reports the same condition as an ``empty-index`` error, because every
+    structural check it runs read the same blank graph. Two copies of that
+    comparison would let one command call a store usable that the other refuses.
+
     **Empty is not "behind".** Zero documents beside files on disk is the state
     a fresh clone is in, and every read answers nothing: the same condition
     ``no-index`` describes, one step later, after anything at all opened the
@@ -451,7 +456,7 @@ def _projection_findings(store: Mapping[str, object]) -> list[DoctorFinding]:
     on_disk = store.get("documents_on_disk")
     if not isinstance(indexed, int) or not isinstance(on_disk, int) or indexed == on_disk:
         return []
-    if indexed == 0:
+    if index_is_empty(documents=indexed, documents_on_disk=on_disk):
         return [
             DoctorFinding(
                 kind="empty-index",

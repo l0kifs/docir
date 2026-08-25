@@ -178,7 +178,16 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   id are invisible in the index (it dedupes by primary key). That scan is the merge-into-`main`
   guard; `docir check --strict` exits 1 for CI.
 - **Tier 1 findings carry a severity, and `--strict` gates on `error` only.** `ERROR_KINDS`
-  (`graph_checks.py`) is `duplicate-id`/`dangling`/`malformed` — the corpus is *broken*.
+  (`graph_checks.py`) is `duplicate-id`/`dangling`/`malformed` — the corpus is *broken* — plus
+  **`empty-index`**, which earns the severity by a different argument: it means `check` could
+  not *look*. The graph half reads the index, so with none built every structural finding is
+  silent and `--strict` exits 0 — a merge gate that passes by reading nothing, green on a
+  corpus with sixteen dangling edges (issue-87410666c867). The warnings below all red-build a
+  *correct* setup; this red-builds one that was never checking anything. It fires only when
+  the index is empty **and** files exist (so a fresh `docir init` is silent), and a partially
+  behind index stays `docir doctor`'s `index-behind-files` warning. The comparison lives in
+  `index_is_empty`, shared by `check` and `doctor`, so the two cannot disagree about whether
+  a store is readable.
   Everything else (`orphan`, `cycle`, `layering`, `stale`, `unblocked`, `unmatched-code`, `tag-key-format`,
   the three `unknown-type`/`unknown-status`/`unknown-tag`, plus `unknown-relation-kind`,
   `missing-required` and `schema-drift`) is

@@ -48,7 +48,16 @@ _WHITE, _GREY, _BLACK = 0, 1, 2
 #: the whole of `docir check`, which is where the duplicate-id detection lives.
 #: Findings that mean the corpus is *broken* — a document is unreachable, or an
 #: edge resolves to nothing. These are what a merge gate must stop.
-ERROR_KINDS: frozenset[str] = frozenset({"duplicate-id", "dangling", "malformed"})
+#:
+#: `empty-index` is the one that does not describe damage to the corpus, and it
+#: earns the severity by a different argument: it means `check` *could not look*.
+#: The graph half reads the index, so with none built every structural finding is
+#: silent and `--strict` exits 0 — a merge gate that passes because it read
+#: nothing, which is strictly worse than no gate (issue-87410666c867). The
+#: warnings this file argues against promoting all red-build a *correct* setup;
+#: this one red-builds a setup that was never checking anything, and names the
+#: single command that fixes it.
+ERROR_KINDS: frozenset[str] = frozenset({"duplicate-id", "dangling", "malformed", "empty-index"})
 
 #: Every finding kind docir defines. A store's own check may not take one of
 #: these names: a check called `dangling` would make `--strict`'s behaviour
@@ -74,6 +83,7 @@ RESERVED_FINDING_KINDS: frozenset[str] = frozenset(
         "missing-required",
         "schema-drift",
         "stale-index-build",
+        "empty-index",
     }
 )
 

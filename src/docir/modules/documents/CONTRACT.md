@@ -97,6 +97,11 @@ files and the derived index never disagree.
   store this build already indexed. Equality against the running version, so a downgrade
   rebuilds too, and an absent stamp rebuilds — unlike `check`'s `stale-index-build`, where
   absent means unknown and stays silent, here unknown means the vectors predate the stamp.
+- `MaintenanceService.check()` also reports **`empty-index`**, an `error`: the index holds
+  nothing while `docs/` holds files, so every structural check below it read a blank graph.
+  The only error kind that does not describe damage to the corpus — it means `check` could not
+  look, which made `--strict` a merge gate that passed by reading nothing. Unlike
+  `stale-index-build`/`schema-drift`, which describe an index that is behind and still answers.
 - `MaintenanceService.check() -> [CheckIssue]` — Tier 1 structural findings (incl. staleness,
   and `unknown-type`/`unknown-status`/`unknown-tag`, the three Tier 0 rules a hand-edit can
   bypass, plus `tag-key-format` for a registered key outside the shared grammar). Also
@@ -124,6 +129,11 @@ files and the derived index never disagree.
   opt-in `DOCIR_SCHEMA_NOTICE` stderr notice and the `docir_schema_drift` MCP tool. Empty when
   nothing moved *or* when the store has no baseline: absent means unknown, not unchanged.
   `reindex` is the only writer of that baseline.
+- `index_is_empty(documents=, documents_on_disk=) -> bool` — the one comparison behind
+  `check`'s `empty-index` error and `docir doctor`'s finding of the same name. Shared, because
+  two copies would let one command call a store usable that the other refuses — the drift
+  `validation.is_absent` exists to prevent, one size down. False for an empty store: the two
+  counts agree at zero.
 - `MaintenanceService.store_status() -> StoreStatus` — what the derived index says about
   itself, for `docir doctor` and the `docir_store_status` MCP tool: document count, the
   running version, `stale_index_build`, `schema_drift`, the resolved `embedding_model` and

@@ -1235,22 +1235,21 @@ class TestStoreStatusIsTheIndexAccountOfItself:
         }
 
 
-class TestCheckIsSilentUntilTheIndexIsBuilt:
-    """Why CI reindexes *before* `check --strict`, demonstrated rather than asserted.
+class TestCheckRefusesToReportAVerdictItCouldNotReach:
+    """`check` over an unbuilt index, and why it is now an `error`.
 
     `.docir/docs/` is committed and the index is gitignored, so a fresh clone —
     which is every CI checkout — has no index. Half of `check` scans the files
-    directly (`duplicate-id`, `malformed`) and kept working; the graph half reads
-    the index, so `dangling` (the other half of the merge-into-main guard) never
-    fired. The gate exited 0 over zero documents for as long as it existed
-    (issue-87410666c867).
+    directly (`duplicate-id`, `malformed`) and always worked; the graph half
+    reads the index, so `dangling`, the other half of the merge-into-main guard,
+    was silent. `check --strict` was a gate that passed by reading nothing —
+    green on a corpus with sixteen dangling edges (issue-87410666c867).
 
-    This deliberately does **not** assert that the silence is correct. A test
-    that blessed it would be `test_check_strict_gates_ci` again — the guard that
-    pinned an unusable CI gate and so kept it. What it pins is the *hazard*: the
-    same corpus, the same command, two different answers depending on whether
-    the index was built. Delete the reindex step from a workflow and this test
-    still passes; read it and you cannot delete that step by accident.
+    `empty-index` is the only error kind that does not describe damage to the
+    corpus. It earns the severity by a different argument: the report below it is
+    not a weaker verdict, it is no verdict. The warnings this codebase refuses to
+    promote all red-build a *correct* setup; this one red-builds a setup that was
+    never checking anything, and names the one command that fixes it.
     """
 
     @staticmethod
@@ -1270,24 +1269,48 @@ class TestCheckIsSilentUntilTheIndexIsBuilt:
             encoding="utf-8",
         )
 
-    def test_the_graph_half_finds_nothing_before_a_rebuild(
+    def test_the_graph_half_still_finds_nothing_before_a_rebuild(
         self, dispatcher: Dispatcher, settings: Settings
     ) -> None:
-        """Characterization, not approval.
+        """The hazard the error exists to announce, pinned so it stays visible.
 
-        If `check` ever grows a finding for "the index is empty and the files
-        are not" — the question `docir doctor` answers today as `empty-index` —
-        this test is *supposed* to fail, and the right response is to change it,
-        not to keep the silence it describes.
+        `dangling` is genuinely absent here — the graph is empty, not clean. That
+        the two are indistinguishable from the finding list alone is the whole
+        reason `check` now says so out loud.
         """
         self._write_a_dangling_pair(settings)
         kinds = {issue["kind"] for issue in dispatcher.dispatch("check", {})}
-        # Not "the corpus is clean" — "nothing ran". The distinction is the bug.
         assert "dangling" not in kinds
-        errors = [
-            issue for issue in dispatcher.dispatch("check", {}) if issue["severity"] == "error"
-        ]
-        assert errors == [], "a --strict gate here exits 0 on a broken corpus"
+
+    def test_it_fails_strict_instead_of_passing_by_reading_nothing(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        """What a merge gate does with a corpus it could not read.
+
+        An `error`, so `--strict` exits 1. Reported as a warning it would have
+        changed nothing: an adopter whose CI runs `check --strict` on a fresh
+        clone would still get a green gate over an empty graph.
+        """
+        self._write_a_dangling_pair(settings)
+        issues = dispatcher.dispatch("check", {})
+        empty = [issue for issue in issues if issue["kind"] == "empty-index"]
+        assert empty, "the index holds nothing and docs/ holds a file"
+        assert empty[0]["severity"] == "error"
+        assert "docir reindex" in empty[0]["message"], "a finding names the move"
+
+    def test_an_empty_store_is_silent(self, dispatcher: Dispatcher) -> None:
+        """A freshly `docir init`-ed store has no files either, so the counts
+        agree at zero. Firing here would greet every new store with an error."""
+        kinds = {issue["kind"] for issue in dispatcher.dispatch("check", {})}
+        assert "empty-index" not in kinds
+
+    def test_it_clears_once_the_index_exists(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        self._write_a_dangling_pair(settings)
+        dispatcher.dispatch("reindex", {})
+        kinds = {issue["kind"] for issue in dispatcher.dispatch("check", {})}
+        assert "empty-index" not in kinds
 
     def test_the_same_corpus_reports_it_once_the_index_exists(
         self, dispatcher: Dispatcher, settings: Settings

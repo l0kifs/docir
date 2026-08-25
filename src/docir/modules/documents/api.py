@@ -29,6 +29,7 @@ from docir.modules.documents.application.services.maintenance_service import (
     MaintenanceService,
     ReindexResult,
     StoreStatus,
+    index_is_empty,
 )
 from docir.modules.documents.application.services.schema_conformance import (
     ConformanceFinding,
@@ -71,6 +72,7 @@ __all__ = [
     "UpdateDocumentRequest",
     "check_schema_conformance",
     "describe_schema",
+    "index_is_empty",
     "load_schema",
     "render_schema_yaml",
 ]

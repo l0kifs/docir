@@ -28,6 +28,22 @@ from docir.platform.persistence.unit_of_work import UnitOfWork
 UnitOfWorkFactory = Callable[[], UnitOfWork]
 
 
+def index_is_empty(*, documents: int, documents_on_disk: int) -> bool:
+    """Whether the index holds nothing while the files hold documents.
+
+    One function because two reporters answer with it and must not disagree:
+    `check` raises it as an `empty-index` error, and `docir doctor` reads the
+    same pair out of :class:`StoreStatus`. Two copies of a two-term comparison
+    is exactly the drift `validation.is_absent` exists to prevent, one size
+    down.
+
+    An empty *store* — freshly ``docir init``-ed, nothing written yet — has no
+    files either, so the two agree at zero and this is ``False``. The condition
+    is specifically "there are documents and the projection of them is blank".
+    """
+    return documents == 0 and documents_on_disk > 0
+
+
 @dataclass(frozen=True, slots=True)
 class ReindexResult:
     """Summary of a reindex run.
@@ -275,11 +291,47 @@ class MaintenanceService:
             code_digests=self._resolve_code_digests(documents),
             mentions=mentions,
         )
+        issues.extend(self._unbuilt_index_issue())
         issues.extend(self._find_duplicate_ids())
         issues.extend(self._find_malformed())
         issues.extend(self._drift_issues())
         issues.extend(self._build_issues())
         return issues
+
+    def _unbuilt_index_issue(self) -> list[CheckIssue]:
+        """The finding that says this check could not look.
+
+        Every structural check above reads the index; the index is derived and
+        gitignored, so a fresh clone has none and they are all silent. That made
+        `check --strict` a merge gate which passed by reading nothing — green on
+        a corpus with sixteen dangling edges (issue-87410666c867).
+
+        An **error**, unlike every other finding about derived state, and the
+        distinction is the point: `stale-index-build` and `schema-drift` describe
+        an index that is behind, which still answers. This one describes an index
+        that answers nothing, so the report above it is not a weaker verdict but
+        no verdict at all.
+
+        Deliberately narrow. It compares against the files, so an empty store is
+        silent, and a partially-behind index is left to `docir doctor` — a single
+        unparseable file must not fail a build twice.
+        """
+        with self._uow_factory() as uow:
+            documents = uow.documents.count()
+        on_disk = self._file_store.count()
+        if not index_is_empty(documents=documents, documents_on_disk=on_disk):
+            return []
+        return [
+            CheckIssue(
+                kind="empty-index",
+                message=(
+                    f"the index holds nothing while docs/ holds {on_disk} file(s), so every "
+                    "structural check below read an empty graph — run `docir reindex` first "
+                    "(the index is derived and gitignored, so a fresh clone has none)"
+                ),
+                doc_ids=(),
+            )
+        ]
 
     def store_status(self) -> StoreStatus:
         """The derived index's account of itself (the store half of ``docir doctor``).

@@ -38,6 +38,7 @@ uv run ty check                                        # type check (Astral ty)
 uv run vulture                                         # dead-code scan
 uv run tach check                                      # module boundaries (§8)
 uv run python scripts/check_contract_sync.py           # api.py <-> CONTRACT.md (§8.6)
+uv run python scripts/check_expressions.py <file.md>   # --expr examples actually run
 uv run pytest --cov=docir --cov-fail-under=90          # tests + coverage (currently 95%)
 ```
 

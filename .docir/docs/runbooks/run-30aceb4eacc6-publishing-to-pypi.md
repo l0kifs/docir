@@ -82,7 +82,23 @@ gh release list --limit 10 2>&1 | cat
    git push
    ```
 
-6. **Create a GitHub release**:
+6. **Check the release notes before publishing** (required if they show a `--expr`):
+
+   ```bash
+   uv run python scripts/check_expressions.py notes.md
+   ```
+
+   A release body is the one surface docir's own guards do not reach — the prose test covers
+   what ships in the wheel and `lint --deep` covers a store's documents, but a release page is
+   written once, published, and copied from. v0.18.0 shipped `owner == null` in its notes,
+   which is a JMESPath *identifier* rather than a literal: it gave the right answer for the
+   wrong reason until 0.19.0 refused it, and the page had to be corrected after the fact.
+
+   The check takes the notes *file*, so it runs before `gh release create` and needs no
+   network. It prints how many arguments it checked — "0 problems" and "nothing was checked"
+   are the one pair a gate must never conflate.
+
+7. **Create a GitHub release**:
 
    Using GitHub CLI with inline notes:
    ```bash
@@ -114,12 +130,12 @@ gh release list --limit 10 2>&1 | cat
    gh release view v0.2.0
    ```
 
-7. **GitHub Actions will automatically**:
+8. **GitHub Actions will automatically**:
    - Build the package using UV
    - Publish to PyPI using trusted publishing
    - You can monitor the progress in the Actions tab
 
-8. **Record the release in the store** (required): a `release_note` document, linked to the
+9. **Record the release in the store** (required): a `release_note` document, linked to the
    decisions the release is made of.
 
    ```bash

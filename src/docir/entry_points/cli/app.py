@@ -615,6 +615,10 @@ def query(
     ] = None,
     limit: Annotated[int, typer.Option("--limit")] = 50,
     offset: Annotated[int, typer.Option("--offset", help="Rows to skip; page with --limit.")] = 0,
+    expr: Annotated[
+        str | None,
+        typer.Option("--expr", help="Keep documents a JMESPath expression matches."),
+    ] = None,
 ) -> None:
     """Structured metadata filtering.
 
@@ -634,6 +638,24 @@ def query(
     decisions a branch should be read against. The paths are matched against
     the patterns as text, so a file the branch *deleted* still finds its
     decisions. A document governing a directory governs what is in it.
+
+    `--expr` is a JMESPath expression, for the questions these flags cannot ask.
+    It sees each document's own fields plus its edges resolved in *both*
+    directions, every edge carrying the other document's type and status:
+
+        id type status title description tags owner verified created updated
+        archived stale code
+        related     [{to, kind, type, status}]   outgoing
+        related_by  [{to, kind, type, status}]   incoming
+
+    A truthy result keeps the document, so a filter needs no comparison bolted
+    on. Applied before --limit, like --stale:
+
+        docir query --expr "stale && owner == null"
+        docir query --type issue --expr "related[?status=='superseded']"
+
+    docir ships no expressions of its own — this is the ability to state a rule,
+    not a rule (adr-7316abc6be93).
     """
     payload: dict[str, object] = {
         "types": tuple(type or ()),
@@ -643,6 +665,7 @@ def query(
         "include_inactive": _include_inactive(include_inactive, include_resolved),
         "owner": owner,
         "stale": stale,
+        "expr": expr,
         "code": tuple(code or ()),
         "limit": limit,
         "offset": offset,

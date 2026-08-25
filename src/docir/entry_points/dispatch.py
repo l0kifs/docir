@@ -138,6 +138,7 @@ class Dispatcher:
             include_inactive=_bool(payload, "include_inactive"),
             owner=_opt_str(payload, "owner"),
             stale_only=_bool(payload, "stale"),
+            expression=_opt_str(payload, "expr"),
             code_paths=_tuple(payload, "code"),
             limit=_int(payload, "limit", default=50),
             offset=_int(payload, "offset", default=0),

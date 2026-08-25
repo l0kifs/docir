@@ -86,6 +86,22 @@ case. Run `docir init` first.
 | `docir query --type decision --status accepted --tag auth` | Structured filter; repeatable `--type/--status/--tag`. Pages with `--limit`/`--offset` — a page shorter than `--limit` means the end. |
 | `docir query --code src/auth/login.py` | Which docs declared they govern this file. Repeat `--code` for several paths (any match counts) — run it over the files you are about to change, *before* changing them. A deleted path still finds its docs. |
 
+**`query --expr` asks what the flags cannot.** A JMESPath expression over each document: its
+own fields, plus its edges resolved in both directions with the other document's type and
+status on each. A truthy result keeps the document, and it is applied before `--limit`, so the
+limit counts matches.
+
+```bash
+docir query --expr "stale && owner == null"            # overdue and unowned
+docir query --type issue --expr "related[?status=='superseded']"
+docir query --expr "length(related_by[?kind!='relates_to']) == \`0\`"
+```
+
+Fields: `id type status title description tags owner verified created updated archived stale
+code`, plus `related` (outgoing) and `related_by` (incoming), each entry
+`{to, kind, type, status}`. Reach for it when a question needs two facts at once, or a fact
+about a *neighbour*; the plain flags are cheaper for anything they already cover.
+
 **Two-tier read (skeleton → body).** `context` / `query` / `search` return
 *skeletons* — id, title, description, tags, typed `related`, `owner`,
 `verified`, `stale` — **but not the body**. Scan those to judge relevance, then

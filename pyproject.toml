@@ -62,6 +62,7 @@ dependencies = [
     # depending on someone else's transitive dependency is depending on their
     # next release notes.
     "packaging>=24.0",
+    "jmespath>=1.1.0",
 ]
 
 # The sidebar every PyPI visitor scans. Absent, the page linked nowhere at all:

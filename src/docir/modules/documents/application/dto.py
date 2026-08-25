@@ -273,6 +273,11 @@ class QueryRequest:
     include_inactive: bool = False
     owner: str | None = None
     stale_only: bool = False
+    #: A JMESPath expression over each document's projection — the questions
+    #: `query`'s fixed flags cannot ask (issue-9b2d2ab09060). Like `stale_only`
+    #: it is a post-SQL predicate applied *before* the limit, so `--expr ...
+    #: --limit 10` means ten matching documents.
+    expression: str | None = None
     #: Paths to answer "which documents govern this?" for. Matched against each
     #: document's ``code`` globs — like ``stale_only``, a predicate the index
     #: cannot express, so it is applied after the query and before the limit.

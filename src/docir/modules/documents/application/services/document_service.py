@@ -28,6 +28,12 @@ from docir.modules.documents.application.services.id_generator import IdGenerato
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.schema import SEQUENTIAL_ID_STYLE, Schema
 from docir.modules.documents.domain.services.code_globs import governs_any
+from docir.modules.documents.domain.services.expressions import (
+    EdgeView,
+    compile_expression,
+    matches,
+    project,
+)
 from docir.modules.documents.domain.services.markdown_sections import (
     append_section,
     extract_section,
@@ -508,8 +514,10 @@ class DocumentService:
                 offset=offset,
             )
 
-        predicate = self._post_sql_predicate(request)
         with self._uow_factory() as uow:
+            # Built inside the unit of work: an expression predicate reads the
+            # whole edge graph once, which needs a session the others do not.
+            predicate = self._post_sql_predicate(request, uow)
             if predicate is None:
                 # The common path: the window is a LIMIT/OFFSET, so the cost of
                 # a page does not grow with the corpus behind it.
@@ -518,7 +526,9 @@ class DocumentService:
                 documents = self._scanned_page(uow, spec, request, predicate)
         return [self._summary(doc) for doc in documents]
 
-    def _post_sql_predicate(self, request: QueryRequest) -> Callable[[Document], bool] | None:
+    def _post_sql_predicate(
+        self, request: QueryRequest, uow: UnitOfWork
+    ) -> Callable[[Document], bool] | None:
         """The filters the index cannot express, as one test, or ``None``.
 
         Combined into a single predicate so the paging scan below stays one
@@ -532,9 +542,54 @@ class DocumentService:
         if request.code_paths:
             paths = request.code_paths
             tests.append(lambda document: governs_any(document.code, paths))
+        if request.expression is not None:
+            tests.append(self._expression_test(request.expression, uow))
         if not tests:
             return None
         return lambda document: all(test(document) for test in tests)
+
+    def _expression_test(self, expression: str, uow: UnitOfWork) -> Callable[[Document], bool]:
+        """Compile the expression once and resolve the graph once.
+
+        Every edge in the store is read up front and indexed both ways, rather
+        than looked up per document. A corpus has hundreds to low thousands of
+        edges — one pass over them is cheaper than N round trips, and it makes
+        the cost of `--expr` independent of how many documents survive the SQL
+        filters rather than proportional to it.
+        """
+        compiled = compile_expression(expression)
+        kinds = {(rel.source, rel.target): rel.kind for rel in uow.documents.relations()}
+        shape = {doc.id: (doc.type, doc.status) for doc in uow.documents.all()}
+
+        def edge(other: str, kind: str) -> EdgeView:
+            # A target the corpus no longer carries keeps its id and reports no
+            # type or status: absent, not guessed. That edge is `dangling`.
+            resolved = shape.get(other)
+            return {
+                "to": other,
+                "kind": kind,
+                "type": resolved[0] if resolved else None,
+                "status": resolved[1] if resolved else None,
+            }
+
+        outgoing: dict[str, list[EdgeView]] = {}
+        incoming: dict[str, list[EdgeView]] = {}
+        for (source, target), kind in kinds.items():
+            outgoing.setdefault(source, []).append(edge(target, kind))
+            incoming.setdefault(target, []).append(edge(source, kind))
+
+        def test(document: Document) -> bool:
+            return matches(
+                compiled,
+                project(
+                    document,
+                    stale=self._is_stale(document),
+                    outgoing=outgoing.get(document.id, []),
+                    incoming=incoming.get(document.id, []),
+                ),
+            )
+
+        return test
 
     def _scanned_page(
         self,

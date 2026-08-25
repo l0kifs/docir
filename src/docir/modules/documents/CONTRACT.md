@@ -37,6 +37,15 @@ files and the derived index never disagree.
 - `DocumentService.search(SearchRequest) -> [DocumentSummary]` — full-text search over title,
   description and body (**not** tags); skeleton, no body. `limit`/`offset` are applied after the
   status filter, since FTS5 cannot see a status.
+- `QueryRequest.expression` — a JMESPath predicate over each document, applied post-SQL
+  **before** the limit like `stale_only` and `code_paths` (adr-7316abc6be93). The projection
+  it evaluates against is **public surface**, because a user's expression is written against
+  it and cannot be broken silently:
+  `id type status title description tags owner verified created updated archived stale code`,
+  plus `related` (outgoing) and `related_by` (incoming), each entry `{to, kind, type, status}`
+  with the *other* document's type and status resolved — `null` for both when the corpus no
+  longer carries it. Adding a key is additive; renaming or removing one is not.
+  docir ships no expressions of its own: this is the ability to state a rule, not a rule.
 - `DocumentService.context(ContextRequest) -> [DocumentSummary]` — ranked relevant set (skeleton, no body).
   Each ranked hit carries `similarity`, the raw cosine (absolute meaning; `score` is rank-derived RRF
   and has none). `ContextRequest.min_score` is a floor on `similarity`, so an empty result is

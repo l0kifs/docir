@@ -209,9 +209,25 @@ def build_mcp_server(
         include_inactive: bool = False,
         limit: int = 50,
         offset: int = 0,
+        expr: str | None = None,
         stores: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Filter documents by their frontmatter. No text matching.
+
+        `expr` is a JMESPath expression over each document, for the questions
+        these flags cannot ask. It sees the document's own fields plus its edges
+        resolved in **both** directions, each carrying the other document's type
+        and status:
+
+            id type status title description tags owner verified created
+            updated archived stale code
+            related     [{to, kind, type, status}]   outgoing
+            related_by  [{to, kind, type, status}]   incoming
+
+        A truthy result keeps the document, so `related[?status=='superseded']`
+        is a filter with no comparison bolted on. Applied before `limit`, like
+        `stale`. Examples: `stale && owner == null`,
+        `length(related_by[?kind!='relates_to']) == `0``.
 
         `owner` plus `stale` is a review queue: the documents one steward is
         responsible for that are past their type's review cadence. Staleness is
@@ -244,6 +260,7 @@ def build_mcp_server(
                 "tags": tags or [],
                 "owner": owner,
                 "stale": stale,
+                "expr": expr,
                 "code": code or [],
                 "include_archived": include_archived,
                 "include_inactive": include_inactive,

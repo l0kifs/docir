@@ -410,9 +410,18 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   dispatcher command (`store_status`), so the version comparison and the drift diff stay
   implemented once and an agent reaches them over MCP — while the rest is deliberately *not*
   a dispatcher command, since a daemon reporting on its own process makes "is the daemon
-  stale?" inexpressible. `documents` / `documents_on_disk` travel as a pair: doctor's own
-  dispatch creates an empty index, so without the disk count the second run of a fresh clone
-  reads as a healthy empty corpus. And the global `~/.docir` is excluded from
+  stale?" inexpressible. `documents` / `documents_on_disk` travel as a pair, and split into **two**
+  finding kinds: doctor's own dispatch creates the index, so on a fresh clone the second run
+  finds an *empty* one where the first found none — `empty-index` is an error for the same
+  reason `no-index` is (every read answers nothing), while a partial mismatch stays
+  `index-behind-files`, a warning, because one unparseable file would otherwise red-build a
+  repo for a condition `check` already reports as `malformed`. Severity is per *kind*, never
+  conditional inside one, so a new finding still classifies itself.
+  **CI runs `reindex` -> `doctor --strict` -> `check --strict` in that order** (issue below):
+  the index is gitignored, so before the rebuild `check` ran over zero documents and printed
+  "no structural issues" — `duplicate-id` and `malformed` still fired (file scans), but
+  `dangling`, the other half of the merge guard, never did. Measured: a corpus missing one
+  linked-to document passed the old gate and produces 16 `dangling` findings under the new one. And the global `~/.docir` is excluded from
   `shadowed-store` — it sits above every store under the user's home directory, so reporting
   it fires the finding on the ordinary correct setup, the `orphan` failure again. The corpus
   is `check`'s question and doctor never walks the graph; a diagnosis costing what `check`

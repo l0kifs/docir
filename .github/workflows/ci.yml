@@ -63,6 +63,32 @@ jobs:
       - name: Tests + coverage
         run: uv run pytest --cov=docir --cov-fail-under=90
 
+      - name: Build the index the document gates read
+        # `.docir/docs/` is committed and the derived index is gitignored, so a
+        # checkout has NO index at all — and `check` reads the index. Without
+        # this step the gate below ran over zero documents and printed "no
+        # structural issues", which is the failure its own comment warns about:
+        # a gate that always exits 0 reads as "the corpus is clean" when it
+        # means "nothing ran". The file-scanning half (duplicate ids, malformed
+        # files) still fired; `dangling` — the other half of the merge guard —
+        # never did. Same reason pages.yml reindexes before it builds.
+        run: |
+          if [ ! -d .docir/docs ]; then exit 0; fi
+          uv run docir --no-daemon reindex
+
+      - name: Store health (docir doctor --strict)
+        # Proves the rebuild above actually populated the index, before the gate
+        # below trusts it. --strict exits 1 on `error` findings only: no index,
+        # an index holding nothing beside files on disk, a schema that will not
+        # load, an absent embedder. The warnings it also reports (a stale build
+        # stamp, schema drift, a pending embedding queue) never fail the build —
+        # every store is in one of those states between an upgrade and its next
+        # rebuild.
+        run: |
+          if [ ! -d .docir/docs ]; then exit 0; fi
+          uv run docir --no-daemon --pretty doctor
+          uv run docir --no-daemon doctor --strict
+
       - name: Document integrity (docir check --strict)
         # The merge-into-main guard: --strict exits 1 on `error` findings only —
         # duplicate ids and dangling edges, which is exactly what a branch merge

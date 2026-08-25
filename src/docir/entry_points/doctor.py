@@ -68,6 +68,12 @@ WARNING = "warning"
 ERROR_KINDS = frozenset(
     {
         "no-index",
+        # An index holding nothing while the files hold documents is the same
+        # condition as no index at all — every read answers nothing — so it
+        # carries the same severity. Its own kind rather than a severity that
+        # varies inside `index-behind-files`, because severity deriving from
+        # the kind is what stops a new finding forgetting to classify itself.
+        "empty-index",
         "schema-unreadable",
         "no-embedder",
         "store-unreachable",
@@ -409,20 +415,7 @@ def _store_findings(
                 fix="docir self upgrade  (or docir reindex)",
             )
         )
-    indexed = store.get("documents")
-    on_disk = store.get("documents_on_disk")
-    if isinstance(indexed, int) and isinstance(on_disk, int) and indexed != on_disk:
-        findings.append(
-            DoctorFinding(
-                kind="index-behind-files",
-                message=(
-                    f"{on_disk} file(s) under docs/ but {indexed} document(s) in the index — "
-                    "the files are canonical, so every read is answering from a projection "
-                    "that does not match them"
-                ),
-                fix="docir reindex  (docir check names any file that will not parse)",
-            )
-        )
+    findings.extend(_projection_findings(store))
     drift = store.get("schema_drift")
     if isinstance(drift, Sequence) and not isinstance(drift, str) and drift:
         findings.append(
@@ -436,6 +429,51 @@ def _store_findings(
             )
         )
     return findings
+
+
+def _projection_findings(store: Mapping[str, object]) -> list[DoctorFinding]:
+    """The index against the files it projects — one comparison, two severities.
+
+    **Empty is not "behind".** Zero documents beside files on disk is the state
+    a fresh clone is in, and every read answers nothing: the same condition
+    ``no-index`` describes, one step later, after anything at all opened the
+    store and created the file. `docir doctor` does that itself, so without this
+    the second run of a fresh clone reported a healthy empty corpus — and a
+    ``--strict`` gate that passes on the second attempt is worse than one that
+    never fired.
+
+    **A partial mismatch stays a warning**, and must. A single file that will
+    not parse counts on disk and not in the index, permanently, so an error kind
+    would red-build a repository for a condition `check` already reports as
+    `malformed` — twice, for one file.
+    """
+    indexed = store.get("documents")
+    on_disk = store.get("documents_on_disk")
+    if not isinstance(indexed, int) or not isinstance(on_disk, int) or indexed == on_disk:
+        return []
+    if indexed == 0:
+        return [
+            DoctorFinding(
+                kind="empty-index",
+                message=(
+                    f"the index holds nothing while docs/ holds {on_disk} file(s) — "
+                    "every read answers nothing, which is what a fresh clone looks like "
+                    "before its first rebuild"
+                ),
+                fix="docir reindex",
+            )
+        ]
+    return [
+        DoctorFinding(
+            kind="index-behind-files",
+            message=(
+                f"{on_disk} file(s) under docs/ but {indexed} document(s) in the index — "
+                "the files are canonical, so every read is answering from a projection "
+                "that does not match them"
+            ),
+            fix="docir reindex  (docir check names any file that will not parse)",
+        )
+    ]
 
 
 def _embedding_findings(

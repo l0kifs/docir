@@ -575,6 +575,9 @@ to leave alone.
 - `docir doctor` — the *environment*, not the corpus: the installation, this store's derived
   index, the embedding model in force, the daemon, and each declared peer. See "When the answers
   look wrong" below. Run it when a read contradicts the files, and once after cloning a repo.
+  **In CI, run it after `docir reindex` and before `docir check --strict`** — the index is
+  gitignored, so without the rebuild `check` runs over zero documents and reports a clean
+  corpus; `doctor --strict` is what proves the rebuild populated it.
 - `docir check --fix` — repair what can be repaired without guessing: re-issue duplicate ids (the oldest file keeps the id, so existing links stay valid) and drop `related` edges pointing at nothing. It reports every change, then lists what it could not fix. `malformed` and `unknown-type` are left alone — those need you to decide what the file or the schema should say. **This is the supported way to recover; do not hand-edit markdown to fix these.**
 - **Recovering from `schema-drift`**: the active schema differs from the one the index was built
   against — usually an upgrade, since the types, statuses and cadences come from the installed
@@ -724,8 +727,12 @@ docir doctor --probe    # also load the embedding model and time it (may downloa
 
 Each finding carries a `kind`, a `severity` and the command that closes it:
 
-- `no-index` / `index-behind-files` — the index is derived and **gitignored**, so a fresh clone
-  has none and every read answers nothing, or less than the files hold. → `docir reindex`
+- `no-index` / `empty-index` — the index is derived and **gitignored**, so a fresh clone has
+  none and every read answers nothing. Both are errors, and `empty-index` is the one that
+  survives: opening the store creates the file, so the *second* command finds an empty index
+  rather than a missing one. → `docir reindex`
+- `index-behind-files` — the index holds fewer documents than `docs/` does. A warning: usually
+  one file that will not parse, which `docir check` names as `malformed`.
 - `stale-index-build` — the index was built by a docir that is no longer installed.
   → `docir self upgrade`
 - `schema-drift` — the types or cadences moved under the corpus with nothing in `git diff`.

@@ -122,19 +122,45 @@ def test_a_missing_index_is_read_before_the_dispatch_that_creates_one(
     assert "no-index" in _kinds(report)
 
 
-def test_an_index_behind_its_files_is_reported(settings: Settings) -> None:
-    """The hole `no-index` alone leaves: doctor's own dispatch creates an empty
-    index, so a second run would otherwise say `0 documents` and nothing else —
-    which is exactly the fresh-clone state, reported as healthy."""
+def test_an_empty_index_beside_files_is_an_error_on_the_second_run_too(
+    settings: Settings,
+) -> None:
+    """The hole `no-index` alone leaves, and why it is an *error*.
+
+    Doctor's own dispatch creates the index, so on a fresh clone the second run
+    finds a file where the first found none. Reported as a mere warning, that run
+    passed `--strict` — a gate that goes green on the second attempt is worse
+    than one that never fired, and the corpus is in exactly the same state both
+    times: every read answers nothing.
+    """
     _add()
     _add("B")
     settings.db_path.unlink()
-    _doctor()  # creates an empty index as a side effect of asking the store
-    _, report = _doctor()
+    code, first = _doctor("--strict")
+    assert (code, "no-index" in _kinds(first)) == (1, True)
+
+    code, report = _doctor("--strict")  # the index now exists, and is empty
     assert "no-index" not in _kinds(report), "the first run created one"
+    assert "empty-index" in _kinds(report)
+    assert code == 1, "same corpus, same answer: --strict must not go green here"
+    assert (report["store"]["documents"], report["store"]["documents_on_disk"]) == (0, 2)
+
+
+def test_an_index_merely_behind_its_files_stays_a_warning(settings: Settings) -> None:
+    """A file that will not parse counts on disk and not in the index, for as
+    long as it exists — so an error kind would red-build a repository for a
+    condition `check` already reports as `malformed`, twice, for one file."""
+    _add()
+    (settings.docs_root / "decisions" / "broken.md").write_text(
+        "---\nid: adr-9999\ntitle: B\ndescription: d\ntype: decision\n"
+        "status: proposed\ncreated: not-a-date\nupdated: not-a-date\n"
+        "tags: []\nrelated: []\n---\n\nbody\n",
+        encoding="utf-8",
+    )
+    code, report = _doctor("--strict")
     assert "index-behind-files" in _kinds(report)
-    assert report["store"]["documents_on_disk"] == 2
-    assert report["store"]["documents"] == 0
+    assert "empty-index" not in _kinds(report)
+    assert code == 0, "one unparseable file must not fail a gate twice"
 
 
 def test_an_index_built_by_another_version_is_reported(settings: Settings, uow_factory) -> None:
@@ -302,6 +328,8 @@ def test_every_error_kind_classifies_itself(settings: Settings) -> None:
     """Severity is derived from the kind, so a new finding cannot forget to
     classify itself — it either joins ERROR_KINDS or it is a warning."""
     assert doctor.severity_for("no-index") == doctor.ERROR
+    assert doctor.severity_for("empty-index") == doctor.ERROR
+    assert doctor.severity_for("index-behind-files") == doctor.WARNING
     assert doctor.severity_for("stale-index-build") == doctor.WARNING
     assert doctor.severity_for("a-kind-nobody-declared") == doctor.WARNING
 

@@ -3,15 +3,15 @@ code:
 - src/docir/modules/documents/application/dto.py
 - src/docir/modules/documents/domain/services/graph_checks.py
 created: '2026-08-13'
-description: The filter half shipped as query --expr; named checks a store declares
-  in its schema are what remains, and are where the rule-engine line gets tested.
+description: 'Both halves shipped: query --expr asks a question, and checks: in docs-schema.yaml
+  states a rule the store runs.'
 id: issue-9b2d2ab09060
 owner: maintainer
 related:
 - adr-b2cfed9d5888
-- ref-a6db21f52427
 - adr-7316abc6be93
-status: open
+- adr-d2ae4604a01e
+status: resolved
 tags:
 - retrieval
 - cli
@@ -106,14 +106,15 @@ construction. It is a question about the corpus and this is a per-document predi
 
 ## What is left
 
-**Named checks a store declares in `docs-schema.yaml`**, evaluated by `check` as Tier 1
-warnings. That is where the line adr-b2cfed9d5888 drew actually gets tested — an expression
-docir *runs unasked* is much closer to a rule than one a person types — and it needs question 2
-settled first: a store's own rule cannot join `ERROR_KINDS` without letting one store's opinion
-fail another repository's build.
+Nothing. Both halves shipped — adr-d2ae4604a01e added `checks:` in `docs-schema.yaml`, and
+question 2 is answered there: a declared check is **always a warning**, because `--strict` gates
+on docir's own error kinds and must mean the same thing in every repository. `--strict-all`
+covers a store that wants its rules fatal.
 
-Building the filter first was deliberate. The grammar and the projection get exercised by hand,
-against a real corpus, before anything runs them unattended.
+Building the filter first was deliberate, and waiting for a real rule was the rest of it. The
+rule that arrived — "something supersedes this and it is still live" — found two violations in
+docir's own corpus on its first run and went silent once they were retired. That is the
+feature's first exercise being a real question rather than a fixture.
 
 ## Why the rest is still not urgent
 

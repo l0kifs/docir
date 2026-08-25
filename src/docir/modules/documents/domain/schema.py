@@ -188,6 +188,26 @@ RELATION_KIND_PROPERTIES: tuple[str, ...] = ("symmetric", "dependency", "success
 
 
 @dataclass(frozen=True, slots=True)
+class StoreCheck:
+    """One rule a *store* states about its own corpus (adr-…).
+
+    docir ships none of these. The grammar is docir's; every rule written in it
+    is the store's, which is the line adr-b2cfed9d5888 drew and this must not
+    cross — a shipped default expression would be docir having an opinion about
+    your corpus, which is exactly what that decision refused.
+
+    ``name`` becomes the finding's ``kind``, so a store's rule reads like any
+    other finding. It may not collide with one docir defines: the loader refuses
+    that, because a check named ``dangling`` would make ``--strict``'s behaviour
+    depend on whose schema is loaded.
+    """
+
+    name: str
+    expression: str
+    message: str
+
+
+@dataclass(frozen=True, slots=True)
 class Schema:
     """The full set of document-type grammars."""
 
@@ -213,6 +233,11 @@ class Schema:
     # field the *package* moved under a file nobody edited — and this key only
     # ever changes when somebody edits that file.
     embed_model: str | None = None
+    # Rules the store states about its own corpus, evaluated by `check` as Tier
+    # 1 warnings. Absent from ``schema_shape.describe`` for the reason
+    # ``embed_model`` is: drift reports what ``git diff`` cannot show you, and a
+    # check only ever changes when somebody edits the file it lives in.
+    checks: tuple[StoreCheck, ...] = ()
 
     def __post_init__(self) -> None:
         prefixes: dict[str, str] = {}

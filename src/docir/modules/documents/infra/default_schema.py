@@ -135,6 +135,20 @@ _SCHEMA_FOOTER = """
 #   # `docir embed --flush` -- vectors record which model made them, so nothing
 #   # compares across models.
 #
+# checks:
+#   # Rules *you* state about *your* corpus, evaluated by `docir check` as Tier
+#   # 1 warnings. docir ships none: the grammar is docir's, every rule written
+#   # in it is yours. Each is a JMESPath expression over the same projection
+#   # `docir query --expr` uses — write it as a query first, then declare it.
+#   #
+#   # A truthy result *is* the finding, so an expression reads as "documents
+#   # that are wrong". The name becomes the finding's kind and may not collide
+#   # with one docir defines. Always a warning; `--strict-all` makes them fatal.
+#   superseded-still-live:
+#     expr: "length(related_by[?kind=='supersedes']) > `0` && status != 'superseded'"
+#     message: >-
+#       something supersedes this and it is still in a live status
+#
 # relation_types:
 #   # Registers additional edge kinds on top of the core six (relates_to,
 #   # supersedes, depends_on, implements, contradicts, refines). Using a kind

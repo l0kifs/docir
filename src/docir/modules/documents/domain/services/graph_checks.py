@@ -19,6 +19,12 @@ from datetime import date
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.entities.relation import Relation
 from docir.modules.documents.domain.schema import Schema
+from docir.modules.documents.domain.services.expressions import (
+    EdgeView,
+    compile_expression,
+    matches,
+    project,
+)
 from docir.modules.documents.domain.services.validation import is_absent
 from docir.platform.naming import TAG_KEY_RULE, is_valid_tag_key
 
@@ -43,6 +49,33 @@ _WHITE, _GREY, _BLACK = 0, 1, 2
 #: Findings that mean the corpus is *broken* — a document is unreachable, or an
 #: edge resolves to nothing. These are what a merge gate must stop.
 ERROR_KINDS: frozenset[str] = frozenset({"duplicate-id", "dangling", "malformed"})
+
+#: Every finding kind docir defines. A store's own check may not take one of
+#: these names: a check called `dangling` would make `--strict`'s behaviour
+#: depend on whose schema is loaded, and a store's rule must never be able to
+#: change what a docir finding means. The loader refuses the collision.
+RESERVED_FINDING_KINDS: frozenset[str] = frozenset(
+    {
+        "duplicate-id",
+        "dangling",
+        "malformed",
+        "orphan",
+        "cycle",
+        "layering",
+        "stale",
+        "unblocked",
+        "unmatched-code",
+        "code-changed",
+        "tag-key-format",
+        "unknown-type",
+        "unknown-status",
+        "unknown-tag",
+        "unknown-relation-kind",
+        "missing-required",
+        "schema-drift",
+        "stale-index-build",
+    }
+)
 
 #: Everything else (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`,
 #: `unknown-status`, `unknown-tag`, `tag-key-format`, `unmatched-code`,
@@ -137,6 +170,7 @@ class GraphChecker:
         issues.extend(self._find_orphans(documents, relations, mentions))
         issues.extend(self._find_layering_violations(documents, relations))
         issues.extend(self._find_unblocked(documents, relations))
+        issues.extend(self._find_store_checks(documents, relations))
         if today is not None:
             issues.extend(self._find_stale(documents, today))
         if code_matches is not None:
@@ -629,6 +663,71 @@ class GraphChecker:
                         doc_ids=(doc.id,),
                     )
                 )
+        return issues
+
+    def _find_store_checks(
+        self, documents: list[Document], relations: list[Relation]
+    ) -> list[CheckIssue]:
+        """Evaluate the rules the *store* declared in its own schema.
+
+        docir ships none of these. The grammar is docir's and every rule written
+        in it is the store's, which is the line adr-b2cfed9d5888 drew: docir
+        refused to have opinions about your architecture, not to let you state
+        yours. A shipped default expression here would cross back.
+
+        Always a **warning**, whatever the rule says. `ERROR_KINDS` means "the
+        corpus is broken" in docir's terms and gates a merge; a store that wants
+        its own rules fatal has `--strict-all`, which already means exactly
+        that. Letting a declared check into the error set would make `--strict`
+        mean something different in every repository.
+
+        Each document is projected the same way `query --expr` projects it — one
+        shape for both, because a rule is written by trying it as a query first
+        and would otherwise mean something subtly different once declared.
+        """
+        if not self._schema.checks:
+            return []
+        by_id = {doc.id: doc for doc in documents}
+        outgoing: dict[str, list[EdgeView]] = {}
+        incoming: dict[str, list[EdgeView]] = {}
+        for rel in relations:
+            target = by_id.get(rel.target)
+            source = by_id.get(rel.source)
+            outgoing.setdefault(rel.source, []).append(
+                {
+                    "to": rel.target,
+                    "kind": rel.kind,
+                    "type": target.type if target else None,
+                    "status": target.status if target else None,
+                }
+            )
+            incoming.setdefault(rel.target, []).append(
+                {
+                    "to": rel.source,
+                    "kind": rel.kind,
+                    "type": source.type if source else None,
+                    "status": source.status if source else None,
+                }
+            )
+
+        issues: list[CheckIssue] = []
+        for check in self._schema.checks:
+            compiled = compile_expression(check.expression)
+            for document in documents:
+                projection = project(
+                    document,
+                    stale=False,
+                    outgoing=outgoing.get(document.id, []),
+                    incoming=incoming.get(document.id, []),
+                )
+                if matches(compiled, projection):
+                    issues.append(
+                        CheckIssue(
+                            kind=check.name,
+                            message=f"{document.id!r}: {check.message}",
+                            doc_ids=(document.id,),
+                        )
+                    )
         return issues
 
     def _find_unblocked(

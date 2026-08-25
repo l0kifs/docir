@@ -24,16 +24,19 @@ from docir.modules.documents.domain.schema import (
     REQUIRABLE_FIELDS,
     RelationKindSchema,
     Schema,
+    StoreCheck,
     TypeSchema,
 )
 from docir.modules.documents.domain.services import schema_shape
+from docir.modules.documents.domain.services.expressions import compile_expression
+from docir.modules.documents.domain.services.graph_checks import RESERVED_FINDING_KINDS
 from docir.modules.documents.infra.default_schema import DEFAULT_SCHEMA_YAML
 from docir.modules.documents.infra.profiles import (
     CORE_SCHEMA_YAML,
     PROFILE_NAMES,
     PROFILE_YAMLS,
 )
-from docir.platform.errors import SchemaError
+from docir.platform.errors import SchemaError, ValidationError
 
 
 def ensure_schema_file(path: Path) -> None:
@@ -93,6 +96,7 @@ def parse_schema(raw: object) -> Schema:
         relation_types=frozenset(_parse_relation_types(raw.get("relation_types"))),
         relation_kinds=_parse_relation_kinds(raw.get("relation_types")),
         embed_model=_parse_embed_model(raw.get("embed_model")),
+        checks=_parse_checks(raw.get("checks")),
     )
 
 
@@ -145,7 +149,50 @@ def _merge_profiled(raw: object) -> Schema:
         # embedded with is the store's choice, and a package upgrade that could
         # move it would silently re-embed every document in every store.
         embed_model=_parse_embed_model(raw.get("embed_model")),
+        checks=_parse_checks(raw.get("checks")),
     )
+
+
+def _parse_checks(raw: object) -> tuple[StoreCheck, ...]:
+    """Parse ``checks:`` — the rules a store states about its own corpus.
+
+    Everything is validated here, where the author is looking at the file. An
+    expression that does not compile, a name that collides with a finding docir
+    defines, a missing message: each is reported at load rather than surviving
+    until somebody runs ``check`` and reads a finding that is not theirs.
+
+    The name-collision rule is the load-bearing one. A check called ``dangling``
+    would make ``--strict``'s behaviour depend on whose schema is loaded, and a
+    store's own rule must never be able to change what a docir finding means.
+    """
+    if raw is None:
+        return ()
+    if not isinstance(raw, dict):
+        raise SchemaError("'checks' must be a mapping of name -> {expr, message}")
+    parsed: list[StoreCheck] = []
+    for name, spec in raw.items():
+        key = str(name)
+        if key in RESERVED_FINDING_KINDS:
+            reserved = ", ".join(sorted(RESERVED_FINDING_KINDS))
+            raise SchemaError(f"check {key!r} collides with a docir finding; reserved: {reserved}")
+        if not isinstance(spec, dict):
+            raise SchemaError(f"check {key!r} must be a mapping with 'expr' and 'message'")
+        expression = spec.get("expr")
+        if not isinstance(expression, str) or not expression.strip():
+            raise SchemaError(f"check {key!r} needs a non-empty 'expr'")
+        # Compiled at load so a typo fails the command that reads the schema,
+        # not the first document that happens to reach it. Re-raised as a
+        # SchemaError: the fault is in the file, and the CLI maps the two to
+        # different exit codes.
+        try:
+            compile_expression(expression)
+        except ValidationError as exc:
+            raise SchemaError(f"check {key!r}: {exc}") from exc
+        message = spec.get("message")
+        if not isinstance(message, str) or not message.strip():
+            raise SchemaError(f"check {key!r} needs a 'message' saying what the finding means")
+        parsed.append(StoreCheck(name=key, expression=expression.strip(), message=message.strip()))
+    return tuple(parsed)
 
 
 def _parse_embed_model(raw: object) -> str | None:

@@ -9,12 +9,12 @@ related:
 - adr-90e994d931cc
 - issue-e183d47cdee1
 - issue-b928ad676595
-status: active
+status: superseded
 tags:
 - docs
 title: Discovery frame — docir at v0.2.1, run 2026-07-26
 type: reference
-updated: '2026-08-05'
+updated: '2026-08-25'
 ---
 
 # Frame

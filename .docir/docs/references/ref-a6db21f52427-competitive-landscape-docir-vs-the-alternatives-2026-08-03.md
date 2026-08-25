@@ -17,14 +17,14 @@ related:
 - issue-9b2d2ab09060
 - adr-fb938175f72a
 - adr-9c7c1ab8acef
-status: active
+status: superseded
 tags:
 - docs
 - retrieval
 - agents
 title: Competitive landscape — docir vs. the alternatives (2026-08-03)
 type: reference
-updated: '2026-08-13'
+updated: '2026-08-25'
 verified: '2026-08-13'
 ---
 

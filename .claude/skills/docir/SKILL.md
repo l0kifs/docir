@@ -490,6 +490,22 @@ Until they are moved, `docir check` reports them as `unknown-type` (a warning, s
 nothing is blocked) beside the `schema-drift` finding naming the change. Disabling
 a name nothing declares, or one the same file declares inline, is refused.
 
+`checks:` is how a store states a rule about **its own** corpus. Each is a JMESPath expression
+over the same projection `query --expr` uses, so write it as a query first and declare it once
+it finds what you meant. A truthy result *is* the finding — the expression describes documents
+that are wrong.
+
+```yaml
+checks:
+  superseded-still-live:
+    expr: "length(related_by[?kind=='supersedes']) > `0` && status != 'superseded'"
+    message: something supersedes this and it is still in a live status
+```
+
+The name becomes the finding's kind and may not collide with one docir defines. Always a
+warning, never an error — `--strict` gates on docir's own error kinds and must mean the same
+thing in every repository; `--strict-all` is what makes a store's rules fatal.
+
 `allowed_relations` is a **whitelist trap**: absent/empty means permissive (any
 kind, any target), but listing one kind restricts the type to *only* the listed
 kinds — re-list every kind you still want, including `relates_to`.

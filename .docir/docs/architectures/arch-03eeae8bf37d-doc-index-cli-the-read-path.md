@@ -1,4 +1,6 @@
 ---
+code:
+- src/docir/modules/indexing/**
 created: '2026-08-15'
 description: 'How a query becomes results: full-text and vector rankings fused, section-level
   embeddings, default status visibility, and reads spanning peer stores.'
@@ -11,7 +13,7 @@ tags:
 - architecture
 title: Doc-Index CLI — the read path
 type: architecture
-updated: '2026-08-16'
+updated: '2026-08-25'
 ---
 
 ## Read path
@@ -51,9 +53,17 @@ needed.
 
 ### docir context scoring
 
-combines FTS5 BM25 score and cosine
-similarity (e.g. weighted sum or reciprocal rank fusion) rather than
-replacing FTS5 outright — lexical matches are still valuable and cheap.
+Reciprocal rank fusion over the FTS5 ranking and the vector ranking, rather than replacing
+full-text outright — lexical matches are still valuable and cheap, and the two disagree often
+enough that either alone is measurably worse (`benchmarks/`).
+
+`score` is therefore rank-derived and says only where a document placed; `similarity` carries
+the raw cosine through and is the one number with absolute meaning. `--explain` returns both
+plus the terms behind them.
+
+With several queries — `context --also` — pooling still decides each document's numbers and
+**taking turns** decides the order, so no one query fills the head of the result
+(adr-4c21693aac55).
 
 ### Where it runs
 

@@ -1,4 +1,7 @@
 ---
+code:
+- src/docir/entry_points/cli/app.py
+- src/docir/entry_points/dispatch.py
 created: '2026-08-15'
 description: The command vocabulary agents drive docir with, the static site build,
   and a worked flow through them end to end.
@@ -11,7 +14,7 @@ tags:
 - architecture
 title: Doc-Index CLI — the CLI surface
 type: architecture
-updated: '2026-08-16'
+updated: '2026-08-25'
 ---
 
 ## CLI commands
@@ -26,9 +29,9 @@ Every command below exists in `docir --help`; the groups are `agent`, `daemon`,
 | Command | Purpose |
 |---|---|
 | `docir get <id> [--section "<heading>"]` | One document in full, or just the span under one heading |
-| `docir query --type decision --status accepted --tag auth` | Structured filtering; also `--owner`, `--stale`, `--code`, `--limit/--offset` |
-| `docir search "<text>"` | Full-text over title, description and body |
-| `docir context "<agent task>"` | Ranked minimal set (FTS5 + semantic, fused) plus graph neighbours; `--expand`, `--min-score` |
+| `docir query --type decision --status accepted --tag auth` | Structured filtering; also `--owner`, `--stale`, `--code`, and `--expr` for a JMESPath question the flags cannot ask, `--code`, `--limit/--offset` |
+| `docir search "<text>"` | Full-text over title, description and body; `--explain` for the rank and BM25 behind each hit |
+| `docir context "<agent task>"` | Ranked minimal set (FTS5 + semantic, fused) plus graph neighbours; `--expand` bounds the neighbour slots, `--min-score` filters on `similarity`, `--also` adds a phrasing of your own (several queries take turns rather than pooling), `--explain` returns the terms behind each rank |
 
 **Write** — the single sanctioned path to a markdown file.
 
@@ -46,8 +49,9 @@ Every command below exists in `docir --help`; the groups are `agent`, `daemon`,
 | Command | Purpose |
 |---|---|
 | `docir reindex [--changed]` | Rebuild the index from the canonical files; re-embeds what it re-saves; read `documents_skipped` |
-| `docir check [--strict] [--strict-all] [--fix]` | Tier 1 structural findings; `--strict` is the CI gate (errors only), `--fix` repairs what needs no guess |
+| `docir check [--strict] [--strict-all] [--fix]` | Tier 1 structural findings, including `unblocked` — a document whose every blocker has closed; `--strict` is the CI gate (errors only), `--fix` repairs what needs no guess |
 | `docir lint --deep` | Tier 2 advisories (content similarity, scope creep) |
+| `docir bench <fixture.yaml>` | Score this store's retrieval against tasks whose answers you know |
 | `docir embed --flush` | Force a synchronous recompute of dirty vectors |
 | `docir schema show` / `docir schema validate` | Inspect the merged schema / check `docs-schema.yaml` before a write reaches it |
 

@@ -26,7 +26,7 @@ tags:
 - persistence
 title: Keep the corpus trustworthy (maintenance, CI, staleness)
 type: architecture
-updated: '2026-08-17'
+updated: '2026-08-25'
 ---
 
 ## Backbone
@@ -186,3 +186,22 @@ BR-041, BR-042, BR-043, BR-044, BR-045, BR-046, BR-047
 ## Gaps
 
 issue-b7ddde3ce860, issue-9cb85759076d, issue-40d1792bc9f9, issue-b4f441c7210f, issue-476b4e188fab, issue-9ed4905e0db8, issue-c33edcf431fa, issue-5f979576ef7d
+
+## check reports what is ready, not only what is wrong
+
+Since 0.18.0 `check` also reports **`unblocked`**: a live document whose every `depends_on`
+target has closed. The one finding here that is good news — the work is ready to start.
+
+It exists because the edge was asserted and nothing read it. A `depends_on` claims this work
+waits on that work, and until now only `context` expansion followed it, and only when a caller
+happened to query nearby — so a blocker could clear and the thing it blocked would sit there
+with the graph holding the answer and nobody asking.
+
+A warning, never an error, on the same argument as `stale`: nothing is broken, this is a
+scheduling fact, and it is cleared by doing something real rather than by a flag — start the
+work, or drop an edge that is no longer true.
+
+Which kinds count is the schema's `blocking` property, not the name `depends_on`. That property
+is deliberately separate from `dependency`, which `layering` reads: one is temporal and the
+other structural, and reading one for both announced a decision refining a *superseded* one as
+ready to start (adr-716c2eeb4e51).

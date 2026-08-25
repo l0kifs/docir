@@ -852,6 +852,16 @@ Three surfaces carry that, and all three are part of the change, not a follow-up
   shape without showing it leaves the agent to invent one.
 - **`README.md`** — for the human deciding whether to adopt docir at all.
 
+**And exercise it against this repository's own store, through the daemon (adr-f14682e3f4d6).**
+A scratch store is two documents, a fresh index and no daemon; docir's corpus is 170+ documents
+with real edges, real staleness, a schema baseline, an index built by a previous version, and a
+warm model. The gates cannot see the difference and neither can a unit test. 0.18.0 was fully
+green — ruff, ty, vulture, tach, contract-sync, 2834 tests — and running the changed surfaces
+against the real corpus found three defects anyway: two CLI flags that reached no MCP tool, a
+benchmark figure that had drifted as the corpus grew, and `stale-index-build` behaviour nobody
+had watched. Cross the second transport too; the MCP drift existed because every check of that
+release ran through the CLI.
+
 **Then verify by use, from the state an adopter is in.** Not by re-reading what you wrote and
 judging it sufficient — follow the shipped instructions and run the feature. If a step needs
 data (ids, a path, a name), the instructions have to say where that data comes from, and

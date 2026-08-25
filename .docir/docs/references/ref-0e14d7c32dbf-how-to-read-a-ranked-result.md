@@ -1,4 +1,7 @@
 ---
+code:
+- src/docir/modules/indexing/domain/scoring.py
+- src/docir/modules/documents/application/services/document_service.py
 created: '2026-08-16'
 description: What score and similarity each mean on a context or search hit, which
   one --min-score filters, and the two hits it never drops.
@@ -12,7 +15,7 @@ tags:
 - cli
 title: How to read a ranked result
 type: reference
-updated: '2026-08-16'
+updated: '2026-08-25'
 ---
 
 Every read path that ranks — `context` and `search` — returns two numbers per hit, and
@@ -86,3 +89,24 @@ stale, and an empty `tags` list is simply not there.
 
 Pass `--no-trim` for the full, unrounded payload when you are comparing numbers rather
 than reading results.
+
+## Or ask the ranking directly
+
+Everything above explains two numbers because the numbers were all there was. Since 0.18.0 they
+are not: `docir context "<task>" --explain` returns the terms behind each rank —
+
+```
+lexical_rank=7 lexical_rrf=0.0149 semantic_rank=1 semantic_rrf=0.0164
+similarity=0.813 matched_section="Switching embedders re-embeds…"
+```
+
+— and a graph-reached hit carries `via_graph_from` and `via_graph_route` instead, naming the
+seed it came from and whether that edge was a successor, an ordinary relation or a mention.
+
+It answers the question `--min-score` cannot. `--min-score` tells you whether anything relevant
+exists; this tells you **why this outranked that**. A hit with a `semantic_rank` and no
+`lexical_rank` shares no vocabulary with your wording and was found by meaning alone; the
+reverse means the embedder contributed nothing to it.
+
+Keys are omitted rather than nulled, so an absent `lexical_rank` is the finding, not a gap in
+the payload. `docir search --explain` gives the thinner version: rank and raw BM25.

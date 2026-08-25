@@ -1,8 +1,10 @@
 ---
+code:
+- src/docir/platform/embedding/**
+- src/docir/modules/documents/domain/schema.py
 created: '2026-08-15'
-description: The default embedder's install and runtime cost, the measured retrieval
-  gap when you opt out, why sections are embedded separately, and what switching models
-  does.
+description: What the default embedder costs to install, what the model-free fallback
+  loses, and how a store names a different model.
 id: ref-e7534f1c812d
 owner: maintainer
 related:
@@ -14,7 +16,7 @@ tags:
 - retrieval
 title: 'The embedding model: what it costs, and what the fallback loses'
 type: reference
-updated: '2026-08-15'
+updated: '2026-08-25'
 ---
 
 Semantic search runs on a real embedding model, installed by default. It is quantized,
@@ -100,3 +102,29 @@ wrote, and recomputes them on the next write or on `docir embed --flush`. Differ
 models have different widths, so the alternative is a dimension-mismatch error on every
 read in an existing store. The first read after a switch has no semantic signal until
 the recompute lands.
+
+## Choosing a different model
+
+The default is `bge-small-en-v1.5`, and since 0.18.0 it is a **default rather than the only
+option**. A store names another with a top-level `embed_model:` key in `docs-schema.yaml`.
+
+This matters most for a corpus not written in English, where the default is not merely weaker —
+it is worse than turning semantic search off. Measured on a Russian translation of the
+benchmark corpus, same documents and same judgments so language is the only variable:
+
+| corpus | model | recall@5 | MRR | paraphrased |
+|---|---|---|---|---|
+| Russian | `bge-small-en-v1.5` | 0.75 | 0.63 | **0.50** |
+| Russian | `paraphrase-multilingual-MiniLM-L12-v2` | 0.86 | 0.90 | **0.80** |
+
+The default's perfect 1.00 on same-words tasks beside a paraphrased 0.50 is FTS5 carrying the
+whole lexical half unaided — which is what "no better than full-text search" means as a number.
+
+On the **English** corpus the same swap costs ranking and buys nothing, which is why the default
+does not move. Both halves of the design are evidenced, by different rows.
+
+Any model `fastembed` supports is accepted; three are measured. Anything else is accepted with a
+warning, because docir embeds queries and documents through the same call, so a model trained on
+asymmetric `query:`/`passage:` prefixes ranks below its published numbers. `docir self status`
+reports the model in force, and switching re-embeds rather than mixing vector spaces — see
+below. (adr-ab9c454b760c built that machinery; the setting is what it was missing.)

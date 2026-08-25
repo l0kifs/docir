@@ -1,5 +1,6 @@
 ---
 code:
+- src/docir/modules/documents/application/services/document_service.py
 - src/docir/modules/indexing/**
 created: '2026-07-30'
 description: 'How a task turns into a ranked document set: hybrid fusion plus graph
@@ -20,7 +21,7 @@ tags:
 - embeddings
 title: Retrieve relevant context (the read path)
 type: architecture
-updated: '2026-08-15'
+updated: '2026-08-25'
 ---
 
 ## Backbone
@@ -107,3 +108,24 @@ BR-018, BR-025, BR-026, BR-027, BR-028, BR-029, BR-030, BR-031, BR-032, BR-033, 
 ## Gaps
 
 issue-8c37bf22ba3c, issue-996b567e5131, issue-93152f7b9213, issue-e19a2fde1805, issue-5bfbc6f2699d, issue-f6a5d0b86806
+
+## Several queries, and how they merge
+
+Since 0.18.0 the caller may hand the ranking more than one query. `docir context "<task>"
+--also "<phrasing>"` retrieves each string and merges them, and the merge is two operations
+rather than one: **pooling decides each document's numbers** (RRF over every backend list, with
+ranks, `similarity` and the matched section taken from its best pass) and **taking turns decides
+the order**, so the caller's task holds every Nth slot whatever the others rank.
+
+That split is measured. Pooling alone gives a correct extra phrasing everything it is worth —
+recall@5 0.88 to 1.00 on docir's own corpus — and lets a confidently wrong one take the result
+down to 0.25. Weighting the task fixes the second by destroying the first. Taking turns keeps
+both: 1.00 and 0.75 (adr-4c21693aac55, adr-b23dae55666f).
+
+docir writes none of those phrasings. The caller is already a model that has read the code, so a
+rewriter shipped underneath it would guess at context the caller had and did not send
+(adr-27c63ad02695). An agent passing a hypothetical *answer* is doing HyDE with the better model.
+
+`--explain` returns the terms behind each rank, and `docir bench` scores the whole path against
+a fixture of judged tasks — the two things that make a change to any of the above arguable from
+numbers rather than from taste.

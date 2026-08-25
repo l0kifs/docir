@@ -113,10 +113,14 @@ def _referenced_fields(node: object) -> set[str]:
     walking these gives a complete list of what the expression expects to exist.
     """
     found: set[str] = set()
-    if isinstance(node, dict):
-        if node.get("type") == "field" and isinstance(node.get("value"), str):
-            found.add(node["value"])
-        for child in node.get("children") or ():
+    if not isinstance(node, dict):
+        return found
+    value = node.get("value")
+    if node.get("type") == "field" and isinstance(value, str):
+        found.add(value)
+    children = node.get("children")
+    if isinstance(children, list):
+        for child in children:
             found |= _referenced_fields(child)
     return found
 

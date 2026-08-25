@@ -507,6 +507,7 @@ class MaintenanceService:
         # the embedding queue last drained.
         findings.extend(self._linter.find_oversized_sections(documents))
         findings.extend(self._linter.find_ambiguous_headings(documents))
+        findings.extend(self._linter.find_broken_expressions(documents))
         # Cross-document by nature: a reference is only stale relative to where
         # the section ended up, so this is the one lint that needs the corpus.
         findings.extend(self._linter.find_unqualified_section_refs(documents))

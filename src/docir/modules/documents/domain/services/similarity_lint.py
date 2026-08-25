@@ -16,8 +16,10 @@ from dataclasses import dataclass
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.schema import Schema
 from docir.modules.documents.domain.services.chunking import split_body
+from docir.modules.documents.domain.services.expressions import compile_expression
 from docir.modules.documents.domain.services.markdown_headings import scan_headings
 from docir.platform.embedding.vector import Embedding
+from docir.platform.errors import ValidationError
 
 #: A quoted phrase long enough, and capitalised enough, to be a section name.
 #: Both quote styles, because prose in this corpus uses each.
@@ -35,6 +37,11 @@ class LintFinding:
     kind: str
     message: str
     doc_ids: tuple[str, ...]
+
+
+#: An explicit `--expr` argument in prose. Deliberately narrow: see
+#: :meth:`SimilarityLinter.find_broken_expressions` for what a wider net caught.
+_EXPR_ARG_RE = re.compile(r'--expr\s+"([^"]+)"')
 
 
 class SimilarityLinter:
@@ -200,6 +207,51 @@ class SimilarityLinter:
                 )
                 for name, pieces in counts
             ]
+        return findings
+
+    def find_broken_expressions(self, documents: list[Document]) -> list[LintFinding]:
+        """Flag a documented ``--expr`` argument that would not run.
+
+        Every other invocation docir documents is checked for *shape* — the
+        command exists, the flag exists. `--expr` is the one flag whose argument
+        is a language, and a wrong expression looks exactly like a right one
+        until somebody runs it. Two failures are silent rather than loud: a bare
+        `null` is an identifier and not a literal, so `owner == null` compares a
+        key nothing carries against itself and returns the answer the author
+        wanted for the wrong reason; and a name the projection lacks evaluates
+        to null, so a typo matches nothing and reads as a clean corpus.
+
+        Scoped to an explicit --expr followed by a quoted argument, not to anything
+        expression-shaped. Sweeping backticked spans over this project's own
+        corpus found 18 candidates and 13 apparent failures, of which one was
+        real — the rest were quoted assertions, error messages and prose
+        comparisons like ``old == new``. Text does not distinguish an expression
+        from a sentence about one; an invocation does.
+
+        A shell example escapes its backticks, because a backtick inside double
+        quotes is command substitution — so the argument is unescaped before it
+        is compiled, or correct documentation would fail.
+
+        Tier 2 and staying there: a document may quote a deliberately wrong
+        expression to explain why it is wrong.
+        """
+        findings: list[LintFinding] = []
+        for doc in documents:
+            for raw in _EXPR_ARG_RE.findall(doc.body):
+                expression = raw.replace("\\`", "`")
+                try:
+                    compile_expression(expression)
+                except ValidationError as exc:
+                    findings.append(
+                        LintFinding(
+                            kind="broken-expression",
+                            message=(
+                                f"{doc.id!r} documents --expr {expression!r}, which will not "
+                                f"run: {exc}"
+                            ),
+                            doc_ids=(doc.id,),
+                        )
+                    )
         return findings
 
     def find_ambiguous_headings(self, documents: list[Document]) -> list[LintFinding]:

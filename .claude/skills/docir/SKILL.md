@@ -593,6 +593,8 @@ to leave alone.
   read reaches only the first), and **unqualified section references** (prose naming a
   section that lives in another document). All advisory — a long reference table is often
   right as it is.
+  Also **broken expressions** — a `--expr` documented in a body that would not run, which
+  is the one documented argument that is a language rather than a flag.
 - `docir bench <fixture.yaml>` — score this store's retrieval against tasks whose answers you
   already know. Reach for it when someone asks whether `docir context` is any good on *this*
   corpus, when you have changed something that affects ranking, or before reporting that

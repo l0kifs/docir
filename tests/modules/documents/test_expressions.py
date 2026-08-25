@@ -212,3 +212,52 @@ class TestQueryWiring:
         assert dispatcher.dispatch("query", {"limit": 10}) == (
             dispatcher.dispatch("query", {"limit": 10, "expr": None})
         )
+
+
+class TestBrokenExpressionLint:
+    """`lint --deep` flags a documented `--expr` that would not run.
+
+    Every other invocation docir checks is checked for shape — the command
+    exists, the flag exists. This is the one flag whose argument is a language.
+    """
+
+    def _lint(self, body: str) -> list:
+        from docir.modules.documents.domain.services.similarity_lint import SimilarityLinter
+
+        doc = Document(
+            id="arch-0001",
+            title="T",
+            description="D",
+            type="architecture",
+            status="active",
+            created=date(2026, 1, 1),
+            updated=date(2026, 1, 1),
+            body=body,
+        )
+        return SimilarityLinter().find_broken_expressions([doc])
+
+    def test_a_bare_null_literal_is_reported(self) -> None:
+        found = self._lint('docir query --expr "stale && owner == null"')
+        assert len(found) == 1
+        assert found[0].kind == "broken-expression"
+        assert "null" in found[0].message
+
+    def test_a_mistyped_field_is_reported(self) -> None:
+        assert len(self._lint("docir query --expr \"stauts == 'open'\"")) == 1
+
+    def test_a_valid_expression_is_silent(self) -> None:
+        assert self._lint("docir query --expr \"related[?kind=='supersedes']\"") == []
+
+    def test_a_shell_escaped_backtick_is_not_a_failure(self) -> None:
+        """Correct documentation must not be reported.
+
+        A backtick inside double quotes is command substitution, so a shell
+        example escapes them — the argument is unescaped before it is compiled.
+        """
+        assert self._lint('docir query --expr "length(tags) == \\`0\\`"') == []
+
+    def test_prose_that_merely_looks_like_an_expression_is_ignored(self) -> None:
+        # Why the net is narrow: a sweep of backticked spans over docir's own
+        # corpus found 13 apparent failures and one real one, the rest being
+        # quoted assertions, error messages and sentences.
+        assert self._lint("The test asserts `9 == 3` and fails, since `old == new`.") == []

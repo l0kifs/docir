@@ -84,10 +84,14 @@ jobs:
         # stamp, schema drift, a pending embedding queue) never fail the build —
         # every store is in one of those states between an upgrade and its next
         # rebuild.
+        #
+        # One command, not a report followed by a gate: doctor emits the whole
+        # report *before* --strict exits, so a second run would only rebuild the
+        # container to print what the first already printed. `--pretty` is what
+        # makes it a table in the log rather than piped JSON.
         run: |
           if [ ! -d .docir/docs ]; then exit 0; fi
-          uv run docir --no-daemon --pretty doctor
-          uv run docir --no-daemon doctor --strict
+          uv run docir --no-daemon --pretty doctor --strict
 
       - name: Document integrity (docir check --strict)
         # The merge-into-main guard: --strict exits 1 on `error` findings only —

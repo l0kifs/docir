@@ -306,13 +306,14 @@ uv run docir bench benchmarks/example_fixture.yaml
 
 `example_fixture.yaml` judges eight tasks against **this repository's** store, so
 it is a worked example of the shape rather than a portable benchmark. On the
-corpus as of 2026-08-24:
+corpus as of 2026-08-25 — these drift as the corpus grows, since BM25 ordering
+does:
 
 | strategy | recall@5 | prec@5 | MRR |
 |---|---|---|---|
 | `context` | 0.88 | 0.20 | 0.63 |
 | `context --expand 0` | 0.75 | 0.18 | 0.60 |
-| `search` | 0.62 | 0.15 | 0.54 |
+| `search` | 0.62 | 0.15 | 0.48 |
 
 The ordering is the design working: graph expansion beats ranking alone, and
 ranking alone beats full-text. Precision is low because the judgments are tight

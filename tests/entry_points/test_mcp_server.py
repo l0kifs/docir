@@ -469,3 +469,98 @@ def test_lifecycle_and_maintenance_tools_reach_their_commands(server) -> None:
     assert "actions" not in repaired
     assert [issue["kind"] for issue in repaired["remaining"]] == ["orphan"]
     assert call(server, "docir_lint", {}) == []
+
+
+def _cli_tree() -> dict[str, Any]:
+    """The Typer command tree as plain data, the same source the prose test reads."""
+    import typer.main
+
+    from docir.entry_points.cli import app as cli_app
+
+    def node(command: Any) -> dict[str, Any]:
+        return {
+            "options": [
+                {"flags": list(param.opts)}
+                for param in getattr(command, "params", ())
+                if getattr(param, "opts", None)
+            ],
+            "commands": {name: node(sub) for name, sub in getattr(command, "commands", {}).items()},
+        }
+
+    return node(typer.main.get_command(cli_app.app))
+
+
+TREE = _cli_tree()
+
+
+# --- argument parity: a CLI flag must reach the tool that mirrors it ---------
+#
+# The vocabulary test above pins tool *names* against the dispatcher, which is
+# what stops a new command reaching only the CLI. It says nothing about
+# arguments, and that is where the surface actually drifted: `--also`,
+# `--explain` on `context` and `--explain` on `search` all shipped to the CLI
+# and reached no tool, so an MCP client could not ask for them at all. That is
+# exactly the "a tool and its command cannot answer differently" property
+# adr-354a4270ecd8 exists for.
+
+#: `tool -> CLI command` for the tools that mirror one directly.
+_MIRRORED = {
+    "docir_context": "context",
+    "docir_search": "search",
+    "docir_query": "query",
+    "docir_get": "get",
+    "docir_bench": "bench",
+}
+
+#: CLI flag -> tool property, where the two deliberately differ. The tool takes
+#: lists and says so in the plural; the CLI repeats a singular flag. Renaming a
+#: tool argument breaks an agent's saved prompts, so the difference is kept and
+#: declared rather than reconciled.
+_FLAG_ALIASES = {
+    "type": "types",
+    "status": "statuses",
+    "tag": "tags",
+}
+
+#: Flags that shape *rendering*, not the request. They never reach a tool
+#: because a tool result is JSON by construction.
+#:
+#: `--store` is absent from this map on purpose: it is a *global* flag rather
+#: than one of these commands', and which tools may name a peer is already
+#: pinned by the federation case above — a tool that federates must take
+#: `stores`, and `docir_bench`, which does not federate, must not.
+_PRESENTATION_FLAGS = frozenset({"pretty", "json", "no-trim", "include-resolved"})
+
+
+def _cli_flags(command: str) -> set[str]:
+    node = TREE
+    for part in command.split():
+        node = node["commands"][part]
+    return {
+        flag.lstrip("-")
+        for option in node["options"]
+        for flag in option["flags"]
+        if flag.startswith("--")
+    } - _PRESENTATION_FLAGS
+
+
+@pytest.mark.parametrize("tool", sorted(_MIRRORED))
+def test_every_cli_flag_reaches_its_tool(server, tool: str) -> None:
+    properties = set(list_tools(server)[tool].inputSchema.get("properties", {}))
+    missing = {
+        flag
+        for flag in _cli_flags(_MIRRORED[tool])
+        if _FLAG_ALIASES.get(flag.replace("-", "_"), flag.replace("-", "_")) not in properties
+    }
+    assert not missing, (
+        f"{tool} cannot be asked for {sorted(missing)} — `docir {_MIRRORED[tool]}` can. "
+        f"Add the argument, or declare the difference in _FLAG_ALIASES."
+    )
+
+
+@pytest.mark.parametrize("flag", sorted(_FLAG_ALIASES))
+def test_every_alias_is_still_needed(flag: str) -> None:
+    """A stale alias would silently excuse a genuinely missing argument."""
+    assert any(flag in _cli_flags(command) for command in _MIRRORED.values()), (
+        f"{flag!r} is aliased and no mirrored command has it — drop it from _FLAG_ALIASES"
+    )

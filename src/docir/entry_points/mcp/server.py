@@ -125,6 +125,8 @@ def build_mcp_server(
         expand: int = _DEFAULT_EXPAND,
         min_score: float | None = None,
         include_inactive: bool = False,
+        also: list[str] | None = None,
+        explain: bool = False,
         stores: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Rank the documents relevant to a task. Start here.
@@ -149,6 +151,18 @@ def build_mcp_server(
                 and has no absolute meaning). Omit for no floor.
             include_inactive: Also return archived documents and ones in a
                 status their type marks inactive.
+            also: Other phrasings of the same need, retrieved beside `task` and
+                fused with it. docir writes none of them — you are the model
+                that has read the code. The case that pays is a hypothetical
+                *answer*: a question and an answer do not look alike to an
+                embedder, so searching with the answer's shape is what finds the
+                document. Use it when you could defend the answer you are
+                guessing — a correct one takes recall@5 from 0.88 to 1.00 on
+                docir's own corpus and a confidently wrong one takes it to 0.75.
+            explain: Attach the retrieval trace to each hit — where it placed in
+                the full-text and vector rankings, each RRF term, the raw
+                cosine, and for a graph-reached document the seed and whether
+                that edge was a successor, a relation or a mention.
             stores: Extra store paths to read alongside this one, for this call.
                 Added to whatever `stores.yaml` already declares. Never written
                 to; every row of the reply names the `store` it came from.
@@ -161,6 +175,8 @@ def build_mcp_server(
                 "expand": expand,
                 "min_score": min_score,
                 "include_inactive": include_inactive,
+                "also": list(also or []),
+                "explain": explain,
                 STORES_KEY: resolve_extra(stores or []),
             },
         )
@@ -172,6 +188,7 @@ def build_mcp_server(
         offset: int = 0,
         include_inactive: bool = False,
         stores: list[str] | None = None,
+        explain: bool = False,
     ) -> list[dict[str, Any]]:
         """Full-text search over title, description and body.
 
@@ -193,6 +210,7 @@ def build_mcp_server(
                 "limit": limit,
                 "offset": offset,
                 "include_inactive": include_inactive,
+                "explain": explain,
                 STORES_KEY: resolve_extra(stores or []),
             },
         )

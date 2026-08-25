@@ -7,6 +7,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-08-25
+
+0.18.0 gave you a grammar to ask questions with. This one lets a store *state a rule* in it —
+and then found that a mistyped question had been answering "nothing wrong" all along.
+
+### Upgrade notes
+
+- **`owner == null` now errors, and it always should have.** Bare `null` is an identifier in
+  JMESPath, not a literal; the literal is `` `null` ``. The old form compared a key no document
+  carries against itself, which is `None == None`, which is the answer you wanted — for the
+  wrong reason. Every `--expr` example docir shipped in 0.18.0 used it. Rewrite as
+  `` owner == `null` ``; the error names what would have worked.
+- **Nothing else changes without you asking.** `checks:` is absent from every existing schema,
+  and a store that declares none behaves exactly as before.
+
+### Added
+
+- **A store declares its own checks: `checks:` in `docs-schema.yaml`.** A name, a JMESPath
+  expression over the same projection `query --expr` evaluates, and a message. `docir check`
+  reports each match as a Tier 1 warning.
+
+  ```yaml
+  checks:
+    superseded-still-live:
+      expr: "length(related_by[?kind=='supersedes']) > `0` && status != 'superseded'"
+      message: something supersedes this and it is still in a live status
+  ```
+
+  **docir ships none of them.** The grammar is docir's; every rule written in it is yours. That
+  is what keeps adr-b2cfed9d5888 intact — it refused docir having opinions about your
+  architecture, not your ability to state yours — and a shipped default expression appearing
+  here is how it would cross back.
+
+  Three rules hold it up. Always a **warning**: `--strict` gates on docir's own error kinds and
+  must mean the same thing in every repository, so `--strict-all` is what makes your rules
+  fatal. The name may not collide with a finding docir defines, and the reserved set is *all* of
+  them — reserving only the errors would let a store redefine `stale` and leave a reader unable
+  to tell whose finding they were reading. And one projection, shared with `query --expr`,
+  because a rule is written by trying it as a query first.
+
+  It waited for a rule somebody actually wanted. The one above is docir's own, found two real
+  violations on its first run, and went silent once they were retired.
+
+- **`docir lint --deep` reports `broken-expression`.** A `--expr` documented in a body that
+  would not run. Tier 2, because a document may quote a deliberately wrong expression to explain
+  why it is wrong.
+
+### Fixed
+
+- **An expression naming a field no document carries is refused.** JMESPath evaluates an unknown
+  identifier to `null` rather than raising, so `stauts == 'open'` matched nothing, returned an
+  empty result, and read exactly like a corpus with nothing wrong — and a *declared* check
+  carrying that typo would have run forever, finding nothing, looking like a rule that passes.
+  The error names what would have worked.
+
+### Measured and rejected
+
+- **A `code:`-coverage advisory** — flagging a document that describes code and declares no
+  glob. On this corpus 63 of 173 documents name a path and declare none; restricted to live
+  architecture, decision and reference it drops to seven, and **none of the seven should declare
+  one**. The clearest candidate names `src/auth/**` — the *example* it uses to teach the field.
+  Prose naming a path is not evidence of governance, and `code:` is a claim, so a false positive
+  asks an author to assert something untrue. (adr-f0fb4833ab04)
+
+### Internal
+
+- **Every change is now exercised against docir's own corpus, through the daemon, before it is
+  reported done** (adr-f14682e3f4d6). 0.18.0 shipped with every gate green and three defects
+  that only a real store with history exposes. A scratch store is two documents and no daemon;
+  the difference is what the rule exists for.
+
 ## [0.18.0] - 2026-08-25
 
 Retrieval was a black box you could not point at your own corpus, could not see inside, and
@@ -1767,7 +1838,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/l0kifs/docir/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/l0kifs/docir/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/l0kifs/docir/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/l0kifs/docir/compare/v0.15.0...v0.16.0

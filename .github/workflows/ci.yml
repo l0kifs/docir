@@ -67,6 +67,17 @@ jobs:
       - name: Lint (ruff)
         run: uv run ruff check .
 
+      - name: Workflow lint (actionlint)
+        # The one file in this repo that cannot be validated by running it.
+        # Parsing as YAML is a far weaker claim than "GitHub accepts it", and
+        # the gap between them is where a job-level `env:` using the `runner`
+        # context slipped through: GitHub rejected the file outright, so zero
+        # jobs ran and the failure said only "workflow file issue". actionlint
+        # names the line and the rule. Runs here *and* locally — `uv run
+        # actionlint` — because a gate that only fires after a push cannot stop
+        # the push that turns main red.
+        run: uv run actionlint
+
       - name: Format check (ruff)
         run: uv run ruff format --check .
 

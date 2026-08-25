@@ -34,6 +34,7 @@ uv run docir --no-daemon <cmd> ...               # run in-process, bypass the da
 
 # the full CI gate suite — run ALL of these before reporting work done:
 uv run ruff check . && uv run ruff format --check .   # lint + format
+uv run actionlint                                      # GitHub Actions workflows
 uv run ty check                                        # type check (Astral ty)
 uv run vulture                                         # dead-code scan
 uv run tach check                                      # module boundaries (§8)
@@ -42,6 +43,13 @@ uv run python scripts/check_expressions.py <file.md>   # --expr examples actuall
 uv run pytest --cov=docir --cov-fail-under=90          # tests + coverage (currently 95%)
 ```
 
+- **`actionlint` is the only gate for a file that cannot be validated by running it.** A
+  workflow parses as YAML long after GitHub would reject it — a job-level `env:` using the
+  `runner` context is valid YAML and a workflow-file error, so *zero* jobs run and the failure
+  says only "workflow file issue". It ships as `actionlint-py`, a wheel vendoring the Go
+  binary, so the gate runs like every other one instead of needing Go or Docker. Run it before
+  pushing a workflow change; a gate that only fires after the push cannot stop the push that
+  turns main red.
 - **`tach check` exits 0 even though it prints `[WARN] ... deprecated` lines.** Those warnings are
   the intended baseline (see "The shared-index baseline" below), not failures. A real boundary
   break exits non-zero.

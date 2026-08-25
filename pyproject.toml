@@ -79,6 +79,13 @@ docir = "docir.entry_points.cli.app:main"
 
 [dependency-groups]
 dev = [
+    # The GitHub Actions linter, as a wheel that vendors the Go binary — so the
+    # workflow gate runs like every other one (`uv run actionlint`) instead of
+    # needing a Go toolchain or Docker. It exists because a workflow file is the
+    # one thing in this repo that cannot be validated by running it: parsing as
+    # YAML is a far weaker claim than "GitHub accepts it", and the gap between
+    # those two took main red once (issue-82b01d7f80d0's follow-up).
+    "actionlint-py>=1.7",
     "pytest>=8.3",
     "pytest-cov>=6.0",
     "ruff>=0.9",

@@ -7,6 +7,121 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-08-25
+
+Retrieval was a black box you could not point at your own corpus, could not see inside, and
+could not improve without editing the source. This release opens all three: a model you can
+change, an instrument you can run, a trace you can read, and a way to hand docir a better
+question. Every ranking change in it was measured before it shipped, and two were measured and
+thrown away.
+
+### Upgrade notes
+
+- **Run `docir self upgrade`.** No migrations, but the relation-kind registry gained a property
+  and the index records the schema it was built against — until you reindex, `check` reports
+  six `schema-drift` findings, one per core kind.
+- **Nothing is rewritten and no flag is retired.** `embed_model:` is absent from every existing
+  schema, which means the default, so retrieval is byte-identical until you set it.
+- **If you publish diagrams**, `--mermaid` now refuses a non-UMD bundle. mermaid 11 stopped
+  shipping one; see below.
+
+### Added
+
+- **A store can choose its embedding model: `embed_model:` in `docs-schema.yaml`.**
+  The default, `bge-small-en-v1.5`, is English-only, so a corpus written in another language
+  retrieved no better than full-text search with nothing to report it. Measured on a Russian
+  translation of the benchmark corpus: paraphrased recall@5 **0.50 → 0.80** and MRR 0.63 → 0.90
+  with `paraphrase-multilingual-MiniLM-L12-v2`, which is the same 384 width for 220 MB instead
+  of 67. On the *English* corpus the same swap costs ranking and buys nothing, which is why the
+  default does not move — both halves of the design are evidenced, by different numbers. The
+  key lives in the committed schema rather than an environment variable because the index is
+  gitignored: two clones holding different models would each re-embed the corpus behind the
+  other. Any model `fastembed` supports is accepted; three are measured, and anything else
+  warns that docir embeds queries and documents identically, so a model trained on asymmetric
+  prefixes will rank below its published numbers. `docir self status` reports the model in
+  force. (adr-ab9c454b760c built the machinery; this is the setting it was missing.)
+
+- **`docir bench <fixture.yaml>` — the retrieval instrument, pointed at your corpus.**
+  docir published retrieval numbers measured on docir's corpus, which an adopter inherited as a
+  claim. A fixture is a list of `{id, task, relevant}` naming document **ids** — not paths, so
+  it survives a retitle and a retype. Three rows come back: `context`, `context --expand 0`
+  (which removes graph expansion, the thing that lifts every embedder and hides the difference
+  between them) and `search`. An id no document carries is reported under `unresolved` and
+  excluded rather than dropped quietly, because a shrinking recall denominator *raises* the
+  score — a rotting fixture would read as retrieval improving.
+
+- **`--explain` on `context` and `search`.** Where a hit placed in the full-text and vector
+  rankings, each RRF term, the raw cosine, the section that matched, and for a graph-reached
+  document the seed it came from and whether that edge was a successor, a relation or a
+  mention. Keys are omitted rather than nulled: no `lexical_rank` means the full-text index
+  never returned it, which is the most useful single fact about a hit that ranked badly.
+
+- **`context --also` — your own phrasings, fused.** docir writes none of them, because the
+  caller is already a model that has read the code. Passing a hypothetical *answer* is HyDE
+  done by a better model than docir could ship: measured, a correct one takes recall@5 from
+  0.88 to **1.00**. Use it when you could defend the answer you are guessing — a confidently
+  wrong one costs 0.88 → 0.75, and that asymmetry is documented rather than hidden.
+
+- **`docir query --expr '<JMESPath>'` — the questions the flags cannot ask.** An expression over
+  each document's own fields plus its edges **resolved in both directions**, each carrying the
+  other document's type and status: `stale && owner == null`,
+  `related[?status=='superseded']`. Applied before `--limit`, so the limit counts matches.
+  docir ships **no** expressions of its own — this is the ability to state a rule, not a rule.
+
+- **`docir check` reports `unblocked`: a live document whose every blocker has closed.** The one
+  finding that is good news. A `depends_on` edge claims this work waits on that work, and until
+  now only `context` expansion read it — so a blocker could clear and the thing it blocked
+  would sit there with the graph holding the answer and nobody asking.
+
+- **A fourth relation-kind property, `blocking`.** The source *waits for* the target, which is
+  what `unblocked` reads. Split from `dependency`, which is *structural* — whether the source
+  sits above the target in the type hierarchy — and is what `layering` reads.
+
+### Changed
+
+- **Several queries take turns rather than pooling their scores.** With more than one query,
+  each query's ranking fills every Nth slot instead of all of them competing on summed RRF. It
+  keeps everything pooling had on a correct extra phrasing (recall@5 1.00) and bounds what a
+  wrong one costs (0.25 → 0.75). Weighting the task was tried first and removes the gain along
+  with the risk. One query is unaffected.
+
+- **`--mermaid` requires a UMD bundle, and says where to get one.** docir loads the runtime as a
+  classic script — deliberately, since a `type="module"` script is fetched under CORS and would
+  break the `file://` guarantee the published site is built around. mermaid 11 ships only ES
+  modules, so the file docir's own docs named has not existed for a major version. The error now
+  names `mermaid@10.9.3` and its URL rather than sending you to a package that does not contain
+  it.
+
+- **`Embedder.dimension` is gone.** Declared on the port and read by nothing: storage is
+  width-agnostic and the one place two widths could disagree is checked inside `Embedding`.
+
+### Fixed
+
+- **`unblocked` announced a decision refining a *superseded* one as "ready to start".** It read
+  `dependency`, which is structural; `refines` is a dependency and not a blocker, so a narrowing
+  whose broader rule had just been retired was reported as good news. Latent across 34 edges in
+  docir's own corpus.
+
+- **`--also` and `--explain` reached the CLI and no MCP tool.** An agent could not ask for
+  either. The tool-name test pinned names against the dispatcher and said nothing about
+  arguments; it now checks that every CLI flag reaches the tool that mirrors it.
+
+- **A document id in shipped prose must now resolve.** Two ADR ids were cited in docstrings
+  before the decisions were recorded, and never resolved at all. Every id in the wheel's prose
+  is checked against the store, with examples declared.
+
+### Measured and rejected
+
+Kept because the measurement is the useful artifact, not the code.
+
+- **Pseudo-relevance feedback** — rewriting a query from its own top hits — cost 0.13 recall@5
+  on docir's corpus. The first pass is already right 88% of the time, so feedback mostly
+  amplifies the 12% where it was not. (adr-46b69a581c65)
+- **A generative model, at all.** Not as a dependency and not as an extra. docir's caller is
+  already a frontier model that has read the code; a 0.5–1.5B rewriter underneath it would be
+  guessing at context the caller had and did not send. `--also` is what replaces it.
+  (adr-27c63ad02695)
+
 ## [0.17.0] - 2026-08-17
 
 Staleness measured a calendar and `orphan` measured `related:` frontmatter, so docir called a
@@ -1652,7 +1767,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/l0kifs/docir/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/l0kifs/docir/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/l0kifs/docir/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/l0kifs/docir/compare/v0.14.0...v0.15.0

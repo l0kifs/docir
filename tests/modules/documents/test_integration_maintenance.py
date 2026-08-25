@@ -1233,3 +1233,95 @@ class TestStoreStatusIsTheIndexAccountOfItself:
             "embedding_model",
             "embeddings_pending",
         }
+
+
+class TestCheckIsSilentUntilTheIndexIsBuilt:
+    """Why CI reindexes *before* `check --strict`, demonstrated rather than asserted.
+
+    `.docir/docs/` is committed and the index is gitignored, so a fresh clone —
+    which is every CI checkout — has no index. Half of `check` scans the files
+    directly (`duplicate-id`, `malformed`) and kept working; the graph half reads
+    the index, so `dangling` (the other half of the merge-into-main guard) never
+    fired. The gate exited 0 over zero documents for as long as it existed
+    (issue-87410666c867).
+
+    This deliberately does **not** assert that the silence is correct. A test
+    that blessed it would be `test_check_strict_gates_ci` again — the guard that
+    pinned an unusable CI gate and so kept it. What it pins is the *hazard*: the
+    same corpus, the same command, two different answers depending on whether
+    the index was built. Delete the reindex step from a workflow and this test
+    still passes; read it and you cannot delete that step by accident.
+    """
+
+    @staticmethod
+    def _write_a_dangling_pair(settings: Settings) -> None:
+        """A committed corpus whose edge points at a document nobody wrote.
+
+        Written to disk rather than through the CLI, because the CLI would index
+        them — and refuse the edge at Tier 0. This is the state a merge leaves:
+        one side of a link committed, the other dropped.
+        """
+        directory = settings.docs_root / "decisions"
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "adr-0001-live.md").write_text(
+            "---\nid: adr-0001\ntitle: Live\ndescription: d\ntype: decision\n"
+            "status: proposed\ncreated: '2026-07-07'\nupdated: '2026-07-07'\n"
+            "tags: []\nrelated:\n- adr-0002\n---\n\nbody\n",
+            encoding="utf-8",
+        )
+
+    def test_the_graph_half_finds_nothing_before_a_rebuild(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        """Characterization, not approval.
+
+        If `check` ever grows a finding for "the index is empty and the files
+        are not" — the question `docir doctor` answers today as `empty-index` —
+        this test is *supposed* to fail, and the right response is to change it,
+        not to keep the silence it describes.
+        """
+        self._write_a_dangling_pair(settings)
+        kinds = {issue["kind"] for issue in dispatcher.dispatch("check", {})}
+        # Not "the corpus is clean" — "nothing ran". The distinction is the bug.
+        assert "dangling" not in kinds
+        errors = [
+            issue for issue in dispatcher.dispatch("check", {}) if issue["severity"] == "error"
+        ]
+        assert errors == [], "a --strict gate here exits 0 on a broken corpus"
+
+    def test_the_same_corpus_reports_it_once_the_index_exists(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        """The other half of the pair: one `reindex` is the whole difference."""
+        self._write_a_dangling_pair(settings)
+        dispatcher.dispatch("reindex", {})
+        issues = dispatcher.dispatch("check", {})
+        dangling = [issue for issue in issues if issue["kind"] == "dangling"]
+        assert dangling, "the edge points at adr-0002, which nothing wrote"
+        assert dangling[0]["severity"] == "error", "this is what --strict must catch"
+
+    def test_the_file_scanning_half_worked_all_along(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        """Why nothing looked broken for as long as it was.
+
+        `duplicate-id` and `malformed` read the source files, so they fired on an
+        unbuilt index exactly as they do on a built one — the gate was reporting
+        findings, just never the graph ones. A gate that is half-alive is harder
+        to notice than one that is dead.
+        """
+        (settings.docs_root / "decisions").mkdir(parents=True, exist_ok=True)
+        (settings.docs_root / "decisions" / "broken.md").write_text(
+            _MALFORMED_FILE, encoding="utf-8"
+        )
+        kinds = {issue["kind"] for issue in dispatcher.dispatch("check", {})}
+        assert "malformed" in kinds
+
+    def test_store_status_is_what_says_the_index_is_empty(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        """The signal that makes the silence visible, and where `docir doctor`
+        reads it from: files on disk, nothing indexed (adr-909734bced92)."""
+        self._write_a_dangling_pair(settings)
+        status = dispatcher.dispatch("store_status", {})
+        assert (status["documents"], status["documents_on_disk"]) == (0, 1)

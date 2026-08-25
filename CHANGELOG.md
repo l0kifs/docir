@@ -64,7 +64,7 @@ thrown away.
 
 - **`docir query --expr '<JMESPath>'` — the questions the flags cannot ask.** An expression over
   each document's own fields plus its edges **resolved in both directions**, each carrying the
-  other document's type and status: `stale && owner == null`,
+  other document's type and status: `stale && owner == `null``,
   `related[?status=='superseded']`. Applied before `--limit`, so the limit counts matches.
   docir ships **no** expressions of its own — this is the ability to state a rule, not a rule.
 

@@ -91,7 +91,7 @@ status on each. A truthy result keeps the document, and it is applied before `--
 limit counts matches.
 
 ```bash
-docir query --expr "stale && owner == null"            # overdue and unowned
+docir query --expr "stale && owner == `null`"            # overdue and unowned
 docir query --type issue --expr "related[?status=='superseded']"
 docir query --expr "length(related_by[?kind!='relates_to']) == \`0\`"
 ```

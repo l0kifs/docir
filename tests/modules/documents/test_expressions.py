@@ -14,6 +14,8 @@ import pytest
 
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.services.expressions import (
+    EDGE_FIELDS,
+    PROJECTION_FIELDS,
     compile_expression,
     matches,
     project,
@@ -92,6 +94,56 @@ class TestEvaluation:
         # first *matching* document would make the error depend on the corpus.
         with pytest.raises(ValidationError, match="not a valid JMESPath"):
             compile_expression("this is not ((valid")
+
+    def test_a_field_the_projection_lacks_is_refused(self) -> None:
+        """The more dangerous fault, and the reason this check exists.
+
+        An unknown identifier evaluates to `null` rather than raising, so
+        `stauts == 'open'` matches nothing and reads exactly like a corpus with
+        nothing wrong. A *declared* check carrying that typo would run forever
+        finding nothing.
+        """
+        with pytest.raises(ValidationError) as exc:
+            compile_expression("stauts == 'open'")
+        message = str(exc.value)
+        assert "'stauts'" in message
+        assert "status" in message, "the error must name what would have worked"
+
+    def test_bare_null_is_an_identifier_and_is_refused(self) -> None:
+        """JMESPath spells a literal with backticks; bare `null` is a *field*.
+
+        `owner == null` therefore compares against a key no document has, which
+        is `None`, which is what the author meant — so it works by accident and
+        for the wrong reason. Every example docir shipped used that form until
+        this check refused it.
+        """
+        with pytest.raises(ValidationError, match="'null'"):
+            compile_expression("owner == null")
+        compile_expression("owner == `null`")
+
+    def test_an_unknown_field_inside_an_edge_filter_is_refused(self) -> None:
+        with pytest.raises(ValidationError, match="'knd'"):
+            compile_expression("related[?knd=='x']")
+
+    def test_every_projection_key_is_accepted(self) -> None:
+        # Derived from the constant, so a field added to `project` without being
+        # declared fails here rather than being silently unwritable.
+        for field in sorted(PROJECTION_FIELDS):
+            compile_expression(f"{field} != `null`")
+
+    def test_the_declared_fields_are_exactly_what_project_returns(self) -> None:
+        """The two would otherwise drift: a new key in `project` would be
+        unusable in an expression, and a stale entry here would let a typo
+        through."""
+        assert set(project(_doc(), stale=False)) == PROJECTION_FIELDS
+
+    def test_edge_fields_are_exactly_what_an_edge_carries(self) -> None:
+        view = project(
+            _doc(),
+            stale=False,
+            outgoing=[{"to": "x", "kind": "relates_to", "type": "decision", "status": "accepted"}],
+        )
+        assert set(view["related"][0]) == EDGE_FIELDS
 
     def test_an_empty_expression_is_refused(self) -> None:
         with pytest.raises(ValidationError, match="needs an expression"):

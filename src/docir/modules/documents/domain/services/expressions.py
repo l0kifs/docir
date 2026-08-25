@@ -78,20 +78,82 @@ def project(
     }
 
 
+#: Every key :func:`project` puts on a document. Declared rather than derived
+#: from a sample projection — that would be circular — and pinned by a test that
+#: asserts ``project()`` returns exactly this set, so the two cannot drift.
+PROJECTION_FIELDS: frozenset[str] = frozenset(
+    {
+        "id",
+        "type",
+        "status",
+        "title",
+        "description",
+        "tags",
+        "owner",
+        "verified",
+        "created",
+        "updated",
+        "archived",
+        "stale",
+        "code",
+        "related",
+        "related_by",
+    }
+)
+
+#: Every key an edge carries inside ``related`` / ``related_by``.
+EDGE_FIELDS: frozenset[str] = frozenset({"to", "kind", "type", "status"})
+
+
+def _referenced_fields(node: object) -> set[str]:
+    """Every identifier an expression reads, from the parsed AST.
+
+    JMESPath emits a ``field`` node for each identifier access, and every
+    identifier a caller can write refers to something in the projection — so
+    walking these gives a complete list of what the expression expects to exist.
+    """
+    found: set[str] = set()
+    if isinstance(node, dict):
+        if node.get("type") == "field" and isinstance(node.get("value"), str):
+            found.add(node["value"])
+        for child in node.get("children") or ():
+            found |= _referenced_fields(child)
+    return found
+
+
 def compile_expression(expression: str) -> jmespath.parser.ParsedResult:
     """Parse an expression, reporting a bad one where the caller typed it.
 
     Compiled once per query rather than per document: a syntax error is a
     property of the expression, and finding out on the first *matching*
     document would make the error depend on the corpus.
+
+    Also refuses a name the projection does not carry, which is the more
+    dangerous fault: an unknown identifier evaluates to ``null`` rather than
+    raising, so a typo returns an empty result that cannot be told from a corpus
+    with nothing wrong.
     """
     text = expression.strip()
     if not text:
         raise ValidationError("--expr needs an expression")
     try:
-        return jmespath.compile(text)
+        compiled = jmespath.compile(text)
     except JMESPathError as exc:
         raise ValidationError(f"--expr is not a valid JMESPath expression: {exc}") from exc
+
+    # A name the projection does not carry evaluates to null, so `stauts ==
+    # 'open'` matches nothing and reads as a corpus with nothing wrong. Silent
+    # is the one outcome a filter must not have: it cannot be told from a clean
+    # answer, and a *declared* check with that typo would run forever finding
+    # nothing (adr-9b36dc92fc07).
+    unknown = sorted(_referenced_fields(compiled.parsed) - PROJECTION_FIELDS - EDGE_FIELDS)
+    if unknown:
+        known = ", ".join(sorted(PROJECTION_FIELDS))
+        raise ValidationError(
+            f"expression names {', '.join(repr(name) for name in unknown)}, which no document "
+            f"carries; available: {known} (edges carry {', '.join(sorted(EDGE_FIELDS))})"
+        )
+    return compiled
 
 
 def matches(compiled: jmespath.parser.ParsedResult, projection: Mapping[str, Any]) -> bool:

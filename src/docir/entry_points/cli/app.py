@@ -651,7 +651,7 @@ def query(
     A truthy result keeps the document, so a filter needs no comparison bolted
     on. Applied before --limit, like --stale:
 
-        docir query --expr "stale && owner == null"
+        docir query --expr "stale && owner == `null`"
         docir query --type issue --expr "related[?status=='superseded']"
 
     docir ships no expressions of its own — this is the ability to state a rule,

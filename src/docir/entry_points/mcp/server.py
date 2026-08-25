@@ -244,7 +244,7 @@ def build_mcp_server(
 
         A truthy result keeps the document, so `related[?status=='superseded']`
         is a filter with no comparison bolted on. Applied before `limit`, like
-        `stale`. Examples: `stale && owner == null`,
+        `stale`. Examples: `stale && owner == `null``,
         `length(related_by[?kind!='relates_to']) == `0``.
 
         `owner` plus `stale` is a review queue: the documents one steward is

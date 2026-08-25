@@ -189,7 +189,7 @@ RELATION_KIND_PROPERTIES: tuple[str, ...] = ("symmetric", "dependency", "success
 
 @dataclass(frozen=True, slots=True)
 class StoreCheck:
-    """One rule a *store* states about its own corpus (adr-…).
+    """One rule a *store* states about its own corpus (adr-d2ae4604a01e).
 
     docir ships none of these. The grammar is docir's; every rule written in it
     is the store's, which is the line adr-b2cfed9d5888 drew and this must not

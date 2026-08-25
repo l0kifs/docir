@@ -175,6 +175,11 @@ CORE_RELATION_KINDS: dict[str, RelationKindSchema] = {
     # *and* waits for it. `refines` says only the first.
     "depends_on": RelationKindSchema("depends_on", dependency=True, blocking=True),
     "refines": RelationKindSchema("refines", dependency=True),
+    # Deliberately inert (adr-bbfac38a82b6). `dependency: true` was the obvious
+    # reading and warns on ordinary modelling: "this architecture implements
+    # ADR-7" points from a *higher*-level type to a lower one, which is the
+    # layering violation. `refines` survives that test because its direction is
+    # reliable — the narrower refines the broader — and `implements` has none.
     "implements": RelationKindSchema("implements"),
 }
 

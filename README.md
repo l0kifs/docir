@@ -68,7 +68,7 @@ docir context "implement a new auth endpoint"
 ```
 
 In a terminal, `docir context` prints ranked, body-less **skeletons** — frontmatter and
-typed edges, no body — so you scan wide, then fetch a body by id with `docir get`. Built
+typed edges, no body — so you scan wide, then fetch the bodies by id with one `docir get`. Built
 for agents, though: when the output is **captured** (stdout isn't a TTY), the same command
 emits **compact, trimmed JSON** — no borders, empty fields dropped, ~40% fewer tokens:
 
@@ -159,7 +159,7 @@ never watch, so CI still needs the explicit command.
 | `docir update` | Edit content, metadata, or relations of an existing document |
 | `docir context <query>` | Ranked relevant set (skeletons) — full-text + vector, fused (`--also` to add a phrasing you could defend, `--min-score` to filter noise, `--explain` for the trace) |
 | `docir search` / `query` | Full-text search (title/description/body — **not tags**) / structured filter. Both page with `--limit`/`--offset`; `query --owner X --stale` is a review queue, `query --code <path>` the decisions governing a file, `query --expr` a JMESPath question over fields and resolved edges |
-| `docir get <id>` | Full document with body — or one section with `--section "<heading>"` |
+| `docir get <id> [<id>...]` | Full documents with bodies — several in one command, and `<id>#<heading>` for just one section of one |
 | `docir check` | Structural findings — duplicate ids, dangling edges, staleness (`--strict` gates CI on errors, `--fix` repairs them) |
 | `docir agent install` | Teach this repo's AI agent to drive docir |
 | `docir self upgrade` | Upgrade docir, then resync this store: reindex, refresh the agent files, report what `check` finds |
@@ -179,6 +179,13 @@ self {status, upgrade}
 check [--fix] · lint · reindex · embed · version
 daemon serve · mcp serve
 ```
+
+**Reading in bulk.** `docir get` takes as many ids as you like, and `<id>#<heading>` addresses
+one section of one — `docir get adr-3f9a2b1c7d4e "arch-0002#Decision"`. This is worth doing
+every time: a docir read is dominated by starting the process, not by retrieval, so five
+separate calls cost roughly five times one. With two or more ids the reply becomes
+`{"documents": [...], "missing": [...]}`; an id that no longer exists is reported in `missing`
+rather than failing the read.
 
 **Publishing.** `docir build --out site/` renders the store as a self-contained static site.
 `--title` names it (without it every page reads "Documentation"), `--logo` sets the mark and
@@ -310,7 +317,7 @@ by [tach](https://docs.gauge.sh) in CI — not by convention. Each module expose
 one public file (`api.py`) described by a `CONTRACT.md`.
 
 The design rationale and the module rules are themselves docir documents — run
-`docir get arch-1cfb1b212237` and `docir get arch-322e5f992ad2`, or browse
+`docir get arch-1cfb1b212237 arch-322e5f992ad2`, or browse
 [`.docir/docs/architectures/`](.docir/docs/architectures/). [`docs/README.md`](docs/README.md)
 maps every pre-migration path to its id.
 

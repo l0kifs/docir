@@ -9,8 +9,9 @@ description: 'Startup still dominates after the SQLAlchemy fix: ~0.49s of a 0.53
 id: issue-9509f9fa3631
 owner: maintainer
 related:
-- arch-1cfb1b212237
 - adr-ab9c454b760c
+- arch-1cfb1b212237
+- adr-fe7c91f61f32
 status: open
 tags:
 - cli
@@ -18,7 +19,7 @@ tags:
 - material
 title: Interpreter startup, not retrieval, dominates read latency
 type: issue
-updated: '2026-08-16'
+updated: '2026-08-25'
 ---
 
 ## What was measured
@@ -198,3 +199,36 @@ retry without a fresh measurement.
 
 This does not touch **What is left**: `pydantic-settings` and docir's own ~130 modules are
 still the floor, and still the only remaining candidates.
+
+## Batching removes it four times out of five
+
+The floor is unchanged — this does not fix the issue, it stops paying it N
+times. `docir get` now takes several ids (and `<id>#<heading>` addresses) in one
+process, so an agent reading five documents pays one interpreter instead of
+five.
+
+`benchmarks/latency.py` grew the pair that prices it: `get x5` is five separate
+`get` processes, `get 5in1` is the same five bodies in one command. Same
+machine, 25 documents, p50 seconds, 9 warm samples.
+
+| command | warm daemon | cold daemon | no daemon |
+|---|---|---|---|
+| `get` (one document) | 0.459 | 1.378 | 0.805 |
+| `get x5` | 2.506 | 3.133 | 4.248 |
+| `get 5in1` | 0.508 | 1.320 | 0.872 |
+| `version` (floor) | 0.522 | — | — |
+
+Warm, five bodies go from 2.506s to 0.508s — **4.9x**, and 0.508 is the floor
+row, which says the five reads themselves are free at this corpus size. With no
+daemon it is the same 4.9x from a worse start. The cold row gains least (2.4x)
+because a cold sample pays one spawn per process and the batch only removes
+four of five.
+
+The saving is four floors, so it grows with the number of documents read and is
+independent of how large they are. That also bounds it: it is worth nothing to a
+caller reading one document, which is why `get` still answers a single `doc_id`
+with the document object rather than an envelope.
+
+Over MCP the process cost is already amortised — the server is long-lived — and
+the win is a different one: five tool calls are five model turns, and one is
+one.

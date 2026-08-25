@@ -111,6 +111,42 @@ class DocumentView:
 
 
 @dataclass(frozen=True, slots=True)
+class MissingDocument:
+    """One address in a batch read that did not resolve, and why.
+
+    Carries the ``ref`` as the caller wrote it rather than an id plus a section:
+    the address is what they would have to retype, it is what federation resends
+    to a peer, and splitting it into two fields would put the ``id#heading``
+    grammar in a second place — which is how a document becomes addressable by
+    one spelling and invisible to another. The id is the ref, or its half before
+    the hash, and ``error`` names it anyway.
+    """
+
+    ref: str
+    error: str
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentBatch:
+    """Several deep reads answered together (``get`` with more than one id).
+
+    A partial answer on purpose. The batch exists because an agent that just
+    ranked five documents should pay one round trip for their bodies, and one of
+    those five having been deleted since must not cost it the other four — so a
+    reference that fails lands in ``missing`` instead of failing the request. A
+    *malformed* reference still raises: that is the caller's own typo, not a
+    fact about the corpus, and it is Tier 0's to refuse.
+
+    ``documents`` holds them in the order they were asked for, deduplicated by
+    address — the same document twice under two headings is two entries, the
+    same address twice is one.
+    """
+
+    documents: tuple[DocumentView, ...]
+    missing: tuple[MissingDocument, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class DocumentSummary:
     """The skeleton projection for list read paths — frontmatter without the body.
 

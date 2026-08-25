@@ -288,13 +288,20 @@ def build(
         },
     )
     ids = [str(row["id"]) for row in _as_mappings(skeletons) if row.get("id")]
-    # One `get` per document, because bodies are deliberately absent from every
-    # list path (the skeleton contract). A site build is an offline operation
-    # run occasionally, so N round trips is the right trade against widening a
-    # read path that exists to stay narrow.
-    documents = [
-        mapping for doc_id in ids for mapping in _as_mappings([execute("get", {"doc_id": doc_id})])
-    ]
+    # A second pass for the bodies, deliberately absent from every list path
+    # (the skeleton contract) — but one batched `get`, since a site build reads
+    # the whole corpus deeply, which is the shape the batch exists for. Two
+    # deliberate omissions: `missing` is ignored, because these ids came from
+    # `query` a moment ago and one that has since gone is a page not to publish
+    # rather than an error; and an empty store skips the pass instead of being
+    # tolerated by `get`, because nothing to read is not asking for nothing.
+    documents = (
+        _as_mappings(
+            _as_mapping(execute("get", {"doc_ids": ids, LOCAL_ONLY_KEY: True})).get("documents")
+        )
+        if ids
+        else []
+    )
     result = run_local(
         lambda: build_site_builder().build(
             PublishRequest(
@@ -571,7 +578,7 @@ def delete(
 
 @app.command()
 def get(
-    doc_id: Annotated[str, typer.Argument()],
+    doc_ids: Annotated[list[str], typer.Argument(metavar="ID...")],
     section: Annotated[
         str | None,
         typer.Option(
@@ -580,16 +587,37 @@ def get(
         ),
     ] = None,
 ) -> None:
-    """Return one document in full, or just one section of it.
+    """Return documents in full, or just one section of each.
+
+    The only read path that carries a body: `query` / `search` / `context`
+    return skeletons, so this is where you spend the tokens once you know which
+    documents are worth them.
 
     --section takes a heading and returns that heading plus the text under it —
     the same span --replace-section would overwrite. It is the paired read for
     `context`: a long document can rank on one of its sections, and this reads
     that section without paying for a body that is often ten times its size. An
     unknown heading is an error listing the ones that exist.
+
+    Name several documents to read them in one command. That matters because a
+    docir read is dominated by starting the process, not by retrieval, so five
+    separate calls cost about five times one call regardless of how small the
+    documents are. Address a section inline with ID#Heading — which is what a
+    ranked hit's `matched_section` gives you:
+
+        docir get adr-3f9a2b1c7d4e "arch-0002#Decision"
+
+    One id answers with the document object, as it always has. Two or more
+    answer with {"documents": [...], "missing": [...]}: an id that no longer
+    exists, or a heading that does not, is reported beside the documents that
+    did resolve instead of failing the whole read. --section takes one document;
+    with several, write the '#' form.
     """
     _warn_on_global_fallback()
-    _emit_document(execute("get", {"doc_id": doc_id, "section": section}))
+    if len(doc_ids) == 1:
+        _emit_document(execute("get", {"doc_id": doc_ids[0], "section": section}))
+        return
+    _emit_batch(execute("get", {"doc_ids": doc_ids, "section": section}))
 
 
 @app.command()
@@ -1238,11 +1266,42 @@ def _as_list(data: object) -> list[dict[str, object]]:
 def _emit_document(data: object) -> None:
     state = get_state()
     if isinstance(data, dict):
-        data = {**data, "store": str(state.settings.home)}
+        data = _with_store(_as_mapping(data))
     if use_json(state):
         rendering.emit_json(data, trim=state.trim)
     elif isinstance(data, dict):
         rendering.render_document({str(key): value for key, value in data.items()})
+
+
+def _emit_batch(data: object) -> None:
+    """Render a batched deep read: the documents, then the addresses that missed.
+
+    The misses go to stderr in the human view and stay in the payload in the
+    JSON one. They are not an error — the request succeeded and most of it
+    resolved — but they are the half a reader would otherwise have to notice by
+    counting the panels.
+    """
+    state = get_state()
+    payload = _as_mapping(data)
+    documents = [_with_store(row) for row in _as_mappings(payload.get("documents"))]
+    missing = _as_mappings(payload.get("missing"))
+    if use_json(state):
+        rendering.emit_json({"documents": documents, "missing": missing}, trim=state.trim)
+        return
+    for row in documents:
+        rendering.render_document(row)
+    for row in missing:
+        rendering.render_warning(f"{row.get('ref')}: {row.get('error')}")
+
+
+def _with_store(row: dict[str, object]) -> dict[str, object]:
+    """Name the store a deep read came from, without overwriting a peer's.
+
+    Federation stamps a document with the store that answered for it, so the
+    local home may only fill the gap when nothing did — writing it unconditionally
+    told the reader that a peer's document lived here.
+    """
+    return {"store": str(get_state().settings.home), **row}
 
 
 def _warn_on_global_fallback() -> None:
@@ -1332,8 +1391,13 @@ def _as_mappings(data: object) -> list[dict[str, object]]:
     commands — so every caller that wants fields has to narrow. Rebuilding the
     dicts rather than casting keeps the key type honest: the wire is JSON, where
     keys are strings whatever the producer thought.
+
+    Tuples count as lists here: in-process a dataclass field arrives as the
+    tuple it was declared as, and over the socket the same field arrives as a
+    JSON array. Accepting only one of the two makes a command work in one mode
+    and silently return nothing in the other.
     """
-    if not isinstance(data, list):
+    if not isinstance(data, list | tuple):
         return []
     return [
         {str(key): value for key, value in row.items()} for row in data if isinstance(row, dict)

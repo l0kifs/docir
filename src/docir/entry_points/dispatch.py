@@ -126,8 +126,25 @@ class Dispatcher:
         return asdict(self._documents.update(request))
 
     def _get(self, payload: Payload) -> object:
-        view = self._documents.get(_str(payload, "doc_id"), _opt_str(payload, "section"))
-        return asdict(view)
+        """One document, or several — the shape follows the key, not the count.
+
+        ``doc_id`` answers with the document object, exactly as it always has.
+        ``doc_ids`` answers with ``{documents, missing}``, and does so even for a
+        list of one: a caller that asked in the plural gets the plural shape, so
+        nothing has to branch on how many results came back. The CLI picks the
+        key from how many ids were typed; every other client says which it wants.
+        """
+        refs = payload.get("doc_ids")
+        if refs is None:
+            view = self._documents.get(_str(payload, "doc_id"), _opt_str(payload, "section"))
+            return asdict(view)
+        if payload.get("doc_id") is not None:
+            raise ValidationError("get takes 'doc_id' or 'doc_ids', not both")
+        if payload.get("section") is not None:
+            raise ValidationError(
+                "'section' takes one document; with 'doc_ids' write '<id>#<heading>'"
+            )
+        return asdict(self._documents.get_many(_str_list(payload, "doc_ids")))
 
     def _query(self, payload: Payload) -> object:
         request = QueryRequest(

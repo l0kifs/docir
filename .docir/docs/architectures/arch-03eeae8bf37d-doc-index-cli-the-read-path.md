@@ -25,8 +25,10 @@ whole `docs/` folder.
 **Two-tier retrieval (skeleton → body).** `context`, `query`, and `search`
 return *skeletons* — frontmatter, tags, typed `related`, and the
 `owner`/`verified`/`stale` fields, but **not the body**. The agent scans those to
-judge relevance and then fetches only the bodies it needs with `docir get <id>`.
-Keeping bodies out of result sets is where the context savings come from; the
+judge relevance and then fetches only the bodies it needs — all of them in one
+`docir get <id> <id> ...`, since process start rather than retrieval is what a
+read costs (issue-9509f9fa3631). Keeping bodies out of result sets is where the
+context savings come from; the
 `description` field (indexed and shown in listings) is what makes the skeleton
 enough to judge relevance.
 

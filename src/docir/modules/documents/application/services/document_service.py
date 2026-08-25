@@ -8,7 +8,7 @@ schedules the deferred embedding recompute off the critical path.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import replace
 
 from docir.modules.documents.application.dto import (
@@ -17,8 +17,10 @@ from docir.modules.documents.application.dto import (
     BenchResult,
     BenchTask,
     ContextRequest,
+    DocumentBatch,
     DocumentSummary,
     DocumentView,
+    MissingDocument,
     QueryRequest,
     SearchRequest,
     StrategyScore,
@@ -41,6 +43,7 @@ from docir.modules.documents.domain.services.markdown_sections import (
 )
 from docir.modules.documents.domain.services.retrieval_scoring import mean, score_task
 from docir.modules.documents.domain.services.validation import Tier0Validator
+from docir.modules.documents.domain.value_objects.doc_ref import DocRef
 from docir.modules.documents.domain.value_objects.identifiers import DocId
 from docir.modules.documents.domain.value_objects.queries import DocumentFilter
 from docir.modules.documents.domain.value_objects.relations import RelatedRef
@@ -85,6 +88,25 @@ _SEARCH_OVERFETCH = 2
 def _parse_refs(tokens: tuple[str, ...]) -> tuple[RelatedRef, ...]:
     """Parse ``<id>`` / ``<id>:<kind>`` CLI tokens into typed edges."""
     return tuple(RelatedRef.parse(token) for token in tokens if token.strip())
+
+
+def _unique_refs(tokens: Iterable[str]) -> tuple[DocRef, ...]:
+    """Parse batch addresses, keeping the caller's order and dropping repeats.
+
+    Deduplicated on the whole address, not the id: two headings of one document
+    are two legitimate reads, while the same address twice is a mistake that
+    would otherwise be paid for in body-sized tokens.
+    """
+    seen: set[tuple[str, str | None]] = set()
+    refs: list[DocRef] = []
+    for token in tokens:
+        ref = DocRef.parse(token)
+        key = (ref.doc_id, ref.section)
+        if key in seen:
+            continue
+        seen.add(key)
+        refs.append(ref)
+    return tuple(refs)
 
 
 #: Rows per scan when `--stale` or `--code` forces post-filtering. Large enough
@@ -391,22 +413,85 @@ class DocumentService:
         without paying for a body that is frequently ten times its size. A
         heading that does not exist raises, listing the ones that do — an agent
         should not have to fetch the whole body to discover the names.
+
+        ``doc_id`` may itself carry the heading as ``<id>#<heading>``, which is
+        the address form :meth:`get_many` takes; supplying both spellings at
+        once is refused rather than resolved, since the two disagreeing has no
+        reading worth guessing.
         """
-        with self._uow_factory() as uow:
-            document = self._require(uow, doc_id)
-            view = DocumentView.from_document(
-                document,
-                stale=self._is_stale(document),
-                # Both directions, because the useful question is usually the
-                # backwards one: "what did anyone say about this decision" is
-                # answered by who names it, and nothing else in the CLI answers
-                # it — `related` only records what its own author wrote down.
-                mentions=tuple(uow.mentions.outgoing(doc_id)),
-                mentioned_by=tuple(uow.mentions.incoming(doc_id)),
+        ref = DocRef.parse(doc_id)
+        if ref.section is not None and section is not None:
+            raise ValidationError(
+                f"{doc_id!r} already names a section; drop --section or the '#' form"
             )
-            if section is None:
-                return view
-            return replace(view, body=extract_section(document.body, section), section=section)
+        with self._uow_factory() as uow:
+            return self._deep_read(uow, DocRef(ref.doc_id, ref.section or section))
+
+    def get_many(self, refs: Sequence[str]) -> DocumentBatch:
+        """Return several documents in full, in one request (``docir get a b``).
+
+        The deep read, batched. It exists because process start dominates a
+        docir read (issue-9509f9fa3631): five ``get`` calls are five
+        interpreters, and over MCP they are five model turns. One unit of work
+        answers all of them, so the marginal cost of the second document is the
+        body it carries and nothing else.
+
+        The skeleton contract is untouched — ``query``/``search``/``context``
+        still return no bodies. This widens how many bodies one *deep* read may
+        name, not which paths carry one.
+
+        Each entry is a :class:`DocRef` address: ``<id>``, or ``<id>#<heading>``
+        for the section form, which is what a ranked hit's ``matched_section``
+        already gives an agent. Order and duplicates follow the caller: the same
+        address twice is answered once, the same document under two headings is
+        two answers.
+
+        A reference that does not resolve — no such document, or no such heading
+        in it — lands in ``missing`` carrying the error it would have raised
+        alone. A *malformed* one still raises, and the asymmetry is the point:
+        one is a fact about the corpus that must not cost the caller the four
+        documents that did resolve, the other is the caller's own typo.
+        """
+        addresses = _unique_refs(refs)
+        if not addresses:
+            raise ValidationError("get needs at least one document reference")
+        documents: list[DocumentView] = []
+        missing: list[MissingDocument] = []
+        with self._uow_factory() as uow:
+            for ref in addresses:
+                try:
+                    documents.append(self._deep_read(uow, ref))
+                except (DocumentNotFoundError, ValidationError) as exc:
+                    # Exactly the two per-reference failures: no such document,
+                    # no such heading in it. A broader catch would report a
+                    # broken *store* as a missing document — an answer that
+                    # reads as "somebody deleted it" and sends nobody to the
+                    # real fault.
+                    missing.append(MissingDocument(ref=ref.to_token(), error=str(exc)))
+        return DocumentBatch(documents=tuple(documents), missing=tuple(missing))
+
+    def _deep_read(self, uow: UnitOfWork, ref: DocRef) -> DocumentView:
+        """One document, whole or narrowed — the body of both ``get`` paths.
+
+        Shared so the single and batched reads cannot answer differently: a
+        batch that assembled its own view would be a second projection of the
+        aggregate, and the field it forgot would be missing only when you asked
+        for two documents.
+        """
+        document = self._require(uow, ref.doc_id)
+        view = DocumentView.from_document(
+            document,
+            stale=self._is_stale(document),
+            # Both directions, because the useful question is usually the
+            # backwards one: "what did anyone say about this decision" is
+            # answered by who names it, and nothing else in the CLI answers
+            # it — `related` only records what its own author wrote down.
+            mentions=tuple(uow.mentions.outgoing(ref.doc_id)),
+            mentioned_by=tuple(uow.mentions.incoming(ref.doc_id)),
+        )
+        if ref.section is None:
+            return view
+        return replace(view, body=extract_section(document.body, ref.section), section=ref.section)
 
     def bench(self, request: BenchRequest) -> BenchResult:
         """Score this store's read path against judged tasks (``docir bench``).

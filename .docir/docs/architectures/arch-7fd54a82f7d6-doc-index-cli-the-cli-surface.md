@@ -28,7 +28,7 @@ Every command below exists in `docir --help`; the groups are `agent`, `daemon`,
 
 | Command | Purpose |
 |---|---|
-| `docir get <id> [--section "<heading>"]` | One document in full, or just the span under one heading |
+| `docir get <id> [<id>...] [--section "<heading>"]` | Documents in full — several in one command, `<id>#<heading>` for one section of one, `--section` for the single-document form. Two or more ids answer with `{documents, missing}`; a ref that does not resolve is reported there rather than failing the read |
 | `docir query --type decision --status accepted --tag auth` | Structured filtering; also `--owner`, `--stale`, `--code`, and `--expr` for a JMESPath question the flags cannot ask, `--code`, `--limit/--offset` |
 | `docir search "<text>"` | Full-text over title, description and body; `--explain` for the rank and BM25 behind each hit |
 | `docir context "<agent task>"` | Ranked minimal set (FTS5 + semantic, fused) plus graph neighbours; `--expand` bounds the neighbour slots, `--min-score` filters on `similarity`, `--also` adds a phrasing of your own (several queries take turns rather than pooling), `--explain` returns the terms behind each rank |
@@ -96,10 +96,14 @@ cannot survive as an orphaned page nobody can reach and nobody knows is stale.
 build is recognised, and any other non-empty directory is refused unless
 `--force`, because `--out` is a path a person types.
 
-The build does one `query` and then one `get` per document. Bodies are absent
-from every list path by contract, so a build that stopped at `query` would
-report the right document count and publish empty pages — which looks exactly
-like success.
+The build does one `query` and then one batched `get` for every body. Bodies are
+absent from every list path by contract, so a build that stopped at `query`
+would report the right document count and publish empty pages — which looks
+exactly like success. It reads the whole corpus deeply, which is the shape the
+batch exists for; `missing` is ignored, because these ids came from `query` a
+moment ago and one that has since gone is a page not to publish rather than an
+error, and an empty store skips the pass instead of asking `get` to tolerate an
+empty list.
 
 Architecturally, `publishing` is a **leaf module**: it takes documents as data
 (the `docir get` JSON shape) rather than importing `documents.api`. The site is
@@ -124,10 +128,13 @@ not "simplify" it by handing it a `DocumentService`.
 2. **Read only what matters**
    Agent judges relevance from the skeletons — by `similarity`, the raw cosine,
    never by `score`, which is rank-derived and says nothing about how good a
-   match was — then calls `docir get adr-3f9a2b1c7d4e` for the bodies it
-   actually needs. If the hit named a `matched_section`, that heading goes
-   straight to `docir get <id> --section "<heading>"` and the agent pays for one
-   section instead of a body ten times its size.
+   match was — then calls `docir get` **once** for every body it actually
+   needs: `docir get adr-3f9a2b1c7d4e arch-0002 issue-0003`. A hit that named a
+   `matched_section` is addressed inline as `<id>#<heading>`, so the agent pays
+   for one section instead of a body ten times its size, and one process
+   instead of one per document. That second saving is the larger one — a docir
+   read is dominated by starting the interpreter, not by retrieval
+   (issue-9509f9fa3631).
 
 3. **Check what the change is governed by**
    `docir query --code src/auth/login.py` answers the other direction: which

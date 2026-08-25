@@ -47,7 +47,8 @@ Two rules govern every use of these tools:
    and collision-free ids.
 2. `docir_context`, `docir_search` and `docir_query` return *skeletons*:
    frontmatter, typed relation edges and staleness, with no body. Scan wide
-   with those, then fetch the one body you need with `docir_get`.
+   with those, then fetch the bodies you need with `docir_get` — one call with
+   `doc_ids`, not one call per document.
 
 Start a task with `docir_context "<what you are about to change>"`. Call
 `docir_schema` before your first write to learn the valid types, statuses and
@@ -290,25 +291,46 @@ def build_mcp_server(
 
     @mcp.tool(annotations=_READ_ONLY)
     def docir_get(
-        doc_id: str, section: str | None = None, stores: list[str] | None = None
+        doc_id: str | None = None,
+        section: str | None = None,
+        doc_ids: list[str] | None = None,
+        stores: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Fetch one document — the whole body, or a single section of it.
+        """Fetch documents in full — whole bodies, or single sections of them.
 
-        The only read path that returns a body. Reach for it after a skeleton
-        from `docir_context` / `docir_search` / `docir_query` tells you which
-        document is worth the tokens.
+        The only read path that returns a body. Reach for it after skeletons
+        from `docir_context` / `docir_search` / `docir_query` tell you which
+        documents are worth the tokens.
 
-        Prefer `section` on a long document: architecture notes here run to tens
+        **Pass `doc_ids` whenever you want more than one.** Reading five
+        documents with five calls costs five turns; one call costs one, and the
+        reply is the same content. There is no penalty for batching.
+
+        Prefer sections on a long document: architecture notes here run to tens
         of thousands of characters, and one section is usually the part that
         answers you. An unknown heading is an error listing the ones that exist,
         so you can find the right name without fetching the whole body first.
 
         Args:
-            doc_id: The document id (e.g. "adr-3f9a2b1c7d4e").
+            doc_id: One document id (e.g. "adr-3f9a2b1c7d4e"). Answers with that
+                document. Use `doc_ids` instead for two or more.
             section: A heading. Returns that heading and the text under it.
+                Applies to `doc_id`; with `doc_ids`, write the heading into each
+                address instead.
+            doc_ids: Several addresses, read in one request. Each is an id, or
+                `"<id>#<heading>"` for one section of it — which is exactly what
+                a hit's `matched_section` gives you. Answers with
+                `{"documents": [...], "missing": [{"ref", "error"}]}`: an id that
+                no longer exists, or a heading that does not, is reported beside
+                the documents that did resolve rather than failing the request.
             stores: Extra store paths to search alongside this one. A federated
                 hit names its `store`; this is how you then read it.
         """
+        if doc_ids:
+            return run.one(
+                "get",
+                {"doc_ids": doc_ids, STORES_KEY: resolve_extra(stores or [])},
+            )
         return run.one(
             "get",
             {

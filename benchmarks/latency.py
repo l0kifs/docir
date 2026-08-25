@@ -62,7 +62,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from docir.config.settings import Settings
@@ -224,6 +224,16 @@ def timed(argv: list[str], *, no_daemon: bool) -> float:
     return elapsed
 
 
+def timed_all(argvs: Sequence[list[str]], *, no_daemon: bool) -> float:
+    """One sample made of several processes, summed.
+
+    A batched read is only worth measuring against the thing it replaces, and
+    that thing is N whole invocations rather than N dispatches — the cost being
+    removed is the interpreter, not the query.
+    """
+    return sum(timed(argv, no_daemon=no_daemon) for argv in argvs)
+
+
 def percentile(values: list[float], pct: float) -> float:
     """Nearest-rank percentile: with n=5 the p95 is the slowest sample, not a fit."""
     ordered = sorted(values)
@@ -233,7 +243,7 @@ def percentile(values: list[float], pct: float) -> float:
 
 def measure(
     settings: Settings,
-    commands: dict[str, Callable[[int], list[str]]],
+    commands: dict[str, Callable[[int], list[list[str]]]],
     warm_samples: int,
 ) -> dict[tuple[str, str], list[float]]:
     """Time every (command, mode) pair at the store's current size."""
@@ -244,13 +254,13 @@ def measure(
             # One untimed run so the daemon is spawned and the model loaded;
             # timing that would be the cold row measured under the wrong name.
             timed(["version"], no_daemon=False)
-            timed(next(iter(commands.values()))(0), no_daemon=False)
+            timed_all(next(iter(commands.values()))(0), no_daemon=False)
         for name, argv in commands.items():
             times: list[float] = []
             for index in range(count):
                 if mode == "cold daemon":
                     lifecycle.stop(settings)
-                times.append(timed(argv(index), no_daemon=(mode == "no daemon")))
+                times.append(timed_all(argv(index), no_daemon=(mode == "no daemon")))
             samples[name, mode] = times
             print(f"    {name:<9} {mode:<12} p50 {percentile(times, 50):>6.3f}s")
     floor = [timed(["version"], no_daemon=True) for _ in range(SAMPLES["floor"])]
@@ -325,10 +335,18 @@ def main() -> int:
             # A document from the middle of the store, so `get` reads neither
             # the newest nor the oldest row.
             middle = ids[len(ids) // 2]
-            commands: dict[str, Callable[[int], list[str]]] = {
-                "context": lambda index: ["context", QUERIES[index % len(QUERIES)]],
-                "search": lambda index: ["search", QUERIES[index % len(QUERIES)]],
-                "get": lambda index, doc_id=middle: ["get", doc_id],
+            # Five documents spread across the store, for the two batch rows.
+            spread = [ids[(len(ids) * step) // 6] for step in range(1, 6)]
+            commands: dict[str, Callable[[int], list[list[str]]]] = {
+                "context": lambda index: [["context", QUERIES[index % len(QUERIES)]]],
+                "search": lambda index: [["search", QUERIES[index % len(QUERIES)]]],
+                "get": lambda index, doc_id=middle: [["get", doc_id]],
+                # What an agent pays for five bodies today, and what it pays
+                # for the same five in one command. The pair is the whole
+                # argument for the batch: identical content, identical index
+                # work, and the difference is five interpreters against one.
+                "get x5": lambda index, docs=spread: [["get", doc] for doc in docs],
+                "get 5in1": lambda index, docs=spread: [["get", *docs]],
             }
             samples = measure(settings, commands, args.samples)
             collected[size] = samples
@@ -337,7 +355,11 @@ def main() -> int:
         print(
             "\nSubtract the `version` floor to separate starting Python from answering\n"
             "the question. What is left of a warm-daemon read is the daemon's whole\n"
-            "cost: a socket round trip and the work itself."
+            "cost: a socket round trip and the work itself.\n\n"
+            "`get x5` against `get 5in1` prices the batch: same five bodies, five\n"
+            "processes against one. Both rows include the floor once per process, so\n"
+            "the gap is roughly four floors — which is the point, since the floor is\n"
+            "what dominates a read."
         )
     finally:
         lifecycle.stop(settings)

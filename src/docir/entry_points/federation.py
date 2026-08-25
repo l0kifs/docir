@@ -198,6 +198,8 @@ class FederatedDispatcher:
         self.unavailable = tuple(peer for peer in peers if peer.reader is None)
         readers = [peer for peer in peers if peer.reader is not None]
         if command == "get":
+            if rest.get("doc_ids") is not None:
+                return self._get_many(rest, readers)
             return self._get(rest, readers)
         return self._merge(command, rest, readers)
 
@@ -220,6 +222,44 @@ class FederatedDispatcher:
                 except DocirError:
                     continue
             raise local_miss
+
+    def _get_many(self, payload: dict[str, object], peers: Sequence[Peer]) -> object:
+        """A batch deep read: ask locally, then ask each peer only what is left.
+
+        Store priority is the single ``get``'s rule applied per reference —
+        local first, then peers in declaration order, first match wins — so the
+        two cannot disagree about which copy of an id you are handed. It costs
+        one dispatch per store rather than one per reference: a peer is asked
+        only for the addresses nothing nearer could answer, and is not asked at
+        all once none are left.
+
+        A reference that resolves nowhere keeps the *local* store's error, for
+        the reason the single ``get`` re-raises ``local_miss``: "it is in none of
+        these stores" is the local answer with a longer search, and reporting a
+        peer's phrasing of it would name a repository the caller never asked
+        about. The order within ``documents`` is therefore by store and then by
+        request, not by request alone — a peer's answers arrive after the local
+        ones because that is the order the stores were consulted in.
+        """
+        result = _as_mapping(self._base.dispatch("get", payload))
+        found = [
+            _stamp_row(row, self._home) if peers else row for row in _rows(result.get("documents"))
+        ]
+        missing = {entry["ref"]: entry for entry in _missing(result.get("missing"))}
+        for peer in peers:
+            if not missing:
+                break
+            assert peer.reader is not None
+            try:
+                answer = _as_mapping(
+                    peer.reader.dispatch("get", {**payload, "doc_ids": list(missing)})
+                )
+            except DocirError:
+                continue
+            found.extend(_stamp_row(row, peer.home) for row in _rows(answer.get("documents")))
+            unresolved = {entry["ref"] for entry in _missing(answer.get("missing"))}
+            missing = {ref: entry for ref, entry in missing.items() if ref in unresolved}
+        return {"documents": found, "missing": list(missing.values())}
 
     def _merge(self, command: str, payload: dict[str, object], peers: Sequence[Peer]) -> object:
         """Ask every store, then order the union by comparable relevance.
@@ -305,6 +345,27 @@ def _stamp_row(row: dict[str, object], home: Path) -> dict[str, object]:
     ambiguous one. Ids stay the only identifier.
     """
     return {**row, "store": str(home)}
+
+
+def _as_mapping(payload: object) -> dict[str, object]:
+    """One response object, or an empty mapping if the payload was not one."""
+    if not isinstance(payload, dict):
+        return {}
+    return {str(key): value for key, value in payload.items()}
+
+
+def _missing(payload: object) -> list[dict[str, str]]:
+    """The unresolved addresses of a batch reply, keyed by the ``ref`` field.
+
+    Anything without a string ``ref`` is dropped rather than carried: the ref is
+    what the retry is addressed with, so an entry lacking one cannot be asked
+    for again and would only survive as an unremovable miss.
+    """
+    return [
+        {str(key): str(value) for key, value in row.items()}
+        for row in _rows(payload)
+        if isinstance(row.get("ref"), str)
+    ]
 
 
 def _rows(payload: object) -> list[dict[str, object]]:

@@ -71,6 +71,35 @@ def _declare(home: Path, *peers: Path) -> None:
     (home / PEER_FILE).write_text(f"stores:\n{lines}\n", encoding="utf-8")
 
 
+class _RecordingReader:
+    """A store that answers `get` for the ids it knows, and remembers the asking.
+
+    Only the batch shape: the fan-out under test never sends anything else.
+    """
+
+    def __init__(self, known: set[str], label: str = "local") -> None:
+        self.calls: list[list[str]] = []
+        self._known = known
+        self._label = label
+
+    @property
+    def commands(self) -> frozenset[str]:
+        return frozenset({"get"})
+
+    def dispatch(self, command: str, payload: dict[str, object]) -> object:
+        raw = payload.get("doc_ids")
+        refs = [str(item) for item in raw] if isinstance(raw, list) else []
+        self.calls.append(refs)
+        return {
+            "documents": [{"id": ref} for ref in refs if ref in self._known],
+            "missing": [
+                {"ref": ref, "error": f"{self._label}: no document with id {ref!r}"}
+                for ref in refs
+                if ref not in self._known
+            ],
+        }
+
+
 def _digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -272,6 +301,117 @@ class TestFederatedReads:
         )
         assert isinstance(rows, list)
         assert [row["title"] for row in rows] == [_PEER_DOC["title"]]
+
+
+class TestFederatedBatchRead:
+    """A batch `get` applies the single `get`'s store priority per reference.
+
+    The two must not disagree about which copy of an id you are handed, and the
+    fan-out must not degrade into one dispatch per reference per store.
+    """
+
+    def test_local_and_peer_documents_come_back_together(
+        self, container: Container, peer: Container
+    ) -> None:
+        local = container.dispatcher.dispatch("add", _LOCAL_DOC)
+        remote = peer.dispatcher.dispatch("add", {**_PEER_DOC, "title": "Rate limits"})
+        assert isinstance(local, dict) and isinstance(remote, dict)
+        _declare(container.settings.home, peer.settings.home)
+
+        payload = container.dispatcher.dispatch("get", {"doc_ids": [local["id"], remote["id"]]})
+        assert isinstance(payload, dict)
+        assert {row["id"] for row in payload["documents"]} == {local["id"], remote["id"]}
+        assert not payload["missing"]
+
+    def test_each_document_names_the_store_that_answered(
+        self, container: Container, peer: Container
+    ) -> None:
+        """The single `get` stamps the peer's home; the batch must too, or a
+        federated hit becomes an id with no repository behind it."""
+        local = container.dispatcher.dispatch("add", _LOCAL_DOC)
+        remote = peer.dispatcher.dispatch("add", {**_PEER_DOC, "title": "Rate limits"})
+        assert isinstance(local, dict) and isinstance(remote, dict)
+        _declare(container.settings.home, peer.settings.home)
+
+        payload = container.dispatcher.dispatch("get", {"doc_ids": [local["id"], remote["id"]]})
+        assert isinstance(payload, dict)
+        stores = {row["id"]: row["store"] for row in payload["documents"]}
+        assert stores[local["id"]] == str(container.settings.home)
+        assert stores[remote["id"]] == str(peer.settings.home)
+
+    def test_a_section_address_resolves_in_a_peer(
+        self, container: Container, peer: Container
+    ) -> None:
+        """The retry has to carry the heading, which means carrying the whole
+        address — a peer asked for the bare id would answer the wrong span."""
+        remote = peer.dispatcher.dispatch("add", {**_PEER_DOC, "title": "Rate limits"})
+        assert isinstance(remote, dict)
+        _declare(container.settings.home, peer.settings.home)
+
+        payload = container.dispatcher.dispatch("get", {"doc_ids": [f"{remote['id']}#Decision"]})
+        assert isinstance(payload, dict)
+        (document,) = payload["documents"]
+        assert document["section"] == "Decision"
+        assert "client certificate" in document["body"]
+
+    def test_a_miss_everywhere_keeps_the_local_error(
+        self, container: Container, peer: Container
+    ) -> None:
+        """The same rule the single `get` follows by re-raising `local_miss`:
+        the answer is this store's, given after a longer search."""
+        _declare(container.settings.home, peer.settings.home)
+        payload = container.dispatcher.dispatch("get", {"doc_ids": ["adr-nope"]})
+        assert isinstance(payload, dict)
+        assert not payload["documents"]
+        (entry,) = payload["missing"]
+        assert entry["ref"] == "adr-nope"
+        assert "no document with id" in entry["error"]
+
+
+class TestBatchFanOutCost:
+    """One dispatch per store, and only for the addresses still unanswered.
+
+    Constructed against recording readers rather than two real stores: the
+    property is *which* requests were made, and a real peer answers a wasteful
+    fan-out and a frugal one identically.
+    """
+
+    def _federated(
+        self, tmp_path: Path, local: set[str], remote: set[str]
+    ) -> tuple[FederatedDispatcher, _RecordingReader]:
+        home, peer_home = tmp_path / "local", tmp_path / "peer"
+        home.mkdir()
+        peer_home.mkdir()
+        _declare(home, peer_home)
+        reader = _RecordingReader(remote, label="peer")
+        return (
+            FederatedDispatcher(_RecordingReader(local), home, lambda _home: (reader, "")),
+            reader,
+        )
+
+    def test_a_peer_is_not_asked_when_the_local_store_answered_everything(
+        self, tmp_path: Path
+    ) -> None:
+        dispatcher, peer = self._federated(tmp_path, {"a", "b"}, {"c"})
+        dispatcher.dispatch("get", {"doc_ids": ["a", "b"]})
+        assert peer.calls == []
+
+    def test_a_peer_is_asked_only_for_what_is_still_missing(self, tmp_path: Path) -> None:
+        """Re-asking for the whole batch would make every peer re-read documents
+        the caller already holds — the cost the batch exists to remove."""
+        dispatcher, peer = self._federated(tmp_path, {"a"}, {"b"})
+        payload = dispatcher.dispatch("get", {"doc_ids": ["a", "b"]})
+        assert peer.calls == [["b"]]
+        assert isinstance(payload, dict)
+        assert [row["id"] for row in payload["documents"]] == ["a", "b"]
+        assert not payload["missing"]
+
+    def test_an_address_nobody_answers_keeps_the_local_error(self, tmp_path: Path) -> None:
+        dispatcher, peer = self._federated(tmp_path, set(), set())
+        payload = dispatcher.dispatch("get", {"doc_ids": ["a"]})
+        assert peer.calls == [["a"]]
+        assert isinstance(payload, dict)
+        assert payload["missing"] == [{"ref": "a", "error": "local: no document with id 'a'"}]
 
 
 class TestPeersAreReadOnly:

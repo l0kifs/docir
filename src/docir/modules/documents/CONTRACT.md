@@ -25,7 +25,19 @@ files and the derived index never disagree.
   name it, resolved against the index. Derived, untyped and unauthored, so they sit beside
   `related` rather than in it — a reader must be able to tell an edge somebody wrote from one
   docir inferred. On `get` only: the list paths are skeletons, and the body these were derived
-  from is already in this response.
+  from is already in this response. `id` may carry a heading as `<id>#<heading>`, the address
+  form `get_many` takes; supplying that and `section` together is refused.
+- `DocumentService.get_many([ref]) -> DocumentBatch` — several documents in full, one unit of
+  work. The deep read batched, because process start dominates a docir read
+  (issue-9509f9fa3631): five `get` calls are five interpreters, and over MCP five model turns.
+  It widens how many bodies one *deep* read may name, never which paths carry a body — the
+  skeleton contract is untouched. Each ref is `<id>` or `<id>#<heading>`; order is the
+  caller's, deduplicated on the whole address (one document under two headings is two reads).
+  A ref that does not resolve — no such document, no such heading — lands in
+  `DocumentBatch.missing` as `MissingDocument{ref, error}` carrying the error it would have
+  raised alone, so one deleted id does not cost the caller the four that resolved. A
+  *malformed* ref, and an empty list, still raise: that is the caller's own typo, not a fact
+  about the corpus.
 - `DocumentService.query(QueryRequest) -> [DocumentSummary]` — structured filtering (skeleton, no body).
   Pages with `limit`/`offset`, applied as a SQL window so the cost of a page does not grow with the
   corpus. `code_paths` answers "which documents govern this file": each path is matched against

@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from docir.modules.documents.domain.services.slugify import slugify
+from docir.modules.documents.domain.value_objects.doc_ref import DocRef
 from docir.modules.documents.domain.value_objects.identifiers import DocId
 from docir.platform.embedding.vector import Embedding
 from docir.platform.errors import ValidationError
@@ -82,3 +83,41 @@ class TestSlugify:
 
     def test_slugify_truncates(self) -> None:
         assert len(slugify("a " * 100, max_length=10)) <= 10
+
+
+class TestDocRef:
+    """The ``<id>#<heading>`` address a batch read takes."""
+
+    def test_a_bare_id_names_no_section(self) -> None:
+        ref = DocRef.parse("adr-3f9a2b1c7d4e")
+        assert ref == DocRef("adr-3f9a2b1c7d4e", None)
+
+    def test_the_hash_splits_id_from_heading(self) -> None:
+        assert DocRef.parse("adr-0007#Decision") == DocRef("adr-0007", "Decision")
+
+    def test_only_the_first_hash_splits(self) -> None:
+        """A heading may contain hashes; an id may not, so the first one wins."""
+        assert DocRef.parse("adr-0007#Why #1 matters") == DocRef("adr-0007", "Why #1 matters")
+
+    def test_surrounding_space_is_ignored_on_both_halves(self) -> None:
+        assert DocRef.parse("  adr-0007 # Decision  ") == DocRef("adr-0007", "Decision")
+
+    @pytest.mark.parametrize("bad", ["", "   ", "#Decision", " # "])
+    def test_a_half_without_a_document_is_refused(self, bad: str) -> None:
+        with pytest.raises(ValidationError):
+            DocRef.parse(bad)
+
+    def test_a_trailing_hash_is_refused_rather_than_read_as_the_whole_document(self) -> None:
+        """Guessing "they meant everything" returns a body nobody asked for.
+
+        The other reading — a heading they started typing — is at least as
+        likely, and the two differ by the whole document.
+        """
+        with pytest.raises(ValidationError, match="names no heading"):
+            DocRef.parse("adr-0007#")
+
+    @pytest.mark.parametrize("token", ["adr-0007", "adr-0007#Decision", "adr-0007#Why #1"])
+    def test_the_token_round_trips(self, token: str) -> None:
+        """`missing` hands the ref back for the caller to retype and federation
+        resends it to a peer, so parse and render must agree."""
+        assert DocRef.parse(token).to_token() == token

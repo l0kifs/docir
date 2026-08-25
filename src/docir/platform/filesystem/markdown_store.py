@@ -120,6 +120,12 @@ class MarkdownDocumentFileStore(DocumentFileStore):
             except ValidationError:
                 continue
 
+    def count(self) -> int:
+        """Count the ``.md`` files under the root — the same glob ``scan`` walks."""
+        if not self._root.exists():
+            return 0
+        return sum(1 for _ in self._root.rglob("*.md"))
+
     def find_malformed(self) -> list[tuple[str, str]]:
         """Return ``(path, reason)`` for every ``.md`` file that fails to parse."""
         malformed: list[tuple[str, str]] = []

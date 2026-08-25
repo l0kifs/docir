@@ -146,6 +146,9 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
         rows = self._session.scalars(select(DocumentRow)).all()
         return self._hydrate(list(rows))
 
+    def count(self) -> int:
+        return int(self._session.scalar(select(func.count()).select_from(DocumentRow)) or 0)
+
     def query(self, spec: DocumentFilter) -> list[Document]:
         stmt = select(DocumentRow)
         if spec.types:

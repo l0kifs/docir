@@ -1158,3 +1158,78 @@ def test_lint_does_not_flag_a_pair_that_is_related(dispatcher: Dispatcher) -> No
     dispatcher.dispatch("update", {"doc_id": ids[0], "set_related": [ids[1]]})
     findings = dispatcher.dispatch("lint", {})
     assert [f for f in findings if f["kind"] == "duplicate"] == []
+
+
+class TestStoreStatusIsTheIndexAccountOfItself:
+    """`store_status` — the store half of `docir doctor`, over the dispatcher.
+
+    What is only true here is that the facts are *facts*: the command reports
+    what the index holds and leaves the judgement to whoever also knows the
+    process it is running in. The one exception is `stale_index_build`, which is
+    carried so the version comparison stays implemented once — asserted below,
+    because a second implementation is exactly what would drift.
+    """
+
+    def test_it_counts_both_sides_of_the_projection(self, dispatcher: Dispatcher) -> None:
+        # The pair is the point: the index is derived from the files, so a
+        # difference is the "reads are answering from stale state" condition.
+        # A fresh clone has files and no index at all.
+        dispatcher.dispatch("add", {"type": "decision", "title": "A", "description": "d"})
+        dispatcher.dispatch("add", {"type": "decision", "title": "B", "description": "d"})
+        status = dispatcher.dispatch("store_status", {})
+        assert status["documents"] == 2
+        assert status["documents_on_disk"] == 2
+
+    def test_a_file_the_index_does_not_hold_shows_in_the_disk_count(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        """Counted as a file and not as a document, which is correct twice: the
+        index really does not hold it, and `check` names it as `malformed`."""
+        dispatcher.dispatch("add", {"type": "decision", "title": "A", "description": "d"})
+        (settings.docs_root / "decisions" / "broken.md").write_text(
+            _MALFORMED_FILE, encoding="utf-8"
+        )
+        status = dispatcher.dispatch("store_status", {})
+        assert (status["documents"], status["documents_on_disk"]) == (1, 2)
+
+    def test_the_stale_build_judgement_is_carried_not_recomputed(
+        self, dispatcher: Dispatcher, uow_factory: Callable[[], UnitOfWork]
+    ) -> None:
+        dispatcher.dispatch("add", {"type": "decision", "title": "A", "description": "d"})
+        assert dispatcher.dispatch("store_status", {})["stale_index_build"] is None
+
+        with uow_factory() as uow:
+            uow.index_build.set("0.0.1")
+            uow.commit()
+        status = dispatcher.dispatch("store_status", {})
+        assert status["stale_index_build"] == "0.0.1"
+        assert status["version"] == __version__
+
+    def test_it_reports_the_embedding_queue_nothing_else_reads(
+        self, dispatcher: Dispatcher, uow_factory: Callable[[], UnitOfWork]
+    ) -> None:
+        """`embed --flush` drains the queue without ever saying how long it was,
+        so until now a corpus with no current vectors was invisible."""
+        dispatcher.dispatch("add", {"type": "decision", "title": "A", "description": "d"})
+        assert dispatcher.dispatch("store_status", {})["embeddings_pending"] == 0
+
+        with uow_factory() as uow:
+            uow.embeddings.mark_dirty("adr-0001")
+            uow.commit()
+        assert dispatcher.dispatch("store_status", {})["embeddings_pending"] == 1
+
+    def test_it_says_nothing_about_the_corpus(self, dispatcher: Dispatcher) -> None:
+        """`check` owns that question. A diagnosis that costs what `check` costs
+        is one nobody runs while something is actually wrong, so the absence of
+        graph findings here is the contract, not an oversight."""
+        dispatcher.dispatch("add", {"type": "decision", "title": "Lonely", "description": "d"})
+        status = dispatcher.dispatch("store_status", {})
+        assert set(status) == {
+            "documents",
+            "documents_on_disk",
+            "version",
+            "stale_index_build",
+            "schema_drift",
+            "embedding_model",
+            "embeddings_pending",
+        }

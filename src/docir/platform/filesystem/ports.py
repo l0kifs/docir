@@ -59,6 +59,20 @@ class DocumentFileStore(ABC):
         to surface those.
         """
 
+    def count(self) -> int:
+        """How many source files the docs root holds, without parsing any.
+
+        The counterpart to ``DocumentRepository.count``, and the pair is the
+        point: the index is a derived projection of these files, so the two
+        numbers disagreeing is the whole "your reads are answering from stale
+        state" condition in one comparison. Deliberately counts *files* rather
+        than parseable documents — a file that will not parse is one the index
+        does not hold, which is exactly what the comparison should show.
+
+        Defaults to ``0``; a real store overrides it.
+        """
+        return 0
+
     def find_malformed(self) -> list[tuple[str, str]]:
         """Return ``(path, reason)`` for source files that fail to parse.
 

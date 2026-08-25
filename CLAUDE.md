@@ -399,6 +399,24 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   would be replaced, so the rebuild after it would stamp the version on its way out. It is a
   `self` group because `docir update <id>` already means "edit a document", and it is not an
   MCP tool — the halves it orchestrates already are.
+- **`docir doctor` snapshots the environment *before* it dispatches, and that ordering is
+  the whole command (adr-909734bced92).** Every request runs `ensure_running`, which stops a
+  daemon serving other code and replaces it, and every container build creates a missing
+  index — so a doctor that asked the store first would repair two of the conditions it exists
+  to report and then call them clean. `doctor.snapshot()` reads only this process, this
+  environment and the filesystem; `try_execute` (not `execute`) then asks the store, because
+  "the store will not open" is a *finding* and exiting there prints nothing at the one moment
+  the environment half is wanted. Three consequences are load-bearing. The store half is a
+  dispatcher command (`store_status`), so the version comparison and the drift diff stay
+  implemented once and an agent reaches them over MCP — while the rest is deliberately *not*
+  a dispatcher command, since a daemon reporting on its own process makes "is the daemon
+  stale?" inexpressible. `documents` / `documents_on_disk` travel as a pair: doctor's own
+  dispatch creates an empty index, so without the disk count the second run of a fresh clone
+  reads as a healthy empty corpus. And the global `~/.docir` is excluded from
+  `shadowed-store` — it sits above every store under the user's home directory, so reporting
+  it fires the finding on the ordinary correct setup, the `orphan` failure again. The corpus
+  is `check`'s question and doctor never walks the graph; a diagnosis costing what `check`
+  costs is one nobody runs while something is wrong.
 - **The package half of `self upgrade` re-execs, and refuses to guess (adr-a555ee6bc484).**
   The installer runs only where docir owns its environment — a `uv tool` receipt, pipx
   metadata, a `pyvenv.cfg` — and then `os.execv`s `python -m docir` with a hidden

@@ -56,8 +56,8 @@ MODELS = (
 
 def measure(corpus_file: str, tasks_file: str, model: str) -> dict[str, float]:
     """Run every task through ``context`` and report the means for one cell."""
-    original = composition._build_embedder
-    composition._build_embedder = lambda _name=None: FastEmbedEmbedder(model_name=model)
+    original = composition.build_embedder
+    composition.build_embedder = lambda _name=None: FastEmbedEmbedder(model_name=model)
     home = Path(tempfile.mkdtemp(prefix="docir-multilingual-"))
     try:
         container, ids = build_store(home, corpus_file)
@@ -72,7 +72,7 @@ def measure(corpus_file: str, tasks_file: str, model: str) -> dict[str, float]:
             (lex if task["lexical"] else sem).append(recall)
         container.close()
     finally:
-        composition._build_embedder = original
+        composition.build_embedder = original
         shutil.rmtree(home, ignore_errors=True)
 
     def mean(values: list[float]) -> float:

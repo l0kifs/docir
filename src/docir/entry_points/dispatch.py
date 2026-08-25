@@ -60,6 +60,7 @@ class Dispatcher:
             "reindex": self._reindex,
             "check": self._check,
             "schema_drift": self._schema_drift,
+            "store_status": self._store_status,
             "repair": self._repair,
             "lint": self._lint,
             "bench": self._bench,
@@ -238,6 +239,9 @@ class Dispatcher:
 
     def _schema_drift(self, _payload: Payload) -> object:
         return {"drift": self._maintenance.schema_drift()}
+
+    def _store_status(self, _payload: Payload) -> object:
+        return asdict(self._maintenance.store_status())
 
     def _repair(self, _payload: Payload) -> object:
         return asdict(self._maintenance.repair())

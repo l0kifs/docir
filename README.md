@@ -161,6 +161,7 @@ never watch, so CI still needs the explicit command.
 | `docir search` / `query` | Full-text search (title/description/body — **not tags**) / structured filter. Both page with `--limit`/`--offset`; `query --owner X --stale` is a review queue, `query --code <path>` the decisions governing a file, `query --expr` a JMESPath question over fields and resolved edges |
 | `docir get <id> [<id>...]` | Full documents with bodies — several in one command, and `<id>#<heading>` for just one section of one |
 | `docir check` | Structural findings — duplicate ids, dangling edges, staleness (`--strict` gates CI on errors, `--fix` repairs them) |
+| `docir doctor` | Diagnose the *environment* — the installation, this store's index, the embedding model, the daemon, the peers (`--strict` gates a setup step on errors) |
 | `docir agent install` | Teach this repo's AI agent to drive docir |
 | `docir self upgrade` | Upgrade docir, then resync this store: reindex, refresh the agent files, report what `check` finds |
 | `docir bench fixture.yaml` | Score this store's retrieval against tasks whose answers you know |
@@ -287,6 +288,15 @@ model all sort themselves out on the next command. What is left is one command:
 docir self upgrade        # install the new docir, then resync this store
 docir self status         # what is installed, and whether anything newer exists
 ```
+
+When they do not — or when a read simply contradicts what you can see in the files —
+`docir doctor` is the one command that reports every way docir can be *subtly* wrong: a
+daemon still serving code you replaced, a `DOCIR_EMBEDDER` left over from a test run, an
+index built by another version or behind the files it projects, a schema that moved under the
+corpus, a peer store every read is silently skipping, writes about to land in `~/.docir`
+because nobody ran `docir init` here. Each finding names the command that closes it, and
+`--strict` exits nonzero on the ones that mean docir cannot work at all. It makes no network
+call and loads no model unless you pass `--probe`.
 
 Where docir does *not* own its environment — a checkout, a project whose lockfile pins it,
 an ephemeral `uvx` run — it says so and resyncs the store anyway. The full procedure is

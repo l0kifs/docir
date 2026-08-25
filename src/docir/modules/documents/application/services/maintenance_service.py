@@ -62,6 +62,50 @@ class ReindexResult:
 
 
 @dataclass(frozen=True, slots=True)
+class StoreStatus:
+    """What the derived index says about itself — the store half of ``docir doctor``.
+
+    Facts, not advice: every field is something only the index can answer, and
+    the judgement about what it means is made by the caller that also knows the
+    process it is running in. The one exception is ``stale_index_build``, which
+    is a judgement already implemented once
+    (:meth:`MaintenanceService.stale_index_build`) and would otherwise be
+    implemented a second time by whoever compared the two version strings.
+
+    Deliberately says nothing about the corpus. ``docir check`` owns that
+    question and answers it with a full graph scan; this one has to stay cheap
+    enough that the command reporting a broken environment is not itself the
+    slow part of the diagnosis.
+    """
+
+    #: Documents in the index. Counted in SQL, not hydrated.
+    documents: int
+    #: Source files under ``docs/``, counted without parsing them. The pair is
+    #: the point: the index is a projection of these files, so a difference is
+    #: the "reads are answering from stale state" condition stated as a number.
+    #: A file that will not parse counts here and not in ``documents``, which is
+    #: correct — the index does not hold it either.
+    documents_on_disk: int
+    #: The docir running this process, so a caller can report the pair without
+    #: having to know the version itself.
+    version: str
+    #: The version that built this index, when it is not the running one.
+    #: ``None`` covers both "built by this docir" and "never recorded" — absent
+    #: means unknown, the rule the schema baseline follows.
+    stale_index_build: str | None
+    #: How the active schema differs from the one the index was built against,
+    #: one line per change. Empty means nothing moved *or* nothing to compare.
+    schema_drift: tuple[str, ...]
+    #: The ``model_id`` this store's reads would score with, resolved rather
+    #: than configured: it is the embedder that was actually built.
+    embedding_model: str
+    #: Documents with no current vector for that model. A leftover
+    #: ``DOCIR_EMBEDDER`` shows up here as the whole corpus, because a vector
+    #: made by another model reads as dirty rather than as a rival answer.
+    embeddings_pending: int
+
+
+@dataclass(frozen=True, slots=True)
 class RepairAction:
     """One repair that was applied, in the caller's terms."""
 
@@ -236,6 +280,33 @@ class MaintenanceService:
         issues.extend(self._drift_issues())
         issues.extend(self._build_issues())
         return issues
+
+    def store_status(self) -> StoreStatus:
+        """The derived index's account of itself (the store half of ``docir doctor``).
+
+        One round trip for facts that were each reachable and none of which
+        were reportable together: the build stamp was a `check` finding buried
+        among the corpus ones, the drift had its own command, and the embedding
+        queue had no reader at all — `embed --flush` drains it without ever
+        saying how long it was.
+
+        Cheap on purpose. It counts documents in SQL and asks the queue for its
+        ids; it does not hydrate the corpus, scan the files or walk the graph.
+        A diagnosis command that costs what `check` costs is one nobody runs
+        while something is actually wrong.
+        """
+        with self._uow_factory() as uow:
+            documents = uow.documents.count()
+            pending = len(uow.embeddings.dirty_ids(self._embedder.model_id))
+        return StoreStatus(
+            documents=documents,
+            documents_on_disk=self._file_store.count(),
+            version=self._version,
+            stale_index_build=self.stale_index_build(),
+            schema_drift=tuple(self.schema_drift()),
+            embedding_model=self._embedder.model_id,
+            embeddings_pending=pending,
+        )
 
     def stale_index_build(self) -> str | None:
         """The version that built this index, when it is not the running one.

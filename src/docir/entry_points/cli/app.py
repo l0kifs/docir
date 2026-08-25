@@ -20,6 +20,7 @@ from typer.main import get_command
 
 from docir import __version__
 from docir.config.settings import Settings, new_store_home
+from docir.entry_points import doctor as doctor_report
 from docir.entry_points.cli import rendering
 from docir.entry_points.cli.body_input import resolve_body
 from docir.entry_points.cli.runner import (
@@ -30,6 +31,7 @@ from docir.entry_points.cli.runner import (
     help_wants_json,
     run_local,
     set_state,
+    try_execute,
     use_json,
     with_executor,
 )
@@ -1108,6 +1110,63 @@ def check(
 
 
 @app.command()
+def doctor(
+    strict: Annotated[
+        bool,
+        typer.Option("--strict", help="Exit nonzero on error-severity findings (for CI)."),
+    ] = False,
+    probe: Annotated[
+        bool,
+        typer.Option("--probe", help="Actually load the embedding model (may download ~67MB)."),
+    ] = False,
+) -> None:
+    """Diagnose the docir installation, this store, the daemon and the peers.
+
+    The conditions docir can be *subtly* wrong in, in one report: a daemon
+    serving code you have since replaced, DOCIR_EMBEDDER left over from a test
+    run, an index built by another version, a schema that has moved under the
+    corpus, a peer every read is silently skipping, writes about to land in the
+    global store because nobody ran `docir init` here.
+
+    Each was already detectable — in `daemon status`, `self status`, a stderr
+    line during a read, one finding among a hundred in `check`. None was
+    reportable together, so the way you found out was an answer that looked
+    right and was not.
+
+    Findings carry a severity. `error` means docir cannot work correctly here (no
+    index, a schema that will not load, no embedding model); `warning` means it
+    works less well than you think. --strict exits 1 on errors only, which is
+    what makes it usable in a setup script or CI.
+
+    It never touches the network and, without --probe, never loads a model:
+
+        docir doctor                # the whole report, in ~100ms
+        docir doctor --strict       # gate a setup step on a working install
+        docir doctor --probe        # also prove the model loads, and time it
+
+    The corpus is `docir check`'s question, not this one.
+    """
+    state = get_state()
+    # Before anything is dispatched: `ensure_running` replaces a daemon serving
+    # other code and a container build creates a missing index, so both facts
+    # are gone by the time the first request returns.
+    environment = run_local(lambda: doctor_report.snapshot(state.settings, __version__))
+    store, store_error = try_execute("store_status", {})
+    probed = (
+        run_local(lambda: doctor_report.probe_embedder(environment.embed_model)) if probe else None
+    )
+    report = doctor_report.diagnose(
+        environment,
+        _store_reply(store),
+        store_error=store_error,
+        probe=probed,
+    )
+    _emit_doctor(report)
+    if strict and report.errors:
+        raise typer.Exit(code=1)
+
+
+@app.command()
 def lint(
     deep: Annotated[bool, typer.Option("--deep")] = False,
 ) -> None:
@@ -1512,6 +1571,79 @@ def _active_embedder(settings: Settings) -> str:
     schema_path = settings.schema_path
     model = load_schema(schema_path).embed_model if schema_path.exists() else None
     return active_embedder_id(model)
+
+
+def _emit_doctor(report: doctor_report.DoctorReport) -> None:
+    """Emit the diagnosis as one payload, findings included.
+
+    Sections and findings travel together rather than as two commands' output,
+    because a finding is only actionable beside the fact that produced it: "12
+    documents have no current vector" means one thing under the real model and
+    another under a leftover DOCIR_EMBEDDER, and the embedding section is where
+    the caller reads which.
+    """
+    environment = report.environment
+    release = environment.release
+    payload: dict[str, object] = {
+        "ok": not report.errors,
+        "installation": {
+            "version": environment.version,
+            "method": release.method,
+            "latest": release.latest,
+            "update_available": release.update_available,
+            "fastembed_installed": environment.fastembed_installed,
+        },
+        "store": {
+            "home": str(environment.home),
+            "home_origin": environment.home_origin,
+            "schema": str(environment.schema_path),
+            "schema_loads": not environment.schema_error,
+            "index_present": environment.index_present,
+            "shadowed_home": _opt_str_path(environment.shadowed_home),
+            **(report.store or {}),
+        },
+        "embedding": {
+            "model": environment.embedder_id,
+            "configured": environment.embed_model,
+            "env": environment.embedder_env,
+        },
+        "daemon": {
+            "running": environment.daemon.running,
+            "pid": environment.daemon.pid,
+            "socket": environment.daemon.socket_path,
+            "serving": environment.daemon.version,
+            "stale_code": environment.daemon.stale_code,
+            "disabled_by_env": environment.daemon_env_disabled,
+            "watching": environment.watch,
+        },
+        "peers": [{"home": str(home), "unavailable": reason} for home, reason in environment.peers],
+        "findings": [asdict(finding) for finding in report.findings],
+    }
+    if report.probe is not None:
+        payload["probe"] = asdict(report.probe)
+    state = get_state()
+    if use_json(state):
+        rendering.emit_json(payload, trim=state.trim)
+    else:
+        rendering.render_doctor(payload)
+
+
+def _store_reply(payload: object) -> dict[str, object] | None:
+    """``store_status``'s reply as a mapping, or ``None`` when there is none.
+
+    ``None`` is the store-unreachable signal doctor turns into a finding, so a
+    reply that is not a mapping has to read the same way — a payload nobody can
+    interpret is not a store that answered. Distinct from :func:`_as_mapping`,
+    which coerces a missing reply to ``{}`` because its callers are rendering a
+    result they already know arrived.
+    """
+    if not isinstance(payload, dict):
+        return None
+    return {str(key): value for key, value in payload.items()}
+
+
+def _opt_str_path(path: Path | None) -> str | None:
+    return None if path is None else str(path)
 
 
 def _emit_upgrade(result: UpgradeResult) -> None:

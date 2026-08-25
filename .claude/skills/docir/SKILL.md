@@ -573,6 +573,9 @@ to leave alone.
   doc's `type` to one the schema knows — then `docir reindex`. `check --fix` deliberately will
   not guess which you meant. Until it is resolved the doc cannot be validated, is never
   reported stale, and is skipped by the layering check.
+- `docir doctor` — the *environment*, not the corpus: the installation, this store's derived
+  index, the embedding model in force, the daemon, and each declared peer. See "When the answers
+  look wrong" below. Run it when a read contradicts the files, and once after cloning a repo.
 - `docir check --fix` — repair what can be repaired without guessing: re-issue duplicate ids (the oldest file keeps the id, so existing links stay valid) and drop `related` edges pointing at nothing. It reports every change, then lists what it could not fix. `malformed` and `unknown-type` are left alone — those need you to decide what the file or the schema should say. **This is the supported way to recover; do not hand-edit markdown to fix these.**
 - **Recovering from `schema-drift`**: the active schema differs from the one the index was built
   against — usually an upgrade, since the types, statuses and cadences come from the installed
@@ -711,16 +714,38 @@ of `docs-schema.yaml` for the whole schema, or per type to override it.
 
 ## When the answers look wrong
 
-A long-lived daemon serves your reads, and it loads docir once. After an upgrade or a change to
-docir's own source it can keep answering from the code it started with — a stale answer imitates
-a correct one, so nothing looks broken.
+**`docir doctor` first.** Reads can be quietly answering from the wrong state, and every such
+condition looks exactly like a correct answer. One command reports all of them:
 
-- `docir daemon status` — whether it is running and **which build it is serving**.
-- Re-run the command with `docir --no-daemon <cmd>` to answer in-process from the installed
-  code. Two different answers to the same command means the daemon is the stale half; it is
-  disposable, so `docir daemon stop` and let the next command respawn it.
+```bash
+docir doctor            # the whole report; no network, no model load, ~100ms
+docir doctor --strict   # exit 1 on error-severity findings only (setup scripts, CI)
+docir doctor --probe    # also load the embedding model and time it (may download ~67MB)
+```
 
-Reach for this when results contradict what you can see in the files, not as a routine step.
+Each finding carries a `kind`, a `severity` and the command that closes it:
+
+- `no-index` / `index-behind-files` — the index is derived and **gitignored**, so a fresh clone
+  has none and every read answers nothing, or less than the files hold. → `docir reindex`
+- `stale-index-build` — the index was built by a docir that is no longer installed.
+  → `docir self upgrade`
+- `schema-drift` — the types or cadences moved under the corpus with nothing in `git diff`.
+  → `docir check` to read them, then `docir reindex`
+- `hashing-embedder` / `embeddings-pending` — `DOCIR_EMBEDDER` is overriding the model, or
+  documents have no current vector, so `docir context` is ranking blind.
+  → unset it, then `docir embed --flush`
+- `stale-daemon` — the daemon was serving code this process is not running. Already replaced by
+  the doctor run; **re-run anything you acted on**.
+- `peer-unavailable` — a store in `stores.yaml` that every federated read is silently skipping.
+- `global-fallback` / `shadowed-store` — writes are about to land in a store other than the one
+  you think. → `docir init`
+
+`error` means docir cannot work correctly here (no index, a schema that will not load, no
+embedding model); `warning` means it works less well than you think. Only `error` fails
+`--strict`.
+
+The corpus is a different question: `docir doctor` never scans the graph, and `docir check` is
+what reports dangling edges, duplicate ids and staleness.
 
 ## Notes
 

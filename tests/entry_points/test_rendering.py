@@ -259,3 +259,96 @@ class TestHumanRenderers:
     def test_render_setup_empty(self, capsys: pytest.CaptureFixture[str]) -> None:
         rendering.render_setup([])
         assert "nothing" in capsys.readouterr().out
+
+
+class TestRenderDoctor:
+    """The human report. Facts before findings, and facts even when clean —
+    half of what doctor reports is only legible beside the state that produced
+    it, so the sections are not conditional on something being wrong."""
+
+    @staticmethod
+    def _report(**overrides) -> dict:
+        report = {
+            "ok": True,
+            "installation": {
+                "version": "1.2.3",
+                "method": "uv-tool",
+                "latest": None,
+                "update_available": False,
+                "fastembed_installed": True,
+            },
+            "store": {
+                "home": "/store",
+                "home_origin": "project",
+                "schema_loads": True,
+                "index_present": True,
+                "documents": 12,
+                "documents_on_disk": 12,
+                "stale_index_build": None,
+                "schema_drift": [],
+            },
+            "embedding": {"model": "fastembed:m", "env": ""},
+            "daemon": {
+                "running": True,
+                "pid": 7,
+                "serving": "1.2.3",
+                "stale_code": False,
+                "disabled_by_env": False,
+                "watching": True,
+            },
+            "peers": [],
+            "findings": [],
+        }
+        report.update(overrides)
+        return report
+
+    def test_a_clean_report_still_prints_every_section(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        rendering.render_doctor(self._report())
+        out = capsys.readouterr().out
+        assert "docir 1.2.3" in out and "12 documents" in out
+        assert "fastembed:m" in out and "pid 7" in out
+        assert "nothing to report" in out
+
+    def test_an_index_behind_its_files_prints_both_numbers(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        # "0 documents" alone reads as an empty corpus in exactly the case where
+        # the index is behind the files it projects.
+        store = {**self._report()["store"], "documents": 0, "documents_on_disk": 12}
+        rendering.render_doctor(self._report(store=store))
+        assert "0 indexed of 12 on disk" in capsys.readouterr().out
+
+    def test_a_finding_prints_its_fix(self, capsys: pytest.CaptureFixture[str]) -> None:
+        # These are conditions people hit while something else is already going
+        # badly; naming the problem without the move costs a second search.
+        rendering.render_doctor(
+            self._report(
+                findings=[
+                    {
+                        "kind": "no-index",
+                        "severity": "error",
+                        "message": "there was no index",
+                        "fix": "docir reindex",
+                    }
+                ]
+            )
+        )
+        out = capsys.readouterr().out
+        assert "no-index" in out and "docir reindex" in out
+        assert "nothing to report" not in out
+
+    def test_an_unreadable_peer_is_listed_with_its_reason(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        rendering.render_doctor(self._report(peers=[{"home": "/peer", "unavailable": "no index"}]))
+        out = capsys.readouterr().out
+        assert "/peer" in out and "no index" in out
+
+    def test_a_broken_store_says_so_instead_of_printing_a_count(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        store = {**self._report()["store"], "schema_loads": False}
+        rendering.render_doctor(self._report(store=store))
+        assert "schema will not load" in capsys.readouterr().out

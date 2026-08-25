@@ -170,6 +170,12 @@ class TestVocabulary:
             "reindex",
             "check",
             "schema_drift",
+            # `docir doctor`'s store half. Local by decision: it reports whether
+            # *this* index is current, and a peer's build stamp is that
+            # repository's business — doctor already names an unreadable peer
+            # from `peer_status`, and merging peers' answers into this one would
+            # report a corpus size nobody can act on.
+            "store_status",
             "repair",
             "lint",
             # A fixture judges ids in *this* store, and the score is a property

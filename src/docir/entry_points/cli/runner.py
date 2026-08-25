@@ -123,6 +123,38 @@ def execute(command: str, payload: dict[str, object]) -> object:
     return _unwrap(response)
 
 
+def try_execute(command: str, payload: dict[str, object]) -> tuple[object, str]:
+    """Run one command, returning ``(data, "")`` or ``(None, message)``.
+
+    :func:`execute` turns a domain error into a process exit, which is correct
+    for every command whose job needs the store to work. ``docir doctor``'s job
+    is to *report* that it does not: a schema that will not parse or a daemon
+    that will not start is the finding, and exiting there would leave the rest
+    of the diagnosis — the environment half, which is still readable — unprinted
+    at exactly the moment somebody needs it.
+
+    Client-side errors and returned ones are folded together on purpose. Whether
+    a broken schema raises while the container is built (in-process) or comes
+    back as a failed `Response` (daemon) is a fact about the transport, and the
+    caller is asking about the store.
+    """
+    state = get_state()
+    try:
+        executor, closer = _build_executor(state.settings)
+    except DocirError as exc:
+        return None, str(exc)
+    try:
+        response = executor.execute(Request(command=command, payload=payload))
+    except DocirError as exc:
+        return None, str(exc)
+    finally:
+        if closer is not None:
+            closer.close()
+    if response.ok:
+        return response.data, ""
+    return None, str((response.error or {}).get("message", "the store could not be opened"))
+
+
 def _with_peers(state: CliState, command: str, payload: dict[str, object]) -> dict[str, object]:
     """Attach this invocation's ad-hoc peers, and warn about unreachable ones.
 

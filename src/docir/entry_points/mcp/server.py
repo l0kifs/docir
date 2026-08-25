@@ -592,6 +592,29 @@ def build_mcp_server(
         """
         return run.one("schema_drift", {})
 
+    @mcp.tool(annotations=_READ_ONLY)
+    def docir_store_status() -> dict[str, Any]:
+        """Whether this store's derived index is current, and worth trusting.
+
+        The store half of `docir doctor`: how many documents are indexed, the
+        docir version that built the index when it is not the running one
+        (`stale_index_build`), how the schema has moved since
+        (`schema_drift`), which embedding model reads score with, and how many
+        documents have no current vector for it (`embeddings_pending`).
+
+        Call it when a read answers something that looks wrong. A stale build
+        stamp or a pending queue means the index is behind the files — reads
+        still answer, they answer from older state, and nothing else in a
+        result says so. `docir_reindex` fixes the first, `docir_embed_flush`
+        the second.
+
+        It says nothing about the corpus; `docir_check` owns that. The rest of
+        `docir doctor` — the daemon, this shell's environment variables, which
+        store the working directory resolved to — is not askable here: those
+        are facts about the client process, and this one runs in the daemon.
+        """
+        return run.one("store_status", {})
+
     @mcp.tool
     def docir_check_fix() -> dict[str, Any]:
         """Repair what needs no guess: duplicate ids and dangling edges.

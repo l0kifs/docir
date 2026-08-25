@@ -157,6 +157,15 @@ class DocumentRepository(ABC):
         """Return every indexed document."""
 
     @abstractmethod
+    def count(self) -> int:
+        """How many documents the index holds.
+
+        Its own query rather than ``len(all())``: the callers that want a size
+        (``docir doctor``) do not want the corpus hydrated into entities to
+        learn it, and on a large store that is the whole cost of the command.
+        """
+
+    @abstractmethod
     def query(self, spec: DocumentFilter) -> list[Document]:
         """Return documents matching the structured filter."""
 

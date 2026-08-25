@@ -550,5 +550,124 @@ def render_upgrade(
     render_findings(findings, empty="no structural issues")
 
 
+def render_doctor(report: Mapping[str, object]) -> None:
+    """Render ``docir doctor``: the facts first, then what is wrong with them.
+
+    Facts before findings, and never findings alone. Half of what doctor reports
+    is only legible against the state that produced it — "12 documents have no
+    current vector" is routine under the real model and an emergency under a
+    leftover DOCIR_EMBEDDER — so the sections are printed even when nothing is
+    wrong with them.
+    """
+    _doctor_section("install", _doctor_install(_submap(report, "installation")))
+    _doctor_section("store", _doctor_store(_submap(report, "store")))
+    _doctor_section("embed", _doctor_embedding(_submap(report, "embedding"), report.get("probe")))
+    _doctor_section("daemon", _doctor_daemon(_submap(report, "daemon")))
+    for peer in _maps(report.get("peers")):
+        reason = str(peer.get("unavailable", ""))
+        state = f"[yellow]{reason}[/]" if reason else "[green]readable[/]"
+        _doctor_section("peer", f"{peer.get('home')} · {state}")
+    findings = _maps(report.get("findings"))
+    console.print("")
+    if not findings:
+        console.print("[green]nothing to report[/]")
+        return
+    for finding in findings:
+        colour = "red" if finding.get("severity") == "error" else "yellow"
+        console.print(f"[{colour}]{finding.get('kind')}[/]: {finding.get('message')}")
+        fix = finding.get("fix")
+        if fix:
+            console.print(f"  [dim]->[/] {fix}")
+
+
+def _doctor_section(label: str, line: str) -> None:
+    console.print(f"[cyan]{label:<7}[/] {line}")
+
+
+def _doctor_install(install: Mapping[str, object]) -> str:
+    latest = install.get("latest")
+    if latest is None:
+        # Absent is *unknown*, never "up to date" — the rule every three-valued
+        # field in docir follows.
+        currency = "[dim]newest release unknown[/]"
+    elif install.get("update_available"):
+        currency = f"[yellow]{latest} available[/]"
+    else:
+        currency = "[green]current[/]"
+    embedder = "" if install.get("fastembed_installed") else "  [red]fastembed not installed[/]"
+    return f"docir {install.get('version')} [dim]({install.get('method')})[/]  {currency}{embedder}"
+
+
+def _doctor_store(store: Mapping[str, object]) -> str:
+    if not store.get("schema_loads"):
+        return f"{store.get('home')}  [red]schema will not load[/]"
+    if not store.get("index_present"):
+        return f"{store.get('home')}  [red]no index[/]"
+    documents = store.get("documents")
+    on_disk = store.get("documents_on_disk")
+    # Both numbers whenever they disagree: "179 documents" alone reads as a
+    # healthy corpus in exactly the case where the index is behind the files.
+    corpus = (
+        f"{documents} documents"
+        if documents == on_disk
+        else f"[yellow]{documents} indexed of {on_disk} on disk[/]"
+    )
+    stale = store.get("stale_index_build")
+    built = f"[yellow]built by {stale}[/]" if stale else "[green]built by this version[/]"
+    drift = _count(store.get("schema_drift"))
+    return f"{store.get('home')} [dim]({store.get('home_origin')})[/]  {corpus} · {built}" + (
+        f" · [yellow]{drift} schema change(s)[/]" if drift else ""
+    )
+
+
+def _doctor_embedding(embedding: Mapping[str, object], probe: object) -> str:
+    line = str(embedding.get("model", "?"))
+    if embedding.get("env"):
+        line += f"  [yellow](forced by DOCIR_EMBEDDER={embedding.get('env')})[/]"
+    if isinstance(probe, Mapping):
+        seconds = _as_float(probe.get("seconds"))
+        line += (
+            f"  [green]probe ok[/] [dim]({probe.get('dimensions')}d, {seconds:.1f}s)[/]"
+            if probe.get("ok")
+            else "  [red]probe failed[/]"
+        )
+    return line
+
+
+def _doctor_daemon(daemon: Mapping[str, object]) -> str:
+    if daemon.get("disabled_by_env"):
+        return "[yellow]disabled by DOCIR_NO_DAEMON[/] [dim](model loads cold every command)[/]"
+    if not daemon.get("running"):
+        # Past tense: the snapshot is taken before this command dispatches, and
+        # dispatching is what starts one. Saying "not running" in the present
+        # would describe a moment that had already passed when it was printed.
+        return "[dim]was not running when this command started[/]"
+    served = daemon.get("serving") or "an unknown build"
+    state = (
+        f"[yellow]was serving stale code ({served}) — replaced by this command[/]"
+        if daemon.get("stale_code")
+        else f"[green]serving {served}[/]"
+    )
+    watching = "" if daemon.get("watching") else "  [dim]not watching docs/[/]"
+    return f"pid {daemon.get('pid')} · {state}{watching}"
+
+
+def _submap(report: Mapping[str, object], key: str) -> dict[str, object]:
+    value = report.get(key)
+    if not isinstance(value, Mapping):
+        return {}
+    return {str(name): item for name, item in value.items()}
+
+
+def _maps(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, Sequence) or isinstance(value, str):
+        return []
+    return [
+        {str(name): entry for name, entry in item.items()}
+        for item in value
+        if isinstance(item, Mapping)
+    ]
+
+
 def render_message(message: str) -> None:
     console.print(message)

@@ -7,7 +7,7 @@ from datetime import date
 
 import pytest
 
-from docir.entry_points.composition import _build_embedder
+from docir.entry_points.composition import build_embedder
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.indexing.infra.scheduler import (
     InlineEmbeddingScheduler,
@@ -149,12 +149,12 @@ class TestEmbedderSelection:
 
     def test_default_is_the_real_model(self, monkeypatch) -> None:
         monkeypatch.delenv("DOCIR_EMBEDDER", raising=False)
-        assert _build_embedder().model_id.startswith("fastembed:")
+        assert build_embedder().model_id.startswith("fastembed:")
 
     @pytest.mark.parametrize("value", ["deterministic", "hash", "DETERMINISTIC"])
     def test_opt_out_selects_the_model_free_embedder(self, monkeypatch, value: str) -> None:
         monkeypatch.setenv("DOCIR_EMBEDDER", value)
-        assert _build_embedder().model_id.startswith("deterministic-hash")
+        assert build_embedder().model_id.startswith("deterministic-hash")
 
     def test_falls_back_with_a_warning_when_fastembed_is_missing(self, monkeypatch) -> None:
         # A missing dependency must degrade, not break the CLI outright.
@@ -163,5 +163,5 @@ class TestEmbedderSelection:
             "docir.entry_points.composition.importlib.util.find_spec", lambda _name: None
         )
         with pytest.warns(RuntimeWarning, match="shared words rather than meaning"):
-            embedder = _build_embedder()
+            embedder = build_embedder()
         assert embedder.model_id.startswith("deterministic-hash")

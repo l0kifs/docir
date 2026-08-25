@@ -28,6 +28,7 @@ from docir.modules.documents.application.services.document_service import Docume
 from docir.modules.documents.application.services.maintenance_service import (
     MaintenanceService,
     ReindexResult,
+    StoreStatus,
 )
 from docir.modules.documents.application.services.schema_conformance import (
     ConformanceFinding,
@@ -66,6 +67,7 @@ __all__ = [
     "ReindexResult",
     "RelatedView",
     "SearchRequest",
+    "StoreStatus",
     "UpdateDocumentRequest",
     "check_schema_conformance",
     "describe_schema",

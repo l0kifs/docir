@@ -124,6 +124,20 @@ files and the derived index never disagree.
   opt-in `DOCIR_SCHEMA_NOTICE` stderr notice and the `docir_schema_drift` MCP tool. Empty when
   nothing moved *or* when the store has no baseline: absent means unknown, not unchanged.
   `reindex` is the only writer of that baseline.
+- `MaintenanceService.store_status() -> StoreStatus` — what the derived index says about
+  itself, for `docir doctor` and the `docir_store_status` MCP tool: document count, the
+  running version, `stale_index_build`, `schema_drift`, the resolved `embedding_model` and
+  how many documents have no current vector for it. `documents` and `documents_on_disk`
+  travel as a pair: the index is a projection of the files, so a difference is the
+  "reads are answering from stale state" condition stated as a number — which is the only
+  way a fresh clone (index gitignored, so absent) is visible once anything has created an
+  empty one. Facts, not advice — the judgement is the
+  caller's, because only the caller also knows the process it is running in (a daemon serving
+  another build, an env var overriding the embedder). Cheap by contract: SQL counts, no
+  hydration, no file scan and no graph walk. It says nothing about the corpus; `check()` owns
+  that question, and a diagnosis that costs what `check()` costs is one nobody runs while
+  something is wrong. `stale_index_build` is carried rather than left to the caller, so the
+  version comparison stays implemented once.
 - `MaintenanceService.lint_deep() -> [LintFinding]` — Tier 2 advisory findings
   (`duplicate`, `scope-creep`, `oversized-section`, `ambiguous-heading`,
   `unqualified-section-ref`, `unresolved-mention`); never blocking.

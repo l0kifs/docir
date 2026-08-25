@@ -74,7 +74,7 @@ class Container:
     dispatcher: FederatedDispatcher
     scheduler: EmbeddingScheduler
     engine: Engine
-    #: The embedder actually built, not the one requested. `_build_embedder`
+    #: The embedder actually built, not the one requested. `build_embedder`
     #: falls back when fastembed is missing, so anything reporting the
     #: configuration (benchmarks) must read the resolved object, not the env var.
     embedder: Embedder
@@ -151,7 +151,7 @@ def verify_embed_model(model_name: str | None) -> None:
     )
 
 
-def _build_embedder(model_name: str | None = None) -> Embedder:
+def build_embedder(model_name: str | None = None) -> Embedder:
     """Pick the embedder: the real model unless asked for, or unable to, do otherwise.
 
     ``model_name`` is the store's ``embed_model:`` schema key, or ``None`` for
@@ -191,12 +191,12 @@ def _build_embedder(model_name: str | None = None) -> Embedder:
 def active_embedder_id(model_name: str | None = None) -> str:
     """The ``model_id`` a command would embed with, without loading the model.
 
-    Goes through :func:`_build_embedder` rather than repeating its branch: the
+    Goes through :func:`build_embedder` rather than repeating its branch: the
     two disagreeing would make ``self status`` report a model no read actually
     uses. Cheap because both embedders load lazily — constructing one costs no
     download and no ONNX session.
     """
-    return _build_embedder(model_name).model_id
+    return build_embedder(model_name).model_id
 
 
 def build_container(
@@ -233,7 +233,7 @@ def build_container(
     def uow_factory() -> UnitOfWork:
         return SqlAlchemyUnitOfWork(session_factory)
 
-    embedder = _build_embedder(schema.embed_model)
+    embedder = build_embedder(schema.embed_model)
     scheduler = build_scheduler(uow_factory, embedder, background=background_embeddings)
 
     file_store = MarkdownDocumentFileStore(settings.docs_root)

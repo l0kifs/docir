@@ -130,8 +130,8 @@ and rel-0c8d261640f6 links what 0.18.0 did about the two below.
 `docir query --expr '<JMESPath>'` ships: an expression over each document's own fields plus its
 edges resolved in both directions, applied before the limit (adr-7316abc6be93). Three of the
 four questions this gap was opened with are now askable —
-`stale && owner == null`, `related[?status=='superseded']`,
-`length(related_by[?kind!='relates_to']) == 0`. The fourth is an aggregate across documents and
+`stale && owner == `null``, `related[?status=='superseded']`,
+`length(related_by[?kind!='relates_to']) == `0``. The fourth is an aggregate across documents and
 is out of reach of a per-document predicate.
 
 What DocHub still has and docir does not is the *second* use of the same grammar: an expression

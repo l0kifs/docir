@@ -84,7 +84,7 @@ The filter half shipped as `docir query --expr '<JMESPath>'` — adr-7316abc6be9
 choices. Three of the four questions above are now askable:
 
 ```bash
-docir query --expr "stale && owner == null"
+docir query --expr "stale && owner == `null`"
 docir query --type issue --expr "related[?status=='superseded']"
 ```
 

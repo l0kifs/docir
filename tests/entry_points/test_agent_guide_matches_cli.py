@@ -833,3 +833,56 @@ def test_an_example_id_must_not_be_a_real_one(doc_id: str = "") -> None:
     """The exemption list may not quietly cover a document that exists."""
     overlap = sorted(set(_EXAMPLE_IDS) & CORPUS_IDS)
     assert not overlap, f"exempted as examples but real: {overlap}"
+
+
+# --- `--expr` arguments in prose must compile ------------------------------
+#
+# The invocation tests above prove a documented command *resolves* — that its
+# name and flags exist. They say nothing about the argument, and `--expr` is the
+# one flag whose argument is a language. A wrong expression looks exactly like a
+# right one until somebody runs it.
+#
+# Scoped to explicit `--expr "..."` occurrences rather than anything
+# expression-shaped. A sweep of backticked spans across the corpus found 18
+# candidates and 13 "failures", of which one was real: the rest were quoted
+# assertions, error messages and prose comparisons (`old == new`). Text does not
+# distinguish an expression from a sentence about one, and an invocation does.
+
+
+def _unescape_shell(expression: str) -> str:
+    """The expression as docir receives it, not as bash carries it.
+
+    A JMESPath literal is backtick-quoted and a backtick inside double quotes is
+    command substitution, so a correct shell example escapes them — `\\`0\\``.
+    Compiling the prose verbatim would fail on documentation that is right.
+    """
+    return expression.replace("\\`", "`")
+
+
+_EXPR_ARGS = [
+    (name, _unescape_shell(expression))
+    for name, text in {**_ID_PROSE, **REPO_PROSE}.items()
+    for expression in re.findall(r'--expr\s+"([^"]+)"', text)
+]
+
+
+def test_the_expr_extractor_finds_a_known_example() -> None:
+    assert any("related" in expression for _name, expression in _EXPR_ARGS), (
+        "extractor no longer finds a documented --expr argument — under-checking"
+    )
+
+
+@pytest.mark.parametrize(
+    ("source", "expression"), _EXPR_ARGS, ids=lambda v: v.replace(" ", "_")[:40]
+)
+def test_a_documented_expression_compiles(source: str, expression: str) -> None:
+    """Two faults this catches, both of which shipped before it existed.
+
+    A bare `null` is an *identifier* in JMESPath, not a literal, so
+    `owner == null` compared a key no document carries against itself — the
+    right answer for the wrong reason. And a bare `0` is not a literal at all.
+    Every place docir documented `--expr` carried one or the other.
+    """
+    from docir.modules.documents.domain.services.expressions import compile_expression
+
+    compile_expression(expression)

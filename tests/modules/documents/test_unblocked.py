@@ -118,10 +118,39 @@ class TestUnblocked:
         rels = [Relation(source="issue-a", target="issue-b", kind="relates_to")]
         assert _unblocked(GraphChecker(schema), docs, rels) == []
 
-    def test_a_custom_dependency_kind_counts(self) -> None:
+    def test_a_custom_blocking_kind_counts(self) -> None:
         schema = parse_schema(
-            {"profiles": ["software"], "relation_types": {"blocked_by": {"dependency": True}}}
+            {"profiles": ["software"], "relation_types": {"blocked_by": {"blocking": True}}}
         )
         docs = [_doc("issue-a"), _doc("issue-b", "resolved")]
         rels = [Relation(source="issue-a", target="issue-b", kind="blocked_by")]
         assert len(_unblocked(GraphChecker(schema), docs, rels)) == 1
+
+    def test_refines_is_a_dependency_and_not_a_blocker(self, schema: Schema) -> None:
+        """The bug this property was split to fix.
+
+        `refines` says the source narrows the target — structural, about where
+        two documents sit relative to each other. It says nothing about
+        waiting. Reading one property for both questions announced a decision
+        refining a *superseded* one as ready to start, which is a problem
+        reported as good news (adr-716c2eeb4e51).
+        """
+        docs = [_doc("adr-a"), _doc("adr-b", "resolved")]
+        rels = [Relation(source="adr-a", target="adr-b", kind="refines")]
+        assert _unblocked(GraphChecker(schema), docs, rels) == []
+        # And the layering check still reads it, so the split lost nothing.
+        assert schema.is_dependency_relation("refines")
+        assert not schema.is_blocking_relation("refines")
+
+    def test_depends_on_is_both(self, schema: Schema) -> None:
+        assert schema.is_dependency_relation("depends_on")
+        assert schema.is_blocking_relation("depends_on")
+
+    def test_a_custom_dependency_alone_does_not_unblock(self) -> None:
+        # Injected bug: reading `dependency` here is what shipped first.
+        schema = parse_schema(
+            {"profiles": ["software"], "relation_types": {"narrows": {"dependency": True}}}
+        )
+        docs = [_doc("issue-a"), _doc("issue-b", "resolved")]
+        rels = [Relation(source="issue-a", target="issue-b", kind="narrows")]
+        assert _unblocked(GraphChecker(schema), docs, rels) == []

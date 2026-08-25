@@ -444,7 +444,8 @@ types:
 | property | effect |
 |---|---|
 | `symmetric` | the edge says the same thing both ways, so a mutually-referencing pair is not a `cycle` finding |
-| `dependency` | the source *relies on* the target — the only claim the Tier 1 `layering` check reads |
+| `dependency` | the source sits *above* the target in the type hierarchy — the only claim `layering` reads |
+| `blocking` | the source *waits for* the target, so a source whose blockers have all closed is `unblocked`. Separate from `dependency`: `refines` is a dependency and not a blocker |
 | `successor` | the *incoming* direction answers "is this still current?", so `docir context` follows it backwards |
 
 ```yaml

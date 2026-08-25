@@ -493,6 +493,12 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   successors first in each seed's edge list: a `supersedes` edge points from
   the new document to the old one, so before this the replacement sat one hop away *backwards* and
   the graph could not answer "is this decision still current?" — the question it exists for.
+  **`dependency` and `blocking` are two properties, not one (adr-716c2eeb4e51).** `layering`
+  asks a structural question — does the source sit above the target — and `unblocked` asks a
+  temporal one: does the source wait for it. `depends_on` carries both; `refines` carries only
+  the first. Reading `dependency` for both was the shipped behaviour for three days and
+  announced a decision refining a *superseded* one as "ready to start", a problem reported as
+  good news, latent across 34 edges in this corpus.
   **Which kinds count is schema data, not a hardcoded name set (adr-234b956a48d8).** Traversal
   reads `Schema.successor_relation_kinds()` and layering reads `is_dependency_relation`, so a
   custom kind declared `successor: true` / `dependency: true` behaves like the core ones; the

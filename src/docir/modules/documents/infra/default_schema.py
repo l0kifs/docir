@@ -150,13 +150,19 @@ _SCHEMA_FOOTER = """
 #   #   symmetric   the edge says the same thing both ways, so a pair of
 #   #               documents referencing each other is not a `cycle`
 #   #               (`relates_to` and `contradicts` are symmetric by default)
-#   #   dependency  the source *relies on* the target, which is the only claim
-#   #               the `layering` check reads (`depends_on`, `refines`)
+#   #   dependency  the source sits *above* the target in the type hierarchy —
+#   #               structural, and the only claim `layering` reads
+#   #               (`depends_on`, `refines`)
+#   #   blocking    the source *waits for* the target, so a source whose every
+#   #               blocker has closed is `unblocked` — temporal, and separate
+#   #               from `dependency` on purpose: `refines` is a dependency and
+#   #               not a blocker (`depends_on` alone is both)
 #   #   successor   the *incoming* direction answers "is this still current?",
 #   #               so `docir context` follows it backwards (`supersedes`,
 #   #               `contradicts`)
 #   #
 #   # governs:   {dependency: true}
+#   # blocked_by: {blocking: true}
 #   # blocks:    {}                    # registered, all defaults
 #   # duplicates: {symmetric: true}
 #   # replaced_by: {successor: true}

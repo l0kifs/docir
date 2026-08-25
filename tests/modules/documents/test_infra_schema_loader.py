@@ -619,11 +619,19 @@ class TestRelationKindMappingForm:
         assert kinds["relates_to"]["symmetric"] is True
         assert kinds["supersedes"]["successor"] is True
         assert kinds["depends_on"]["dependency"] is True
+        # The only core kind carrying both: it says the source sits above the
+        # target *and* waits for it (adr-716c2eeb4e51).
+        assert kinds["depends_on"]["blocking"] is True
+        assert kinds["refines"]["dependency"] is True
+        assert kinds["refines"]["blocking"] is False
+        # Exhaustive rather than per-key: a new property must be *decided* for
+        # every kind, not silently defaulted for the ones nobody thought about.
         assert kinds["implements"] == {
             "name": "implements",
             "symmetric": False,
             "dependency": False,
             "successor": False,
+            "blocking": False,
         }
 
 

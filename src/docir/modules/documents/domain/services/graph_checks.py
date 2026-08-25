@@ -650,13 +650,17 @@ class GraphChecker:
         dependencies is not unblocked, it is unconstrained, and reporting it
         would fire on most of the corpus.
 
-        Which kinds count is schema data, not a name: ``is_dependency_relation``
-        is exactly the property "the source relies on the target", so a custom
-        kind declared ``dependency: true`` behaves like ``depends_on``
-        (adr-234b956a48d8). A warning, never an error — nothing is broken, this
-        is a scheduling fact, and like ``stale`` it is cleared by doing
-        something real rather than by a flag: start the work, or drop an edge
-        that is no longer true.
+        Which kinds count is schema data rather than a name — but the property
+        is ``blocking``, not ``dependency``. Reading ``dependency`` here was the
+        first version and it was wrong: that property is *structural*, about
+        where two types sit relative to each other, and this question is
+        *temporal*. ``refines`` is a dependency and not a blocker, so a decision
+        refining a **superseded** one was announced as ready to start — a
+        problem reported as good news (adr-716c2eeb4e51).
+
+        A warning, never an error — nothing is broken, this is a scheduling
+        fact, and like ``stale`` it is cleared by doing something real rather
+        than by a flag: start the work, or drop an edge no longer true.
         """
         inactive = self._schema.inactive_statuses()
         by_id = {doc.id: doc for doc in documents}
@@ -674,7 +678,7 @@ class GraphChecker:
             # document depending on one resolved issue and one *dangling* edge
             # would have arrived with a single satisfied blocker and been
             # announced as ready to start.
-            if self._schema.is_dependency_relation(rel.kind):
+            if self._schema.is_blocking_relation(rel.kind):
                 blockers.setdefault(rel.source, []).append(rel.target)
 
         issues: list[CheckIssue] = []

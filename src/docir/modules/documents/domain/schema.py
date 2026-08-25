@@ -121,7 +121,7 @@ class TypeSchema:
 class RelationKindSchema:
     """What a relation kind *means*, so the checks can stop hardcoding names.
 
-    Three independent properties, each read by exactly one consumer:
+    Four independent properties, each read by exactly one consumer:
 
     ``symmetric``
         ``A -kind-> B`` and ``B -kind-> A`` are the same statement, so a
@@ -130,26 +130,35 @@ class RelationKindSchema:
         the kind: symmetry is what makes a mutual pair legitimate and exactly
         what makes "A relates to A" empty.
     ``dependency``
-        The edge asserts that the source *relies on* the target, which is the
-        only claim a layering violation can be read from.
+        The edge asserts that the source sits *above* the target in the type
+        hierarchy, which is the only claim a layering violation can be read
+        from. Structural, and about types rather than about time.
+    ``blocking``
+        The edge asserts that the source *waits for* the target, so a source
+        whose every blocker has closed is ready to start. Temporal, and
+        deliberately separate from ``dependency`` even though ``depends_on``
+        carries both: ``refines`` is a dependency and is not a blocker, and
+        reading one property for both questions announced a decision refining a
+        *superseded* one as ready to start — a problem reported as good news
+        (adr-716c2eeb4e51).
     ``successor``
         The edge's *incoming* direction answers "is this still current?", so
         ``context`` expansion follows it backwards — a ``supersedes`` edge points
         from the new document to the old one, and without this the replacement
         sits one hop away in the unreachable direction.
 
-    All three default to false, and that asymmetry is deliberate. ``symmetric``
+    All four default to false, and that asymmetry is deliberate. ``symmetric``
     off means the kind *is* cycle-checked, so a custom kind keeps the coverage it
-    had before kinds were distinguished at all; ``dependency`` and ``successor``
-    off mean a custom kind adds no warning and changes no traversal until its
-    author asks for it. The default is "check what you already checked, do
-    nothing new".
+    had before kinds were distinguished at all; the other three off mean a custom
+    kind adds no warning and changes no traversal until its author asks for it.
+    The default is "check what you already checked, do nothing new".
     """
 
     name: str
     symmetric: bool = False
     dependency: bool = False
     successor: bool = False
+    blocking: bool = False
 
 
 #: Properties of the six kinds the frozen core registers. These live here rather
@@ -162,13 +171,15 @@ CORE_RELATION_KINDS: dict[str, RelationKindSchema] = {
     "relates_to": RelationKindSchema("relates_to", symmetric=True),
     "supersedes": RelationKindSchema("supersedes", successor=True),
     "contradicts": RelationKindSchema("contradicts", symmetric=True, successor=True),
-    "depends_on": RelationKindSchema("depends_on", dependency=True),
+    # The only core kind that is both: it says the source sits above the target
+    # *and* waits for it. `refines` says only the first.
+    "depends_on": RelationKindSchema("depends_on", dependency=True, blocking=True),
     "refines": RelationKindSchema("refines", dependency=True),
     "implements": RelationKindSchema("implements"),
 }
 
 #: The property names a schema may set on a relation kind.
-RELATION_KIND_PROPERTIES: tuple[str, ...] = ("symmetric", "dependency", "successor")
+RELATION_KIND_PROPERTIES: tuple[str, ...] = ("symmetric", "dependency", "successor", "blocking")
 
 
 @dataclass(frozen=True, slots=True)
@@ -236,8 +247,12 @@ class Schema:
         return self.relation_kind(kind).symmetric
 
     def is_dependency_relation(self, kind: str) -> bool:
-        """Whether ``kind`` asserts that the source relies on the target."""
+        """Whether ``kind`` puts the source above the target in the hierarchy."""
         return self.relation_kind(kind).dependency
+
+    def is_blocking_relation(self, kind: str) -> bool:
+        """Whether ``kind`` asserts that the source waits for the target."""
+        return self.relation_kind(kind).blocking
 
     def successor_relation_kinds(self) -> frozenset[str]:
         """Kinds whose incoming direction answers "is this still current?"."""

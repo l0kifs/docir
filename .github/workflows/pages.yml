@@ -29,6 +29,9 @@ name: Publish documentation
       - '.docir/**'
       - 'src/docir/modules/publishing/**'
       - '.github/workflows/pages.yml'
+      # The render assertion lives here; editing it must be able to trigger the
+      # run that exercises it.
+      - 'scripts/assert_diagrams_render.py'
   workflow_dispatch:
 
 # Pages deployments must not run concurrently, and a queued one must not be
@@ -44,6 +47,16 @@ jobs:
   build:
     name: Build the site
     runs-on: ubuntu-latest
+
+    env:
+      # Where playwright puts the browser, pinned so the cache step names the
+      # same directory. A literal on both sides, deliberately: `actions/cache`
+      # expands `~` in its `path:` and a job-level `env:` value is not
+      # shell-expanded, and the `runner` context is not available in one at all.
+      # Both traps have been paid for once (issue-82b01d7f80d0 and the commit
+      # after it); a literal needs neither rule remembered.
+      PLAYWRIGHT_BROWSERS_PATH: /tmp/ms-playwright
+
     # `pages: write` here as well as on the deploy job, so `configure-pages`
     # can read the Pages configuration.
     permissions:
@@ -68,6 +81,13 @@ jobs:
 
       - name: Install dependencies
         run: uv sync
+
+      - name: Cache the browser that proves the diagrams draw
+        # The path is PLAYWRIGHT_BROWSERS_PATH above, spelled identically.
+        uses: actions/cache@v6
+        with:
+          path: /tmp/ms-playwright
+          key: playwright-${{ runner.os }}-chromium
 
       - name: Rebuild the index from the committed files
         # The index is a derived artifact and is gitignored, so it does not
@@ -108,18 +128,25 @@ jobs:
           uv run docir --no-daemon build --out site \
             --title "docir — design documents" --mermaid mermaid.min.js
 
-      - name: Assert the diagrams can draw
-        # `build` writes the runtime only when a document actually drew
-        # something, so its absence means either "no diagram in the corpus" or
-        # "the fence stopped being recognised" — and the second is invisible in
-        # a green check mark. The architecture note carries one, so this store's
-        # answer is always "yes".
-        run: |
-          if [ ! -f site/mermaid.min.js ]; then
-            echo "::error::no diagram runtime in the site — the mermaid fence was not rendered"
-            exit 1
-          fi
-          echo "diagram runtime published ($(wc -c < site/mermaid.min.js) bytes)"
+      - name: Install the browser the assertion below needs
+        # `--with playwright` rather than a dev dependency: only this workflow
+        # renders anything, and adding it to the dev group would put a 40 MB
+        # wheel in front of every `uv sync`, ci.yml's included.
+        run: uv run --with playwright python -m playwright install --with-deps chromium
+
+      - name: Assert the diagrams actually draw
+        # Not "is the runtime file present" — that is a weaker claim than it
+        # reads as, and the gap is where a real defect lived: the shipped
+        # guidance named mermaid 10.9.3 on the grounds that 11 is ESM-only while
+        # this workflow published with 11.16.1 (issue-28e5dc0191cd). Had the
+        # reverse been true, every page would have shipped its diagram as source
+        # with the runtime file sitting right there and the check green.
+        #
+        # So this opens the pages in a real browser and asserts an <svg> with
+        # real content inside each diagram node. Verified by injection: a no-op
+        # global and an ESM-only module both fail it, and both would have passed
+        # the file-exists check.
+        run: uv run --with playwright python scripts/assert_diagrams_render.py site
 
       - name: Assert the site is not empty
         # The belt to the reindex step's braces. A site with no documents is a

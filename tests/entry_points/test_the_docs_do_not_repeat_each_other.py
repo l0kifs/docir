@@ -91,11 +91,24 @@ BASELINE: frozenset[tuple[tuple[str, ...], str]] = frozenset(
 
 
 def _sources() -> dict[str, str]:
+    """One entry per *surface*, which is not one entry per file.
+
+    `CLAUDE.md` and `.claude/rules/**` are joined: the split moved prose out of
+    the root file without changing who reads it, so measuring them apart would
+    have reported this repo's duplication as fixed on the day it moved. It would
+    also flag the split itself — each rule file restates its own one-line summary
+    in CLAUDE.md, which is the arrangement, not a repeat.
+    """
     templates = PackagedTemplateProvider()
     sources = {f"guide/{name}": text for name, text in templates.template("skill").items()}
     sources["writing/SKILL.md"] = templates.template("writing")["SKILL.md"]
-    for name in ("README.md", "CLAUDE.md"):
-        sources[name] = (_REPO / name).read_text(encoding="utf-8")
+    sources["README.md"] = (_REPO / "README.md").read_text(encoding="utf-8")
+    rules = sorted((_REPO / ".claude" / "rules").rglob("*.md"))
+    assert len(rules) > 10, f"only {len(rules)} rule files found — is the path right?"
+    sources["CLAUDE.md"] = "\n".join(
+        [(_REPO / "CLAUDE.md").read_text(encoding="utf-8")]
+        + [path.read_text(encoding="utf-8") for path in rules]
+    )
     return sources
 
 

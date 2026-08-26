@@ -12,10 +12,12 @@ The oracle is the CLI's own command tree, introspected rather than shelled out:
 the same object `docir --help` prints from, so the test cannot drift from the
 binary. A flag removed from `app.py` fails here in the same commit.
 
-Five sources are checked, because the same rot reaches all of them and only the
-first was covered. The guide and the README are what an *adopter* reads;
-`CLAUDE.md` and the project store (`.docir/docs/**`) are what an agent working
-*in this repo* reads, and CLAUDE.md points at the store first; docstrings under
+Every surface that names a command is checked, because the same rot reaches all
+of them and only the first was covered. The guide and the README are what an
+*adopter* reads; `CLAUDE.md`, the path-scoped rules beside it (`.claude/rules/**`)
+and the project store (`.docir/docs/**`) are what an agent working *in this repo*
+reads — CLAUDE.md points at the store first and keeps one line per invariant, with
+the argument in a rule file that loads with the code it governs; docstrings under
 `src/` are what a reader reaches by following the code. The second group went
 unchecked long enough for the architecture document to accumulate 96 invocations
 of the binary's previous name beside `--set-field` and `reindex --all`, and the
@@ -66,6 +68,13 @@ _README = (_REPO / "README.md").read_text(encoding="utf-8")
 #: the working instructions for anyone (human or agent) changing this codebase,
 #: and CLAUDE.md sends readers to them before it explains anything itself.
 _STORE_DOCS = _REPO / ".docir" / "docs"
+
+#: The path-scoped rules CLAUDE.md was split into. Claude Code loads one when it
+#: reads a file the rule's `paths:` matches, so this is the same prose CLAUDE.md
+#: used to carry inline — three quarters of it — and it goes stale the same way.
+#: Sweeping it is what stops the split from turning this guard into a count that
+#: cannot tell "nothing is wrong" from "nothing is checked".
+_RULES = _REPO / ".claude" / "rules"
 
 #: Added by the parser at parse time, so it is on every command but on no
 #: command's declared params.
@@ -453,13 +462,20 @@ def _exemption(invocation: str) -> tuple[str, ...] | None:
 
 
 def _repo_prose() -> dict[str, str]:
-    """CLAUDE.md plus every markdown file in the project store, by name."""
+    """CLAUDE.md, the rules it was split into, and the project store, by name."""
     assert _STORE_DOCS.is_dir(), (
         f"{_STORE_DOCS} is missing — the suite runs from the checkout "
         "(test_installation.py pins that), so an absent store means this guard "
         "is scanning nothing rather than finding nothing"
     )
+    assert _RULES.is_dir(), (
+        f"{_RULES} is missing — CLAUDE.md keeps one line per invariant and sends "
+        "the argument there, so an absent directory means this guard silently "
+        "stopped reading most of what an agent in this repo is told"
+    )
     sources = {"CLAUDE.md": (_REPO / "CLAUDE.md").read_text(encoding="utf-8")}
+    for path in sorted(_RULES.rglob("*.md")):
+        sources[f"rules/{path.name}"] = path.read_text(encoding="utf-8")
     for path in sorted(_STORE_DOCS.rglob("*.md")):
         sources[path.name] = path.read_text(encoding="utf-8")
     return sources
@@ -477,6 +493,8 @@ REPO_INVOCATIONS = [
         ("CLAUDE.md", "docir query --type decision"),
         ("CLAUDE.md", "docir get arch-1cfb1b212237"),
         ("CLAUDE.md", "docir add --type decision"),
+        # A rule file, which is where most of CLAUDE.md's prose now lives.
+        ("rules/checks-and-lint.md", "docir check --fix"),
         # The store: a fenced block, a table cell, and an inline span each.
         # `docir check` anchors the CLI-surface document rather than the spine:
         # the architecture split moved the command vocabulary out of the latter,
@@ -497,6 +515,18 @@ def test_the_corpus_extractor_finds_known_invocations(source: str, expected: str
         name.startswith(source) and invocation.startswith(expected)
         for name, invocation in REPO_INVOCATIONS
     ), f"extractor no longer finds {expected!r} in {source} — it is silently under-checking"
+
+
+def test_the_rules_sweep_covers_every_rule_file() -> None:
+    """The split moved prose out of CLAUDE.md; the sweep has to follow it.
+
+    A rule file added later is covered by being written, not by anyone
+    remembering this test — which is the property the store assertion below
+    has, one directory over.
+    """
+    on_disk = {f"rules/{path.name}" for path in _RULES.rglob("*.md")}
+    assert on_disk <= set(REPO_PROSE), sorted(on_disk - set(REPO_PROSE))
+    assert len(on_disk) > 10, f"only {len(on_disk)} rule files found — is the path right?"
 
 
 def test_the_corpus_sweep_covers_the_whole_store() -> None:
@@ -797,6 +827,10 @@ _ID_PROSE: dict[str, str] = {
     "skill/": GUIDE,
     "README.md": (_REPO / "README.md").read_text(encoding="utf-8"),
     "CLAUDE.md": (_REPO / "CLAUDE.md").read_text(encoding="utf-8"),
+    **{
+        f"rules/{path.name}": path.read_text(encoding="utf-8")
+        for path in sorted(_RULES.rglob("*.md"))
+    },
     **_PACKAGED_MD,
     **{f"docstring:{name}": text for name, text in SOURCE_PROSE.items()},
 }

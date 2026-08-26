@@ -186,6 +186,56 @@ def test_a_vector_count_equal_to_the_document_count_is_not_printed(
     assert "vectors" not in result.stdout
 
 
+def test_it_grows_a_single_file_skill_into_a_directory(settings: Settings, tmp_path) -> None:
+    """The migration every existing adopter goes through, and it happens here.
+
+    Before adr-e18250eb3081 a skill was one file. `self upgrade` is the command
+    that carries those repos across, so it has to *add* the reference files
+    rather than only restamp the entry point — and the reference files are the
+    guide now, so an upgrade that skipped them would leave the adopter with a
+    255-line SKILL.md whose every link is broken.
+    """
+    project = tmp_path / "project"
+    skill = project / ".claude" / "skills" / "docir" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text(
+        "---\nname: docir\ndescription: an older guide\n---\n"
+        "<!-- docir:v0.0.1 — generated file, do not edit by hand -->\n"
+        "# docir — Agent Guide\n\nthe whole guide, in one file\n",
+        encoding="utf-8",
+    )
+
+    agents = _upgrade(str(project))["agents"]
+    assert [file["previous_version"] for file in agents] == ["0.0.1"]
+    # Named, not counted: a run that wrote one reference file and dropped five
+    # reports the same "it installed extras" as a correct one.
+    assert agents[0]["extras"] == sorted(agents[0]["extras"])
+    assert all(name.startswith("reference/") for name in agents[0]["extras"])
+    written = {path.relative_to(skill.parent).as_posix() for path in skill.parent.rglob("*.md")}
+    assert written == {"SKILL.md", *agents[0]["extras"]}
+
+
+def test_upgrade_reports_an_install_the_same_way_agent_update_does(
+    settings: Settings, tmp_path
+) -> None:
+    """Two serializers of one event is how `self upgrade` came to under-report.
+
+    It listed the entry point and said nothing about the six reference files
+    beside it, while `docir agent update` named them — the same install
+    described two ways, one of them wrong.
+    """
+    project = tmp_path / "project"
+    project.mkdir()
+    assert runner.invoke(app, ["--no-daemon", "agent", "install", str(project)]).exit_code == 0
+
+    from_update = json.loads(
+        runner.invoke(app, ["--no-daemon", "--json", "agent", "update", str(project)]).stdout
+    )
+    from_upgrade = _upgrade(str(project))["agents"]
+    assert [set(row) for row in from_upgrade] == [set(row) for row in from_update]
+    assert from_upgrade[0]["extras"], "the skill's reference files are absent from both"
+
+
 def test_it_refreshes_an_installed_skill_and_leaves_an_absent_one_alone(
     settings: Settings, tmp_path
 ) -> None:

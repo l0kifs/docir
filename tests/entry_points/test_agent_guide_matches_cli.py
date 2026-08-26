@@ -1,6 +1,6 @@
 """Every `docir ...` command in docir's own prose must exist in the CLI.
 
-Guards issue-87a27629f6a6. The guide (`modules/agents/infra/templates/skill.md`) is the one
+Guards issue-87a27629f6a6. The guide (`modules/agents/infra/templates/skill/`) is the one
 artifact `docir agent install` copies into *other* repositories, so a wrong
 instruction there is distributed to every adopting project and is executed by an
 agent that has no way to know better. It told agents to run `docir reindex
@@ -333,7 +333,16 @@ def _shipped_vocabulary() -> tuple[dict[str, frozenset[str]], frozenset[str]]:
     return statuses, frozenset().union(*statuses.values())
 
 
-GUIDE = PackagedTemplateProvider().template("skill")
+_SKILL_TEMPLATE = PackagedTemplateProvider().template("skill")
+
+#: The CLI guide as one text. It is a *directory* now — `SKILL.md` plus the
+#: reference files it links — but every check below asks a question about the
+#: guide, not about one of its files: "is `--title` documented" is answered by
+#: whichever file documents it, and a command moved from the entry point into
+#: `reference/` has not stopped being documented. Joining them keeps the whole
+#: guide in scope, which is what stops the split from quietly shrinking what is
+#: checked.
+GUIDE = "\n".join(_SKILL_TEMPLATE[key] for key in sorted(_SKILL_TEMPLATE))
 TREE, GROUPS = _cli_tree()
 TYPE_STATUSES, ALL_STATUSES = _shipped_vocabulary()
 INVOCATIONS = _invocations(GUIDE)
@@ -652,14 +661,17 @@ def test_no_source_docstring_invokes_a_retired_binary_name(source: str) -> None:
 #: which is exactly when a command name in one goes stale. They ship in the
 #: wheel, and until now nothing read them.
 #:
-#: `skill.md` is deliberately excluded: it is already checked through
-#: `PackagedTemplateProvider` above, and covering it twice would double every
-#: one of its cases. The exclusion is by *identity*, not by directory, so a
-#: second template added beside it is picked up here.
+#: The CLI guide's own files are deliberately excluded: they are already checked
+#: through `PackagedTemplateProvider` above, and covering them twice would double
+#: every one of their cases. The exclusion is by *identity* — every text the
+#: `skill` template serves — not by directory, so a second template added beside
+#: it (`writing/`) is picked up here, and so is a reference file that has somehow
+#: stopped being served.
+_GUIDE_TEXTS = frozenset(_SKILL_TEMPLATE.values())
 _PACKAGED_MD = {
     str(path.relative_to(_REPO)): path.read_text(encoding="utf-8")
     for path in sorted((_REPO / "src").rglob("*.md"))
-    if path.read_text(encoding="utf-8") != GUIDE
+    if path.read_text(encoding="utf-8") not in _GUIDE_TEXTS
 }
 
 PACKAGED_INVOCATIONS = [
@@ -782,7 +794,7 @@ CORPUS_IDS = _corpus_ids()
 #: failure. `REPO_PROSE` (README, CLAUDE.md, the corpus) is deliberately absent:
 #: its corpus half is adr-e86c5040d626's, and its two files are covered here.
 _ID_PROSE: dict[str, str] = {
-    "skill.md": GUIDE,
+    "skill/": GUIDE,
     "README.md": (_REPO / "README.md").read_text(encoding="utf-8"),
     "CLAUDE.md": (_REPO / "CLAUDE.md").read_text(encoding="utf-8"),
     **_PACKAGED_MD,

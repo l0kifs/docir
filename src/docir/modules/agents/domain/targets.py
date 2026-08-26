@@ -4,8 +4,9 @@ A *target* is one place an AI coding assistant reads its instructions from, plus
 the *form* those instructions take there. docir ships three — two skills and the
 index that lists them (adr-3a2d5ee7bc84, adr-735ba7f6209b):
 
-- ``claude`` — a standalone Claude Code *skill* file the assistant auto-loads by
-  its frontmatter ``description``. Installable per-project or globally.
+- ``claude`` — a Claude Code *skill*: a directory whose ``SKILL.md`` the
+  assistant auto-loads by its frontmatter ``description``, plus the reference
+  files that entry point links to. Installable per-project or globally.
 - ``claude-writing`` — a second skill, opt-in, covering how to write the
   documents rather than how to drive the CLI (adr-735ba7f6209b).
 - ``agents`` — a marker-delimited block merged into the cross-assistant
@@ -55,8 +56,9 @@ class AgentTarget:
     relative_path: tuple[str, ...]
     #: Whether a ``--global`` (``~/``-rooted) install location exists.
     supports_global: bool
-    #: For a skill: which packaged template it installs (``<stem>.md``). Read
-    #: only for :data:`AgentForm.SKILL`; a pointer renders from what it names.
+    #: For a skill: which packaged template *directory* it installs
+    #: (``templates/<template>/``, entered through :data:`ENTRY_FILE`). Read only
+    #: for :data:`AgentForm.SKILL`; a pointer renders from what it names.
     template: str = ""
     #: For a pointer: the ``SKILL``-form targets it always names, which installing
     #: this target therefore also writes. Empty for a skill.
@@ -70,6 +72,19 @@ class AgentTarget:
         the separator is part of the content and cannot come from ``os.sep``.
         """
         return "/".join(self.relative_path)
+
+    @property
+    def directory(self) -> tuple[str, ...]:
+        """The directory a skill owns outright — where its bundled files land.
+
+        Meaningful only for :data:`AgentForm.SKILL`, whose ``relative_path`` ends
+        in the entry file (``ENTRY_FILE``, named by the port the templates come
+        through). It is what makes the install sweepable: everything
+        under here is docir's, so a file this build no longer ships can be
+        removed rather than left behind saying something no longer true. A
+        pointer is merged into a file it does not own, and has no such directory.
+        """
+        return self.relative_path[:-1]
 
 
 CLAUDE = AgentTarget(

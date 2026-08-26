@@ -688,8 +688,14 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   `DEFAULT_SCHEMA_YAML`/`PROFILE_NAMES` are exported from `documents.api`.
 - **`docir agent install/update` bypasses the daemon/dispatcher on purpose (adr-3a2d5ee7bc84).** The
   `agents` module installs AI-assistant instruction files (a Claude skill, and an `AGENTS.md`
-  block linking it) from one packaged template (`modules/agents/infra/templates/skill.md`, the
-  canonical guide — edit it there, not `docs/AGENT_GUIDE.md`, which is now a pointer). It touches
+  block linking it) from one packaged template *directory*
+  (`modules/agents/infra/templates/skill/` — `SKILL.md` plus the `reference/*.md` it links,
+  the canonical guide; edit it there, not `docs/AGENT_GUIDE.md`, which is now a pointer).
+  Installing a skill **regenerates** that directory: every packaged file is written and every
+  `.md` under it this build does not ship is deleted and reported (adr-e18250eb3081), because a
+  reference file a release renamed would stay on disk, linked from nothing, and still answer.
+  The entry point is held under 500 lines by a test — past that, an assistant pays the whole
+  guide to learn one command. It touches
   no index/DB, so the CLI builds the service directly via
   `agents.api.build_agent_service(__version__)` and runs it in-process — like `version` and
   `daemon serve`, not through the `RequestExecutor`/`Dispatcher`. Generated files carry a
@@ -859,7 +865,8 @@ tests/
   from "nothing is checked".
 - **`tests/entry_points/test_agent_guide_matches_cli.py` validates docir's own prose**
   against the Typer command tree, introspected from `cli.app` rather than shelled out. Six
-  sources: the packaged guide (`modules/agents/infra/templates/skill.md`) and `README.md`,
+  sources: the packaged guide (every file of `modules/agents/infra/templates/skill/`, joined —
+  a command moved into `reference/` has not stopped being documented) and `README.md`,
   which an *adopter* reads; `CLAUDE.md` and every file in `.docir/docs/**`, which an agent
   working in this repo reads; every docstring under `src/`, which 37 stale invocations
   survived in after the markdown side was clean; and the six `CONTRACT.md` files, which
@@ -889,7 +896,7 @@ invoke it — including how to obtain any input it needs.
 
 Three surfaces carry that, and all three are part of the change, not a follow-up:
 
-- **The packaged skill** (`modules/agents/infra/templates/skill.md`) — what the feature is and
+- **The packaged skill** (`modules/agents/infra/templates/skill/`) — what the feature is and
   *when* to reach for it. Edit the template, never `.claude/skills/**`, then run `docir agent
   update` so this repo's own copies match what an adopter installs.
 - **The CLI docstring** — *how*, with a worked example. `docir <cmd> --help` is JSON when piped,

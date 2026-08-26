@@ -1,8 +1,6 @@
 ---
 code:
-- src/docir/modules/agents/infra/templates/skill.md
-- README.md
-- .github/workflows/pages.yml
+- src/docir/modules/agents/infra/templates/**
 created: '2026-08-25'
 description: skill and README named mermaid 10.9.3 on the false grounds that 11 is
   ESM-only, while docir's own pages.yml published with 11.16.1.

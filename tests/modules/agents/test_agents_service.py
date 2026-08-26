@@ -17,7 +17,14 @@ from docir.platform.errors import AgentSetupError
 
 TEMPLATE = "---\nname: docir\ndescription: drive docir\n---\n# docir — Agent Guide\n\nbody line\n"
 WRITING = "---\nname: w\ndescription: write well\n---\n# docir — Writing Rules\n\nrule line\n"
-TEMPLATES = {"skill": TEMPLATE, "writing": WRITING}
+REFERENCE = "# Schema\n\nreference line\n"
+#: A skill is a directory: the entry point plus whatever it links to. Keyed by
+#: ``/``-separated path relative to the skill's own directory, exactly as
+#: ``PackagedTemplateProvider`` serves it.
+TEMPLATES: dict[str, dict[str, str]] = {
+    "skill": {"SKILL.md": TEMPLATE, "reference/schema.md": REFERENCE},
+    "writing": {"SKILL.md": WRITING},
+}
 
 PROJECT = Path("/proj")
 HOME = Path("/home")
@@ -28,16 +35,17 @@ AGENTS_PATH = PROJECT / "AGENTS.md"
 
 
 class FakeTemplates:
-    def __init__(self, templates: dict[str, str] | None = None) -> None:
+    def __init__(self, templates: dict[str, dict[str, str]] | None = None) -> None:
         self._templates = templates or TEMPLATES
 
-    def template(self, name: str) -> str:
+    def template(self, name: str) -> dict[str, str]:
         return self._templates[name]
 
 
 class FakeSink:
     def __init__(self) -> None:
         self.files: dict[Path, str] = {}
+        self.removed: list[Path] = []
 
     def read(self, path: Path) -> str | None:
         return self.files.get(path)
@@ -45,11 +53,22 @@ class FakeSink:
     def write(self, path: Path, content: str) -> None:
         self.files[path] = content
 
+    def markdown_files(self, directory: Path) -> tuple[Path, ...]:
+        return tuple(
+            sorted(
+                path for path in self.files if path.suffix == ".md" and directory in path.parents
+            )
+        )
+
+    def remove(self, path: Path) -> None:
+        self.files.pop(path, None)
+        self.removed.append(path)
+
 
 def make(
     version: str = "1.0.0",
     sink: FakeSink | None = None,
-    templates: dict[str, str] | None = None,
+    templates: dict[str, dict[str, str]] | None = None,
 ) -> tuple[AgentSetupService, FakeSink]:
     sink = sink or FakeSink()
     return AgentSetupService(FakeTemplates(templates), sink, version), sink
@@ -91,6 +110,77 @@ class TestInstall:
         assert sink.files[SKILL_PATH].startswith("---\nname: docir")
         assert "<!-- docir:v1.0.0" in sink.files[SKILL_PATH]
 
+    def test_a_skill_installs_its_reference_files_beside_the_entry_point(self) -> None:
+        svc, sink = make()
+        result = svc.install(install_req())
+        reference = SKILL_PATH.parent / "reference" / "schema.md"
+        assert sink.files[reference].endswith(REFERENCE)
+        # Every file says which build wrote it, not just the entry point —
+        # otherwise a hand-edited reference is indistinguishable from a shipped one.
+        assert "<!-- docir:v1.0.0" in sink.files[reference]
+        assert result.files[0].extras == ("reference/schema.md",)
+
+    def test_a_reference_file_this_build_no_longer_ships_is_swept(self) -> None:
+        """A renamed reference file would otherwise stay on disk and still answer.
+
+        The skill directory is entirely docir's, so it is regenerated rather than
+        merged — the rule `docir build` applies to its output directory.
+        """
+        svc, sink = make("1.0.0")
+        svc.install(install_req())
+        orphan = SKILL_PATH.parent / "reference" / "retired.md"
+        sink.write(orphan, "# Retired\n\nadvice from an older docir\n")
+
+        result = svc.install(install_req())
+        assert orphan not in sink.files
+        assert result.files[0].removed == ("reference/retired.md",)
+        # Named, not merely counted: a sweep that deleted the wrong file would
+        # report the same count as one that deleted the right one.
+        assert sink.removed == [orphan]
+
+    def test_the_sweep_keeps_every_file_the_template_still_ships(self) -> None:
+        svc, sink = make("1.0.0")
+        svc.install(install_req())
+        result = svc.install(install_req())
+        assert result.files[0].removed == ()
+        assert (SKILL_PATH.parent / "reference" / "schema.md") in sink.files
+
+    def test_the_sweep_stays_inside_the_skill_it_is_regenerating(self) -> None:
+        """`claude-writing` is a different directory, and a foreign file is not ours."""
+        svc, sink = make("1.0.0")
+        svc.install(install_req(agents=("claude", "claude-writing")))
+        bystander = PROJECT / "notes.md"
+        sink.write(bystander, "a human's file")
+
+        svc.install(install_req(agents=("claude",)))
+        assert bystander in sink.files
+        assert WRITING_PATH in sink.files
+
+    def test_a_release_that_only_adds_a_reference_file_is_not_unchanged(self) -> None:
+        """The entry point can differ by nothing but its stamp and still have changed.
+
+        A per-file answer reports `unchanged` for a skill the user just gained a
+        chapter of, so the action is aggregated over the whole directory.
+        """
+        svc, sink = make("1.0.0")
+        svc.install(install_req())
+        grown = dict(
+            TEMPLATES,
+            skill=dict(TEMPLATES["skill"], **{"reference/new.md": "# New\n"}),
+        )
+        svc2, _ = make("2.0.0", sink=sink, templates=grown)
+        result = svc2.install(install_req())
+        assert result.files[0].action is InstallAction.UPDATED
+
+    def test_a_release_that_only_drops_a_reference_file_is_not_unchanged(self) -> None:
+        svc, sink = make("1.0.0")
+        svc.install(install_req())
+        shrunk = dict(TEMPLATES, skill={"SKILL.md": TEMPLATE})
+        svc2, _ = make("2.0.0", sink=sink, templates=shrunk)
+        result = svc2.install(install_req())
+        assert result.files[0].action is InstallAction.UPDATED
+        assert result.files[0].removed == ("reference/schema.md",)
+
     def test_a_release_that_changed_nothing_reads_previous_version_and_says_unchanged(
         self,
     ) -> None:
@@ -112,7 +202,10 @@ class TestInstall:
         # The other half of the guard — `unchanged` must not swallow a real one.
         svc, sink = make("1.0.0")
         svc.install(install_req())
-        moved = dict(TEMPLATES, skill=TEMPLATE.replace("body line", "new body line"))
+        moved = dict(
+            TEMPLATES,
+            skill=dict(TEMPLATES["skill"], **{"SKILL.md": TEMPLATE.replace("body", "new body")}),
+        )
         svc2, _ = make("2.0.0", sink=sink, templates=moved)
         result = svc2.install(install_req())
         assert result.files[0].action is InstallAction.UPDATED
@@ -216,12 +309,22 @@ class TestInstall:
         # The pointer's whole content is the description; rendering the block
         # without one would name a file and never say when to open it.
         class Broken:
-            def template(self, name: str) -> str:
-                return "# no frontmatter\n"
+            def template(self, name: str) -> dict[str, str]:
+                return {"SKILL.md": "# no frontmatter\n"}
 
         svc = AgentSetupService(Broken(), FakeSink(), "1.0.0")
         with pytest.raises(AgentSetupError):
             svc.install(install_req(agents=("agents",)))
+
+    def test_a_template_with_no_entry_point_is_refused(self) -> None:
+        """A wheel that dropped its data files must say so, not install nothing.
+
+        An assistant that silently learned nothing is indistinguishable from one
+        that was never taught, so the empty install cannot be the report.
+        """
+        svc, _ = make(templates={"skill": {"reference/schema.md": "# Schema\n"}})
+        with pytest.raises(AgentSetupError, match=r"SKILL\.md"):
+            svc.install(install_req())
 
     def test_unknown_agent_is_rejected(self) -> None:
         """Guards issue-b8220546282c — and this test asserted the opposite.

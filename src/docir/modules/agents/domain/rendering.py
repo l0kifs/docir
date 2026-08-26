@@ -6,6 +6,9 @@ are supported:
 - **Skill** (whole file): the packaged template's frontmatter is preserved and a
   version *stamp* is inserted right after it, so the Claude Code skill loader
   still sees valid frontmatter followed by a machine-parseable version marker.
+  A skill's bundled reference files go through the same function and carry no
+  frontmatter, so their stamp lands on line one — which is what makes every file
+  of an installed skill say which build wrote it, not just the entry point.
 - **Pointer** (a block inside ``AGENTS.md``): the skill's frontmatter
   ``description`` plus the repo-relative path to the skill file, wrapped between
   ``<!-- docir:start -->`` / ``<!-- docir:end -->`` markers. Merging *replaces

@@ -38,8 +38,10 @@ so a repo that does not want it should not load it every session
 
 ## Source of truth
 
-The content lives in the packaged templates
-[`skill.md`](../src/docir/modules/agents/infra/templates/skill.md) and
-[`writing.md`](../src/docir/modules/agents/infra/templates/writing.md).
-Edit them there — a skill installs its template verbatim, and the `AGENTS.md`
-block quotes each frontmatter `description` and links the file.
+The content lives in the packaged template directories
+[`skill/`](../src/docir/modules/agents/infra/templates/skill) and
+[`writing/`](../src/docir/modules/agents/infra/templates/writing). Each holds a
+`SKILL.md` plus the `reference/*.md` files it links (adr-e18250eb3081).
+Edit them there — a skill installs its directory verbatim and sweeps what the
+build no longer ships, and the `AGENTS.md` block quotes each frontmatter
+`description` and links the entry point.

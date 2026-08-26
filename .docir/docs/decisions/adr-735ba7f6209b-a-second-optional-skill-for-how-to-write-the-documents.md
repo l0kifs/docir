@@ -1,8 +1,8 @@
 ---
 code:
-- src/docir/modules/agents/infra/templates/writing.md
 - src/docir/modules/agents/domain/targets.py
 - src/docir/modules/agents/infra/template_provider.py
+- src/docir/modules/agents/infra/templates/writing/**
 created: '2026-08-15'
 description: Why documentation-writing rules ship as their own opt-in skill rather
   than a section of the CLI guide, and why the length rule is a section limit rather
@@ -20,7 +20,7 @@ tags:
 - docs
 title: A second, optional skill for how to write the documents
 type: decision
-updated: '2026-08-15'
+updated: '2026-08-25'
 ---
 
 ## Context

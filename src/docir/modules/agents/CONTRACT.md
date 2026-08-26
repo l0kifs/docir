@@ -5,8 +5,9 @@ Installs and refreshes the AI-assistant instruction files for docir — two Clau
 Code skills and an `AGENTS.md` block that **links** to them. `claude`
 (`.claude/skills/docir/SKILL.md`) teaches the CLI; `claude-writing`
 (`.claude/skills/docir-writing/SKILL.md`) teaches how to write the documents and
-is opt-in (adr-735ba7f6209b). Each installs one packaged template verbatim, and
-the block carries only those templates' `description` plus the path to each file
+is opt-in (adr-735ba7f6209b). Each installs one packaged template *directory*
+verbatim — an entry `SKILL.md` plus the reference files it links — and the block
+carries only those templates' `description` plus the path to each entry point
 (adr-6ed847e02fe5).
 
 ## Public operations
@@ -20,13 +21,22 @@ the block carries only those templates' `description` plus the path to each file
 `InstallRequest`/`UpdateRequest` carry `project_root`, `global_root`, an `agents`
 tuple of target names (`AGENT_NAMES`), and `use_global`. `SetupResult.files` is a
 tuple of `InstalledFile{target, path, action, previous_version, new_version,
-note}` where `action` is an `InstallAction`
-(`created`/`updated`/`unchanged`/`skipped`). A
+note, extras, removed}` — one row per *target*, where `path` is the entry point,
+`extras` names the bundled files written beside it (`/`-separated, relative to
+its directory) and `removed` names the files swept from a skill's directory.
+`action` is an `InstallAction` (`created`/`updated`/`unchanged`/`skipped`). A
 `--global` install of a target with no global location (e.g. `agents`) raises
 `AgentSetupError`.
 
 ## Behavioural guarantees
-- A skill file is entirely docir's and is rewritten wholesale.
+- A skill *directory* is entirely docir's and is regenerated wholesale: every
+  packaged file is written, and every `.md` under that directory which this build
+  does not ship is deleted and named in `removed`. The sweep never leaves the
+  skill's own directory, so a second skill and any foreign file elsewhere in the
+  tree are untouched.
+- A skill's `action` is aggregated over its whole directory: a release that only
+  adds or drops a reference file is `updated`, even though the entry point
+  differs by nothing but its stamp.
 - An `AGENTS.md` is only touched inside docir's `<!-- docir:start/end -->` block
   (replaced, not duplicated); a foreign `AGENTS.md` is never rewritten by
   `update` unless `agents` is explicitly requested (then the block is appended).

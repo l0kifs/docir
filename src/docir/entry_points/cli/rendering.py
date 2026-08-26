@@ -427,6 +427,16 @@ def render_setup(files: Sequence[Mapping[str, object]]) -> None:
         suffix = f" [dim]({note})[/]" if note else ""
         color = colors.get(action, "white")
         console.print(f"[{color}]{action:<9}[/] {file.get('path')}  [dim]{version}[/]{suffix}")
+        # A skill is a directory: the row above names the entry point, so without
+        # these the reference files it carries are written invisibly — and a
+        # deletion nobody was told about is the one an install must not make.
+        extras = file.get("extras") or ()
+        if isinstance(extras, Sequence) and not isinstance(extras, str) and extras:
+            console.print(f"          [dim]+ {len(extras)} reference file(s)[/]")
+        removed = file.get("removed") or ()
+        if isinstance(removed, Sequence) and not isinstance(removed, str):
+            for name in removed:
+                console.print(f"[yellow]removed  [/] [dim]{name} — no longer shipped[/]")
 
 
 def render_release_status(status: Mapping[str, object]) -> None:

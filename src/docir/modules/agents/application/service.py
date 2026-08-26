@@ -3,9 +3,13 @@
 ``install`` writes the requested targets (default: the Claude skill). ``update``
 auto-detects already-installed targets and refreshes them to the running docir
 version, and can *add* a target passed explicitly via ``--agent``. Neither ever
-clobbers foreign content: a skill file is entirely docir's, and an ``AGENTS.md``
-is only touched inside docir's marker block (or appended to when explicitly
-adding that target). See adr-3a2d5ee7bc84 and adr-6ed847e02fe5.
+clobbers foreign content: a skill directory is entirely docir's, and an
+``AGENTS.md`` is only touched inside docir's marker block (or appended to when
+explicitly adding that target). See adr-3a2d5ee7bc84 and adr-6ed847e02fe5.
+
+A skill is a *directory* — an entry ``SKILL.md`` plus the reference files it
+links — so writing one is a regeneration, not a write (adr-e18250eb3081): files this build no longer
+ships are swept, because instructions from an older docir still answer.
 
 A pointer target drags in the skills it names (``points_to``) on both paths, so
 the block can never name a file that was not written — including the case where
@@ -17,10 +21,11 @@ sink) plus an injected version string, so it is fully testable in memory.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from docir.modules.agents.application.ports import FileSink, TemplateProvider
+from docir.modules.agents.application.ports import ENTRY_FILE, FileSink, TemplateProvider
 from docir.modules.agents.domain import rendering
 from docir.modules.agents.domain.results import InstallAction, InstalledFile
 from docir.modules.agents.domain.targets import (
@@ -154,24 +159,23 @@ class AgentSetupService:
         return True
 
     def _write(self, target: AgentTarget, root: Path) -> InstalledFile:
+        if target.form is AgentForm.SKILL:
+            return self._write_skill(target, root)
+        return self._write_pointer(target, root)
+
+    def _write_pointer(self, target: AgentTarget, root: Path) -> InstalledFile:
         path = self._path(target, root)
         existing = self._sink.read(path)
-
-        if target.form is AgentForm.SKILL:
-            content = rendering.render_skill(self._template_of(target), self._version)
-            action = InstallAction.UPDATED if existing is not None else InstallAction.CREATED
-            note = None
+        block = rendering.render_pointer(self._pointers(target, root), self._version)
+        content = rendering.merge_block(existing, block)
+        if existing is None:
+            action, note = InstallAction.CREATED, None
+        elif rendering.has_inlined_guide(existing):
+            action, note = InstallAction.UPDATED, "inlined guide replaced by a link to it"
+        elif rendering.has_block(existing):
+            action, note = InstallAction.UPDATED, None
         else:
-            block = rendering.render_pointer(self._pointers(target, root), self._version)
-            content = rendering.merge_block(existing, block)
-            if existing is None:
-                action, note = InstallAction.CREATED, None
-            elif rendering.has_inlined_guide(existing):
-                action, note = InstallAction.UPDATED, "inlined guide replaced by a link to it"
-            elif rendering.has_block(existing):
-                action, note = InstallAction.UPDATED, None
-            else:
-                action, note = InstallAction.UPDATED, "docir block appended to existing file"
+            action, note = InstallAction.UPDATED, "docir block appended to existing file"
 
         # The file is still written — the stamp records which build produced this
         # content, so skipping the write would leave `update` reporting the same
@@ -190,6 +194,65 @@ class AgentSetupService:
             note=note,
         )
 
+    def _write_skill(self, target: AgentTarget, root: Path) -> InstalledFile:
+        """Materialise a skill directory: the entry point plus every bundled file.
+
+        Reported as one row keyed on the entry point, because that is the file
+        the assistant loads and the one `AGENTS.md` links; the rest ride along in
+        ``extras``. The action is aggregated over the whole directory — a release
+        that only *adds* a reference file has changed the skill even though
+        `SKILL.md` differs by nothing but its stamp, so a per-file answer would
+        report `unchanged` for the skill the user just gained a chapter of.
+        """
+        directory = root.joinpath(*target.directory)
+        entry = self._path(target, root)
+        existing_entry = self._sink.read(entry)
+        templates = self._template_of(target)
+
+        written: dict[Path, str] = {}
+        unchanged = True
+        for relative, template in sorted(templates.items()):
+            path = directory.joinpath(*relative.split("/"))
+            content = rendering.render_skill(template, self._version)
+            existing = self._sink.read(path)
+            unchanged &= existing is not None and rendering.differs_only_by_stamp(existing, content)
+            written[path] = content
+
+        removed = self._sweep(directory, keep=set(written))
+        for path, content in written.items():
+            self._sink.write(path, content)
+
+        if existing_entry is None:
+            action = InstallAction.CREATED
+        elif unchanged and not removed:
+            action = InstallAction.UNCHANGED
+        else:
+            action = InstallAction.UPDATED
+        return InstalledFile(
+            target=target.name,
+            path=str(entry),
+            action=action,
+            previous_version=rendering.parse_version(existing_entry) if existing_entry else None,
+            new_version=self._version,
+            extras=tuple(sorted(key for key in templates if key != ENTRY_FILE)),
+            removed=removed,
+        )
+
+    def _sweep(self, directory: Path, *, keep: set[Path]) -> tuple[str, ...]:
+        """Delete every ``.md`` under ``directory`` this run is not writing.
+
+        A skill directory is entirely docir's, so it is regenerated rather than
+        merged — the same rule `docir build` applies to its output directory, and
+        for the same reason: a reference file a release renamed would otherwise
+        stay on disk, linked from nothing, and be read as current by an assistant
+        that greps the directory. Stale instructions are worse than none, because
+        they still answer.
+        """
+        stale = tuple(path for path in self._sink.markdown_files(directory) if path not in keep)
+        for path in stale:
+            self._sink.remove(path)
+        return tuple(path.relative_to(directory).as_posix() for path in stale)
+
     def _pointers(self, target: AgentTarget, root: Path) -> tuple[rendering.SkillPointer, ...]:
         """One entry per indexed skill — description verbatim, path linked.
 
@@ -206,7 +269,7 @@ class AgentSetupService:
         for skill in AGENT_TARGETS.values():
             if skill.name not in names:
                 continue
-            description = rendering.parse_description(self._template_of(skill))
+            description = rendering.parse_description(self._template_of(skill)[ENTRY_FILE])
             if description is None:
                 raise AgentSetupError(
                     f"skill template for {skill.name!r} has no frontmatter 'description'"
@@ -214,5 +277,19 @@ class AgentSetupService:
             pointers.append(rendering.SkillPointer(description=description, path=skill.posix_path))
         return tuple(pointers)
 
-    def _template_of(self, target: AgentTarget) -> str:
-        return self._templates.template(target.template)
+    def _template_of(self, target: AgentTarget) -> Mapping[str, str]:
+        """Every packaged file of ``target``'s skill, keyed relative to its directory.
+
+        A skill with no entry point would install a directory nothing loads, and
+        an assistant that silently learned nothing looks exactly like one that
+        was never taught. Target names come from the static catalogue, so this
+        can only be a packaging fault — a wheel that dropped its data files —
+        and it must say so here rather than surface as an empty install.
+        """
+        files = self._templates.template(target.template)
+        if ENTRY_FILE not in files:
+            raise AgentSetupError(
+                f"packaged template {target.template!r} has no {ENTRY_FILE}; this "
+                "docir installation is incomplete — reinstall the package"
+            )
+        return files

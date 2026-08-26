@@ -1665,6 +1665,13 @@ def _emit_upgrade(result: UpgradeResult) -> None:
 
 
 def _setup_file(file: InstalledFile) -> dict[str, object]:
+    """The one JSON shape for an installed file — `agent` and `self upgrade` share it.
+
+    There were two of these, and adding a field to one is how `self upgrade`
+    came to report an install without saying which reference files it wrote.
+    Both commands describe the same event, so one of them describing it
+    differently is always a defect, never a choice.
+    """
     return {
         "target": file.target,
         "path": file.path,
@@ -1672,21 +1679,16 @@ def _setup_file(file: InstalledFile) -> dict[str, object]:
         "previous_version": file.previous_version,
         "new_version": file.new_version,
         "note": file.note,
+        # A skill is a directory: `path` is the entry point, so without these the
+        # agent reading this JSON cannot see which reference files it now has —
+        # nor that an install deleted one.
+        "extras": list(file.extras),
+        "removed": list(file.removed),
     }
 
 
 def _emit_setup(result: SetupResult) -> None:
-    files = [
-        {
-            "target": file.target,
-            "path": file.path,
-            "action": file.action.value,
-            "previous_version": file.previous_version,
-            "new_version": file.new_version,
-            "note": file.note,
-        }
-        for file in result.files
-    ]
+    files = [_setup_file(file) for file in result.files]
     state = get_state()
     if use_json(state):
         rendering.emit_json(files, trim=state.trim)

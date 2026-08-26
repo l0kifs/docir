@@ -1,8 +1,8 @@
 ---
 code:
-- src/docir/modules/agents/infra/templates/skill.md
-- src/docir/entry_points/cli/app.py
 - README.md
+- src/docir/entry_points/cli/app.py
+- src/docir/modules/agents/infra/templates/**
 created: '2026-08-24'
 description: A business feature is done when an agent holding only the installed package
   can tell what it is, when to reach for it and how to invoke it — and somebody has
@@ -19,7 +19,7 @@ tags:
 - testing
 title: A feature ships with its instructions, verified by use
 type: decision
-updated: '2026-08-24'
+updated: '2026-08-25'
 ---
 
 ## Context

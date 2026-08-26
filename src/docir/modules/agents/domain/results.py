@@ -28,7 +28,13 @@ class InstallAction(enum.Enum):
 
 @dataclass(frozen=True)
 class InstalledFile:
-    """The outcome of acting on one target."""
+    """The outcome of acting on one target.
+
+    One row per *target*, not per file: a skill is a directory now, and seven
+    rows all reporting the same version transition would bury the answer the
+    caller wants ("did it install, and at what version"). ``path`` is therefore
+    the entry point, and the bundled files it carries are named in ``extras``.
+    """
 
     target: str
     path: str
@@ -36,3 +42,11 @@ class InstalledFile:
     previous_version: str | None
     new_version: str | None
     note: str | None = None
+    #: Files written *beside* ``path``, relative to its directory and
+    #: ``/``-separated (e.g. ``reference/schema.md``). Empty for a pointer.
+    extras: tuple[str, ...] = ()
+    #: Files deleted from the skill's directory because this build no longer
+    #: ships them. Reported rather than merely done: it is the one part of an
+    #: install that destroys something, and a reference file left behind from an
+    #: older docir would be read as current.
+    removed: tuple[str, ...] = ()

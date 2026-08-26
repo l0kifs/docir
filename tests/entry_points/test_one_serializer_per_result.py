@@ -24,7 +24,12 @@ import ast
 import dataclasses
 from pathlib import Path
 
+import pytest
+
 from docir.modules.agents.domain.results import InstallAction, InstalledFile
+from docir.modules.documents.api import ConformanceReport
+from docir.modules.publishing.api import PublishResult
+from docir.modules.release.api import ReleaseStatus
 
 _ENTRY_POINTS = Path(__file__).resolve().parents[2] / "src" / "docir" / "entry_points"
 
@@ -34,11 +39,48 @@ _ENTRY_POINTS = Path(__file__).resolve().parents[2] / "src" / "docir" / "entry_p
 #: shape of the type.
 _MATCH_THRESHOLD = 4
 
-DECLARED = frozenset(field.name for field in dataclasses.fields(InstalledFile))
 
-#: Where the one serializer is allowed to live. Named rather than counted: a
-#: scan that found *nothing* and a scan that found only the sanctioned site
-#: produce the same count, and only one of them means the guard is working.
+@dataclasses.dataclass(frozen=True)
+class Guarded:
+    """A result type `entry_points` turns into JSON by hand."""
+
+    #: The dataclass whose shape the serializer is supposed to reproduce.
+    type: type
+    #: Where its one serializer is allowed to live. Named rather than counted: a
+    #: scan that found *nothing* and a scan that found only the sanctioned site
+    #: produce the same count, and only one of them means the guard is working.
+    site: str
+    #: Fields deliberately kept out of the payload, each with the reason. An
+    #: exemption with no reason beside it is indistinguishable from an oversight.
+    withheld: dict[str, str] = dataclasses.field(default_factory=dict)
+
+    @property
+    def declared(self) -> frozenset[str]:
+        return frozenset(field.name for field in dataclasses.fields(self.type))
+
+    @property
+    def expected(self) -> frozenset[str]:
+        return self.declared - set(self.withheld)
+
+
+#: Every result type whose JSON shape is built by hand under `entry_points`.
+#: Request types are deliberately absent: `AddDocumentRequest` and friends are
+#: built twice on purpose, once from CLI flags and once from MCP arguments
+#: (adr-354a4270ecd8), so their invariant is that the two *agree* — a different
+#: test, and one this file does not make.
+GUARDED = [
+    Guarded(InstalledFile, site="cli/app.py"),
+    Guarded(ReleaseStatus, site="cli/app.py"),
+    Guarded(ConformanceReport, site="cli/app.py"),
+    Guarded(
+        PublishResult,
+        site="cli/app.py",
+        withheld={"files": "`pages` already carries the count; the list is every filename written"},
+    ),
+]
+
+IDS = [guarded.type.__name__ for guarded in GUARDED]
+DECLARED = frozenset(field.name for field in dataclasses.fields(InstalledFile))
 SANCTIONED = "cli/app.py"
 
 
@@ -74,18 +116,47 @@ def test_the_scan_sees_real_dict_literals() -> None:
     assert len(literals) > 20, f"only {len(literals)} dict literals under entry_points"
 
 
-def test_installed_file_has_exactly_one_serializer() -> None:
-    sites = _serializers_of(DECLARED)
-    assert [site[0] for site in sites] == [SANCTIONED], (
-        "InstalledFile is serialized in "
-        f"{[f'{name}:{line}' for name, line, _ in sites]} — route both commands "
-        "through the single helper instead; a field added to one of two "
-        "serializers is how `self upgrade` stopped reporting a skill's reference files"
+@pytest.mark.parametrize("guarded", GUARDED, ids=IDS)
+def test_the_result_type_has_exactly_one_serializer(guarded: Guarded) -> None:
+    sites = _serializers_of(guarded.declared)
+    assert [site[0] for site in sites] == [guarded.site], (
+        f"{guarded.type.__name__} is serialized in "
+        f"{[f'{name}:{line}' for name, line, _ in sites]} — route every caller "
+        "through one helper instead; a field added to one of two serializers is "
+        "how `self upgrade` stopped reporting a skill's reference files"
     )
 
 
-def test_the_one_serializer_emits_every_declared_field() -> None:
-    """A field the serializer never emits is one no caller can act on."""
+@pytest.mark.parametrize("guarded", GUARDED, ids=IDS)
+def test_the_serializer_names_every_field_it_should(guarded: Guarded) -> None:
+    """The keys the one dict literal carries, against the fields it stands for.
+
+    Weaker than calling it (`{"note": file.path}` would satisfy this), which is
+    why `InstalledFile` is also checked by invocation below. It is what covers
+    the serializers that print instead of returning.
+    """
+    (_, _, keys), *rest = _serializers_of(guarded.declared)
+    assert not rest, "more than one serializer — the case above says which"
+    missing = guarded.expected - keys
+    assert not missing, (
+        f"{guarded.type.__name__} declares {sorted(missing)} and the payload never "
+        "names them; emit them, or add them to `withheld` with the reason"
+    )
+
+
+@pytest.mark.parametrize("guarded", GUARDED, ids=IDS)
+def test_every_withheld_field_still_exists(guarded: Guarded) -> None:
+    """An exemption for a field that was renamed away silently widens the check."""
+    unknown = sorted(set(guarded.withheld) - guarded.declared)
+    assert not unknown, f"{guarded.type.__name__} withholds fields it does not have: {unknown}"
+
+
+def test_the_installed_file_serializer_emits_every_field_when_called() -> None:
+    """The stronger form, where a helper returns the dict instead of printing it.
+
+    Reads the real values through, so a key present but wired to the wrong
+    attribute still has to survive the round trip.
+    """
     from docir.entry_points.cli.app import _setup_file
 
     emitted = set(

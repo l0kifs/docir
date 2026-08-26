@@ -3,7 +3,8 @@
 
 What to do when `docir check` reports something, when a human has edited the
 files by hand, and how the staleness signal works. For the *environment* — the
-index, the daemon, the model — see [`reference/troubleshooting.md`](troubleshooting.md).
+index, the daemon, the model, the installation — see
+[`reference/troubleshooting.md`](troubleshooting.md).
 
 ## Contents
 
@@ -13,50 +14,49 @@ index, the daemon, the model — see [`reference/troubleshooting.md`](troublesho
 
 ## Checks & maintenance (non-blocking)
 
-- `docir check` — Tier 1 warnings: cycles, orphans, layering, **dangling** `related` links, **duplicate ids**, **stale** docs (past their review cadence), **unknown type/status/tag** (a `type` not in the active schema, a `status` the type doesn't declare, a tag not in the registry — all three mean a file was edited outside the CLI), **missing-required** (a field the type requires that the document lacks), **unknown-relation-kind** (an edge whose kind the schema no longer registers), and **schema-drift** (the schema itself changed since the index was built) and **stale-index-build** (the index was built by a docir that is no longer installed). Run before finishing.
+- `docir check` — Tier 1 warnings over the corpus: `cycle`, `orphan`, `layering`,
+  **`dangling`** (a `related` link pointing at nothing), **`duplicate-id`**, **`stale`** (past
+  the type's review cadence), **`unknown-type`** / **`unknown-status`** / **`unknown-tag`** /
+  **`unknown-relation-kind`** (a type, status, tag or relation kind the schema does not know —
+  all four mean a file was edited outside the CLI), **`missing-required`**, **`schema-drift`**
+  and **`stale-index-build`**. Run before finishing; the ones worth a recovery are spelled out
+  below.
 - **`unblocked`** — a live document whose every `depends_on` target has closed. The one
   finding that is good news: it means the work is ready to start. Act on it by starting the
   work or by dropping an edge that is no longer true; nothing clears it mechanically.
-- `docir check --strict` — exits nonzero on **error**-severity findings only (`duplicate-id`, `dangling`, `malformed` — the corpus is broken; plus `empty-index`, which means `check` could not look). Use as a **CI / pre-merge gate**, and **run `docir reindex` first**: the index is derived and gitignored, so a fresh clone has none and every structural check reads a blank graph. `empty-index` is what says so rather than letting the gate pass by reading nothing. Warnings (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`, `unknown-status`, `unknown-tag`, `missing-required`, `unknown-relation-kind`, `schema-drift`, `stale-index-build`) are reported but never fail the build; `--strict-all` makes them fatal too.
-- **Recovering from `missing-required`**: the schema now requires a field the document was
-  written without — usually because `docs-schema.yaml` gained a `required:` entry, or an upgrade
-  brought one in through a profile. Supply it (`docir update <id> --set-owner ...`) or drop the
+- `docir check --strict` — exits nonzero on **error** severity only: `duplicate-id`,
+  `dangling`, `malformed` (the corpus is broken) plus `empty-index` (`check` could not look).
+  Every other finding above is a warning and never fails the build; `--strict-all` makes them
+  fatal too.
+  **As a CI / pre-merge gate the order is `docir reindex` → `docir doctor --strict` →
+  `docir check --strict`.** The index is derived and gitignored, so before the rebuild `check`
+  reads a blank graph and calls the corpus clean; `doctor --strict` proves the rebuild
+  populated it, and `empty-index` is what fires if it did not.
+- **Recovering from `missing-required`** — the type requires a field the document was written
+  without, usually because `docs-schema.yaml` gained a `required:` entry or an upgrade brought
+  one in through a profile. Supply it (`docir update <id> --set-owner ...`) or drop the
   requirement from the schema. Until then **every** write to that document is refused, including
   one that touches nothing else — so fix these before editing an old document.
-- **Recovering from `unknown-type`** (a doc whose `type` isn't in the active schema, usually
-  because a profile was disabled): re-enable the profile in `docs-schema.yaml`, or change the
-  doc's `type` to one the schema knows — then `docir reindex`. `check --fix` deliberately will
+- **Recovering from `unknown-type`** — the document's `type` is not in the active schema,
+  usually because a profile was disabled. Re-enable the profile in `docs-schema.yaml`, or
+  change the doc's `type` to one the schema knows — then `docir reindex`. `check --fix` deliberately will
   not guess which you meant. Until it is resolved the doc cannot be validated, is never
   reported stale, and is skipped by the layering check.
-- `docir doctor` — the *environment*, not the corpus: the installation, this store's derived
-  index, the embedding model in force, the daemon, and each declared peer. See `reference/troubleshooting.md`. Run it when a read contradicts the files, and once after cloning a repo.
-  **In CI, run it after `docir reindex` and before `docir check --strict`** — the index is
-  gitignored, so without the rebuild `check` runs over zero documents and reports a clean
-  corpus; `doctor --strict` is what proves the rebuild populated it.
-- `docir check --fix` — repair what can be repaired without guessing: re-issue duplicate ids (the oldest file keeps the id, so existing links stay valid) and drop `related` edges pointing at nothing. It reports every change, then lists what it could not fix. `malformed` and `unknown-type` are left alone — those need you to decide what the file or the schema should say. **This is the supported way to recover; do not hand-edit markdown to fix these.**
-- **Recovering from `schema-drift`**: the active schema differs from the one the index was built
-  against — usually an upgrade, since the types, statuses and cadences come from the installed
-  docir as much as from `docs-schema.yaml`. Each finding names one change (`+type test_plan`,
+- `docir doctor` — the *environment* rather than the corpus, and a different question: run it
+  when a read contradicts the files, and once after cloning a repo. Every finding it can
+  report, and the command that closes each, is in `reference/troubleshooting.md`.
+- `docir check --fix` — repair what needs no guess: re-issue duplicate ids (the oldest file
+  keeps the id, so existing links stay valid) and drop `related` edges pointing at nothing. It
+  reports every change, then lists what it could not fix. `malformed` and `unknown-type` are
+  left alone — those need you to decide what the file or the schema should say. **This is the
+  supported way to recover; do not hand-edit markdown to fix these.**
+- **Recovering from `schema-drift`** — the schema moved under the corpus since the index was
+  built, usually an upgrade: the types, statuses and cadences come from the installed docir as
+  much as from `docs-schema.yaml`. Each finding names one change (`+type test_plan`,
   `type decision: required [] -> ['owner']`). Deal with the consequences it explains — the
   `unknown-type`, `unknown-status` and `missing-required` findings beside it — then `docir
   reindex`, which is what records the new baseline. Set `DOCIR_SCHEMA_NOTICE=1` to have every
   command print the drift on stderr instead of waiting for a `check`.
-- **`docir self upgrade` — upgrade docir and resync this store, in one command.** It
-  installs the newest docir where docir owns its environment (a uv tool, a pipx install, a
-  virtualenv), re-executes as the new build, then reindexes (the index is derived and
-  gitignored, and a rebuild is what records the schema baseline *and* the version that built
-  it), refreshes any installed agent instruction file, and reports what `check` still finds.
-  Where docir does *not* own its environment — a checkout, a project whose lockfile pins it,
-  an ephemeral `uvx` run — it says so on stderr and does the rest; the package is that
-  project's to upgrade. Pass `--no-package` to skip the install and only resync the store.
-  **`stale-index-build`** is the finding that asks for this: the index was built by a docir
-  that is no longer installed. A warning, never a `--strict` failure — every store is in that
-  state between an upgrade and the next rebuild.
-- `docir self status` — what is installed, how, and whether a newer release exists. A file
-  read: it reports the answer the daemon last cached, and an absent `latest` means *nobody
-  has checked*, not "up to date". `--refresh` asks PyPI now (docir's only network call, and
-  it is skipped if the answer is already from today). Set `DOCIR_UPDATE_CHECK=1` to have the
-  daemon keep it fresh and every command say on stderr when a newer docir is out.
 - `docir lint --deep` — Tier 2 advisories: duplicate content, oversized documents,
   **oversized sections** (a section the chunker has to split, so part of it is text no
   heading can address), **ambiguous headings** (used twice in one document, so a section
@@ -116,11 +116,10 @@ hand-edited corpus, this is the contract:
 | `created` / `updated` | ❌ | `updated` is the staleness clock's fallback. |
 | `verified` | ❌ **never** | It means "somebody re-read this and it is still true". Nothing can check that, so writing it by hand is simply a false statement. Use `docir update <id> --verified`. |
 
-**After any hand-edit: `docir reindex` then `docir check`.** Reindex reports
-`documents_skipped` for files whose frontmatter will not parse — those are
-*absent from every read path*, not merely flagged. `check` then catches
-`unknown-tag`, `unknown-status`, `unknown-type`, `unknown-relation-kind`,
-`missing-required`, `dangling` and `duplicate-id`.
+**After any hand-edit: `docir reindex` then `docir check`.** Watch `documents_skipped`
+in the reindex output (above). `check` then catches `unknown-tag`, `unknown-status`,
+`unknown-type`, `unknown-relation-kind`, `missing-required`, `dangling` and
+`duplicate-id`.
 
 It cannot catch everything: a plausible-but-wrong `verified` date, or edited
 `created`/`updated`, are indistinguishable from real ones. Those are the fields

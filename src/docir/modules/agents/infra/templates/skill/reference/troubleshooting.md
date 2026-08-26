@@ -1,12 +1,14 @@
 # When the answers look wrong
 
 Reads can quietly answer from the wrong state, and every such condition looks
-exactly like a correct answer. This file is the environment half; the corpus half
-— dangling edges, duplicate ids, staleness — is [`reference/maintenance.md`](maintenance.md).
+exactly like a correct answer. This file is the environment half — the index, the
+daemon, the model, the installation. The corpus half — dangling edges, duplicate
+ids, staleness — is [`reference/maintenance.md`](maintenance.md).
 
 ## Contents
 
 - `docir doctor` — every finding and the command that closes it
+- Keeping the installation current — `docir self upgrade`, `docir self status`
 - Notes — exit codes, async vectors, where state lives
 
 ## `docir doctor` first
@@ -29,7 +31,7 @@ Each finding carries a `kind`, a `severity` and the command that closes it:
 - `index-behind-files` — the index holds fewer documents than `docs/` does. A warning: usually
   one file that will not parse, which `docir check` names as `malformed`.
 - `stale-index-build` — the index was built by a docir that is no longer installed.
-  → `docir self upgrade`
+  → `docir self upgrade` (below)
 - `schema-drift` — the types or cadences moved under the corpus with nothing in `git diff`.
   → `docir check` to read them, then `docir reindex`
 - `hashing-embedder` / `embeddings-pending` — `DOCIR_EMBEDDER` is overriding the model, or
@@ -47,6 +49,24 @@ embedding model); `warning` means it works less well than you think. Only `error
 
 The corpus is a different question: `docir doctor` never scans the graph, and `docir check` is
 what reports dangling edges, duplicate ids and staleness.
+
+## Keeping the installation current
+
+- **`docir self upgrade` — upgrade docir and resync this store, in one command.** It
+  installs the newest docir where docir owns its environment (a uv tool, a pipx install, a
+  virtualenv), re-executes as the new build, then reindexes (the index is derived and
+  gitignored, and a rebuild is what records the schema baseline *and* the version that built
+  it), refreshes any installed agent instruction file, and reports what `check` still finds.
+  Where docir does *not* own its environment — a checkout, a project whose lockfile pins it,
+  an ephemeral `uvx` run — it says so on stderr and does the rest; the package is that
+  project's to upgrade. Pass `--no-package` to skip the install and only resync the store.
+  `stale-index-build` is the finding that asks for this. It is a warning, never a `--strict`
+  failure — every store is in that state between an upgrade and the next rebuild.
+- `docir self status` — what is installed, how, and whether a newer release exists. A file
+  read: it reports the answer the daemon last cached, and an absent `latest` means *nobody
+  has checked*, not "up to date". `--refresh` asks PyPI now (docir's only network call, and
+  it is skipped if the answer is already from today). Set `DOCIR_UPDATE_CHECK=1` to have the
+  daemon keep it fresh and every command say on stderr when a newer docir is out.
 
 ## Notes
 

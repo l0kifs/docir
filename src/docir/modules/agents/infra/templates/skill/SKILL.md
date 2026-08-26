@@ -29,7 +29,7 @@ whole. Each is self-contained; you never need to chain from one to another.
 | [`reference/schema.md`](reference/schema.md) | editing `docs-schema.yaml`: types, statuses, relation kinds, store-defined `checks:`, `allowed_relations` |
 | [`reference/maintenance.md`](reference/maintenance.md) | `docir check` reported something, a human hand-edited the corpus, or a document is stale |
 | [`reference/publishing.md`](reference/publishing.md) | someone wants the decisions as a browsable site (`docir build`) |
-| [`reference/troubleshooting.md`](reference/troubleshooting.md) | a read contradicts the files, or a command failed and you need the exit codes |
+| [`reference/troubleshooting.md`](reference/troubleshooting.md) | a read contradicts the files, docir needs upgrading (`docir doctor`, `docir self upgrade`), or you need the exit codes |
 
 ## When to use
 

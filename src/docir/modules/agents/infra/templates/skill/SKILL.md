@@ -41,9 +41,8 @@ Use docir whenever this repo manages design docs with it (a `docir` command, a
 - When **resolving or updating** an existing doc.
 - When **searching** project knowledge.
 
-docir is the ONLY sanctioned way to read/write these docs — **never edit the
-markdown files by hand.** (A human may; `reference/maintenance.md` holds the
-per-field contract, and they must re-run `docir reindex && docir check` after.)
+A human working in the repo *may* edit the files by hand; you may not.
+`reference/maintenance.md` holds the per-field contract and what to run after.
 
 ## Core loop
 
@@ -62,7 +61,7 @@ per-field contract, and they must re-run `docir reindex && docir check` after.)
 |---|---|
 | `docir context "<task>" [--limit N] [--expand N]` | Best first step: full-text and vector rankings fused, plus 1-hop related docs. Graph-pulled items marked `via_graph`. |
 | `docir get <id>` | Full doc (body included); works for any status. |
-| `docir get <id> --section "<heading>"` | Just that heading and the text under it. Architecture docs here run to tens of thousands of characters and docir ranks a document on its best-matching *section*, so this is usually the part that answered you. An unknown heading errors listing the real ones. |
+| `docir get <id> --section "<heading>"` | Just that heading and the text under it. An unknown heading errors *listing the real ones* — that is where you learn the right name. |
 | `docir get <id> <id> <id>` | Several docs in one command. Address a section inline: `docir get adr-3f9a2b1c7d4e "arch-0002#Decision"`. **Always batch** — a docir read costs mostly process start, so three separate `get` calls cost about three times one. |
 | `docir search "<text>"` | Full-text over **title, description and body only** — *not* tags. `docir search auth` will not find a doc merely tagged `auth`; use `docir query --tag auth`. Supports `--limit`/`--offset`. |
 | `docir query --type decision --status accepted --tag auth` | Structured filter; repeatable `--type/--status/--tag`. Pages with `--limit`/`--offset` — a page shorter than `--limit` means the end. |
@@ -71,25 +70,22 @@ per-field contract, and they must re-run `docir reindex && docir check` after.)
 **Two-tier read (skeleton → body).** `context` / `query` / `search` return
 *skeletons* — id, title, description, tags, typed `related`, `owner`,
 `verified`, `stale` — **but not the body**. Scan those to judge relevance, then
-pull only the bodies you need — in a single `docir get <id> <id> ...`. This is
-the cheap path; never dump every body. On a long document prefer a section: each
-`##` section is embedded separately, so a hit often means one section matched,
-and that section is a fraction of the file.
+pull only the bodies you need; never dump every body. On a long document prefer
+a section: docir embeds each `##` section separately and ranks a document on its
+best-matching one, so a hit usually means one section answered you — and these
+documents run to tens of thousands of characters.
 
 With two or more ids the reply is `{"documents": [...], "missing": [...]}`
 instead of a bare document. An id that no longer exists, or a heading that does
 not, appears in `missing` as `{"ref", "error"}` beside the documents that did
-resolve — a stale id costs you that one body, not the whole read. The `error`
-for a bad heading lists the real ones, so that is where you learn the right
-name.
+resolve — a stale id costs you that one body, not the whole read.
 
 **A hit that matched through a section names it.** `matched_section` on a
 `context` result is the heading whose vector earned the rank — pass it straight
 to `docir get "<id>#<heading>"` (or `--section` for a single document) instead
-of pulling the body. That is the form that batches: one `docir get` can mix
-whole documents and sections of others. Absent
-means the match is not addressable as a section (the document's own vector, a
-full-text hit, a graph neighbour), not that nothing matched.
+of pulling the body; one `docir get` mixes whole documents and sections of
+others. Absent means the match is not addressable as a section (the document's
+own vector, a full-text hit, a graph neighbour), not that nothing matched.
 
 Default read path **hides** closed and archived docs. "Closed" means the type's
 *inactive* statuses — `superseded`/`rejected` for a decision, `resolved` for an

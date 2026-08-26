@@ -1,7 +1,6 @@
 ---
 paths:
   - "src/docir/entry_points/federation.py"
-  - "**/stores.yaml"
 ---
 
 # Federated reads across peer stores

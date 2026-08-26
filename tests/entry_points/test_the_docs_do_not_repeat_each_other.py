@@ -44,21 +44,15 @@ KEY_WORDS = 8
 #: An entry is `(files, first words of the repeated span)`.
 BASELINE: frozenset[tuple[tuple[str, ...], str]] = frozenset(
     {
-        (("CLAUDE.md", "README.md"), "`docir embed --flush` or a full `docir reindex`"),
-        (("CLAUDE.md", "README.md"), "agents never edit markdown directly every write goes"),
-        (("CLAUDE.md", "README.md"), "an mcp tool and its cli command cannot"),
-        (("CLAUDE.md", "README.md"), "because the index is gitignored two clones holding"),
-        (("CLAUDE.md", "README.md"), "dependencies flow `entry points modules platform config`"),
-        (("CLAUDE.md", "README.md"), "each module exposes exactly one public file `api"),
-        (("CLAUDE.md", "README.md"), "on the next write or `docir embed --flush`"),
+        # Three facts `CLAUDE.md` states in full rather than deferring to README:
+        # it is the file an agent has loaded before its first edit, and README is
+        # not. Kept deliberately, not pending.
         (
             ("CLAUDE.md", "README.md"),
             "precedence highest first `--home` `docir home` a project-local",
         ),
-        (
-            ("CLAUDE.md", "README.md", "guide/reference/schema.md"),
-            "is valid and the documents are what",
-        ),
+        (("CLAUDE.md", "README.md"), "dependencies flow `entry points modules platform config`"),
+        (("CLAUDE.md", "README.md"), "each module exposes exactly one public file `api"),
         (("CLAUDE.md", "guide/SKILL.md"), "a `supersedes` edge points from the new"),
         (("CLAUDE.md", "guide/SKILL.md"), "a repair has nothing to read with"),
         (("CLAUDE.md", "guide/SKILL.md"), "inside the task that moved the code"),

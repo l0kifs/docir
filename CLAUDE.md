@@ -73,9 +73,8 @@ lives only in the database — `docir reindex` rebuilds it from the files. The m
 `docs/tags.yaml`) are canonical and diff cleanly in git; the index (metadata + FTS5 + relation
 graph + embedding BLOBs) is a compile artifact, `.gitignore`d. When in doubt, the files win.
 
-**2. Agents never edit markdown directly — every write goes through the CLI.** That single write
-path is what guarantees frontmatter/schema consistency and id allocation without collisions. Adding
-a write that bypasses it defeats the point.
+**2. The CLI is the only write path.** That is what guarantees frontmatter/schema consistency
+and id allocation without collisions. Adding a write that bypasses it defeats the point.
 
 The daemon exists only to keep the embedding model warm and serialize writes; the CLI is a thin,
 stateless client that transparently spawns/respawns it. The same command runs either in-process
@@ -115,7 +114,8 @@ not "simplify" it by handing it a `DocumentService`.
 - **Each module exposes exactly one public file, `api.py`.** Code outside a module (entry_points, or
   another module) may import **only** that module's `api`, never its `domain`/`application`/`infra`.
   This is enforced by the tach dependency graph in `tach.toml`: each layer of each module is its own
-  tach module, and the internals are simply never listed as an allowed dependency of outside code.
+  tach module, and the internals are simply never listed as an allowed dependency of outside code —
+  so importing past `api.py` fails the build rather than a code review.
 - **`domain/` is pure** — no I/O, no frameworks, no `platform` services beyond pure primitives (the
   error taxonomy, the `Embedding` value object). tach enforces this; if domain code needs a
   repository or a clock, it belongs in `application/`.
@@ -153,9 +153,9 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   metadata, FTS, relations) is synchronous and current when the command returns. Two scheduler
   implementations back this: `InlineEmbeddingScheduler` (in-process/tests, drains synchronously so
   behaviour is deterministic) and `ThreadedEmbeddingScheduler` (daemon, debounced background thread).
-  Anything that needs the vector *now* must flush: `--wait-embeddings` on a write, `docir embed
-  --flush`, or a full `docir reindex` — which re-embeds every document it re-saves and reports the
-  count as `embeddings_recomputed`. There is no flag for "recompute the vectors too", and
+  Anything that needs the vector *now* must flush, by one of the three routes README lists; the
+  reindex among them reports its count as `embeddings_recomputed`. There is no flag for
+  "recompute the vectors too", and
   adr-6a4718fa7a7d records why the one that existed was retired rather than repaired: it skipped
   the rebuild instead of adding to it, so it recomputed exactly those vectors and wrote neither
   the schema baseline nor the build stamp. Do not move embedding onto the synchronous write path.
@@ -585,7 +585,7 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   when the index is behind, and a fresh clone has none at all. It opens **no database**, which
   is what preserves `schema validate`'s existing property of being reachable for a store too
   broken to start — do not "simplify" it through `build_container`. And the **exit code does
-  not move**: the file is valid and the documents are what changed, so gating here would
+  not move**, for the reason README gives: gating here would
   red-build every repo mid-migration — the state a correct migration passes through. The graph
   findings are deliberately excluded: `orphan` fires for every unlinked document, which would
   bury the answer under the default state of a healthy corpus. `affected` counts distinct
@@ -724,8 +724,8 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   guide's wording — which would rot the moment the template changed.
 - **`docir mcp serve` is a third client of the dispatcher, not a second implementation
   (adr-354a4270ecd8).** Every tool in `entry_points/mcp/server.py` is one `Request` through a
-  `RequestExecutor` — the same boundary the CLI and the daemon socket cross — so an MCP tool
-  and its CLI command cannot answer differently. Exactly one tool per dispatcher command
+  `RequestExecutor` — the same boundary the CLI and the daemon socket cross, which is the
+  mechanism behind the equivalence README claims. Exactly one tool per dispatcher command
   (`ping` excepted: a liveness probe, not a document operation) plus `docir_schema`, which is
   the one thing an agent needs that is not a command. `test_mcp_server.py` asserts the
   exposed tool **names** against `Dispatcher._handlers`, so a new command that reaches only
@@ -789,8 +789,7 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   too (issue-a24f404dd106).** A top-level `embed_model:` key in `docs-schema.yaml` — beside
   `id_style`, which is the precedent for a store-wide policy that is not a type concept —
   selects any model `fastembed` supports. It lives in the committed file rather than an env
-  var because the index is gitignored: two clones holding different models would each
-  re-embed the corpus behind the other. **The catalogue
+  var, for the reason README gives about two clones disagreeing. **The catalogue
   (`platform/embedding/catalogue.py`) is a recommendation, not a gate**: a name docir has
   measured passes silently *and without importing fastembed at all* — that import is most
   of a cold start and the schema loads on every command, so the short-circuit is load-bearing
@@ -827,8 +826,8 @@ means per-module storage plus an event bus, which is a rewrite the project delib
   rows and `dirty_ids(model_id)` treats a foreign or NULL `model_id` as dirty. Without this,
   changing embedder made `docir context` raise `dimension mismatch: 256 != 384` in every
   existing store — different models have different widths, and `Embedding.cosine_similarity`
-  refuses rather than silently truncating. The recompute happens on the next write or
-  `docir embed --flush`, so the first read after a switch has no semantic signal.
+  refuses rather than silently truncating. The recompute is deferred exactly as README
+  describes, so the first read after a switch has no semantic signal.
 
 ## Testing
 

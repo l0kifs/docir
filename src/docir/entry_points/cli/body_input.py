@@ -26,7 +26,22 @@ def resolve_body(
     if body is not None:
         return body
     if body_file is not None:
-        return body_file.read_text(encoding="utf-8")
+        # Unwrapped, a missing path or a latin-1 draft escaped as a raw traceback
+        # and exit 1, while every other bad argument on the same command printed a
+        # message and exit 2. The path is the thing the user typed, so it is what
+        # the message has to name.
+        try:
+            return body_file.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            raise typer.BadParameter(f"--body-file {body_file}: no such file") from None
+        except IsADirectoryError:
+            raise typer.BadParameter(f"--body-file {body_file}: is a directory") from None
+        except UnicodeDecodeError:
+            raise typer.BadParameter(
+                f"--body-file {body_file}: not valid UTF-8; re-save the file as UTF-8"
+            ) from None
+        except OSError as exc:
+            raise typer.BadParameter(f"--body-file {body_file}: {exc.strerror}") from None
     if read_stdin:
         return sys.stdin.read()
     return default

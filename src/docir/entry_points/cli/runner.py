@@ -152,7 +152,10 @@ def try_execute(command: str, payload: dict[str, object]) -> tuple[object, str]:
             closer.close()
     if response.ok:
         return response.data, ""
-    return None, str((response.error or {}).get("message", "the store could not be opened"))
+    # Only reached when a failed response carries no message; naming the store is
+    # the difference between a sentence the caller can act on and one it cannot.
+    fallback = f"the store at {state.settings.home} could not be opened, and reported no reason"
+    return None, str((response.error or {}).get("message") or fallback)
 
 
 def _with_peers(state: CliState, command: str, payload: dict[str, object]) -> dict[str, object]:

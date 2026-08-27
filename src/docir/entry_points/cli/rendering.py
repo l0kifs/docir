@@ -87,8 +87,19 @@ def _first_line(text: str, *, full: bool = False) -> str:
 
 
 def render_error(error: Mapping[str, object]) -> None:
-    """Print a domain error to stderr."""
-    message = error.get("message", "unknown error")
+    """Print a domain error to stderr.
+
+    A failed response with no message is a bug on the producing side, not
+    something the user did. `error: unknown error` told them nothing and named
+    nothing to try, so the fallback carries the one command that can say more.
+    """
+    message = error.get("message")
+    if not message:
+        error_console.print(
+            "[bold red]error:[/] the command failed but reported no reason "
+            "[dim](run `docir doctor` for the state of this store)[/]"
+        )
+        return
     error_console.print(f"[bold red]error:[/] {message}")
 
 

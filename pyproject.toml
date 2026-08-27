@@ -153,6 +153,9 @@ ignore_decorators = [
 # Pytest / coverage
 # ---------------------------------------------------------------------------
 [tool.pytest.ini_options]
+# scripts/ is not a package, but cli_oracle.py is the one oracle both the prose
+# tests and scripts/check_expressions.py judge a `docir ...` line against.
+pythonpath = ["scripts"]
 testpaths = ["tests"]
 addopts = "-ra"
 markers = ["slow: spawns a real subprocess or loads the real embedding model"]

@@ -16,7 +16,7 @@ tags:
 - release
 title: Publishing to PyPI
 type: runbook
-updated: '2026-08-25'
+updated: '2026-08-27'
 ---
 
 This project uses [UV](https://docs.astral.sh/uv/) as the package manager and GitHub Actions for automated publishing to PyPI.
@@ -82,7 +82,7 @@ gh release list --limit 10 2>&1 | cat
    git push
    ```
 
-6. **Check the release notes before publishing** (required if they show a `--expr`):
+6. **Check the release notes before publishing** (required, always):
 
    ```bash
    uv run python scripts/check_expressions.py notes.md
@@ -90,13 +90,22 @@ gh release list --limit 10 2>&1 | cat
 
    A release body is the one surface docir's own guards do not reach — the prose test covers
    what ships in the wheel and `lint --deep` covers a store's documents, but a release page is
-   written once, published, and copied from. v0.18.0 shipped `owner == null` in its notes,
-   which is a JMESPath *identifier* rather than a literal: it gave the right answer for the
-   wrong reason until 0.19.0 refused it, and the page had to be corrected after the fact.
+   written once, published, and copied from. It is checked on two counts.
 
-   The check takes the notes *file*, so it runs before `gh release create` and needs no
-   network. It prints how many arguments it checked — "0 problems" and "nothing was checked"
-   are the one pair a gate must never conflate.
+   **Every `--expr` compiles.** v0.18.0 shipped `owner == null` in its notes, which is a
+   JMESPath *identifier* rather than a literal: it gave the right answer for the wrong reason
+   until 0.19.0 refused it, and the page had to be corrected after the fact.
+
+   **Every `docir ...` resolves to a real command with real flags**, judged by the same
+   `scripts/cli_oracle.py` the prose tests use, so a line correct here cannot be wrong there.
+   A release body announcing a feature is exactly where a flag gets named from memory, and an
+   agent runs a backticked line regardless of the sentence around it. Prose naming a verb
+   because it does *not* exist is exempted there, once, rather than rewritten here.
+
+   The check takes the notes *file*, so it runs before `gh release create` and needs no store,
+   index or network. It prints both counts even when clean — "0 problems" and "nothing was
+   checked" are the one pair a gate must never conflate, and the two halves go quiet
+   independently.
 
 7. **Create a GitHub release**:
 

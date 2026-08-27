@@ -7,6 +7,140 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-08-27
+
+Every gate in this project was green. Four of them were green because they were not looking:
+`check --strict` read an index no CI checkout has, the diagram check asserted a file existed
+rather than a diagram drawing, the model cache named a directory fastembed stopped writing to,
+and a workflow error stopped every job while the YAML parsed fine. This release closes those and
+adds the command that reports the whole class — the conditions that produce an answer imitating
+a correct one.
+
+### Upgrade notes
+
+- **`docir check` now reports `empty-index`, and it is an error.** A `check --strict` that runs
+  on a fresh clone without rebuilding the index first will start failing. It was passing by
+  reading nothing: measured here, a corpus with one linked-to document removed produced zero
+  findings before a reindex and sixteen `dangling` errors after. Put `docir reindex` in front of
+  it — CI now runs reindex -> `doctor --strict` -> `check --strict`. A freshly `docir init`-ed
+  store stays silent, since it has no files either.
+- **The Claude skill is now a directory, and installing it regenerates that directory.** Every
+  packaged file is written and every `.md` under it this build does not ship is **deleted** and
+  reported. Hand-edited files under `.claude/skills/docir/` will not survive `docir agent update`
+  — the same rule `docir build` applies to `--out`, for the same reason. Run it after upgrading;
+  nothing detects a stale skill later.
+- **Nothing else changes without you asking.**
+
+### Added
+
+- **`docir doctor` — one report for every way docir is subtly wrong.** A daemon serving code you
+  replaced, `DOCIR_EMBEDDER` left over from a test run, an index built by another version or
+  behind the files it projects, a schema that moved inside the package, a peer skipped for schema
+  skew, writes about to land in the global store. None of these raises; each produces an answer
+  that imitates a correct one. Every one was already detected *somewhere* — `daemon status`,
+  `self status`, a stderr line during a read, one finding among a hundred in `check` — and none
+  was reportable together, which is the property that matters.
+
+  Each finding carries the command that closes it. Severity derives from the kind, so `--strict`
+  gates on errors only and the ordinary state of a repo between an upgrade and its next reindex
+  does not fail a setup script. No network call, and no model load without `--probe`.
+
+  The environment is snapshotted **before** the first dispatch, which is the whole command:
+  dispatching first would replace a stale daemon and create a missing index, then call both
+  clean. The store half is a dispatcher command, so an agent reaches it over MCP as
+  `docir_store_status`; the process half deliberately is not, since a daemon reporting on itself
+  makes "is the daemon stale?" inexpressible. (adr-909734bced92)
+
+- **Batch reads: `docir get` takes several addresses in one request.** An address is `<id>` or
+  `<id>#<heading>` — the form a ranked hit hands back as `matched_section`. Roughly half a second
+  of a docir read is starting Python and importing docir, while retrieval underneath is flat from
+  25 to 2000 documents, so five reads cost five interpreters; over MCP the same shape costs five
+  model turns.
+
+  Measured (25 documents, p50 seconds, five bodies): warm daemon 2.506 -> 0.508, cold 3.133 ->
+  1.320, `--no-daemon` 4.248 -> 0.872. The floor row is 0.522, so warm, the five reads themselves
+  are free.
+
+  An address that does not resolve lands in `missing` beside the documents that did — one deleted
+  id must not cost the caller the other four — while a malformed address still raises, because
+  that is the caller's own typo. The reply shape follows the payload key, not the result count, so
+  the single read is unchanged. `docir build` is rewired onto it. (adr-fe7c91f61f32,
+  issue-9509f9fa3631)
+
+- **The packaged skill is a directory, and installing it regenerates the directory.** The CLI
+  guide had reached 764 lines / ~11.8k tokens, so every session that triggered the skill paid the
+  whole guide to learn how to run `docir context`. It is now a 255-line entry point carrying the
+  everyday loop plus six task-grouped files under `reference/` — setup, retrieval, schema,
+  maintenance, publishing, troubleshooting — which cost nothing until read. A reference file a
+  release renamed no longer stays on disk, linked from nothing, and still answering.
+  (adr-e18250eb3081)
+
+### Fixed
+
+- **`docir check --strict` passed by reading nothing.** `.docir/docs/` is committed and the index
+  is gitignored, so a CI checkout has no index — and `check`'s graph half reads it. The
+  file-scanning half (`duplicate-id`, `malformed`) kept firing, which is why nothing looked
+  broken: a half-alive gate is harder to notice than a dead one. `dangling`, the other half of the
+  merge-into-`main` guard and the reason the step exists, never fired.
+
+  `empty-index` is an error against this codebase's own rule about promoting warnings, on a
+  different argument: every warning it refuses to promote describes something that moved and
+  *still answers*, so promoting one red-builds a correct setup. This one describes an index that
+  answers nothing. A warning would have changed nothing, which is the test. (adr-1cccd77cb023,
+  issue-87410666c867)
+
+- **`docir get <peer-id>` named the wrong repository.** `_emit_document` overwrote a federated
+  hit's `store` with the local home.
+
+- **The mermaid guidance named a version docir itself had stopped using.** The skill and README
+  told adopters to fetch 10.9.3 on the stated grounds that "mermaid 11 ships only ES modules",
+  while `pages.yml` had been publishing with 11.16.1. The claim is false: mermaid 11's package
+  `exports` name only `dist/mermaid.core.mjs`, but `dist/mermaid.min.js` is still published and
+  assigns `globalThis["mermaid"]`, which is exactly what a plain `<script src>` needs. Verified by
+  rendering rather than by reading the bundle. Both surfaces now name the file and the property
+  that matters. (issue-28e5dc0191cd)
+
+- **`self upgrade` and `agent update` disagreed about their own JSON.** Each serialized
+  `InstalledFile` separately, so the upgrade reported an install without naming the reference
+  files it wrote. One serializer now, with a test comparing the two commands' keys.
+
+### Measured and rejected
+
+- **The obvious guard for the empty-index hazard.** Asserting that `check` over an unbuilt index
+  reports nothing is `test_check_strict_gates_ci` a second time — the test that pinned an unusable
+  CI gate and therefore kept it, one of four defects CLAUDE.md names as surviving because a test
+  asserted the existing behaviour was intended. The tests instead pin the *hazard*: a corpus with
+  one dangling edge, invisible before a reindex and an error after. Delete the reindex step from a
+  workflow and they still pass; read them and you cannot delete it by accident.
+
+### Internal
+
+- **`actionlint` gates the workflows** (`uv run actionlint`). A workflow file is the one thing in
+  this repository that cannot be validated by running it — the first honest feedback arrives after
+  `main` is already red. A job-level `env:` using the `runner` context is valid YAML and a
+  workflow-file error: GitHub rejected the file, zero jobs ran, and the failure said only
+  "workflow file issue". It ships as `actionlint-py`, a wheel vendoring the Go binary, so the gate
+  runs locally like every other one — which is the point, since a gate that only fires after a
+  push cannot stop the push. (issue-b323a5b2ba18)
+- **The model cache never hit.** The workflow cached `~/.cache/fastembed`; fastembed 0.8 resolves
+  its cache to `tempfile.gettempdir()/fastembed_cache`. Every run re-downloaded ~64 MB while the
+  step's comment claimed it was downloading once. Both sides now spell one literal, because a
+  job-level `env:` value is not shell-expanded while `actions/cache` *does* expand `~` in `path:`
+  — one side expanding and the other not is how they came to name different directories. Cold 8s,
+  warm 0.93s. (issue-82b01d7f80d0)
+- **`pages.yml` asserts the diagrams draw**, serving the built site in Chromium and requiring an
+  `<svg>` with real content, rather than checking that `site/mermaid.min.js` exists. Verified by
+  injecting two runtimes the file-exists check could not tell from a working one — a no-op global
+  and an ESM-only module.
+- **`scripts/check_expressions.py`** compiles every `--expr` in a release body before it is
+  published. A release page is the one surface docir's own guards do not reach: it is written
+  once, published, and copied from. v0.18.0 shipped `owner == null` and had to be corrected after
+  the fact.
+- **CLAUDE.md is split into path-scoped `.claude/rules/`**, 942 lines to 356. An imported file is
+  expanded into context at launch, so `@path` saves nothing; a rule with `paths:` frontmatter
+  loads only when a file it governs is read. Guarded both ways — a glob that matches nothing is a
+  rule nobody is ever shown.
+
 ## [0.19.0] - 2026-08-25
 
 0.18.0 gave you a grammar to ask questions with. This one lets a store *state a rule* in it —
@@ -1838,7 +1972,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/l0kifs/docir/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/l0kifs/docir/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/l0kifs/docir/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/l0kifs/docir/compare/v0.16.0...v0.17.0

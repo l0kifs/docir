@@ -393,14 +393,19 @@ def _validation_payload(result: SchemaValidation) -> dict[str, object]:
 @app.command()
 def add(
     type: Annotated[str, typer.Option("--type", help="Document type.")],
-    title: Annotated[str, typer.Option("--title")],
-    description: Annotated[str, typer.Option("--description")],
+    title: Annotated[str, typer.Option("--title", help="Document title.")],
+    description: Annotated[
+        str, typer.Option("--description", help="One-line summary, shown in every skeleton.")
+    ],
     tags: Annotated[str | None, typer.Option("--tags", help="Comma-separated.")] = None,
     related: Annotated[
         str | None,
         typer.Option("--related", help="Comma-separated <id> or <id>:<kind> typed edges."),
     ] = None,
-    status: Annotated[str | None, typer.Option("--status")] = None,
+    status: Annotated[
+        str | None,
+        typer.Option("--status", help="Initial status; defaults to the type's default status."),
+    ] = None,
     owner: Annotated[str | None, typer.Option("--owner", help="Steward for staleness.")] = None,
     code: Annotated[
         str | None,
@@ -413,10 +418,20 @@ def add(
             help="Adopt an existing id (migrating a numbered corpus) instead of allocating.",
         ),
     ] = None,
-    body: Annotated[str | None, typer.Option("--body")] = None,
-    body_file: Annotated[Path | None, typer.Option("--body-file")] = None,
-    stdin: Annotated[bool, typer.Option("--stdin")] = False,
-    wait_embeddings: Annotated[bool, typer.Option("--wait-embeddings")] = False,
+    body: Annotated[
+        str | None, typer.Option("--body", help="Body markdown as a literal string.")
+    ] = None,
+    body_file: Annotated[
+        Path | None,
+        typer.Option("--body-file", help="Read the body markdown from this UTF-8 file."),
+    ] = None,
+    stdin: Annotated[
+        bool,
+        typer.Option("--stdin", help="Read the body markdown from stdin; avoids shell escaping."),
+    ] = False,
+    wait_embeddings: Annotated[
+        bool, typer.Option("--wait-embeddings", help="Block until embeddings are recomputed.")
+    ] = False,
 ) -> None:
     """Create a new document with valid frontmatter.
 
@@ -451,14 +466,23 @@ def add(
 @app.command()
 def update(
     doc_id: Annotated[str, typer.Argument(help="Document id.")],
-    status: Annotated[str | None, typer.Option("--status")] = None,
+    status: Annotated[
+        str | None, typer.Option("--status", help="Move the document to this status.")
+    ] = None,
     set_type: Annotated[
         str | None,
         typer.Option("--type", help="Retype the document. The id never changes."),
     ] = None,
-    set_title: Annotated[str | None, typer.Option("--set-title")] = None,
-    set_description: Annotated[str | None, typer.Option("--set-description")] = None,
-    set_tags: Annotated[str | None, typer.Option("--set-tags")] = None,
+    set_title: Annotated[str | None, typer.Option("--set-title", help="Replace the title.")] = None,
+    set_description: Annotated[
+        str | None, typer.Option("--set-description", help="Replace the one-line summary.")
+    ] = None,
+    set_tags: Annotated[
+        str | None,
+        typer.Option(
+            "--set-tags", help='Replace the tags, comma-separated (pass "" to clear them).'
+        ),
+    ] = None,
     set_related: Annotated[
         str | None,
         typer.Option("--set-related", help="Comma-separated <id> or <id>:<kind> typed edges."),
@@ -482,13 +506,32 @@ def update(
             ),
         ),
     ] = False,
-    append_section: Annotated[str | None, typer.Option("--append-section")] = None,
-    replace_section: Annotated[str | None, typer.Option("--replace-section")] = None,
-    replace_body: Annotated[bool, typer.Option("--replace-body")] = False,
-    body: Annotated[str | None, typer.Option("--body")] = None,
-    body_file: Annotated[Path | None, typer.Option("--body-file")] = None,
-    stdin: Annotated[bool, typer.Option("--stdin")] = False,
-    force: Annotated[bool, typer.Option("--force")] = False,
+    append_section: Annotated[
+        str | None,
+        typer.Option("--append-section", help="Append the body text under this heading."),
+    ] = None,
+    replace_section: Annotated[
+        str | None,
+        typer.Option(
+            "--replace-section", help="Overwrite this heading's section with the body text."
+        ),
+    ] = None,
+    replace_body: Annotated[
+        bool, typer.Option("--replace-body", help="Overwrite the whole body. Requires --force.")
+    ] = False,
+    body: Annotated[
+        str | None, typer.Option("--body", help="The edit's text, as a literal string.")
+    ] = None,
+    body_file: Annotated[
+        Path | None, typer.Option("--body-file", help="Read the edit's text from this UTF-8 file.")
+    ] = None,
+    stdin: Annotated[
+        bool,
+        typer.Option("--stdin", help="Read the edit's text from stdin; avoids shell escaping."),
+    ] = False,
+    force: Annotated[
+        bool, typer.Option("--force", help="Allow --replace-body to overwrite the existing body.")
+    ] = False,
     override: Annotated[
         bool,
         typer.Option(
@@ -496,7 +539,9 @@ def update(
             help="Force an illegal status transition (warns; last resort).",
         ),
     ] = False,
-    wait_embeddings: Annotated[bool, typer.Option("--wait-embeddings")] = False,
+    wait_embeddings: Annotated[
+        bool, typer.Option("--wait-embeddings", help="Block until embeddings are recomputed.")
+    ] = False,
 ) -> None:
     """Update a document (metadata patch and/or a body edit).
 
@@ -544,21 +589,26 @@ def update(
 
 
 @app.command()
-def archive(doc_id: Annotated[str, typer.Argument()]) -> None:
+def archive(doc_id: Annotated[str, typer.Argument(help="Document id.")]) -> None:
     """Soft-remove a document from active search."""
     _emit_document(execute("archive", {"doc_id": doc_id}))
 
 
 @app.command()
-def unarchive(doc_id: Annotated[str, typer.Argument()]) -> None:
+def unarchive(doc_id: Annotated[str, typer.Argument(help="Document id.")]) -> None:
     """Restore an archived document to active search."""
     _emit_document(execute("unarchive", {"doc_id": doc_id}))
 
 
 @app.command()
 def delete(
-    doc_id: Annotated[str, typer.Argument()],
-    force: Annotated[bool, typer.Option("--force")] = False,
+    doc_id: Annotated[str, typer.Argument(help="Document id.")],
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force", help="Delete even while documents relate to it, stripping those edges."
+        ),
+    ] = False,
 ) -> None:
     """Hard-delete a document's file and index rows.
 
@@ -580,7 +630,9 @@ def delete(
 
 @app.command()
 def get(
-    doc_ids: Annotated[list[str], typer.Argument(metavar="ID...")],
+    doc_ids: Annotated[
+        list[str], typer.Argument(metavar="ID...", help="One or more document ids.")
+    ],
     section: Annotated[
         str | None,
         typer.Option(
@@ -624,10 +676,19 @@ def get(
 
 @app.command()
 def query(
-    type: Annotated[list[str] | None, typer.Option("--type")] = None,
-    status: Annotated[list[str] | None, typer.Option("--status")] = None,
-    tag: Annotated[list[str] | None, typer.Option("--tag")] = None,
-    include_archived: Annotated[bool, typer.Option("--include-archived")] = False,
+    type: Annotated[
+        list[str] | None, typer.Option("--type", help="Only this type (repeat for more).")
+    ] = None,
+    status: Annotated[
+        list[str] | None, typer.Option("--status", help="Only this status (repeat for more).")
+    ] = None,
+    tag: Annotated[
+        list[str] | None,
+        typer.Option("--tag", help="Only documents carrying this tag (repeat for more)."),
+    ] = None,
+    include_archived: Annotated[
+        bool, typer.Option("--include-archived", help="Also return archived documents.")
+    ] = False,
     include_inactive: Annotated[
         bool,
         typer.Option("--include-inactive", help="Also return documents in an inactive status."),
@@ -643,7 +704,7 @@ def query(
         list[str] | None,
         typer.Option("--code", help="Only documents governing this path (repeat for more)."),
     ] = None,
-    limit: Annotated[int, typer.Option("--limit")] = 50,
+    limit: Annotated[int, typer.Option("--limit", help="Maximum rows to return.")] = 50,
     offset: Annotated[int, typer.Option("--offset", help="Rows to skip; page with --limit.")] = 0,
     expr: Annotated[
         str | None,
@@ -706,8 +767,8 @@ def query(
 
 @app.command()
 def search(
-    text: Annotated[str, typer.Argument()],
-    limit: Annotated[int, typer.Option("--limit")] = 20,
+    text: Annotated[str, typer.Argument(help="Free-text query.")],
+    limit: Annotated[int, typer.Option("--limit", help="Maximum hits to return.")] = 20,
     offset: Annotated[int, typer.Option("--offset", help="Hits to skip; page with --limit.")] = 0,
     include_inactive: Annotated[
         bool,
@@ -827,8 +888,10 @@ def context(
 
 @tag_app.command("add")
 def tag_add(
-    key: Annotated[str, typer.Argument()],
-    description: Annotated[str, typer.Option("--description")],
+    key: Annotated[str, typer.Argument(help="Tag key to register.")],
+    description: Annotated[
+        str, typer.Option("--description", help="What the tag means; shown by `tag list`.")
+    ],
 ) -> None:
     """Register a new tag."""
     data = execute("tag_add", {"key": key, "description": description})
@@ -837,7 +900,9 @@ def tag_add(
 
 @tag_app.command("list")
 def tag_list(
-    limit: Annotated[int, typer.Option("--limit")] = DEFAULT_TAG_PAGE,
+    limit: Annotated[
+        int, typer.Option("--limit", help="Maximum tags to return.")
+    ] = DEFAULT_TAG_PAGE,
     offset: Annotated[int, typer.Option("--offset", help="Tags to skip; page with --limit.")] = 0,
 ) -> None:
     """List registered tags, key-ordered, with a usage count each.
@@ -860,8 +925,8 @@ def tag_list(
 
 @tag_app.command("rename")
 def tag_rename(
-    old: Annotated[str, typer.Argument()],
-    new: Annotated[str, typer.Argument()],
+    old: Annotated[str, typer.Argument(help="Existing tag key.")],
+    new: Annotated[str, typer.Argument(help="New tag key.")],
     merge: Annotated[
         bool,
         typer.Option("--merge", help="Fold `old` into an existing `new` instead of failing."),
@@ -884,8 +949,10 @@ def tag_rename(
 
 @tag_app.command("rm")
 def tag_rm(
-    key: Annotated[str, typer.Argument()],
-    force: Annotated[bool, typer.Option("--force")] = False,
+    key: Annotated[str, typer.Argument(help="Tag key to remove.")],
+    force: Annotated[
+        bool, typer.Option("--force", help="Remove even while documents still carry the tag.")
+    ] = False,
 ) -> None:
     """Remove a tag (blocked while in use unless forced)."""
     data = execute("tag_remove", {"key": key, "force": force})
@@ -1168,7 +1235,9 @@ def doctor(
 
 @app.command()
 def lint(
-    deep: Annotated[bool, typer.Option("--deep")] = False,
+    deep: Annotated[
+        bool, typer.Option("--deep", help="Actually run the checks; without it lint does nothing.")
+    ] = False,
 ) -> None:
     """Tier 2 advisory checks (content similarity, scope creep)."""
     if not deep:
@@ -1252,7 +1321,10 @@ def _read_fixture(path: Path) -> list[object]:
 
 @app.command()
 def embed(
-    flush: Annotated[bool, typer.Option("--flush")] = False,
+    flush: Annotated[
+        bool,
+        typer.Option("--flush", help="Actually drain the queue; without it embed does nothing."),
+    ] = False,
 ) -> None:
     """Force a synchronous embedding recompute of dirty documents."""
     if not flush:

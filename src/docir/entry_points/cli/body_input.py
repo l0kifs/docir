@@ -11,6 +11,8 @@ from pathlib import Path
 
 import typer
 
+from docir.entry_points.cli import rendering
+
 
 def resolve_body(
     body: str | None,
@@ -43,5 +45,11 @@ def resolve_body(
         except OSError as exc:
             raise typer.BadParameter(f"--body-file {body_file}: {exc.strerror}") from None
     if read_stdin:
+        # Blocks until EOF. Piped, that is instant; typed at a terminal it waits
+        # for a Ctrl-D the user has no reason to expect, which is the case where
+        # --stdin was passed without the redirect that was supposed to feed it.
+        isatty = getattr(sys.stdin, "isatty", None)
+        if callable(isatty) and isatty():
+            rendering.render_notice("reading the body from stdin; end with Ctrl-D")
         return sys.stdin.read()
     return default

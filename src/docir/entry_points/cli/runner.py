@@ -276,7 +276,12 @@ def _build_executor(
         from docir.entry_points.daemon.socket_executor import SocketExecutor
 
         return SocketExecutor(settings), None
-    executor, container = build_in_process_executor(settings)
+    # The in-process path loads the schema and the embedding model before a
+    # single request is dispatched, and on a cold fastembed cache it downloads
+    # the model first. The daemon exists so this is paid once; without it every
+    # command pays it, which is the case that looks like a hang.
+    with rendering.progress("loading the embedding model"):
+        executor, container = build_in_process_executor(settings)
     return executor, container
 
 

@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import json
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 
 from rich.console import Console
 from rich.panel import Panel
@@ -115,6 +116,36 @@ def render_schema_drift(lines: Sequence[str]) -> None:
     for line in lines:
         error_console.print(f"  {line}")
     error_console.print("  run `docir reindex` once you have dealt with it.")
+
+
+@contextmanager
+def progress(message: str) -> Iterator[None]:
+    """Say that a slow step is running, for as long as it runs.
+
+    Stderr, and only when stderr is a terminal. Three readers, one rule: stdout
+    carries the JSON an agent parses; an MCP client speaks the protocol over the
+    child's stdout and reads stderr as logs; and neither of them is the reader
+    who cannot tell a long operation from a hung one. That reader is a human at
+    a terminal, so that is who this prints for.
+
+    The spinner clears itself, so a step that turned out to be fast leaves
+    nothing in the scrollback.
+    """
+    if not error_console.is_terminal:
+        yield
+        return
+    with error_console.status(f"[dim]{message}[/]"):
+        yield
+
+
+def render_notice(message: str) -> None:
+    """A one-line "this is running" notice, for a step :func:`progress` cannot wrap.
+
+    Same terminal-only rule. Used where the slow thing writes to the terminal
+    itself — a subprocess installer — and a spinner would fight it for the line.
+    """
+    if error_console.is_terminal:
+        error_console.print(f"[dim]{message}[/]")
 
 
 def render_warning(message: str) -> None:

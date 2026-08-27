@@ -96,7 +96,11 @@ def _executor_for(settings: Settings) -> RequestExecutor:
         from docir.entry_points.daemon.socket_executor import SocketExecutor
 
         return SocketExecutor(settings)
+    from docir.entry_points.cli import rendering
     from docir.entry_points.composition import build_in_process_executor
 
-    executor, _container = build_in_process_executor(settings)
+    # Before the transport is up, so a client spawning this sees nothing happen
+    # for as long as the model takes to load — or to download.
+    with rendering.progress("loading the embedding model"):
+        executor, _container = build_in_process_executor(settings)
     return executor

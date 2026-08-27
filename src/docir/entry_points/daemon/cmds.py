@@ -27,7 +27,10 @@ def serve() -> None:
 def start() -> None:
     """Ensure the daemon is running, spawning it if necessary."""
     settings = get_state().settings
-    lifecycle.ensure_running(settings)
+    # Spawns a detached child and waits for it to answer; the child warms the
+    # embedding model before it does.
+    with rendering.progress("starting the daemon"):
+        lifecycle.ensure_running(settings)
     snapshot = lifecycle.status(settings)
     rendering.render_message(
         f"[green]daemon running[/] (pid {snapshot.pid}) at {snapshot.socket_path}"
@@ -51,7 +54,8 @@ def status() -> None:
 @daemon_app.command("stop")
 def stop() -> None:
     """Stop the daemon if it is running."""
-    stopped = lifecycle.stop(get_state().settings)
+    with rendering.progress("stopping the daemon"):
+        stopped = lifecycle.stop(get_state().settings)
     rendering.render_message(
         "[green]daemon stopped[/]" if stopped else "[dim]daemon was not running[/]"
     )

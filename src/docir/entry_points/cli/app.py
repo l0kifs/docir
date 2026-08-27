@@ -1035,7 +1035,13 @@ def self_status(
     """
     state = get_state()
     service = build_release_service(__version__, state.settings.release_cache_path)
-    _emit_release_status(run_local(lambda: service.status(refresh=refresh)))
+    if refresh:
+        # The cached read is instant; only --refresh goes to the network.
+        with rendering.progress("asking PyPI for the newest release"):
+            status_result = run_local(lambda: service.status(refresh=True))
+    else:
+        status_result = run_local(lambda: service.status(refresh=False))
+    _emit_release_status(status_result)
 
 
 @self_app.command("upgrade")
@@ -1074,14 +1080,15 @@ def self_upgrade(
     if not no_package and upgraded_from is None:
         _upgrade_the_package_then_restart()
 
-    result = with_executor(
-        lambda executor: upgrade_store(
-            lambda command, payload: execute_with(executor, command, payload),
-            project_root=directory.resolve(),
-            version=__version__,
-            upgraded_from=upgraded_from,
+    with rendering.progress("rebuilding the store"):
+        result = with_executor(
+            lambda executor: upgrade_store(
+                lambda command, payload: execute_with(executor, command, payload),
+                project_root=directory.resolve(),
+                version=__version__,
+                upgraded_from=upgraded_from,
+            )
         )
-    )
     _emit_upgrade(result)
 
 
@@ -1109,7 +1116,8 @@ def reindex(
     recompute every vector — there is no flag for that, because there was
     nothing for one to add (adr-6a4718fa7a7d).
     """
-    data = execute("reindex", {"changed_only": changed})
+    with rendering.progress("rebuilding the index"):
+        data = execute("reindex", {"changed_only": changed})
     skipped = data.get("documents_skipped") if isinstance(data, dict) else None
     if isinstance(skipped, int) and skipped:
         # stderr, so a captured JSON payload on stdout stays parseable.
@@ -1156,7 +1164,8 @@ def check(
     """
     state = get_state()
     if fix:
-        result = execute("repair", {})
+        with rendering.progress("repairing the corpus"):
+            result = execute("repair", {})
         payload = result if isinstance(result, dict) else {}
         issues = _as_list(payload.get("remaining"))
         if use_json(state):
@@ -1219,9 +1228,13 @@ def doctor(
     # are gone by the time the first request returns.
     environment = run_local(lambda: doctor_report.snapshot(state.settings, __version__))
     store, store_error = try_execute("store_status", {})
-    probed = (
-        run_local(lambda: doctor_report.probe_embedder(environment.embed_model)) if probe else None
-    )
+    if probe:
+        # The one thing doctor does that is not instant: --probe's whole job is
+        # to load the model, which downloads it on a cold cache.
+        with rendering.progress("loading the embedding model (may download ~67MB)"):
+            probed = run_local(lambda: doctor_report.probe_embedder(environment.embed_model))
+    else:
+        probed = None
     report = doctor_report.diagnose(
         environment,
         _store_reply(store),
@@ -1330,7 +1343,8 @@ def embed(
     if not flush:
         rendering.render_message("[dim]pass --flush to drain the embedding queue[/]")
         raise typer.Exit(code=0)
-    data = execute("embed_flush", {})
+    with rendering.progress("recomputing embeddings"):
+        data = execute("embed_flush", {})
     _emit_or_message(data, str(data))
 
 
@@ -1586,6 +1600,7 @@ def _upgrade_the_package_then_restart() -> None:
     """
     state = get_state()
     service = build_release_service(__version__, state.settings.release_cache_path)
+    rendering.render_notice("upgrading the docir package")
     outcome = run_local(service.upgrade_package)
     if not outcome.ran:
         rendering.render_warning(f"package not upgraded — {outcome.message}")

@@ -33,6 +33,7 @@ from docir.entry_points.federation import (
     merge_ranked,
     peer_homes,
     store_description,
+    unrecognised_keys,
 )
 from docir.platform.clock import Clock
 from docir.platform.errors import DocirError
@@ -723,7 +724,7 @@ class TestDescriptionFileShape:
         with pytest.raises(DocirError, match="one string"):
             peer_homes(home)
 
-    def test_an_unknown_key_is_refused_rather_than_ignored(self, tmp_path: Path) -> None:
+    def test_a_misspelled_key_is_refused_and_named(self, tmp_path: Path) -> None:
         """`store:` for `stores:` used to be caught only because a file without
         a `stores` key was itself an error, and a description-only file is now
         legitimate — so the typo needs its own refusal or it reads as a store
@@ -731,7 +732,18 @@ class TestDescriptionFileShape:
         home = tmp_path / ".docir"
         home.mkdir()
         (home / PEER_FILE).write_text("store:\n  - ../platform/.docir\n")
-        with pytest.raises(DocirError, match="unknown key"):
+        with pytest.raises(DocirError, match="did you mean 'stores'"):
+            peer_homes(home)
+
+    @pytest.mark.parametrize("typo", ["store", "stors", "descriptions", "desc"])
+    def test_every_shape_of_slip_is_named(self, tmp_path: Path, typo: str) -> None:
+        """A near match and an abbreviation are both mistakes this build can
+        name; the parametrization is what keeps the predicate from being tuned
+        to the one example it was written against."""
+        home = tmp_path / ".docir"
+        home.mkdir()
+        (home / PEER_FILE).write_text(f"{typo}: something\n")
+        with pytest.raises(DocirError, match="did you mean"):
             peer_homes(home)
 
     def test_a_file_declaring_nothing_at_all_raises(self, tmp_path: Path) -> None:
@@ -813,7 +825,57 @@ class TestAMalformedPeerListReachesTheCli:
         (settings.home / PEER_FILE).write_text("store:\n  - ../platform/.docir\n")
         result = CliRunner().invoke(cli_app.app, ["--no-daemon", "query", "--limit", "1"])
         assert result.exit_code != 0
-        assert "unknown key" in result.output
+        assert "did you mean 'stores'" in result.output
         # The failure this pins: an unhandled DocirError leaves the exception on
         # the result and prints a stack trace instead of the sentence.
         assert result.exception is None or isinstance(result.exception, SystemExit)
+
+
+class TestAKeyFromANewerDocir:
+    """An unfamiliar key is kept and reported; only a slip of a known one raises.
+
+    The asymmetry is the decision (adr-84fb02d5061b). Refusing a key this build
+    has never heard of would make one repository's upgrade break every
+    repository that had not upgraded yet — backwards from what the strictness
+    protects, and the same call `_peer_schema_status` already made for a peer's
+    index revision. A misspelling is the opposite case: it reads as a store that
+    declared nothing, so it must not pass quietly.
+    """
+
+    _FUTURE = "stores:\n  - {peer}\ndescription: A corpus.\nstore_labels:\n  - platform\n"
+
+    def _declare_future(self, home: Path, peer_home: Path) -> None:
+        (home / PEER_FILE).write_text(self._FUTURE.format(peer=peer_home), encoding="utf-8")
+
+    def test_the_read_still_federates(self, container: Container, peer: Container) -> None:
+        self._declare_future(container.settings.home, peer.settings.home)
+        container.dispatcher.dispatch("add", _LOCAL_DOC)
+
+        rows = container.dispatcher.dispatch("query", {"limit": 10})
+        assert isinstance(rows, list)
+        # Named rather than counted: the peer's document is the half a refusal
+        # would have taken away.
+        assert {row["title"] for row in rows} == {_LOCAL_DOC["title"], _PEER_DOC["title"]}
+
+    def test_the_ignored_key_is_reported(self, tmp_path: Path) -> None:
+        home = tmp_path / ".docir"
+        home.mkdir()
+        self._declare_future(home, tmp_path / "platform" / ".docir")
+        assert unrecognised_keys(home) == ("store_labels",)
+
+    def test_a_misspelling_is_not_treated_as_a_future_key(self, tmp_path: Path) -> None:
+        """The guard above passes trivially if everything is tolerated."""
+        home = tmp_path / ".docir"
+        home.mkdir()
+        (home / PEER_FILE).write_text("description: A corpus.\nstore: ../platform/.docir\n")
+        with pytest.raises(DocirError, match="did you mean 'stores'"):
+            peer_homes(home)
+
+    def test_the_cli_warns_and_answers_anyway(self, settings: Settings) -> None:
+        """stderr, not an error: the read is correct, and the key is news about
+        the file rather than a failure of the command."""
+        settings.home.mkdir(parents=True, exist_ok=True)
+        (settings.home / PEER_FILE).write_text("description: A corpus.\nstore_labels: []\n")
+        result = CliRunner().invoke(cli_app.app, ["--no-daemon", "query", "--limit", "1"])
+        assert result.exit_code == 0
+        assert "store_labels" in result.output

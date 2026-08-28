@@ -369,6 +369,28 @@ def test_a_store_that_describes_nothing_reports_no_description(settings: Setting
     assert "description" not in report["store"]
 
 
+def test_a_key_this_docir_does_not_know_is_reported_not_refused(settings: Settings) -> None:
+    """The half of the asymmetry that has no other reader: the CLI warns on
+    stderr, which the MCP path has nobody watching, so an ignored key would
+    otherwise be invisible to the agent whose reads it silently narrows.
+
+    A warning and never an error — refusing it is what would turn one
+    repository's upgrade into every other repository's outage
+    (adr-84fb02d5061b)."""
+    settings.ensure_directories()
+    (settings.home / "stores.yaml").write_text(
+        yaml.safe_dump({"description": "This service's notes.", "store_labels": ["platform"]}),
+        encoding="utf-8",
+    )
+    _add()
+    code, report = _doctor("--strict")
+    assert "stores-file-unknown-key" in _kinds(report)
+    assert "store_labels" in _message(report, "stores-file-unknown-key")
+    # --strict is what a setup script gates on, and an unfamiliar key must not
+    # fail one: the read it came from was correct.
+    assert code == 0
+
+
 def test_no_daemon_env_is_reported_separately_from_the_flag(settings: Settings) -> None:
     """A leftover variable and a deliberate `--no-daemon` are the same setting
     and different facts; only the variable outlives the command."""

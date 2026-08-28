@@ -81,18 +81,26 @@ same request by the peer list, and a broken one raises.
 
 ## Consequences
 
-- `stores.yaml` gains a second recognised key, so an unrecognised one is now
-  refused by name. Until now a file with no `stores:` key was itself an error,
-  which is what caught `store:` for `stores:`; a description-only file is
-  legitimate, so the typo needs its own refusal.
+- **An unrecognised key splits in two, and the halves get opposite answers.** A
+  key that misspells one this build knows — `store:`, `stors:`, `desc:` —
+  raises: it reads as a store that declared nothing, which is a federated
+  question answered locally, and it used to be caught for free because a file
+  with no `stores:` key was itself an error. A key that resembles nothing here
+  is kept, ignored and reported, because it is most likely one a newer docir
+  writes; refusing it would make one repository's upgrade break every
+  repository that had not upgraded — backwards from what the strictness
+  protects, and the call `_peer_schema_status` already made for a peer's index
+  revision. Reported on two surfaces: the CLI warns, and `docir doctor` carries
+  a `stores-file-unknown-key` warning, because stderr has no reader on the MCP
+  path.
 - **Every example ships `stores:` alongside `description:`, `[]` when there are
   none.** docir 0.20.0 and earlier refuse a `stores.yaml` without that key —
   `peer_homes` raises before the read — so a description-only file takes
   `context`, `query`, `search`, `get` and `doctor` down for everyone in that
   repository who has not upgraded, while writes keep working. Verified against
-  the published 0.20.0 on stores it built. Nothing this build does can fix an
-  older reader, so the spelling is the fix, and a test pins it in the shipped
-  example.
+  the published 0.20.0 on stores it built (adr-ab4598c6f707). Nothing this
+  build does can fix an older reader, so the spelling is the fix, and a test
+  pins it in the shipped example.
 - No index or schema change: the description is read from the file on every
   request, so nothing migrates and nothing needs a reindex. Verified both ways
   against 0.20.0 — this build reads an index it built without a reindex, and

@@ -52,7 +52,12 @@ from docir.entry_points.composition import (
     peer_status,
 )
 from docir.entry_points.daemon import lifecycle
-from docir.entry_points.federation import PEER_FILE, peer_homes, store_description
+from docir.entry_points.federation import (
+    PEER_FILE,
+    peer_homes,
+    store_description,
+    unrecognised_keys,
+)
 from docir.modules.documents.api import index_is_empty, load_schema
 from docir.modules.release.api import ReleaseStatus, build_release_service
 from docir.platform.errors import DocirError
@@ -179,6 +184,11 @@ class Environment:
     #: Empty is the norm and never a finding: a store with no peers has nobody
     #: to introduce itself to.
     store_description: str = ""
+    #: Keys in this store's `stores.yaml` this build ignores. Reported here
+    #: because the CLI's warning goes to stderr, which the MCP path has no
+    #: reader for — and a key that quietly narrows what a read covers is the
+    #: kind of thing doctor exists to surface.
+    unknown_peer_keys: tuple[str, ...] = ()
     peers: tuple[PeerReport, ...] = ()
 
 
@@ -232,6 +242,7 @@ def snapshot(settings: Settings, version: str) -> Environment:
         schema_error=schema_error,
         index_present=settings.db_path.is_file(),
         store_description=store_description(settings.home),
+        unknown_peer_keys=unrecognised_keys(settings.home),
         embed_model=embed_model,
         embedder_env=os.environ.get(EMBEDDER_ENV, ""),
         embedder_id=active_embedder_id(embed_model),
@@ -611,7 +622,7 @@ def _served(daemon: lifecycle.DaemonStatus, version: str) -> str:
 
 
 def _peer_findings(environment: Environment) -> list[DoctorFinding]:
-    """One finding per peer that a read would silently drop.
+    """One finding per peer a read would silently drop, and per key it ignores.
 
     A warning and never an error: a peer's index is derived and gitignored, so a
     colleague's fresh clone is not this repository's outage (adr-fb938175f72a).
@@ -632,6 +643,18 @@ def _peer_findings(environment: Environment) -> list[DoctorFinding]:
         )
         for peer in environment.peers
         if peer.unavailable
+    ] + [
+        DoctorFinding(
+            kind="stores-file-unknown-key",
+            message=(
+                f"{declared} declares {key!r}, which this docir does not know — it is ignored"
+            ),
+            # Both directions, because both are ordinary: a typo nobody has
+            # noticed, or a key written by a docir newer than this one.
+            # Refusing it is what this deliberately does not do.
+            fix="remove the key, or upgrade docir if a newer build writes it",
+        )
+        for key in environment.unknown_peer_keys
     ]
 
 

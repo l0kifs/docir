@@ -20,9 +20,11 @@ from docir.entry_points.composition import Container, build_in_process_executor,
 from docir.entry_points.federation import (
     FEDERATED_COMMANDS,
     LOCAL_ONLY_KEY,
+    PEER_FILE,
     STORES_KEY,
     peer_homes,
     resolve_extra,
+    unrecognised_keys,
 )
 from docir.modules.release.api import build_release_service
 from docir.platform.errors import DocirError
@@ -187,6 +189,13 @@ def _with_peers(state: CliState, command: str, payload: dict[str, object]) -> di
     # that reads it is a different one that started somewhere else entirely.
     extra = resolve_extra(state.stores)
     homes = peer_homes(state.settings.home, extra)
+    # Before the early return: a store with no peers can still carry a key this
+    # build ignores, and that file is exactly where somebody has been editing.
+    for key in unrecognised_keys(state.settings.home):
+        rendering.render_warning(
+            f"ignoring {key!r} in {state.settings.home / PEER_FILE}: this docir does not "
+            "know that key — a newer one may write it"
+        )
     if not homes:
         return payload
     for home in homes:

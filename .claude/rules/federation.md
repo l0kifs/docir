@@ -35,6 +35,13 @@ Reads federate; writes never do. A peer is another repository, opened read-only,
   And the field is **absent, never empty**: `""` reads as "this corpus is about nothing".
   A single-store read still carries neither field — describing yourself is for telling
   another reader what this is, and a store with no peers is talking to nobody.
+  An **unrecognised key splits in two**: one that misspells a known key (`store:`, `desc:`)
+  raises, because it reads as a store that declared nothing; one that resembles nothing here
+  is kept, ignored and reported — it is most likely written by a *newer* docir, and refusing
+  it would break every repository that had not upgraded, which is the call
+  `_peer_schema_status` already made for a peer's index revision. It is reported twice, by
+  a CLI warning and a `stores-file-unknown-key` doctor finding, because stderr has no reader
+  on the MCP path.
   **Every example docir ships writes `stores:` alongside `description:`, `[]` when there
   are none** — verified against the published 0.20.0, whose `_read_peer_file` raises on a
   file with no `stores:` key, taking down `context`/`query`/`search`/`get` (and `doctor`)

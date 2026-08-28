@@ -34,6 +34,7 @@ Four rules hold the design up, and each is load-bearing:
 
 from __future__ import annotations
 
+import difflib
 import os
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -65,6 +66,11 @@ STORES_KEY = "stores"
 #: :func:`store_description`.
 DESCRIPTION_FIELD = "store_description"
 
+#: Every key ``stores.yaml`` recognises. Anything else is either a slip of one
+#: of these — refused — or a key a newer docir writes, which is kept and
+#: reported; :func:`_read_peer_file` is where that asymmetry lives.
+KNOWN_KEYS = ("stores", "description")
+
 #: Payload key opting one request out of federation entirely.
 #:
 #: An empty ``stores`` list cannot mean this — the MCP tools send one whenever
@@ -89,6 +95,8 @@ class StoreFile:
 
     stores: tuple[str, ...] = ()
     description: str = ""
+    #: Keys this build does not know, kept rather than refused.
+    unknown: tuple[str, ...] = ()
 
 
 class Reader(Protocol):
@@ -170,6 +178,27 @@ def store_description(home: Path) -> str:
         return ""
 
 
+def unrecognised_keys(home: Path) -> tuple[str, ...]:
+    """Keys in this store's ``stores.yaml`` this build does not know.
+
+    Kept rather than refused, and this is the asymmetry that matters: a key
+    nothing here has heard of is most likely one a *newer* docir writes, and
+    refusing it would make one repository's upgrade break every repository that
+    had not upgraded yet — backwards from what the strictness protects, and the
+    same call :func:`~docir.entry_points.composition._peer_schema_status`
+    already made for a peer's index revision. A key that misspells one this
+    build *does* know is the opposite case and still raises.
+
+    Kept is not silent: the CLI warns and ``docir doctor`` carries a finding, so
+    an ignored key is visible on a transport an agent reads rather than only on
+    a stderr line nobody is watching.
+    """
+    try:
+        return _read_peer_file(home / PEER_FILE).unknown
+    except DocirError:
+        return ()
+
+
 def resolve_extra(entries: Sequence[str]) -> list[str]:
     """Turn caller-supplied peer paths into absolute ones, here and now.
 
@@ -187,10 +216,15 @@ def _read_peer_file(path: Path) -> StoreFile:
 
     A malformed one raises rather than reading as empty: the file exists only
     because someone declared something, so silently reading nothing would answer
-    a federated question with a local answer and nothing would say so. That is
-    also why an unrecognised key is refused rather than ignored — ``store:`` for
-    ``stores:`` is the typo this check exists for, and it used to be caught only
-    because a file with no ``stores`` key was itself an error.
+    a federated question with a local answer and nothing would say so.
+
+    An unrecognised key splits in two, and the halves get opposite answers.
+    ``store:`` for ``stores:`` **raises**: it reads as a store with no peers,
+    which is a federated question answered locally, and it used to be caught for
+    free because a file with no ``stores`` key was itself an error — a
+    description-only file is legitimate now, so the typo needs its own refusal.
+    A key that resembles nothing here is kept and reported instead, because it is
+    most likely one a newer docir writes; see :func:`unrecognised_keys`.
     """
     if not path.is_file():
         return StoreFile()
@@ -203,25 +237,41 @@ def _read_peer_file(path: Path) -> StoreFile:
     shape = (
         f"{path} must map 'stores' to a list of store paths, 'description' to one string, or both"
     )
-    if not isinstance(data, dict):
+    if not isinstance(data, dict) or not data:
         raise DocirError(shape)
-    # Named before the shape is judged, so `store:` for `stores:` is reported as
-    # the typo it is rather than as a file that declares nothing.
-    unknown = sorted(str(key) for key in set(data) - {"stores", "description"})
-    if unknown:
-        raise DocirError(
-            f"{path} declares unknown key(s) {', '.join(unknown)} — "
-            "expected 'stores' and/or 'description'"
-        )
-    if not set(data) & {"stores", "description"}:
-        raise DocirError(shape)
+    # Judged before the shape is, so `store:` for `stores:` is reported as the
+    # typo it is rather than as a file that declares nothing.
+    unknown = tuple(sorted(str(key) for key in set(data) - set(KNOWN_KEYS)))
+    for key in unknown:
+        intended = _misspelling_of(key)
+        if intended:
+            raise DocirError(
+                f"{path} declares {key!r}, which is not a key here — did you mean "
+                f"{intended!r}? A misspelled key reads as a store that declared "
+                "nothing, and the read would answer locally without saying so"
+            )
     stores = data.get("stores", [])
     if not isinstance(stores, list):
         raise DocirError(f"{path} must map 'stores' to a list of store paths")
     description = data.get("description", "")
     if not isinstance(description, str):
         raise DocirError(f"{path} must map 'description' to one string")
-    return StoreFile(tuple(str(item) for item in stores), description.strip())
+    return StoreFile(tuple(str(item) for item in stores), description.strip(), unknown)
+
+
+def _misspelling_of(key: str) -> str:
+    """The recognised key this one was meant to be, or ``""`` if it is new.
+
+    Two shapes, both slips of a name that already exists: a near match
+    (``store``, ``stors``, ``descriptions``) and an abbreviation of one
+    (``desc``). A name that is merely *unfamiliar* — ``store_labels``,
+    ``peer_timeout`` — matches neither, which is the whole point: the first is a
+    mistake this build can name, the second is a build this one has not met.
+    """
+    close = difflib.get_close_matches(key, KNOWN_KEYS, n=1, cutoff=0.8)
+    if close:
+        return close[0]
+    return next((known for known in KNOWN_KEYS if len(key) >= 3 and known.startswith(key)), "")
 
 
 class FederatedDispatcher:

@@ -327,6 +327,24 @@ benchmark figure that had drifted as the corpus grew, and `stale-index-build` be
 had watched. Cross the second transport too; the MCP drift existed because every check of that
 release ran through the CLI.
 
+**And run the release people already have against it (adr-ab4598c6f707).** A store is a
+committed artifact: the same `.docir/` is read by whatever docir each teammate installed and
+by every repository declaring it a peer, so anything touching a committed file's shape, the
+on-disk contract or the index schema is an interface change against builds already in the
+wild. No gate here holds one. Take the version `docir self status` names as the newest
+release and point it, in both directions, at a store the *other* build created:
+
+```bash
+uvx --from docir==<released> docir --no-daemon context "..." --limit 3   # also query/search/get
+uvx --from docir==<released> docir --no-daemon doctor --strict           # and check --strict
+```
+
+A refusal is the break — an errored read, a skipped index, a rejected file; a field the older
+build cannot show is not. Nothing you ship can repair an installed build, so the remedy lives
+in what an adopter copies (the skill, the docstring, this store's own files) and is pinned by
+a test. adr-84fb02d5061b was fully green here and still failed every read on 0.20.0 the moment
+a store wrote `description:` in `stores.yaml` without `stores:`.
+
 **Then verify by use, from the state an adopter is in.** Not by re-reading what you wrote and
 judging it sufficient — follow the shipped instructions and run the feature. If a step needs
 data (ids, a path, a name), the instructions have to say where that data comes from, and

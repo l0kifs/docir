@@ -14,8 +14,11 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+import yaml
+from typer.testing import CliRunner
 
 from docir.config.settings import Settings
+from docir.entry_points.cli import app as cli_app
 from docir.entry_points.composition import (
     Container,
     build_container,
@@ -29,6 +32,7 @@ from docir.entry_points.federation import (
     FederatedDispatcher,
     merge_ranked,
     peer_homes,
+    store_description,
 )
 from docir.platform.clock import Clock
 from docir.platform.errors import DocirError
@@ -66,9 +70,14 @@ def peer(tmp_path: Path) -> Iterator[Container]:
         built.close()
 
 
-def _declare(home: Path, *peers: Path) -> None:
-    lines = "\n".join(f"  - {path}" for path in peers)
-    (home / PEER_FILE).write_text(f"stores:\n{lines}\n", encoding="utf-8")
+def _declare(home: Path, *peers: Path, description: str = "") -> None:
+    """Write a store's `stores.yaml`: the peers it reads, what it is, or both."""
+    document: dict[str, object] = {}
+    if peers:
+        document["stores"] = [str(path) for path in peers]
+    if description:
+        document["description"] = description
+    (home / PEER_FILE).write_text(yaml.safe_dump(document), encoding="utf-8")
 
 
 class _RecordingReader:
@@ -570,3 +579,241 @@ class TestPeerIndexedByOlderDocir:
             raw.execute("DELETE FROM alembic_version")
 
         assert "docir reindex" in peer_status(peer_home)
+
+
+class TestStoreDescriptions:
+    """Every federated row says what corpus it came from, in that corpus's words.
+
+    A store path answers "which repository" and nothing else, and the reader
+    ranking a hit has to decide whether that corpus is the one that governs the
+    thing it is doing. The description is written once, by the store that owns
+    it, so N readers do not each maintain a sentence about someone else's
+    repository — and so the reader's *own* rows are labelled too, which a
+    reader-side annotation of its peers cannot do.
+    """
+
+    _PLATFORM = "Platform decisions binding every service: auth, transport, deploy."
+    _SERVICE = "The checkout service's own issues and design notes."
+
+    def test_a_peer_row_carries_the_peers_own_words(
+        self, container: Container, peer: Container
+    ) -> None:
+        _declare(peer.settings.home, description=self._PLATFORM)
+        _declare(container.settings.home, peer.settings.home)
+        container.dispatcher.dispatch("add", _LOCAL_DOC)
+
+        rows = container.dispatcher.dispatch("query", {"limit": 10})
+        assert isinstance(rows, list)
+        described = {row["title"]: row.get("store_description") for row in rows}
+        assert described[_PEER_DOC["title"]] == self._PLATFORM
+
+    def test_the_local_store_labels_its_own_rows_too(
+        self, container: Container, peer: Container
+    ) -> None:
+        """Named per row, not counted: with one description in play a merge that
+        stamped every row from the local file would pass a count and mislabel
+        the peer's documents as this repository's."""
+        _declare(peer.settings.home, description=self._PLATFORM)
+        _declare(container.settings.home, peer.settings.home, description=self._SERVICE)
+        container.dispatcher.dispatch("add", _LOCAL_DOC)
+
+        rows = container.dispatcher.dispatch("query", {"limit": 10})
+        assert isinstance(rows, list)
+        described = {row["title"]: row.get("store_description") for row in rows}
+        assert described == {
+            _LOCAL_DOC["title"]: self._SERVICE,
+            _PEER_DOC["title"]: self._PLATFORM,
+        }
+
+    def test_a_store_that_says_nothing_omits_the_field(
+        self, container: Container, peer: Container
+    ) -> None:
+        """Absent, never empty: `""` reads as "this corpus is about nothing"
+        rather than "nobody has written a description"."""
+        _declare(container.settings.home, peer.settings.home)
+        container.dispatcher.dispatch("add", _LOCAL_DOC)
+
+        rows = container.dispatcher.dispatch("query", {"limit": 10})
+        assert isinstance(rows, list)
+        assert all("store" in row for row in rows), "federation is on"
+        assert all("store_description" not in row for row in rows)
+
+    def test_a_single_store_read_is_unchanged_by_describing_itself(
+        self, container: Container
+    ) -> None:
+        """A description is for telling *another* reader what this corpus is. A
+        store with no peers is talking to nobody, and the field would cost every
+        row of every local read — the same argument that keeps `store` off
+        them."""
+        _declare(container.settings.home, description=self._SERVICE)
+        container.dispatcher.dispatch("add", _LOCAL_DOC)
+
+        rows = container.dispatcher.dispatch("query", {"limit": 10})
+        assert isinstance(rows, list)
+        assert all("store" not in row and "store_description" not in row for row in rows)
+
+    def test_a_deep_read_of_a_peer_document_is_described(
+        self, container: Container, peer: Container
+    ) -> None:
+        """`get` is where the reader decides whether to trust what it just read,
+        so the corpus it came from has to survive the fetch."""
+        added = peer.dispatcher.dispatch("add", {**_PEER_DOC, "title": "Rate limits"})
+        assert isinstance(added, dict)
+        _declare(peer.settings.home, description=self._PLATFORM)
+        _declare(container.settings.home, peer.settings.home)
+
+        view = container.dispatcher.dispatch("get", {"doc_id": added["id"]})
+        assert isinstance(view, dict)
+        assert view["store"] == str(peer.settings.home)
+        assert view["store_description"] == self._PLATFORM
+
+    def test_a_batch_read_describes_each_documents_own_store(
+        self, container: Container, peer: Container
+    ) -> None:
+        local = container.dispatcher.dispatch("add", _LOCAL_DOC)
+        remote = peer.dispatcher.dispatch("add", {**_PEER_DOC, "title": "Rate limits"})
+        assert isinstance(local, dict) and isinstance(remote, dict)
+        _declare(peer.settings.home, description=self._PLATFORM)
+        _declare(container.settings.home, peer.settings.home, description=self._SERVICE)
+
+        payload = container.dispatcher.dispatch("get", {"doc_ids": [local["id"], remote["id"]]})
+        assert isinstance(payload, dict)
+        described = {row["id"]: row.get("store_description") for row in payload["documents"]}
+        assert described == {local["id"]: self._SERVICE, remote["id"]: self._PLATFORM}
+
+    def test_a_peers_broken_file_costs_its_label_and_not_the_read(
+        self, container: Container, peer: Container
+    ) -> None:
+        """The peer's `stores.yaml` is that repository's file to get wrong, and
+        the established rule is that a peer's state never fails this reader's
+        query — it only costs what it could not supply."""
+        (peer.settings.home / PEER_FILE).write_text("description: [not, a, string]\n")
+        _declare(container.settings.home, peer.settings.home, description=self._SERVICE)
+        container.dispatcher.dispatch("add", _LOCAL_DOC)
+
+        rows = container.dispatcher.dispatch("query", {"limit": 10})
+        assert isinstance(rows, list)
+        described = {row["title"]: row.get("store_description") for row in rows}
+        assert described == {_LOCAL_DOC["title"]: self._SERVICE, _PEER_DOC["title"]: None}
+
+
+class TestDescriptionFileShape:
+    """This store's own `stores.yaml` is refused when it is wrong, not ignored.
+
+    Every failure here is silent otherwise: the read still answers, from a set
+    or a label the author believes they changed.
+    """
+
+    def test_a_file_that_only_describes_declares_no_peers(self, tmp_path: Path) -> None:
+        """The common case: a corpus is worth describing to whoever points at
+        it, whether or not it points anywhere itself."""
+        home = tmp_path / ".docir"
+        home.mkdir()
+        _declare(home, description="Platform decisions.")
+        assert peer_homes(home) == ()
+        assert store_description(home) == "Platform decisions."
+
+    def test_no_file_describes_nothing(self, tmp_path: Path) -> None:
+        assert store_description(tmp_path) == ""
+
+    def test_a_description_that_is_not_a_string_raises(self, tmp_path: Path) -> None:
+        home = tmp_path / ".docir"
+        home.mkdir()
+        (home / PEER_FILE).write_text("description:\n  - platform\n  - decisions\n")
+        with pytest.raises(DocirError, match="one string"):
+            peer_homes(home)
+
+    def test_an_unknown_key_is_refused_rather_than_ignored(self, tmp_path: Path) -> None:
+        """`store:` for `stores:` used to be caught only because a file without
+        a `stores` key was itself an error, and a description-only file is now
+        legitimate — so the typo needs its own refusal or it reads as a store
+        that declares no peers."""
+        home = tmp_path / ".docir"
+        home.mkdir()
+        (home / PEER_FILE).write_text("store:\n  - ../platform/.docir\n")
+        with pytest.raises(DocirError, match="unknown key"):
+            peer_homes(home)
+
+    def test_a_file_declaring_nothing_at_all_raises(self, tmp_path: Path) -> None:
+        home = tmp_path / ".docir"
+        home.mkdir()
+        (home / PEER_FILE).write_text("{}\n")
+        with pytest.raises(DocirError, match="list of store paths"):
+            peer_homes(home)
+
+
+class TestOlderDocirCanStillReadTheseStores:
+    """Every `stores.yaml` docir ships as an example keeps its `stores:` key.
+
+    docir 0.20.0 and earlier parse that file with a check that requires it:
+    `peer_homes` raises before the read, so a description-only file takes
+    `context`, `query`, `search`, `get` and `doctor` down for everyone in that
+    repository who has not upgraded — writes keep working, which is what makes
+    it look like a corrupt store rather than a version skew. Verified against
+    the published 0.20.0 (adr-84fb02d5061b).
+
+    Nothing this build does can fix an older reader, so the shipped spelling is
+    the whole mitigation, and the examples are what an adopter copies.
+    """
+
+    _SKILL = Path("src/docir/modules/agents/infra/templates/skill/reference/retrieval.md")
+    _OWN_STORE = Path(".docir/stores.yaml")
+
+    @staticmethod
+    def _declares_stores(block: str) -> bool:
+        """Whether an example that describes a store also declares its peers."""
+        lines = [line.strip() for line in block.splitlines()]
+        return "description:" in " ".join(lines) and any(
+            line.startswith("stores:") for line in lines
+        )
+
+    def test_the_packaged_skill_example_declares_stores(self) -> None:
+        """The skill is what an agent installs and copies from."""
+        text = self._SKILL.read_text(encoding="utf-8")
+        fences = [block.split("```")[0] for block in text.split("```yaml")[1:]]
+        describing = [block for block in fences if "description:" in block]
+        assert describing, "the skill no longer shows a stores.yaml example"
+        assert all(self._declares_stores(block) for block in describing), describing
+
+    def test_the_cli_docstring_example_declares_stores(self) -> None:
+        """`docir context --help` is JSON when piped, so it is the example an
+        agent parses rather than reads."""
+        doc = cli_app.context.__doc__ or ""
+        marker = "# .docir/stores.yaml"
+        assert marker in doc, "the context docstring no longer shows the file"
+        block = doc.split(marker, 1)[1].split("\n\n", 1)[0]
+        assert self._declares_stores(block), block
+
+    def test_this_repositorys_own_store_declares_stores(self) -> None:
+        """docir's own file is the example anyone reading the repo sees first —
+        and the one that would break a teammate still on 0.20.0."""
+        declared = yaml.safe_load(self._OWN_STORE.read_text(encoding="utf-8"))
+        assert "description" in declared, "docir's store no longer describes itself"
+        assert "stores" in declared
+
+    def test_the_check_would_notice_a_description_only_example(self) -> None:
+        """The three above pass trivially if the predicate is too generous, so
+        this injects the exact file that breaks 0.20.0."""
+        assert not self._declares_stores("description: Platform decisions.\n")
+        assert self._declares_stores("description: Platform decisions.\nstores: []\n")
+
+
+class TestAMalformedPeerListReachesTheCli:
+    """A broken `stores.yaml` is a message and an exit code, not a traceback.
+
+    It is parsed client-side, before anything is dispatched, so it sits outside
+    the boundary that maps a `DocirError` onto the process exit code — the same
+    gap `execute` already closed twice (issue-06f48d8f239f). Every other reader
+    of the file, `docir doctor` included, printed the message all along, which
+    is what made the traceback look like a crash rather than a bad file.
+    """
+
+    def test_the_message_and_exit_code_survive(self, settings: Settings) -> None:
+        (settings.home).mkdir(parents=True, exist_ok=True)
+        (settings.home / PEER_FILE).write_text("store:\n  - ../platform/.docir\n")
+        result = CliRunner().invoke(cli_app.app, ["--no-daemon", "query", "--limit", "1"])
+        assert result.exit_code != 0
+        assert "unknown key" in result.output
+        # The failure this pins: an unhandled DocirError leaves the exception on
+        # the result and prints a stack trace instead of the sentence.
+        assert result.exception is None or isinstance(result.exception, SystemExit)

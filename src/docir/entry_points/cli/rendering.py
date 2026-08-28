@@ -613,12 +613,23 @@ def render_doctor(report: Mapping[str, object]) -> None:
     """
     _doctor_section("install", _doctor_install(_submap(report, "installation")))
     _doctor_section("store", _doctor_store(_submap(report, "store")))
+    # Its own line rather than a clause on the store's: it is a sentence, and it
+    # is the only way to see that what you wrote in stores.yaml is what peers
+    # will be shown. Absent when the store describes itself nowhere, which is
+    # every store that never federates.
+    described = str(_submap(report, "store").get("description", ""))
+    if described:
+        _doctor_section("about", described)
     _doctor_section("embed", _doctor_embedding(_submap(report, "embedding"), report.get("probe")))
     _doctor_section("daemon", _doctor_daemon(_submap(report, "daemon")))
     for peer in _maps(report.get("peers")):
         reason = str(peer.get("unavailable", ""))
         state = f"[yellow]{reason}[/]" if reason else "[green]readable[/]"
-        _doctor_section("peer", f"{peer.get('home')} · {state}")
+        described = str(peer.get("description", ""))
+        _doctor_section(
+            "peer",
+            f"{peer.get('home')} · {state}" + (f" [dim]{described}[/]" if described else ""),
+        )
     findings = _maps(report.get("findings"))
     console.print("")
     if not findings:

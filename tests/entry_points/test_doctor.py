@@ -335,6 +335,40 @@ def test_an_unreadable_peer_is_named(settings: Settings, tmp_path) -> None:
     assert report["peers"][0]["unavailable"] == "no such store"
 
 
+def test_a_peer_is_reported_with_what_it_says_it_is(settings: Settings, tmp_path) -> None:
+    """The description a federated row carries is the peer's own, so this is
+    where the person who wrote it finds out whether this store can see it —
+    without staging a query that happens to hit that corpus."""
+    settings.ensure_directories()
+    unbuilt = tmp_path / "platform" / ".docir"
+    unbuilt.mkdir(parents=True)
+    (unbuilt / "stores.yaml").write_text(
+        yaml.safe_dump({"description": "Platform decisions binding every service."}),
+        encoding="utf-8",
+    )
+    (settings.home / "stores.yaml").write_text(
+        yaml.safe_dump({"stores": [str(unbuilt)], "description": "This service's own notes."}),
+        encoding="utf-8",
+    )
+    _add()
+    _, report = _doctor()
+    (peer,) = report["peers"]
+    # Both halves: an unreadable peer is still the peer it says it is, and the
+    # reason it is skipped is the actionable half.
+    assert peer["description"] == "Platform decisions binding every service."
+    assert "docir reindex" in peer["unavailable"]
+    assert report["store"]["description"] == "This service's own notes."
+
+
+def test_a_store_that_describes_nothing_reports_no_description(settings: Settings) -> None:
+    """The overwhelmingly common case, and never a finding: a store with no
+    peers has nobody to introduce itself to. Absent rather than empty, which is
+    what the trimmed payload does with every field nobody filled in."""
+    _add()
+    _, report = _doctor()
+    assert "description" not in report["store"]
+
+
 def test_no_daemon_env_is_reported_separately_from_the_flag(settings: Settings) -> None:
     """A leftover variable and a deliberate `--no-daemon` are the same setting
     and different facts; only the variable outlives the command."""

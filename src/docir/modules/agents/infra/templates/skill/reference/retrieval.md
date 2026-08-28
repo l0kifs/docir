@@ -76,8 +76,25 @@ Off by default — it is a diagnostic, and a skeleton read is meant to be cheap.
 
 If `.docir/stores.yaml` exists, this store reads peers alongside its own, and
 `context`, `query`, `search` and `get` already cover them — every row carries a
-`store` field naming where it came from. Add one for a single command with
-`--store ../platform/.docir`.
+`store` field naming where it came from, and a `store_description` when that
+store says what it is. Read the description before you weigh the hit: it is what
+tells you whether another repository's corpus governs the thing you are doing.
+Add a peer for a single command with `--store ../platform/.docir`.
+
+A store describes itself, once, in its own `stores.yaml` beside the peers it
+reads. Write one for the repository you are in when it federates — every reader
+pointing at it sees that line on every row it answers:
+
+```yaml
+description: Platform decisions every service must follow.
+stores:
+  - ../platform/.docir
+```
+
+Keep the `stores:` key even when the store reads no peers — write `stores: []`.
+docir 0.20.0 and earlier refuse a `stores.yaml` without it, so a
+description-only file takes `context`, `query`, `search` and `get` down for
+anyone in that repository who has not upgraded.
 
 Writes never federate: `add` and `update` always land in this repo's store, and
 so does everything `check` reports. Neither does `docir build` — a published

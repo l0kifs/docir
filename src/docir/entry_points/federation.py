@@ -7,7 +7,7 @@ alongside its own, without giving up the property that makes a store safe: there
 is still exactly one home per invocation, and it is still the only one written
 to.
 
-Three rules hold the design up, and each is load-bearing:
+Four rules hold the design up, and each is load-bearing:
 
 * **Peers are opened read-only at the database.** A peer engine's URL carries
   ``mode=ro``, so SQLite refuses a write rather than docir promising not to
@@ -25,12 +25,17 @@ Three rules hold the design up, and each is load-bearing:
   store*, so comparing two stores' scores compares the sizes of their corpora.
   ``similarity`` is a raw cosine against the query and means the same thing
   everywhere.
+* **Every federated row says which store answered and what that store is.** A
+  path answers "which repository" and nothing else, and a reader ranking a hit
+  has to know whether that corpus is the one that decides this. So a store
+  describes itself once, in its own ``stores.yaml``, and the sentence travels
+  with every row it answers.
 """
 
 from __future__ import annotations
 
 import os
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -56,6 +61,10 @@ FEDERATED_COMMANDS = frozenset({"get", "query", "search", "context"})
 #: the next caller's reads.
 STORES_KEY = "stores"
 
+#: What a store says it is, for the rows it answers with. See
+#: :func:`store_description`.
+DESCRIPTION_FIELD = "store_description"
+
 #: Payload key opting one request out of federation entirely.
 #:
 #: An empty ``stores`` list cannot mean this — the MCP tools send one whenever
@@ -66,6 +75,20 @@ STORES_KEY = "stores"
 #: it — the failure docir's staleness model exists to prevent — and that repo
 #: publishes its own site anyway.
 LOCAL_ONLY_KEY = "local_only"
+
+
+@dataclass(frozen=True, slots=True)
+class StoreFile:
+    """``stores.yaml`` parsed: the peers a store reads, and what it is.
+
+    The two keys are independent. A store that only reads peers says nothing
+    about itself; a store that only describes itself declares no peers — which
+    is the common case, since a corpus is worth describing to every reader that
+    points at it, whether or not it points anywhere.
+    """
+
+    stores: tuple[str, ...] = ()
+    description: str = ""
 
 
 class Reader(Protocol):
@@ -108,7 +131,7 @@ def peer_homes(home: Path, extra: Sequence[str | Path] = ()) -> tuple[Path, ...]
     the order is declaration order with duplicates dropped — the merge uses it
     to break ties.
     """
-    declared = _read_peer_file(home / PEER_FILE)
+    declared = _read_peer_file(home / PEER_FILE).stores
     resolved: list[Path] = []
     seen = {home.resolve()}
     for entry in (*declared, *extra):
@@ -119,6 +142,32 @@ def peer_homes(home: Path, extra: Sequence[str | Path] = ()) -> tuple[Path, ...]
         seen.add(absolute)
         resolved.append(absolute)
     return tuple(resolved)
+
+
+def store_description(home: Path) -> str:
+    """What a store says it is, in its own words — or ``""`` if it says nothing.
+
+    **A store describes itself.** The description lives in that store's own
+    ``stores.yaml`` beside the peers it reads, so it is written once by the
+    people who know the corpus and travels with it to every reader. The
+    alternative — each reader annotating the peers it declares — writes the same
+    sentence once per repository pointing at it, drifts as the corpus changes,
+    and cannot label the reader's *own* rows at all, which are stamped too.
+
+    Read per request, for the reason the peer list is: it is one small file, and
+    a daemon that had cached it would label rows with a description its owner
+    has already rewritten.
+
+    A peer whose file is missing or malformed simply has no description. Only
+    that store's own commands owe an error for it — a peer is someone else's
+    repository, and the established rule is that its state never fails this
+    reader's query. The local file gets no such tolerance: :func:`peer_homes`
+    parses it on the same request and raises.
+    """
+    try:
+        return _read_peer_file(home / PEER_FILE).description
+    except DocirError:
+        return ""
 
 
 def resolve_extra(entries: Sequence[str]) -> list[str]:
@@ -133,24 +182,46 @@ def resolve_extra(entries: Sequence[str]) -> list[str]:
     return [str(Path(entry).expanduser().resolve()) for entry in entries]
 
 
-def _read_peer_file(path: Path) -> tuple[str, ...]:
+def _read_peer_file(path: Path) -> StoreFile:
     """Parse ``stores.yaml``. A missing file means no peers, which is the norm.
 
     A malformed one raises rather than reading as empty: the file exists only
-    because someone declared peers, so silently reading none would answer a
-    federated question with a local answer and nothing would say so.
+    because someone declared something, so silently reading nothing would answer
+    a federated question with a local answer and nothing would say so. That is
+    also why an unrecognised key is refused rather than ignored — ``store:`` for
+    ``stores:`` is the typo this check exists for, and it used to be caught only
+    because a file with no ``stores`` key was itself an error.
     """
     if not path.is_file():
-        return ()
+        return StoreFile()
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
         raise DocirError(f"{path} is not valid YAML: {exc}") from exc
     if data is None:
-        return ()
-    if not isinstance(data, dict) or not isinstance(data.get("stores"), list):
+        return StoreFile()
+    shape = (
+        f"{path} must map 'stores' to a list of store paths, 'description' to one string, or both"
+    )
+    if not isinstance(data, dict):
+        raise DocirError(shape)
+    # Named before the shape is judged, so `store:` for `stores:` is reported as
+    # the typo it is rather than as a file that declares nothing.
+    unknown = sorted(str(key) for key in set(data) - {"stores", "description"})
+    if unknown:
+        raise DocirError(
+            f"{path} declares unknown key(s) {', '.join(unknown)} — "
+            "expected 'stores' and/or 'description'"
+        )
+    if not set(data) & {"stores", "description"}:
+        raise DocirError(shape)
+    stores = data.get("stores", [])
+    if not isinstance(stores, list):
         raise DocirError(f"{path} must map 'stores' to a list of store paths")
-    return tuple(str(item) for item in data["stores"])
+    description = data.get("description", "")
+    if not isinstance(description, str):
+        raise DocirError(f"{path} must map 'description' to one string")
+    return StoreFile(tuple(str(item) for item in stores), description.strip())
 
 
 class FederatedDispatcher:
@@ -197,15 +268,18 @@ class FederatedDispatcher:
         peers = [self._peer(peer_home) for peer_home in homes]
         self.unavailable = tuple(peer for peer in peers if peer.reader is None)
         readers = [peer for peer in peers if peer.reader is not None]
+        labels = _labels(self._home, [peer.home for peer in readers])
         if command == "get":
             if rest.get("doc_ids") is not None:
-                return self._get_many(rest, readers)
-            return self._get(rest, readers)
-        return self._merge(command, rest, readers)
+                return self._get_many(rest, readers, labels)
+            return self._get(rest, readers, labels)
+        return self._merge(command, rest, readers, labels)
 
     # -- fan-out ------------------------------------------------------------
 
-    def _get(self, payload: dict[str, object], peers: Sequence[Peer]) -> object:
+    def _get(
+        self, payload: dict[str, object], peers: Sequence[Peer], labels: Mapping[Path, str]
+    ) -> object:
         """Local first, then each peer in declaration order; first match wins.
 
         A miss everywhere must raise the local store's own not-found error, not
@@ -213,17 +287,23 @@ class FederatedDispatcher:
         in none of these stores" is the same answer with a longer search.
         """
         try:
-            return _stamp(self._base.dispatch("get", payload), self._home, always=bool(peers))
+            return _stamp(
+                self._base.dispatch("get", payload), self._home, labels, always=bool(peers)
+            )
         except DocirError as local_miss:
             for peer in peers:
                 assert peer.reader is not None
                 try:
-                    return _stamp(peer.reader.dispatch("get", payload), peer.home, always=True)
+                    return _stamp(
+                        peer.reader.dispatch("get", payload), peer.home, labels, always=True
+                    )
                 except DocirError:
                     continue
             raise local_miss
 
-    def _get_many(self, payload: dict[str, object], peers: Sequence[Peer]) -> object:
+    def _get_many(
+        self, payload: dict[str, object], peers: Sequence[Peer], labels: Mapping[Path, str]
+    ) -> object:
         """A batch deep read: ask locally, then ask each peer only what is left.
 
         Store priority is the single ``get``'s rule applied per reference —
@@ -243,7 +323,8 @@ class FederatedDispatcher:
         """
         result = _as_mapping(self._base.dispatch("get", payload))
         found = [
-            _stamp_row(row, self._home) if peers else row for row in _rows(result.get("documents"))
+            _stamp_row(row, self._home, labels) if peers else row
+            for row in _rows(result.get("documents"))
         ]
         missing = {entry["ref"]: entry for entry in _missing(result.get("missing"))}
         for peer in peers:
@@ -256,12 +337,20 @@ class FederatedDispatcher:
                 )
             except DocirError:
                 continue
-            found.extend(_stamp_row(row, peer.home) for row in _rows(answer.get("documents")))
+            found.extend(
+                _stamp_row(row, peer.home, labels) for row in _rows(answer.get("documents"))
+            )
             unresolved = {entry["ref"] for entry in _missing(answer.get("missing"))}
             missing = {ref: entry for ref, entry in missing.items() if ref in unresolved}
         return {"documents": found, "missing": list(missing.values())}
 
-    def _merge(self, command: str, payload: dict[str, object], peers: Sequence[Peer]) -> object:
+    def _merge(
+        self,
+        command: str,
+        payload: dict[str, object],
+        peers: Sequence[Peer],
+        labels: Mapping[Path, str],
+    ) -> object:
         """Ask every store, then order the union by comparable relevance.
 
         Each store is asked for the full ``limit`` and the merge is truncated to
@@ -272,7 +361,7 @@ class FederatedDispatcher:
         for home, reader in ((self._home, self._base), *((p.home, p.reader) for p in peers)):
             assert reader is not None
             rows = _rows(reader.dispatch(command, payload))
-            ranked.append([_stamp_row(row, home) for row in rows])
+            ranked.append([_stamp_row(row, home, labels) for row in rows])
         merged = merge_ranked(ranked)
         limit = payload.get("limit")
         if isinstance(limit, int) and not isinstance(limit, bool) and limit > 0:
@@ -328,23 +417,43 @@ def merge_ranked(ranked: Sequence[Sequence[dict[str, object]]]) -> list[dict[str
 # -- store stamping ---------------------------------------------------------
 
 
-def _stamp(payload: object, home: Path, *, always: bool) -> object:
+def _labels(home: Path, peers: Sequence[Path]) -> dict[Path, str]:
+    """What each store answering this request says it is, keyed by home.
+
+    Only the stores that can answer: an unavailable peer contributes no rows,
+    so reading its description would be a file read for a label nothing wears.
+    """
+    return {store: store_description(store) for store in (home, *peers)}
+
+
+def _stamp(payload: object, home: Path, labels: Mapping[Path, str], *, always: bool) -> object:
     """Tag a single-document payload with the store it came from."""
     if not always or not isinstance(payload, dict):
         return payload
-    return _stamp_row({str(key): value for key, value in payload.items()}, home)
+    return _stamp_row({str(key): value for key, value in payload.items()}, home, labels)
 
 
-def _stamp_row(row: dict[str, object], home: Path) -> dict[str, object]:
-    """Every federated row names its store.
+def _stamp_row(row: dict[str, object], home: Path, labels: Mapping[Path, str]) -> dict[str, object]:
+    """Every federated row names its store, and says what that store is.
 
     Local reads carry no ``store``: it is one absolute path, identical for every
     row, and per-row it costs more than it is worth. That argument holds exactly
     while there is one store — with peers, the path is the only thing
     distinguishing two hits, so it is the difference between an answer and an
     ambiguous one. Ids stay the only identifier.
+
+    ``store_description`` rides along for the same reason one step further: a
+    path says *which* repository answered and nothing about what is in it, and
+    "is this corpus the one that decides this?" is the judgement the reader has
+    to make about every federated hit. It is omitted, never empty, when the
+    store publishes none — an empty string reads as "this corpus is about
+    nothing" rather than "nobody wrote a description".
     """
-    return {**row, "store": str(home)}
+    described = labels.get(home, "")
+    stamped: dict[str, object] = {**row, "store": str(home)}
+    if described:
+        stamped[DESCRIPTION_FIELD] = described
+    return stamped
 
 
 def _as_mapping(payload: object) -> dict[str, object]:

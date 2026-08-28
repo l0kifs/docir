@@ -52,7 +52,7 @@ from docir.entry_points.composition import (
     peer_status,
 )
 from docir.entry_points.daemon import lifecycle
-from docir.entry_points.federation import PEER_FILE, peer_homes
+from docir.entry_points.federation import PEER_FILE, peer_homes, store_description
 from docir.modules.documents.api import index_is_empty, load_schema
 from docir.modules.release.api import ReleaseStatus, build_release_service
 from docir.platform.errors import DocirError
@@ -126,6 +126,21 @@ class ProbeResult:
 
 
 @dataclass(frozen=True, slots=True)
+class PeerReport:
+    """One declared peer: where it is, whether it reads, and what it is.
+
+    ``description`` is the peer's own words, from its ``stores.yaml`` — the same
+    string a federated row carries. Reporting it here is how the person who
+    wrote it finds out this store can actually see it, without staging a query
+    that happens to hit that corpus.
+    """
+
+    home: Path
+    unavailable: str = ""
+    description: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class Environment:
     """Everything doctor can learn without asking the store anything.
 
@@ -159,8 +174,12 @@ class Environment:
     daemon_env_disabled: bool
     watch: bool
 
-    # -- peers
-    peers: tuple[tuple[Path, str], ...] = ()
+    # -- federation
+    #: What this store says it is, for the rows it answers while federating.
+    #: Empty is the norm and never a finding: a store with no peers has nobody
+    #: to introduce itself to.
+    store_description: str = ""
+    peers: tuple[PeerReport, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,6 +231,7 @@ def snapshot(settings: Settings, version: str) -> Environment:
         schema_present=schema_present,
         schema_error=schema_error,
         index_present=settings.db_path.is_file(),
+        store_description=store_description(settings.home),
         embed_model=embed_model,
         embedder_env=os.environ.get(EMBEDDER_ENV, ""),
         embedder_id=active_embedder_id(embed_model),
@@ -240,8 +260,8 @@ def _shadowed_home(home: Path) -> Path | None:
     return None if enclosing == Path.home() / ".docir" else enclosing
 
 
-def _peers(settings: Settings) -> tuple[tuple[Path, str], ...]:
-    """Each declared peer and why it cannot be read, or ``""`` when it can.
+def _peers(settings: Settings) -> tuple[PeerReport, ...]:
+    """Each declared peer, why it cannot be read, and what it says it is.
 
     Through :func:`~docir.entry_points.composition.peer_status`, the same
     function the reader factory and the read-path warning use, so doctor cannot
@@ -251,7 +271,10 @@ def _peers(settings: Settings) -> tuple[tuple[Path, str], ...]:
     peer, and folding the two together would answer a federated question with a
     local answer.
     """
-    return tuple((home, peer_status(home)) for home in peer_homes(settings.home))
+    return tuple(
+        PeerReport(home, peer_status(home), store_description(home))
+        for home in peer_homes(settings.home)
+    )
 
 
 def probe_embedder(model_name: str | None) -> ProbeResult:
@@ -599,14 +622,16 @@ def _peer_findings(environment: Environment) -> list[DoctorFinding]:
     return [
         DoctorFinding(
             kind="peer-unavailable",
-            message=f"peer store {home} is skipped by every federated read: {reason}",
+            message=(
+                f"peer store {peer.home} is skipped by every federated read: {peer.unavailable}"
+            ),
             # The reason usually names the command already, and sometimes there
             # is none to name ("no such store"). One line that is true in both
             # cases beats one that promises a command the reason may not carry.
-            fix=f"repair {home}, or drop it from {declared}",
+            fix=f"repair {peer.home}, or drop it from {declared}",
         )
-        for home, reason in environment.peers
-        if reason
+        for peer in environment.peers
+        if peer.unavailable
     ]
 
 

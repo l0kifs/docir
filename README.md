@@ -311,7 +311,7 @@ depth lives where an agent can retrieve it rather than in this file:
 | | |
 |---|---|
 | [Publish the store as a static site](https://l0kifs.github.io/docir/run-6ab65e277573.html) | `docir build` for the people who approve decisions — flags, CI, the `--out` guard, mermaid diagrams |
-| [Read across repositories](https://l0kifs.github.io/docir/run-45b267a709b4.html) | Federated reads over peers declared in `.docir/stores.yaml` — and why writes never federate |
+| [Read across repositories](https://l0kifs.github.io/docir/run-45b267a709b4.html) | Federated reads over peers declared in `.docir/stores.yaml` — every hit labelled with the corpus that answered it, and why writes never federate |
 | [The embedding model](https://l0kifs.github.io/docir/ref-e7534f1c812d.html) | What it costs, what the fallback loses, why every section is embedded separately |
 | [Upgrade docir in a project](https://l0kifs.github.io/docir/run-f4a756206fe0.html) | `docir self upgrade`, schema drift, and what resyncs itself |
 | [Rename a document type](https://l0kifs.github.io/docir/run-781485012ad0.html) | `disable_types` frees the prefix, then documents are retyped one at a time — keeping every id |

@@ -869,6 +869,21 @@ def context(
     embed --flush` if you need the floor to cover everything) and graph-reached
     neighbours, which are included because a selected document points at them,
     not because they scored.
+
+    While this store federates — peers in `.docir/stores.yaml`, or `--store` —
+    every hit also carries the `store` that answered it and, when that store
+    describes itself, a `store_description`. Read it: it is what says whether
+    that corpus is the one that governs what you are doing, which the path
+    cannot. A store writes its own once, beside the peers it reads:
+
+        # .docir/stores.yaml
+        description: Platform decisions every service must follow.
+        stores:
+          - ../platform/.docir
+
+    Keep `stores:` even with no peers (`stores: []`): docir 0.20.0 and earlier
+    refuse a `stores.yaml` without that key, and every read in that repository
+    fails until it upgrades.
     """
     payload: dict[str, object] = {
         "task": task,
@@ -1687,6 +1702,7 @@ def _emit_doctor(report: doctor_report.DoctorReport) -> None:
             "schema_loads": not environment.schema_error,
             "index_present": environment.index_present,
             "shadowed_home": _opt_str_path(environment.shadowed_home),
+            "description": environment.store_description,
             **(report.store or {}),
         },
         "embedding": {
@@ -1703,7 +1719,14 @@ def _emit_doctor(report: doctor_report.DoctorReport) -> None:
             "disabled_by_env": environment.daemon_env_disabled,
             "watching": environment.watch,
         },
-        "peers": [{"home": str(home), "unavailable": reason} for home, reason in environment.peers],
+        "peers": [
+            {
+                "home": str(peer.home),
+                "unavailable": peer.unavailable,
+                "description": peer.description,
+            }
+            for peer in environment.peers
+        ],
         "findings": [asdict(finding) for finding in report.findings],
     }
     if report.probe is not None:

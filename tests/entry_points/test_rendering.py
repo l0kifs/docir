@@ -346,6 +346,34 @@ class TestRenderDoctor:
         out = capsys.readouterr().out
         assert "/peer" in out and "no index" in out
 
+    def test_a_peer_is_listed_with_what_it_says_it_is(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """The path names the repository; the description is what the reader of
+        a federated hit actually needs in order to judge it."""
+        rendering.render_doctor(
+            self._report(
+                peers=[{"home": "/peer", "unavailable": "", "description": "Platform decisions."}]
+            )
+        )
+        out = capsys.readouterr().out
+        assert "readable" in out and "Platform decisions." in out
+
+    def test_this_stores_own_description_gets_its_own_line(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Written into stores.yaml and shown nowhere else until a peer reads a
+        row from here, which is a long way to go to check a sentence."""
+        store = {**self._report()["store"], "description": "This service's own notes."}
+        rendering.render_doctor(self._report(store=store))
+        assert "This service's own notes." in capsys.readouterr().out
+
+    def test_a_store_describing_nothing_prints_no_line_for_it(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        rendering.render_doctor(self._report())
+        assert "about" not in capsys.readouterr().out
+
     def test_a_broken_store_says_so_instead_of_printing_a_count(
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:

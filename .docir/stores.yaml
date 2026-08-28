@@ -1,0 +1,8 @@
+# What this corpus is, for anyone who reads it as a peer (adr-84fb02d5061b).
+description: >-
+  docir's own design corpus — the decisions, architecture notes and runbooks
+  behind the docir CLI itself.
+# Kept even though this store reads no peers: docir 0.20.0 and earlier refuse a
+# stores.yaml with no `stores:` key, and every federated read in this repo would
+# fail for anyone still on that build.
+stores: []

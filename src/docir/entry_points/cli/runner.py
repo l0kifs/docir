@@ -108,9 +108,18 @@ def execute(command: str, payload: dict[str, object]) -> object:
     message and the exit code the error carries. Errors the daemon *returns*
     were never affected: they arrive as a `Response` and go through
     :func:`_unwrap`, which is why this survived (issue-06f48d8f239f).
+
+    Reading the peer list is the third half, fixed last for the same reason:
+    ``stores.yaml`` is parsed client-side, before anything is dispatched, so a
+    malformed one printed a traceback while `docir doctor` — reading the same
+    file through the same function — printed its message.
     """
     state = get_state()
-    payload = _with_peers(state, command, payload)
+    # The third half, and the last one outside the handler: `stores.yaml` is
+    # parsed here, so a malformed peer list raised past Typer as a stack trace
+    # while every other reading of the same file printed its message
+    # (issue-06f48d8f239f, again).
+    payload = run_local(lambda: _with_peers(state, command, payload))
     executor, closer = run_local(lambda: _build_executor(state.settings))
     try:
         response = run_local(lambda: executor.execute(Request(command=command, payload=payload)))

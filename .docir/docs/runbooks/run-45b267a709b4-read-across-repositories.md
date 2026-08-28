@@ -12,7 +12,7 @@ tags:
 - cli
 title: Read across repositories
 type: runbook
-updated: '2026-08-15'
+updated: '2026-08-28'
 ---
 
 The decision that governs the service you are editing often lives in another repo, and
@@ -33,6 +33,31 @@ stores:
 `docir context`, `query`, `search` and `get` then answer from all of them, and every
 row names the `store` it came from. That field is only present while federating; with
 one store it is pure cost, which is why the read paths never carried it before.
+
+## What a store says it is
+
+A path names a repository and nothing more, and the reader of a hit has to judge
+whether that corpus governs what it is doing. So a store describes itself, in one
+line, in its own `stores.yaml` (adr-84fb02d5061b):
+
+```yaml
+description: Platform decisions every service must follow.
+stores:
+  - ../platform/.docir
+```
+
+Every row that store answers then carries `store_description` beside `store` —
+including the rows it answers for itself, since a federated read merges the local
+store's hits with its peers'. Written once, by the people who own the corpus,
+rather than once per repository pointing at it.
+
+Keep the `stores:` key even when the store reads no peers — write `stores: []`.
+docir 0.20.0 and earlier refuse a `stores.yaml` without it, so a description-only
+file takes every federated read down for anyone in that repo still on that build.
+
+The field is omitted when a store describes itself nowhere, and `docir doctor`
+prints what this store and each declared peer say they are — so a description
+that never arrives is visible without staging a query that hits that corpus.
 
 ## Adding a peer for one command
 

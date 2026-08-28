@@ -32,13 +32,13 @@ def consoles(monkeypatch) -> tuple[Console, Console]:
 
 class TestAtATerminal:
     def test_progress_says_what_is_running(self, consoles) -> None:
-        out, err = consoles
+        _, err = consoles
         with rendering.progress("rebuilding the index"):
             pass
         assert "rebuilding the index" in err.export_text()
 
     def test_notice_says_what_is_running(self, consoles) -> None:
-        out, err = consoles
+        _, err = consoles
         rendering.render_notice("upgrading the docir package")
         assert "upgrading the docir package" in err.export_text()
 

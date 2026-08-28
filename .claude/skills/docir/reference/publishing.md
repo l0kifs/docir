@@ -1,4 +1,4 @@
-<!-- docir:v0.20.0 — generated file, do not edit by hand; refresh with `docir agent update` after upgrading docir -->
+<!-- docir:v0.21.0 — generated file, do not edit by hand; refresh with `docir agent update` after upgrading docir -->
 # Publishing the corpus for humans
 
 `docir build --out site/` renders the whole store as a self-contained static

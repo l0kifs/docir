@@ -7,6 +7,95 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-08-29
+
+A federated hit named the repository that answered it and nothing about what that repository
+holds — which is the one thing a reader has to know before weighing it. A store now describes
+itself, once, and that sentence travels with every row it answers. The second half of the release
+is what shipping the first taught: every gate here was green, and the change still broke every
+read for anyone still on 0.20.0, because no gate in this repository runs the build people already
+have.
+
+### Upgrade notes
+
+- **A `stores.yaml` that describes a store must still declare `stores:` — `[]` when it has no
+  peers.** docir 0.20.0 and earlier refuse a file without that key, so a description-only file
+  takes `context`, `query`, `search`, `get` and `doctor` down for everyone in the repository who
+  has not upgraded, while writes keep working. Every example docir ships spells it that way, and a
+  test pins the spelling in the packaged skill, the CLI docstring and this repository's own store.
+- **Nothing else changes without you asking.** A store that describes itself nowhere reads exactly
+  as it did, field for field.
+
+### Added
+
+- **A store says what it is, and every federated hit carries it.** `description:` in
+  `.docir/stores.yaml`, and `store_description` beside `store` on every row that store answers —
+  `query`, `search`, `context` and both shapes of `get`. `store` is a path: it separates two hits
+  and says nothing about the corpus behind them, while the judgement a reader has to make about a
+  hit from another repository is whether that corpus governs what it is doing. `platform`, `core`,
+  `shared` are what repositories are called, not what they hold, so an agent either trusts a
+  decision with no authority over its task or discounts the one that decides it.
+
+  The store describes *itself* rather than each reader annotating the peers it declares: written
+  once by the people who own the corpus, and it is the only spelling that also labels the reader's
+  own rows, since a federated read merges local hits with its peers'. Absent, never empty, and a
+  single-store read still carries neither field. `docir doctor` prints what this store and each
+  declared peer say they are, so a description that never arrives is visible without staging a
+  query that happens to hit that corpus. (adr-84fb02d5061b)
+
+### Changed
+
+- **An unrecognised key in `stores.yaml` is judged rather than uniformly refused.** One that
+  misspells a key this build knows — `store:`, `stors:`, `desc:` — raises and names what it was
+  probably meant to be: it otherwise reads as a store that declared nothing, and the read answers
+  locally without saying so. One that resembles nothing here is kept, ignored and reported, by a
+  CLI warning and a `stores-file-unknown-key` doctor finding — it is most likely written by a
+  *newer* docir, and refusing it would make one repository's upgrade break every repository that
+  had not upgraded yet. That is the call `peer_status` already made for a peer's index revision,
+  three functions away.
+
+### Fixed
+
+- **A malformed `stores.yaml` printed a stack trace.** It is parsed client-side, before anything is
+  dispatched, so it sat outside the boundary that maps a `DocirError` onto an exit code — the third
+  half of that gap, after the container build and the transport. `docir doctor`, reading the same
+  file through the same function, had been printing the message all along. (issue-06f48d8f239f)
+- **Forty parameters rendered as a flag name and a blank column**, across fourteen commands:
+  `query --tag`, `add --status`, `update --replace-body`, `embed --flush`, every `doc_id`
+  argument. `--help` is the whole discovery surface, and the README sells the CLI as the agent
+  contract. The test's oracle is the command tree Click renders from, so a parameter added without
+  `help=` now fails in the commit that adds it.
+- **Three error paths named the failure and not the fix.** `--body-file` was read unwrapped, so a
+  missing path, a directory or a latin-1 draft escaped as a traceback and exit 1 while every other
+  bad argument on the same command printed a message and exit 2. `error: unknown error` now points
+  at `docir doctor`, and `try_execute`'s fallback names the store it could not open.
+- **Twelve slow steps ran with nothing on screen** — `reindex`, `check --fix`, `embed --flush`,
+  `doctor --probe`, `self status --refresh`, both halves of `self upgrade`, and the in-process
+  executor build, which loads the embedding model and on a cold cache downloads ~67 MB before it
+  returns. On stderr, and only when stderr is a terminal: stdout carries the JSON an agent parses,
+  and an MCP client reads that stream as its protocol.
+
+### Internal
+
+- **A change is now run against the docir on PyPI before it ships, in both directions.** Every
+  gate here runs one build against itself, and a store is a committed artifact read by whatever
+  docir each teammate installed and by every repository declaring it a peer — so a change to a
+  committed file's shape, the on-disk contract or the index schema is an interface change against
+  builds already in the wild. The store description was green on lint, types, tach, vulture, 3,299
+  tests, `doctor --strict` and `check --strict` on the real corpus, and both transports, and still
+  broke every read on 0.20.0. A refusal is the break; a field an older build cannot show is not.
+  (adr-ab4598c6f707)
+- **`scripts/check_expressions.py` checks the commands in a release body**, not only its `--expr`
+  arguments. A release page is where a flag gets named from memory, and an agent runs a backticked
+  line regardless of the sentence around it. The extractor and resolver moved to
+  `scripts/cli_oracle.py`, shared with `test_agent_guide_matches_cli.py` — 1687 cases before the
+  move, 1687 after. (issue-87a27629f6a6)
+- **`publish-to-pypi.yml` was the only workflow still on Node 20.** It runs once per release, at
+  the moment a release is already tagged, and `ci.yml` and `pages.yml` had both been bumped. One
+  version per action now, rather than one per workflow.
+- **Two unused unpackings** that ruff 0.15 reports (RUF059) made `ruff check .` red without a
+  commit here; `ruff>=0.9` stays unpinned deliberately.
+
 ## [0.20.0] - 2026-08-27
 
 Every gate in this project was green. Four of them were green because they were not looking:
@@ -1972,7 +2061,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/l0kifs/docir/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/l0kifs/docir/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/l0kifs/docir/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/l0kifs/docir/compare/v0.17.0...v0.18.0

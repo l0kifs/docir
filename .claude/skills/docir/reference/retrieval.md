@@ -1,4 +1,4 @@
-<!-- docir:v0.20.0 — generated file, do not edit by hand; refresh with `docir agent update` after upgrading docir -->
+<!-- docir:v0.21.0 — generated file, do not edit by hand; refresh with `docir agent update` after upgrading docir -->
 # Retrieval beyond `docir context`
 
 The four read commands in [`SKILL.md`](../SKILL.md) answer most questions. This

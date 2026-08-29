@@ -27,7 +27,9 @@ from docir.modules.documents.api import (
     ConformanceReport,
     DocumentService,
     MaintenanceService,
+    ReindexResult,
     check_schema_conformance,
+    index_is_empty,
     load_schema,
     render_schema_yaml,
 )
@@ -78,6 +80,11 @@ class Container:
     #: falls back when fastembed is missing, so anything reporting the
     #: configuration (benchmarks) must read the resolved object, not the env var.
     embedder: Embedder
+    #: What :func:`_bootstrap_index` rebuilt while opening the store, or ``None``
+    #: when there was nothing to rebuild — which is every ordinary open. Carried
+    #: rather than printed here so the one caller with a human on the other end
+    #: can say so and the daemon can stay quiet.
+    bootstrapped: ReindexResult | None = None
 
     def close(self) -> None:
         """Stop the scheduler and dispose of the database engine."""
@@ -268,6 +275,9 @@ def build_container(
         code_matcher,
     )
     dispatcher = Dispatcher(document_service, tag_service, maintenance_service)
+    bootstrapped = _bootstrap_index(
+        maintenance_service, uow_factory, file_store, scheduler, background=background_embeddings
+    )
 
     def open_peer(home: Path) -> tuple[Reader | None, str]:
         return build_peer_reader(home, embedder=embedder, clock=clock)
@@ -278,7 +288,51 @@ def build_container(
         scheduler=scheduler,
         engine=engine,
         embedder=embedder,
+        bootstrapped=bootstrapped,
     )
+
+
+def _bootstrap_index(
+    maintenance: MaintenanceService,
+    uow_factory: Callable[[], UnitOfWork],
+    file_store: MarkdownDocumentFileStore,
+    scheduler: EmbeddingScheduler,
+    *,
+    background: bool,
+) -> ReindexResult | None:
+    """Build the index when the store has files and no projection of them.
+
+    `.docir/docs/` is committed and the index is gitignored, so a fresh clone
+    and every new `git worktree` open a store whose every read answers nothing
+    and whose every write reports the document missing. Nothing built it: the
+    daemon's watcher rebuilds what *changes*, and an untouched checkout changes
+    nothing, so the state persisted until somebody ran `docir reindex`
+    (issue-e5a0cb196607).
+
+    The condition is `index_is_empty`, the same comparison behind `check`'s and
+    `doctor`'s `empty-index` — so a store that is merely *behind* is untouched
+    and stays their business. The rebuild is safe for the reason the whole
+    architecture rests on: the files are canonical and the index is derived, so
+    it can only make the two agree, and it writes no markdown.
+
+    It is affordable because it defers the vectors — ~0.9s against ~70s on this
+    repository's 191 documents — and :meth:`MaintenanceService.bootstrap`
+    documents what that leaves pending. The wake is conditional for the same
+    reason: a background scheduler has a worker to start, while waking a
+    synchronous one means draining inline, which is the cost this avoids.
+
+    Peers do not come through here. `build_peer_reader` opens them read-only,
+    and a federated read that rebuilt somebody else's index would make a read
+    a write in a repository nobody asked us to touch.
+    """
+    with uow_factory() as uow:
+        documents = uow.documents.count()
+    if not index_is_empty(documents=documents, documents_on_disk=file_store.count()):
+        return None
+    result = maintenance.bootstrap()
+    if background:
+        scheduler.wake()
+    return result
 
 
 def peer_status(home: Path) -> str:

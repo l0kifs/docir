@@ -300,6 +300,15 @@ def _build_executor(
     # command pays it, which is the case that looks like a hang.
     with rendering.progress("loading the embedding model"):
         executor, container = build_in_process_executor(settings)
+    if container is not None and container.bootstrapped is not None:
+        # The store had files and no index, and opening it built one. Said once,
+        # for the human: the vectors are still queued behind it, so a `context`
+        # run in the next few seconds ranks on full text alone, and in a process
+        # with no daemon nothing drains that queue until `docir embed --flush`.
+        rendering.render_notice(
+            f"built the index for this store ({container.bootstrapped.documents_indexed} "
+            "documents); vectors are queued"
+        )
     return executor, container
 
 

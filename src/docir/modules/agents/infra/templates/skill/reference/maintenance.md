@@ -28,9 +28,9 @@ index, the daemon, the model, the installation — see
   Every other finding above is a warning and never fails the build; `--strict-all` makes them
   fatal too.
   **As a CI / pre-merge gate the order is `docir reindex` → `docir doctor --strict` →
-  `docir check --strict`.** Before the rebuild `check` reads a blank graph and calls the
-  corpus clean; `doctor --strict` proves the rebuild populated it, and `empty-index` is what
-  fires if it did not. `reference/troubleshooting.md` says why a fresh checkout has no index.
+  `docir check --strict`.** The explicit rebuild is what computes the vectors — a store opened
+  cold defers them (`reference/troubleshooting.md`, `no-index`) — so the order stands.
+  `doctor --strict` proves the index is populated, and `empty-index` is what fires if it is not.
 - **Recovering from `missing-required`** — the type requires a field the document was written
   without, usually because `docs-schema.yaml` gained a `required:` entry or an upgrade brought
   one in through a profile. Supply it (`docir update <id> --set-owner ...`) or drop the

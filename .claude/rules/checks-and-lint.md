@@ -31,7 +31,10 @@ Three tiers, and mixing them is the documented overengineering trap. The recurri
   not *look*. The graph half reads the index, so with none built every structural finding is
   silent and `--strict` exits 0 — a merge gate that passes by reading nothing, green on a
   corpus with sixteen dangling edges (issue-87410666c867). The warnings below all red-build a
-  *correct* setup; this red-builds one that was never checking anything. It fires only when
+  *correct* setup; this red-builds one that was never checking anything. The bootstrap
+  (adr-e53c813d2f13) takes the ordinary fresh checkout out of its reach, leaving the stores
+  that bootstrap never saw: files that landed after the container was built, or an index left
+  by a docir predating it. It fires only when
   the index is empty **and** files exist (so a fresh `docir init` is silent), and a partially
   behind index stays `docir doctor`'s `index-behind-files` warning. The comparison lives in
   `index_is_empty`, shared by `check` and `doctor`, so the two cannot disagree about whether
@@ -75,9 +78,11 @@ Three tiers, and mixing them is the documented overengineering trap. The recurri
   nothing in `git diff` to review. The index therefore records the resolved schema it was last
   rebuilt against (`schema_baseline`, migration `0005`, one row) and `check` reports the
   difference as `schema-drift`, one finding per change. Three rules hold it up:
-  **`reindex` is the only writer of that baseline** (it is already the "make derived state agree
-  with the sources" verb; an `accept` command would be a ritual whose only effect is silencing a
-  report — the argument adr-bd7c4f3c5764 makes about staleness); **absent means unknown, not
+  **a rebuild is the only writer of that baseline** — `reindex`, and the store bootstrap that
+  shares its transaction (`MaintenanceService._rebuild`), never a third path (it is already the
+  "make derived state agree with the sources" verb; an `accept` command would be a ritual whose
+  only effect is silencing a report — the argument adr-bd7c4f3c5764 makes about staleness);
+  **absent means unknown, not
   unchanged**, so a store with no baseline reports nothing rather than reporting its whole schema
   as new (an unparseable one reads the same way, since `reindex` overwrites it); and the payload
   is rendered by `domain/services/schema_shape.describe`, which `infra`'s `describe_schema`
@@ -99,9 +104,11 @@ Three tiers, and mixing them is the documented overengineering trap. The recurri
   implemented once and an agent reaches them over MCP — while the rest is deliberately *not*
   a dispatcher command, since a daemon reporting on its own process makes "is the daemon
   stale?" inexpressible. `documents` / `documents_on_disk` travel as a pair, and split into **two**
-  finding kinds: doctor's own dispatch creates the index, so on a fresh clone the second run
-  finds an *empty* one where the first found none — `empty-index` is an error for the same
-  reason `no-index` is (every read answers nothing), while a partial mismatch stays
+  finding kinds, and the split now runs along severity. `no-index` is a **warning** in the
+  past tense — doctor's own dispatch is one of the things that repairs it, so an error would
+  gate on a store that is already fine, the argument `stale-daemon` settled
+  (adr-e53c813d2f13). `empty-index` keeps **error**, since the reads there still answer
+  nothing. A partial mismatch stays
   `index-behind-files`, a warning, because one unparseable file would otherwise red-build a
   repo for a condition `check` already reports as `malformed`. Severity is per *kind*, never
   conditional inside one, so a new finding still classifies itself.

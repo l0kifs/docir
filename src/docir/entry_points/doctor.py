@@ -72,12 +72,18 @@ WARNING = "warning"
 #: turns off the week it upgrades.
 ERROR_KINDS = frozenset(
     {
-        "no-index",
-        # An index holding nothing while the files hold documents is the same
-        # condition as no index at all — every read answers nothing — so it
-        # carries the same severity. Its own kind rather than a severity that
-        # varies inside `index-behind-files`, because severity deriving from
-        # the kind is what stops a new finding forgetting to classify itself.
+        # `no-index` is deliberately absent, and was an error until opening a
+        # store began rebuilding it (adr-e53c813d2f13). The finding describes a
+        # condition this very process has already repaired — the `stale-daemon`
+        # case, worded in the past tense for the same reason — and an error for
+        # a store that is now fine is a gate red on a healthy repository.
+        # An index holding nothing while the files hold documents is not that:
+        # it is a store the bootstrap did not reach — one opened before its
+        # files arrived, or by a build that predates it — so every read still
+        # answers nothing and the severity stays. Its own kind rather than a
+        # severity that varies inside `index-behind-files`, because severity
+        # deriving from the kind is what stops a new finding forgetting to
+        # classify itself.
         "empty-index",
         "schema-unreadable",
         "no-embedder",
@@ -400,10 +406,12 @@ def _store_findings(
                 kind="no-index",
                 message=(
                     "there was no index at "
-                    f"{environment.home / 'index.db'} — it is derived and gitignored, "
-                    "so a fresh clone has none and every read answers nothing"
+                    f"{environment.home / 'index.db'} when this started — it is derived "
+                    "and gitignored, so a fresh clone has none. Opening the store creates "
+                    "it and rebuilds whatever is on disk into it, vectors deferred, so the "
+                    "store counts below are the ones that say where you now stand"
                 ),
-                fix="docir reindex",
+                fix="docir reindex  (to compute the vectors that rebuild defers)",
             )
         )
     if environment.unintended_global:

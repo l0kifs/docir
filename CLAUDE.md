@@ -199,7 +199,8 @@ enough to stop a wrong edit and never enough to argue with.
   promoting one red-builds a *correct* repository, which is how a merge gate gets deleted.
 - `docir check --fix` is the only sanctioned recovery path; it repairs only what needs no guess,
   reindexes first, and does not advance `updated`.
-- `reindex` is the only writer of `schema_baseline` and `index_build`. Absent means *unknown*,
+- A rebuild is the only writer of `schema_baseline` and `index_build` — `reindex`, and the
+  store bootstrap sharing its transaction. Absent means *unknown*,
   never *unchanged*.
 - `docir doctor` snapshots the environment **before** it dispatches. CI runs `reindex` ->
   `doctor --strict` -> `check --strict`, in that order.

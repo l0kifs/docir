@@ -68,11 +68,12 @@ Keep the exception type and exit code — the caller's handling should not chang
 the message sends them — and keep the `no document with id '<id>'` prefix, since the batch
 read reports it per reference.
 
-Rejected: reindexing automatically when the index disagrees with the tree. A rebuild is safe
-(the files are canonical), but doing it inside an arbitrary write turns a bounded command into
-a corpus-sized one at the moment somebody is waiting on it, and hides the state the message
-should be teaching. The daemon's watcher is where automatic rebuilds belong; this is the
-message for everyone not running one.
+Rebuilding automatically was deferred at first, on a cost estimate that turned out to be
+wrong: a rebuild inside an arbitrary command looked corpus-sized. Measured, ~69s of `docir
+reindex`'s 70s on this corpus is the embedding drain, and the rebuild alone is ~0.9s against a
+0.98s baseline `get`. So opening a store that has files and no index now rebuilds it with the
+vectors deferred (adr-e53c813d2f13), and the message is the backstop for what that cannot
+reach — an index emptied under a running process, or a store opened by an older build.
 
 ## Actors affected
 
@@ -88,9 +89,14 @@ message for everyone not running one.
 
 ## Resolution
 
-FIXED. Both raise sites go through `DocumentService._not_found`, which consults
+FIXED, in two parts. Both raise sites go through `DocumentService._not_found`, which consults
 `index_is_empty` and appends the diagnosis and `docir reindex` when the index holds nothing
 while `docs/` holds files. Same `DocumentNotFoundError`, same exit code 4, same message prefix.
 Verified by injecting the bug: with the helper returning the bare message, the empty-index
 guards fail while the populated-store guard still passes. Pinned by
 `TestMissingIdNamesAnEmptyIndex`.
+
+Then the state itself: `build_container` rebuilds an index it finds empty beside files, so the
+message is no longer what a fresh clone or worktree meets first (adr-e53c813d2f13, pinned by
+`TestOpeningAStoreWithNoIndexBuildsOne`). `no-index` became a warning in the same change — it
+now describes a condition the run reporting it has already undone.

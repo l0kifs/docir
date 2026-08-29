@@ -1235,6 +1235,95 @@ class TestStoreStatusIsTheIndexAccountOfItself:
         }
 
 
+class TestOpeningAStoreWithNoIndexBuildsOne:
+    """The bootstrap, and the two things it must not do.
+
+    A committed `.docir/docs/` and a gitignored index means a fresh clone and
+    every new `git worktree` open a store where every read answers nothing and
+    every write reports the document missing (issue-e5a0cb196607). Nothing built
+    it: the daemon's watcher rebuilds what *changes*, and an untouched checkout
+    changes nothing.
+
+    It is affordable only because it defers the vectors. Measured on this
+    repository's 191 documents, the rebuild is ~0.9s and the drain `reindex`
+    does after it is ~70s — so the assertions below are as much about
+    `embeddings_recomputed == 0` as about the documents arriving.
+    """
+
+    @staticmethod
+    def _write_two_documents(settings: Settings) -> None:
+        """A committed corpus, written past the CLI so nothing indexes it."""
+        directory = settings.docs_root / "decisions"
+        directory.mkdir(parents=True, exist_ok=True)
+        for number, title in ((1, "First"), (2, "Second")):
+            (directory / f"adr-000{number}-{title.lower()}.md").write_text(
+                f"---\nid: adr-000{number}\ntitle: {title}\ndescription: d\ntype: decision\n"
+                "status: proposed\ncreated: '2026-07-07'\nupdated: '2026-07-07'\n"
+                "tags: []\nrelated: []\n---\n\nbody\n",
+                encoding="utf-8",
+            )
+
+    def test_the_documents_are_readable_without_anyone_running_reindex(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        """The whole point: the next container to open this store answers."""
+        self._write_two_documents(settings)
+        with closing(build_container(settings, background_embeddings=False)) as opened:
+            assert opened.bootstrapped is not None
+            assert opened.bootstrapped.documents_indexed == 2
+            ids = {row["id"] for row in opened.dispatcher.dispatch("query", {"limit": 10})}
+        assert ids == {"adr-0001", "adr-0002"}
+
+    def test_it_defers_every_vector(self, dispatcher: Dispatcher, settings: Settings) -> None:
+        """The cost argument, pinned. A bootstrap that drained would put the
+        embedding pass back on the path that opens a store."""
+        self._write_two_documents(settings)
+        with closing(build_container(settings, background_embeddings=False)) as opened:
+            assert opened.bootstrapped is not None
+            assert opened.bootstrapped.embeddings_recomputed == 0
+            assert opened.bootstrapped.vectors_written == 0
+            pending = opened.dispatcher.dispatch("store_status", {})["embeddings_pending"]
+        assert pending == 2, "deferred, not skipped — the queue holds them"
+
+    def test_it_records_both_stamps(self, dispatcher: Dispatcher, settings: Settings) -> None:
+        """Or `check` reports drift against an index docir has just built."""
+        self._write_two_documents(settings)
+        with closing(build_container(settings, background_embeddings=False)) as opened:
+            kinds = {i["kind"] for i in opened.dispatcher.dispatch("check", {})}
+        assert "schema-drift" not in kinds
+        assert "stale-index-build" not in kinds
+        assert "empty-index" not in kinds
+
+    def test_an_empty_store_is_left_alone(self, settings: Settings) -> None:
+        """No files, nothing to project — the same zero-agrees-with-zero case
+        `check` stays silent for. Firing here would rebuild on every open."""
+        with closing(build_container(settings, background_embeddings=False)) as opened:
+            assert opened.bootstrapped is None
+
+    def test_an_index_that_is_merely_behind_is_left_alone(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        """The predicate is `index_is_empty`, not "the counts differ". A store
+        holding one document and two files is stale, and staleness is `doctor`'s
+        `index-behind-files` — rebuilding it here would make opening a store a
+        corpus-sized write on every checkout with one unparseable file."""
+        dispatcher.dispatch("add", {"type": "decision", "title": "A", "description": "d"})
+        self._write_two_documents(settings)
+        with closing(build_container(settings, background_embeddings=False)) as opened:
+            assert opened.bootstrapped is None
+
+    def test_a_second_open_does_not_rebuild(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        """Once is the whole contract. A bootstrap that ran again would be a
+        rebuild on every command in every store."""
+        self._write_two_documents(settings)
+        with closing(build_container(settings, background_embeddings=False)) as first:
+            assert first.bootstrapped is not None
+        with closing(build_container(settings, background_embeddings=False)) as second:
+            assert second.bootstrapped is None
+
+
 class TestCheckRefusesToReportAVerdictItCouldNotReach:
     """`check` over an unbuilt index, and why it is now an `error`.
 

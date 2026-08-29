@@ -129,8 +129,14 @@ files and the derived index never disagree.
   opt-in `DOCIR_SCHEMA_NOTICE` stderr notice and the `docir_schema_drift` MCP tool. Empty when
   nothing moved *or* when the store has no baseline: absent means unknown, not unchanged.
   `reindex` is the only writer of that baseline.
+- `MaintenanceService.bootstrap() -> ReindexResult` — `reindex()` without the drain, for a
+  store that has files and no projection of them. Writes both stamps and leaves every vector
+  dirty for the queue, so `embeddings_recomputed` and `vectors_written` are always `0`; the
+  composition root calls it while opening such a store and nothing else should. Measured on
+  this repository's 191 documents: ~0.9s against ~70s for the drain it defers.
 - `index_is_empty(documents=, documents_on_disk=) -> bool` — the one comparison behind
-  `check`'s `empty-index` error and `docir doctor`'s finding of the same name. Shared, because
+  `check`'s `empty-index` error, `docir doctor`'s finding of the same name, the store
+  bootstrap, and the `no document with id` message that names an unbuilt index. Shared, because
   two copies would let one command call a store usable that the other refuses — the drift
   `validation.is_absent` exists to prevent, one size down. False for an empty store: the two
   counts agree at zero.

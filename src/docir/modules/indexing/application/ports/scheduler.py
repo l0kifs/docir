@@ -59,3 +59,19 @@ class EmbeddingScheduler(ABC):
     @abstractmethod
     def stop(self) -> None:
         """Stop background draining and release resources."""
+
+    @abstractmethod
+    def wake(self) -> None:
+        """Tell a background drainer that dirty vectors are already queued.
+
+        For the one caller that marks documents dirty without going through
+        :meth:`schedule`: the store bootstrap rebuilds an index from files and
+        leaves every vector to the queue, so the work exists in the database
+        with nothing having announced it.
+
+        Abstract rather than a default no-op, so an implementation has to say
+        which it is: a synchronous scheduler must *not* wake, because waking it
+        means draining inline and the bootstrap defers precisely because that
+        drain costs a minute; one with a worker must, or the queue stands until
+        something else happens to write.
+        """

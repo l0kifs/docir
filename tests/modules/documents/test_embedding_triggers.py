@@ -35,6 +35,9 @@ class _RecordingScheduler(EmbeddingScheduler):
     def schedule(self, doc_id: str) -> None:
         self.scheduled.append(doc_id)
 
+    def wake(self) -> None:
+        pass
+
     def flush(self) -> DrainResult:
         return DrainResult(documents=0, vectors=0)
 

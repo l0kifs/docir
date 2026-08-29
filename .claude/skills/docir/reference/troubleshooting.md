@@ -24,11 +24,14 @@ docir doctor --probe    # also load the embedding model and time it (may downloa
 
 Each finding carries a `kind`, a `severity` and the command that closes it:
 
-- `no-index` / `empty-index` — the index is derived and **gitignored**, so a fresh clone has
-  none and every read answers nothing. Both are errors, and `empty-index` is the one that
-  survives: opening the store creates the file, so the *second* command finds an empty index
-  rather than a missing one. `docir check` reports `empty-index` too, for the same reason —
-  its structural checks read that empty graph. → `docir reindex`
+- `no-index` — there was no index when the command started. A **warning**, in the past tense:
+  the index is derived and **gitignored**, so a fresh clone and every new `git worktree` has
+  none, and opening the store rebuilds it from the files. Run `docir reindex` only to compute
+  the vectors that rebuild defers.
+- `empty-index` — an index holding nothing while `docs/` holds files, which the rebuild above
+  did not reach: a store opened before its files arrived, or by an older docir. Still an
+  **error**, because every read answers nothing. `docir check` reports it too, since its
+  structural checks read that empty graph. → `docir reindex`
 - `index-behind-files` — the index holds fewer documents than `docs/` does. A warning: usually
   one file that will not parse, which `docir check` names as `malformed`.
 - `stale-index-build` — the index was built by a docir that is no longer installed.
@@ -72,6 +75,7 @@ what reports dangling edges, duplicate ids and staleness.
 ## Notes
 
 - Errors print `error: <message>` to **stderr** with a nonzero exit code (2=validation, 4=not-found, 5=conflict, 6=stale), so a captured stdout stays clean JSON.
+- `no document with id '<id>'` from `get` or `update` means what it says only when the message stops there. When the index holds nothing while `docs/` holds files it names that instead and asks for `docir reindex`; the document is on disk and nothing was lost. Opening a store normally rebuilds an index it finds empty, so this is the rare leftover — an index emptied under a running daemon. Do not go looking for a deletion and do not rewrite the document: rebuild the index and repeat the command.
 - Vectors are computed async; add `--wait-embeddings` to a write (or `docir embed --flush`) if you must `context`-search immediately after.
 - `docir context` matches on meaning, not just wording, so describe the task in your own words rather than guessing the documents' vocabulary. (If the store runs `DOCIR_EMBEDDER=deterministic` — a light, model-free fallback — matching is vocabulary-based instead; when a query under-retrieves there, retry with the terms the codebase actually uses.)
 - All state lives under `~/.docir` (override `DOCIR_HOME`); the index is disposable and rebuildable from files.

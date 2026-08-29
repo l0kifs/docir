@@ -199,6 +199,61 @@ class MaintenanceService:
         vectors while writing neither the schema baseline nor the build stamp
         (adr-6a4718fa7a7d, issue-b24e14474820).
         """
+        indexed, removed, tags_indexed = self._rebuild(changed_only=changed_only)
+        drained = self._scheduler.flush()
+        return ReindexResult(
+            documents_indexed=indexed,
+            documents_removed=removed,
+            tags_indexed=tags_indexed,
+            documents_skipped=len(self._file_store.find_malformed()),
+            embeddings_recomputed=drained.documents,
+            vectors_written=drained.vectors,
+        )
+
+    def bootstrap(self) -> ReindexResult:
+        """Rebuild the index, leaving the vectors to the queue.
+
+        :meth:`reindex` without the drain, for the one state where a store has
+        files and no projection of them at all — a fresh clone, a new `git
+        worktree`. It is what makes that state recoverable without a command,
+        so it has to cost what a command would not be worth: measured on this
+        repository's 191 documents, the rebuild is ~0.9s while the drain that
+        follows it in `reindex` is ~70s, because the drain loads the embedding
+        model and writes 1,454 vectors.
+
+        Deferring them is not skipping them. Every document rebuilt here is
+        marked dirty, which is the same queue a write leaves behind, drained by
+        the daemon's scheduler within its debounce window. Until it drains,
+        `context` ranks on full-text and the graph alone and `docir doctor`
+        says so as `embeddings-pending` — a worse answer than a warm store, and
+        an answer, where the state this replaces returned nothing at all. A
+        process with no daemon (`--no-daemon`, CI) leaves the queue standing;
+        `docir reindex` or `docir embed --flush` is what closes it there, which
+        is why neither drops out of the documented CI order.
+
+        This is not the recompute-only mode adr-6a4718fa7a7d rejected. That one
+        skipped the *rebuild* and recomputed vectors, writing neither stamp;
+        this does the whole rebuild — both stamps included, so `check` does not
+        immediately report drift against a store docir has just built — and
+        defers only the vectors.
+        """
+        indexed, removed, tags_indexed = self._rebuild(changed_only=False)
+        return ReindexResult(
+            documents_indexed=indexed,
+            documents_removed=removed,
+            tags_indexed=tags_indexed,
+            documents_skipped=len(self._file_store.find_malformed()),
+            embeddings_recomputed=0,
+            vectors_written=0,
+        )
+
+    def _rebuild(self, *, changed_only: bool) -> tuple[int, int, int]:
+        """The transaction both rebuild paths share, without the drain.
+
+        One writer for the two stamps, so a rebuild that defers its vectors
+        cannot also forget to record which schema and which build produced the
+        rows it wrote.
+        """
         with self._uow_factory() as uow:
             tags_indexed = self._reindex_tags(uow)
             indexed, removed = self._reindex_documents(uow, changed_only=changed_only)
@@ -214,15 +269,7 @@ class MaintenanceService:
             # documents are read rather than what they must contain.
             uow.index_build.set(self._version)
             uow.commit()
-        drained = self._scheduler.flush()
-        return ReindexResult(
-            documents_indexed=indexed,
-            documents_removed=removed,
-            tags_indexed=tags_indexed,
-            documents_skipped=len(self._file_store.find_malformed()),
-            embeddings_recomputed=drained.documents,
-            vectors_written=drained.vectors,
-        )
+        return indexed, removed, tags_indexed
 
     def resync(self) -> ReindexResult:
         """Rebuild only what the build stamp says is not already indexed.

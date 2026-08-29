@@ -36,6 +36,11 @@ since the model reads only the first ~512 tokens of a body (adr-927aa43d9635).
 - `build_scheduler(uow_factory, embedder, *, background) -> EmbeddingScheduler`
   — construct the deferred embedding-recompute scheduler for one process
 - `EmbeddingScheduler.schedule(id) / flush() -> DrainResult` — queue and drain recomputes
+- `EmbeddingScheduler.wake()` — tell a background drainer that dirty vectors are already
+  queued, for the caller that marks them without going through `schedule` (the store
+  bootstrap). Abstract, so each implementation states its answer: the threaded one wakes its
+  worker, the inline one does nothing, because waking a synchronous scheduler means draining
+  inline and the bootstrap exists to defer that drain.
 - `DrainResult` — what one drain did (`documents`, `vectors`). Two numbers because the queue
   is keyed by document while the work is vectors: each document writes its own plus one per
   `##` section (adr-927aa43d9635), so 315 documents is 1,326 vectors. Reporting only the

@@ -96,6 +96,11 @@ class InlineEmbeddingScheduler(EmbeddingScheduler):
     def schedule(self, doc_id: str) -> None:
         drain_dirty(self._uow_factory, self._embedder)
 
+    def wake(self) -> None:
+        # Nothing to wake: there is no worker, and draining here would put the
+        # whole embedding pass back on the path the bootstrap took it off.
+        return None
+
     def flush(self) -> DrainResult:
         return drain_dirty(self._uow_factory, self._embedder)
 
@@ -124,6 +129,9 @@ class ThreadedEmbeddingScheduler(EmbeddingScheduler):
         self._thread: threading.Thread | None = None
 
     def schedule(self, doc_id: str) -> None:
+        self._wake.set()
+
+    def wake(self) -> None:
         self._wake.set()
 
     def flush(self) -> DrainResult:

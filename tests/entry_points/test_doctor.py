@@ -122,28 +122,31 @@ def test_a_missing_index_is_read_before_the_dispatch_that_creates_one(
     assert "no-index" in _kinds(report)
 
 
-def test_an_empty_index_beside_files_is_an_error_on_the_second_run_too(
+def test_a_missing_index_is_rebuilt_by_the_run_that_reports_it(
     settings: Settings,
 ) -> None:
-    """The hole `no-index` alone leaves, and why it is an *error*.
+    """`no-index` names a condition the run has already undone.
 
-    Doctor's own dispatch creates the index, so on a fresh clone the second run
-    finds a file where the first found none. Reported as a mere warning, that run
-    passed `--strict` — a gate that goes green on the second attempt is worse
-    than one that never fired, and the corpus is in exactly the same state both
-    times: every read answers nothing.
+    Doctor's own dispatch opens the store, and opening a store with files and no
+    index rebuilds it (adr-e53c813d2f13). So the finding is reported in the past
+    tense and is a *warning*: the first run says what it found and leaves a
+    readable store, and the second finds nothing to say. It was an error, and
+    the state it described — the second run of a fresh clone reporting a healthy
+    empty corpus — is now repaired rather than re-reported.
     """
     _add()
     _add("B")
     settings.db_path.unlink()
     code, first = _doctor("--strict")
-    assert (code, "no-index" in _kinds(first)) == (1, True)
+    assert "no-index" in _kinds(first), "the snapshot still sees what it found"
+    assert code == 0, "a store this run rebuilt is not a store docir cannot work in"
 
-    code, report = _doctor("--strict")  # the index now exists, and is empty
-    assert "no-index" not in _kinds(report), "the first run created one"
-    assert "empty-index" in _kinds(report)
-    assert code == 1, "same corpus, same answer: --strict must not go green here"
-    assert (report["store"]["documents"], report["store"]["documents_on_disk"]) == (0, 2)
+    code, report = _doctor("--strict")
+    assert _kinds(report) == {"embeddings-pending"}, (
+        "what the rebuild deferred, and the only thing left to say about it"
+    )
+    assert (report["store"]["documents"], report["store"]["documents_on_disk"]) == (2, 2)
+    assert code == 0, "a queued vector is not a store docir cannot work in either"
 
 
 def test_an_index_merely_behind_its_files_stays_a_warning(settings: Settings) -> None:
@@ -163,32 +166,35 @@ def test_an_index_merely_behind_its_files_stays_a_warning(settings: Settings) ->
     assert code == 0, "one unparseable file must not fail a gate twice"
 
 
-def test_doctor_and_check_agree_that_a_store_is_unreadable(settings: Settings) -> None:
-    """One store, one condition, two commands — and they must not disagree.
+def test_doctor_and_check_agree_about_a_store_neither_had_to_be_told_about(
+    settings: Settings,
+) -> None:
+    """One store, two commands, and they must not disagree about it.
 
-    `check` reports `empty-index` because its structural checks read that blank
-    graph (adr-1cccd77cb023); `doctor` reports it because every read does. Both
-    go through `index_is_empty`, and this is the assertion that the sharing
-    survives from the CLI side: a caller told by one command that a store is
-    unusable must not be told by the other that it is fine.
+    They used to agree it was unreadable: both reported `empty-index`, both
+    gated, and a fresh clone had to run `docir reindex` before either would pass.
+    They now agree it is readable, because opening it is what builds it — and
+    the agreement is the same property, checked from the other side. A caller
+    told by one command that a store is fine must not be told by the other that
+    it is unusable.
 
-    Both are errors, so both gate. That pairing is the whole point — a warning on
-    either side leaves a green gate over a corpus nobody read.
+    `empty-index` is not retired by this: it still fires for a store the
+    bootstrap did not reach, which is where `TestCheckRefusesToReportAVerdictIt`
+    `CouldNotReach` pins it — a container opened before the files arrived.
     """
     _add()
     _add("B")
     settings.db_path.unlink()
-    _doctor()  # doctor's own dispatch leaves an index that exists and is empty
 
     code, report = _doctor("--strict")
-    assert "empty-index" in _kinds(report)
-    assert code == 1
+    assert "empty-index" not in _kinds(report)
+    assert code == 0
 
     result = runner.invoke(app, ["--no-daemon", "check", "--strict"])
     findings = json.loads(result.stdout)
     kinds = {finding["kind"] for finding in findings}
-    assert "empty-index" in kinds, "check must not call this store readable"
-    assert result.exit_code == 1, "and must not pass a gate over a graph it never read"
+    assert "empty-index" not in kinds, "the store was built by opening it"
+    assert result.exit_code == 0, "and a real graph was checked, not an empty one"
 
 
 def test_neither_reports_it_for_a_store_with_no_documents(settings: Settings) -> None:
@@ -422,7 +428,9 @@ def test_strict_gates_on_errors_only(settings: Settings, uow_factory) -> None:
 def test_every_error_kind_classifies_itself(settings: Settings) -> None:
     """Severity is derived from the kind, so a new finding cannot forget to
     classify itself — it either joins ERROR_KINDS or it is a warning."""
-    assert doctor.severity_for("no-index") == doctor.ERROR
+    assert doctor.severity_for("no-index") == doctor.WARNING, (
+        "the run that reports it has already rebuilt the store (adr-e53c813d2f13)"
+    )
     assert doctor.severity_for("empty-index") == doctor.ERROR
     assert doctor.severity_for("index-behind-files") == doctor.WARNING
     assert doctor.severity_for("stale-index-build") == doctor.WARNING

@@ -1,4 +1,4 @@
-<!-- docir:v0.21.0 — generated file, do not edit by hand; refresh with `docir agent update` after upgrading docir -->
+<!-- docir:v0.22.0 — generated file, do not edit by hand; refresh with `docir agent update` after upgrading docir -->
 # Checking and maintaining the corpus
 
 What to do when `docir check` reports something, when a human has edited the

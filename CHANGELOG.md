@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-08-30
+
+A store arrived on a machine with its documents and no index, and every read answered
+nothing while every write said the document did not exist. Both halves of that are fixed: the
+message stops asserting a deletion that never happened, and the state stops occurring, because
+opening a store is now what builds it.
+
+### Upgrade notes
+
+- **A fresh clone or `git worktree` no longer needs `docir reindex` before it can be read or
+  written.** Opening the store rebuilds an index it finds empty, in about a second on a
+  190-document corpus, and leaves the vectors to the background queue. The explicit `reindex`
+  is still what computes those vectors, so it stays first in the CI order.
+- **`docir doctor`'s `no-index` finding is now a warning rather than an error.** A
+  `doctor --strict` that failed on a fresh checkout will start passing — the run reporting the
+  finding is one of the things that repairs it. `empty-index` keeps the error severity, for
+  the stores that rebuild does not reach.
+- **Nothing else changes without you asking.** A store with a built index reads exactly as it
+  did.
+
 ### Changed
 
 - **Opening a store with no index builds one.** `.docir/docs/` is committed and `index.db` is
@@ -2111,7 +2131,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/l0kifs/docir/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/l0kifs/docir/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/l0kifs/docir/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/l0kifs/docir/compare/v0.18.0...v0.19.0

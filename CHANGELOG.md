@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`no document with id '<id>'` no longer denies a document that is sitting on disk.** The
+  index is derived and gitignored, so a fresh clone and every new `git worktree` start without
+  one — and nothing on the read or write path builds it, the daemon's watcher included, since
+  it rebuilds what *changes* and an untouched checkout changes nothing. `get` and `update` then
+  answered a miss with a statement about the corpus that was false, which sends a human looking
+  for a deletion that never happened and an agent — which cannot glance at `docs/` and see the
+  file — to conclude the document is gone. The reporter's automated workflow gave up a document
+  amendment to it. The message now names which of the two happened, through the same
+  `index_is_empty` comparison `check` and `doctor` have reported as `empty-index` since 0.20.0;
+  neither of those runs on the path that hits this, so the diagnosis existed only in the store's
+  health report and never where somebody met the symptom. Same `DocumentNotFoundError`, same
+  exit code 4, same `no document with id '<id>'` prefix the batch read reports per reference —
+  only where the message sends you changes. Reindexing automatically instead was rejected: a
+  rebuild is safe, but doing it inside an arbitrary write makes a bounded command corpus-sized
+  at the moment somebody is waiting on it. (issue-e5a0cb196607, github issue #7)
+
 ## [0.21.0] - 2026-08-29
 
 A federated hit named the repository that answered it and nothing about what that repository

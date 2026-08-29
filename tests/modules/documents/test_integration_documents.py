@@ -204,6 +204,87 @@ class TestUpdate:
         assert view["verified"] == FIXED_DATE.isoformat()
 
 
+class TestMissingIdNamesAnEmptyIndex:
+    """A miss on an unbuilt index says so, instead of denying the document.
+
+    The index is derived and gitignored, so a fresh clone and every new `git
+    worktree` start without one and nothing on the read or write path builds it.
+    `no document with id 'adr-0001'` is then a false statement about the corpus,
+    and it sends the reader at the deletion that never happened: the reporter of
+    issue-e5a0cb196607 lost a document amendment because an automated workflow
+    read it as "the document is gone" (github issue #7).
+
+    `check` and `doctor` have named this condition since 0.20.0 and neither runs
+    on the path that hits it, which is why the message has to carry it.
+    """
+
+    @staticmethod
+    def _write_an_unindexed_document(settings: Settings) -> None:
+        """A committed document that no index knows about.
+
+        Written to disk rather than through the CLI, because the CLI indexes
+        what it writes. This is what a checkout is: the files present, the
+        projection of them never built.
+        """
+        directory = settings.docs_root / "decisions"
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "adr-0001-live.md").write_text(
+            "---\nid: adr-0001\ntitle: Live\ndescription: d\ntype: decision\n"
+            "status: proposed\ncreated: '2026-07-07'\nupdated: '2026-07-07'\n"
+            "tags: []\nrelated: []\n---\n\nbody\n",
+            encoding="utf-8",
+        )
+
+    def test_update_names_the_index_and_the_command_that_fixes_it(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        self._write_an_unindexed_document(settings)
+        with pytest.raises(DocumentNotFoundError) as raised:
+            dispatcher.dispatch("update", {"doc_id": "adr-0001", "append_section": ["Notes", "x"]})
+        message = str(raised.value)
+        assert "no document with id 'adr-0001'" in message, "the miss is still stated"
+        assert "the index holds nothing" in message, "and now so is the reason"
+        assert "docir reindex" in message, "an error names the move"
+
+    def test_get_names_it_too(self, dispatcher: Dispatcher, settings: Settings) -> None:
+        """The read path reaches the same helper through `_require`, so the
+        first command an agent runs after the failed write agrees with it."""
+        self._write_an_unindexed_document(settings)
+        with pytest.raises(DocumentNotFoundError, match="docir reindex"):
+            dispatcher.dispatch("get", {"doc_id": "adr-0001"})
+
+    def test_a_document_that_really_is_gone_still_reads_as_gone(
+        self, dispatcher: Dispatcher
+    ) -> None:
+        """The discrimination, which is the whole point: an index holding
+        documents answers a miss with the miss, and sends nobody to `reindex`
+        over a typo."""
+        dispatcher.dispatch("add", {"type": "decision", "title": "A", "description": "d"})
+        with pytest.raises(DocumentNotFoundError) as raised:
+            dispatcher.dispatch("get", {"doc_id": "adr-0404"})
+        message = str(raised.value)
+        assert message == "no document with id 'adr-0404'"
+
+    def test_an_empty_store_says_nothing_about_reindexing(self, dispatcher: Dispatcher) -> None:
+        """A freshly initialised store has no files either, so the counts agree
+        at zero — the same case `check` stays silent for."""
+        with pytest.raises(DocumentNotFoundError) as raised:
+            dispatcher.dispatch("get", {"doc_id": "adr-0001"})
+        assert "docir reindex" not in str(raised.value)
+
+    def test_the_write_lands_once_the_index_is_built(
+        self, dispatcher: Dispatcher, settings: Settings
+    ) -> None:
+        """The recovery the message names, run end to end — one `reindex` is the
+        whole difference between the amendment being refused and applied."""
+        self._write_an_unindexed_document(settings)
+        dispatcher.dispatch("reindex", {})
+        view = dispatcher.dispatch(
+            "update", {"doc_id": "adr-0001", "append_section": ["Notes", "x"]}
+        )
+        assert "## Notes" in view["body"]
+
+
 class TestDiskDivergenceScoping:
     """Only `--replace-body` is blocked when the file diverged (states issue-be95d3e242a3).
 

@@ -27,6 +27,7 @@ from docir.modules.documents.application.dto import (
     UpdateDocumentRequest,
 )
 from docir.modules.documents.application.services.id_generator import IdGenerator
+from docir.modules.documents.application.services.maintenance_service import index_is_empty
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.schema import SEQUENTIAL_ID_STYLE, Schema
 from docir.modules.documents.domain.services.code_globs import governs_any
@@ -285,7 +286,7 @@ class DocumentService:
         with self._uow_factory() as uow:
             indexed = uow.documents.get(request.doc_id)
             if indexed is None:
-                raise DocumentNotFoundError(f"no document with id {request.doc_id!r}")
+                raise self._not_found(uow, request.doc_id)
 
             base = self._read_current(indexed)
             disk_diverged = indexed.content_hash() != base.content_hash()
@@ -1312,10 +1313,37 @@ class DocumentService:
             return indexed
         return self._file_store.read(indexed.path)
 
+    def _not_found(self, uow: UnitOfWork, doc_id: str) -> DocumentNotFoundError:
+        """The miss, saying so when an empty index is why nothing answered.
+
+        A lookup misses for two reasons that read identically and are undone by
+        opposite actions: the document is gone from the corpus, or the index
+        answering for it holds nothing. The index is derived and gitignored, so
+        the second is an ordinary state — a fresh clone, a new `git worktree` —
+        and the bare message asserts the first. A reader then goes looking for a
+        deletion that never happened, and an automated writer gives up an
+        amendment to a document that is sitting on disk (issue-e5a0cb196607).
+
+        Same exception and the same exit code, because the caller's handling
+        should not change — only where the message sends them. `check` and
+        `doctor` report the condition through the same predicate; this is the
+        one place it reaches somebody who did not ask about the store's health.
+        The counts are read on the error path only, so a lookup that resolves
+        pays nothing for them.
+        """
+        on_disk = self._file_store.count()
+        if not index_is_empty(documents=uow.documents.count(), documents_on_disk=on_disk):
+            return DocumentNotFoundError(f"no document with id {doc_id!r}")
+        return DocumentNotFoundError(
+            f"no document with id {doc_id!r} — the index holds nothing while docs/ holds "
+            f"{on_disk} file(s), so no read can find it; run `docir reindex` first (the index "
+            "is derived and gitignored, so a fresh clone or a new git worktree has none)"
+        )
+
     def _require(self, uow: UnitOfWork, doc_id: str) -> Document:
         document = uow.documents.get(doc_id)
         if document is None:
-            raise DocumentNotFoundError(f"no document with id {doc_id!r}")
+            raise self._not_found(uow, doc_id)
         return document
 
     def _schedule_embedding(self, doc_id: str, *, wait: bool) -> None:

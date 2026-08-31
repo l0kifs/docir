@@ -1,4 +1,4 @@
-<!-- docir:v0.22.0 — generated file, do not edit by hand; refresh with `docir agent update` after upgrading docir -->
+<!-- docir:v0.23.0 — generated file, do not edit by hand; refresh with `docir agent update` after upgrading docir -->
 # When the answers look wrong
 
 Reads can quietly answer from the wrong state, and every such condition looks

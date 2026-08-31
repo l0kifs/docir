@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-08-31
+
+Reading a section and writing it back is the round trip the section read path exists to
+enable, and it corrupted the document. `docir get --section` returns the heading line;
+`--replace-section` writes its own and puts your text under it. So the obvious sequence
+spelled the heading twice — and from there nothing could take the second one out.
+
+### Upgrade notes
+
+- **`--replace-section` / `--append-section` now refuse text that opens with the heading
+  they are writing under.** If a script pipes `docir get --section X` straight into
+  `--replace-section X`, it will start failing with an error naming what to pass instead:
+  drop the heading line, the flag writes it. This is the round trip that was silently
+  producing duplicates, so a failure here means the script was corrupting documents.
+- **`docir update <id> --remove-section "<heading>"` is new**, and takes no `--body` —
+  passing one is refused rather than ignored.
+- **Nothing else changes.** Bodies that do not repeat a heading write exactly as before.
+
+### Added
+
+- **`docir update <id> --remove-section "<heading>"`** deletes a heading and everything
+  under it, on the CLI and as `docir_update(remove_section=)` over MCP. It is the repair
+  path a duplicated heading never had: `--replace-section` keeps the first heading line by
+  contract and `--append-section` adds a sibling, so the only exit was `--replace-body
+  --force` — the riskiest edit mode, the one with the divergence guard, the one the agent
+  guide ranks last.
+
+  It is a body edit mode like the others: at most one per call, resolved against the body as
+  it is on disk, so it composes with an out-of-band change and never needs the divergence
+  guard. It uses the same end boundary as `get --section` — a nested subsection goes with
+  its parent, a heading quoted in a fence is not one — and it carries no `#`-marker guard,
+  because a body that already spells `## ## Resolution` has to be nameable to be repairable.
+  A repeated heading resolves to the first, here as everywhere, so removing the second of
+  two is the same command run twice; `docir lint --deep` names the documents that have one.
+
+### Fixed
+
+- **A section read can no longer be written straight back as a duplicate heading.**
+  `get --section X` returns the heading line and the text under it; `--replace-section X`
+  keeps the document's own heading line and replaces only what is beneath it. The two agree
+  on where a section ends and differ by that one line, and nothing said so — the `get`
+  docstring called it "the same span `--replace-section` would overwrite".
+
+  An agent that read a section, edited it and wrote it back therefore produced two
+  `## X` lines, reported as success. The second attempt was worse: `--replace-section` wrote
+  into the now-empty first section and left the real content stranded under the phantom
+  heading, so the text the caller meant to replace survived untouched. `docir check` saw
+  nothing — a repeated heading is neither malformed frontmatter nor a graph problem — and
+  `lint --deep`'s `ambiguous-heading` is advisory and after the fact.
+
+  Both writing modes now refuse, at Tier 0, replacement text whose *first* line is a heading
+  repeating the one being written under, with an error naming the flag and what to pass
+  instead. Deliberately narrow: a section may open with a sub-heading of its own, prose may
+  name the heading further down, and a fence may quote it — all three stay legal and are
+  pinned as tests. Stripping the line instead was rejected for the reason
+  issue-d5f68b44b1d9 gave when it rejected the same shortcut: it guesses at an intent the
+  caller stated. (issue-9d4db5cd5f29)
+
+- **`--remove-section` with a `--body` is refused, not ignored.** `--remove-section X --body
+  "..."` reads as "delete this text from X" and would delete the whole section while
+  consuming nothing. The check sits in the `Dispatcher`, beside the one `get` makes, because
+  both transports fold `body` into a mode and neither can be where a wire rule is decided —
+  one check covers the CLI and MCP. It fires only when no writing mode would consume the
+  text, so naming two modes still answers "only one body edit mode" rather than blaming the
+  argument doing its job.
+
 ## [0.22.0] - 2026-08-30
 
 A store arrived on a machine with its documents and no index, and every read answered
@@ -2131,7 +2197,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/l0kifs/docir/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/l0kifs/docir/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/l0kifs/docir/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/l0kifs/docir/compare/v0.19.0...v0.20.0

@@ -432,6 +432,7 @@ def build_mcp_server(
         verified: bool = False,
         append_section: str | None = None,
         replace_section: str | None = None,
+        remove_section: str | None = None,
         replace_body: str | None = None,
         body: str | None = None,
         force: bool = False,
@@ -467,8 +468,16 @@ def build_mcp_server(
                 trust signal docir offers.
             append_section: Heading to append `body` under.
             replace_section: Heading whose section `body` replaces.
+            remove_section: Heading to delete, with the text under it. Passing
+                `body` alongside it is refused, not ignored. The way out of a
+                body that spells one heading twice —
+                `replace_section` keeps the first heading line by contract, so it
+                cannot undo one, and a repeated heading resolves to the first.
             replace_body: New markdown replacing the whole body.
-            body: The text for `append_section` / `replace_section`.
+            body: The text for `append_section` / `replace_section`. Both write
+                the heading line themselves, so this is only what goes *under*
+                the heading: text opening with that same heading — what
+                `docir_get(section=)` returns — is refused.
             force: Required by `replace_body`, and only by it. Confirms you
                 mean to discard the whole existing body.
             override: Force an illegal status transition. Last resort.
@@ -485,6 +494,8 @@ def build_mcp_server(
             "set_owner": set_owner,
             "set_code": set_code,
             "mark_verified": verified,
+            "remove_section": remove_section,
+            "body": body,
             "replace_body": replace_body,
             "force": force,
             "allow_transition_override": override,

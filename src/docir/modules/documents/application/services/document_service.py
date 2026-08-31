@@ -40,6 +40,7 @@ from docir.modules.documents.domain.services.expressions import (
 from docir.modules.documents.domain.services.markdown_sections import (
     append_section,
     extract_section,
+    remove_section,
     replace_section,
 )
 from docir.modules.documents.domain.services.retrieval_scoring import mean, score_task
@@ -1280,6 +1281,7 @@ class DocumentService:
         modes = [
             request.append_section,
             request.replace_section,
+            request.remove_section,
             request.replace_body,
         ]
         if sum(mode is not None for mode in modes) > 1:
@@ -1292,6 +1294,12 @@ class DocumentService:
         if request.replace_section is not None:
             heading, body = request.replace_section
             changes["body"] = replace_section(base.body, heading, body)
+            return True
+        if request.remove_section is not None:
+            # A deletion composes with an out-of-band change like the other
+            # section modes: it is resolved against the body as it is on disk,
+            # so it never needs `disk_diverged`.
+            changes["body"] = remove_section(base.body, request.remove_section)
             return True
         if request.replace_body is not None:
             if not request.force:

@@ -11,7 +11,7 @@ tags:
 - architecture
 title: Doc-Index CLI — the write path
 type: architecture
-updated: '2026-08-15'
+updated: '2026-08-31'
 ---
 
 ## Write path
@@ -64,15 +64,26 @@ Two distinct operations, kept separate rather than merged into one:
   `docir update issue-12 --status resolved` — patches only specific
   frontmatter fields, body untouched. `--set-title "..."` /
   `--set-description "..."` update those fields the same way.
-- **Body update** (higher-risk) — three supported modes:
+- **Body update** (higher-risk) — four supported modes, at most one per call:
   - `--append-section "Resolution" --body "Fixed in PR #42"` — appends a
     new heading/section at the end without touching existing content.
     **Default, safest path** — fits patterns like "issue closed → note how".
   - `--replace-section "<heading>" --body "..."` — replaces content under
     a specific existing heading.
+  - `--remove-section "<heading>"` — deletes a heading and the text under
+    it. Takes no `--body`. The repair verb: `--replace-section` keeps the
+    heading line by contract and `--append-section` adds a sibling, so
+    without this a body carrying one heading twice could only be fixed by
+    `--replace-body --force` (issue-9d4db5cd5f29).
   - `--replace-body --force` — full body replacement. Requires an explicit
     force flag because it can silently overwrite content the agent never
     read in full; agents should `docir get` first.
+
+The two writing modes supply the heading line themselves, so `--body` carries
+only what goes *under* it. Text that opens with that same heading — the shape
+`docir get --section` returns — is refused at Tier 0 rather than written twice.
+The read and the write agree on where a section ends and differ by that one
+line, which is the whole of issue-9d4db5cd5f29.
 
 When a body edit changes what the document is fundamentally about, the
 agent is expected to update `description` in the same call (e.g.

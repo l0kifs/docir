@@ -106,6 +106,33 @@ class Dispatcher:
         return asdict(self._documents.add(request))
 
     def _update(self, payload: Payload) -> object:
+        """Edit a document, refusing the one flag combination that reads backwards.
+
+        ``--remove-section X --body "..."`` reads like "delete this text from X"
+        and would delete the whole section instead, ignoring the text. Every
+        other mode consumes what the caller passed, so silence here is the odd
+        one out (issue-9d4db5cd5f29). The check lives at the dispatcher, beside
+        the one ``_get`` makes, because the transports both fold ``body`` into a
+        mode and neither can be the place a wire rule is decided.
+
+        Only when nothing else would consume the text: naming a writing mode too
+        is a different mistake with its own error ("only one body edit mode"),
+        and answering it with this one would blame the wrong argument.
+        """
+        remove_section = _opt_str(payload, "remove_section")
+        writes_text = any(
+            payload.get(mode) is not None
+            for mode in ("append_section", "replace_section", "replace_body")
+        )
+        if (
+            remove_section is not None
+            and not writes_text
+            and (_opt_str(payload, "body") or "").strip()
+        ):
+            raise ValidationError(
+                "--remove-section takes no body text: it deletes the heading and everything "
+                "under it. Use --replace-section to rewrite a section instead"
+            )
         request = UpdateDocumentRequest(
             doc_id=_str(payload, "doc_id"),
             status=_opt_str(payload, "status"),
@@ -119,6 +146,7 @@ class Dispatcher:
             mark_verified=_bool(payload, "mark_verified"),
             append_section=_opt_pair(payload, "append_section"),
             replace_section=_opt_pair(payload, "replace_section"),
+            remove_section=remove_section,
             replace_body=_opt_str(payload, "replace_body"),
             force=_bool(payload, "force"),
             allow_transition_override=_bool(payload, "allow_transition_override"),

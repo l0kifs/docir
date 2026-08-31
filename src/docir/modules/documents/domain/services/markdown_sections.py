@@ -9,6 +9,13 @@ notion of where a section ends, which is what keeps ``get --section X`` and
 That span is located with :func:`~.markdown_headings.scan_headings`, the same
 scanner :mod:`chunking` splits on — so a heading quoted inside a fenced block is
 not a section here either (issue-af046a467575).
+
+The one place read and write do *not* mirror is the heading line itself:
+:func:`extract_section` returns it, and the write modes supply it themselves.
+Reading a section and writing it straight back therefore used to spell the
+heading twice, which is why :func:`_reject_repeated_heading` guards both writes
+and why :func:`remove_section` exists to undo the ones already written
+(issue-9d4db5cd5f29).
 """
 
 from __future__ import annotations
@@ -40,12 +47,43 @@ def _reject_own_markers(heading: str) -> None:
         )
 
 
+def _reject_repeated_heading(heading: str, content: str, *, flag: str, keeps: str) -> None:
+    """Refuse replacement text that opens with the heading it is written under.
+
+    The heading line is the one place the read and the write do not mirror:
+    ``get --section X`` returns it, both write modes supply it. So the obvious
+    round trip — read a section, edit it, write it back — spelled the heading
+    twice, and the result was unaddressable: ``replace_section`` matches the
+    first occurrence and keeps its line, ``append_section`` adds a sibling, so
+    before ``remove_section`` the only way out was ``--replace-body --force``
+    (issue-9d4db5cd5f29).
+
+    Deliberately narrow: only a heading on the *first* line, and only when it
+    repeats the heading being written. Text that mentions the heading further
+    down, or quotes it inside a fence, is ordinary prose — :func:`scan_headings`
+    already knows the difference. Stripping the line instead would be the
+    friendlier-looking choice and is the one issue-d5f68b44b1d9 rejected: it
+    guesses at an intent the caller stated.
+    """
+    found = scan_headings(content.strip())
+    if not found or found[0].line != 0:
+        return
+    if found[0].text.lower() != heading.strip().lower():
+        return
+    raise ValidationError(
+        f"the text passed to {flag} opens with the heading {heading!r}, but {flag} "
+        f"{keeps}: pass only the text that goes under the heading. Writing it again "
+        f"would leave {heading!r} in the document twice"
+    )
+
+
 def append_section(body: str, heading: str, content: str, *, level: int = 2) -> str:
     """Append a new ``level``-deep heading and content at the end of the body.
 
     The default, safest body edit: existing content is never touched.
     """
     _reject_own_markers(heading)
+    _reject_repeated_heading(heading, content, flag="--append-section", keeps="writes it for you")
     prefix = "#" * level
     section = f"{prefix} {heading}\n\n{content.strip()}\n"
     base = body.rstrip()
@@ -98,6 +136,9 @@ def replace_section(body: str, heading: str, content: str) -> str:
     if no such heading exists.
     """
     lines, start_idx, start_level = _locate_section(body, heading)
+    _reject_repeated_heading(
+        heading, content, flag="--replace-section", keeps="keeps the document's own heading line"
+    )
     end_idx = _section_end(body, lines, start_idx, start_level)
 
     new_lines = [
@@ -108,6 +149,33 @@ def replace_section(body: str, heading: str, content: str) -> str:
         *lines[end_idx:],
     ]
     return "\n".join(new_lines).rstrip() + "\n"
+
+
+def remove_section(body: str, heading: str) -> str:
+    """Delete one section — its heading line and everything under it.
+
+    The repair verb, and the reason a duplicated heading is no longer a one-way
+    door. ``replace_section`` keeps the heading line by contract and
+    ``append_section`` adds a sibling, so every other route to a body carrying
+    one heading twice ran through ``--replace-body --force``: the safest edits
+    reached a state only the riskiest one could leave (issue-9d4db5cd5f29).
+
+    Matches the way every other operation here matches — the first heading whose
+    text equals ``heading``, case-insensitively — so on a duplicated heading this
+    removes the *first* of them, and removing the second means running it again.
+    Addressing the later one instead would delete a span ``get --section`` never
+    showed, which is the divergence this module exists to prevent
+    (issue-71555a89a73d records why first-match is the rule).
+
+    The ``#``-marker guard on :func:`append_section` deliberately does not apply,
+    for :func:`extract_section`'s reason turned around: a body that already
+    carries ``## ## Resolution`` has to be *nameable* to be repairable, and
+    naming it is the only way to remove it.
+    """
+    lines, start_idx, start_level = _locate_section(body, heading)
+    end_idx = _section_end(body, lines, start_idx, start_level)
+    remaining = "\n".join([*lines[:start_idx], *lines[end_idx:]]).rstrip()
+    return f"{remaining}\n" if remaining else ""
 
 
 def section_headings(body: str) -> list[str]:

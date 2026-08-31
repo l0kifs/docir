@@ -188,6 +188,12 @@ separate calls cost roughly five times one. With two or more ids the reply becom
 `{"documents": [...], "missing": [...]}`; an id that no longer exists is reported in `missing`
 rather than failing the read.
 
+**Editing a body.** Bodies are edited one section at a time — `--append-section`,
+`--replace-section` and `--remove-section` all take a heading — with `--replace-body --force`
+reserved for a wholesale rewrite. The two writing modes emit the `##` line themselves, so
+`--body` is the prose beneath it and nothing more; handing one a section exactly as
+`docir get --section` printed it errors rather than doubling its heading.
+
 **Publishing.** `docir build --out site/` renders the store as a self-contained static site.
 `--title` names it (without it every page reads "Documentation"), `--logo` sets the mark and
 favicon, `--mermaid mermaid.min.js` draws fenced diagrams (the classic-script bundle, which sets

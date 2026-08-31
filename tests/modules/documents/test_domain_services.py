@@ -16,6 +16,7 @@ from docir.modules.documents.domain.services.graph_checks import GraphChecker
 from docir.modules.documents.domain.services.markdown_sections import (
     append_section,
     extract_section,
+    remove_section,
     replace_section,
 )
 from docir.modules.documents.domain.services.similarity_lint import SimilarityLinter
@@ -855,3 +856,110 @@ class TestSectionHeadingsAreNamedByTextAlone:
         # the guard must not lock someone out of the file they need to repair.
         body = "## ## Resolution\n\nhello\n"
         assert extract_section(body, "## Resolution").startswith("## ## Resolution")
+
+
+class TestReplacementTextMayNotRepeatTheHeading:
+    """`get --section X` returns the heading; the write modes supply it.
+
+    So reading a section, editing it and writing it straight back spelled the
+    heading twice, and the result was unaddressable — `replace_section` matches
+    the first occurrence and keeps its line, `append_section` adds a sibling
+    (issue-9d4db5cd5f29).
+    """
+
+    def test_writing_back_what_get_section_returned_is_refused(self) -> None:
+        body = "## Notes\n\noriginal\n\n## Other\n\ntail\n"
+        read_back = extract_section(body, "Notes")
+        with pytest.raises(ValidationError) as raised:
+            replace_section(body, "Notes", read_back)
+        assert "'Notes'" in str(raised.value)
+
+    def test_the_same_mistake_on_append_is_refused(self) -> None:
+        with pytest.raises(ValidationError):
+            append_section("", "Resolution", "## Resolution\n\nFixed it")
+
+    def test_the_error_names_the_flag_and_what_to_pass_instead(self) -> None:
+        with pytest.raises(ValidationError) as raised:
+            replace_section("## A\n\nold\n", "A", "## A\n\nnew")
+        message = str(raised.value)
+        assert "--replace-section" in message
+        assert "under the heading" in message
+
+    def test_the_heading_case_does_not_smuggle_it_past(self) -> None:
+        with pytest.raises(ValidationError):
+            replace_section("## Notes\n\nold\n", "notes", "## NOTES\n\nnew")
+
+    def test_a_different_heading_first_is_ordinary_content(self) -> None:
+        # A section may legitimately open with a sub-heading of its own.
+        result = replace_section("## A\n\nold\n", "A", "### Detail\n\nnew")
+        assert "### Detail" in result
+        assert result.count("## A") == 1
+
+    def test_the_heading_further_down_is_ordinary_content(self) -> None:
+        # Only the *first* line is the round-trip mistake; prose that names the
+        # heading later is prose.
+        result = replace_section("## A\n\nold\n", "A", "new\n\n## A is discussed above")
+        assert "old" not in result
+
+    def test_the_heading_quoted_in_a_fence_is_not_one(self) -> None:
+        result = replace_section("## A\n\nold\n", "A", "```md\n## A\n```")
+        assert "```md" in result
+
+    def test_a_missing_heading_still_reports_the_miss(self) -> None:
+        # Locating comes first: a caller naming a section that does not exist
+        # needs the list of real ones, not a lecture about the first line.
+        with pytest.raises(ValidationError) as raised:
+            replace_section("## A\n\ntext\n", "Z", "## Z\n\nnew")
+        assert "available: 'A'" in str(raised.value)
+
+
+class TestRemoveSection:
+    """The way out of a body that already spells one heading twice.
+
+    `replace_section` keeps the heading line by contract and `append_section`
+    adds a sibling, so before this the only exit was `--replace-body --force`:
+    the safest edits reached a state only the riskiest one could leave
+    (issue-9d4db5cd5f29).
+    """
+
+    def test_a_duplicated_heading_can_be_removed(self) -> None:
+        body = "## Notes\n\n## Notes\n\nkept\n\n## Other\n\ntail\n"
+        result = remove_section(body, "Notes")
+        assert result == "## Notes\n\nkept\n\n## Other\n\ntail\n"
+
+    def test_removal_takes_the_heading_and_its_text(self) -> None:
+        result = remove_section("## A\n\na\n\n## B\n\nb\n", "A")
+        assert result == "## B\n\nb\n"
+
+    def test_a_middle_section_leaves_its_neighbours_joined(self) -> None:
+        body = "## A\n\na\n\n## B\n\nb\n\n## C\n\nc\n"
+        assert remove_section(body, "B") == "## A\n\na\n\n## C\n\nc\n"
+
+    def test_a_subsection_goes_with_its_parent(self) -> None:
+        # The same end boundary every other section operation uses.
+        body = "## A\n\na\n\n### A1\n\nnested\n\n## B\n\nb\n"
+        assert remove_section(body, "A") == "## B\n\nb\n"
+
+    def test_a_deeper_heading_removes_only_itself(self) -> None:
+        body = "## A\n\na\n\n### A1\n\nnested\n\n## B\n\nb\n"
+        assert remove_section(body, "A1") == "## A\n\na\n\n## B\n\nb\n"
+
+    def test_text_before_the_first_heading_survives(self) -> None:
+        assert remove_section("intro\n\n## A\n\na\n", "A") == "intro\n"
+
+    def test_removing_the_only_section_empties_the_body(self) -> None:
+        assert remove_section("## A\n\na\n", "A") == ""
+
+    def test_a_missing_heading_names_the_real_ones(self) -> None:
+        with pytest.raises(ValidationError) as raised:
+            remove_section("## A\n\ntext\n", "Z")
+        assert "available: 'A'" in str(raised.value)
+
+    def test_a_hand_written_doubled_marker_is_removable(self) -> None:
+        # extract_section's reason turned around: a body carrying '## ## X' has
+        # to be nameable to be repairable, so no '#'-marker guard here.
+        assert remove_section("## ## Resolution\n\nhello\n", "## Resolution") == ""
+
+    def test_a_heading_inside_a_fence_is_not_a_boundary(self) -> None:
+        body = "## A\n\n```md\n## B\n```\n\n## C\n\nc\n"
+        assert remove_section(body, "A") == "## C\n\nc\n"

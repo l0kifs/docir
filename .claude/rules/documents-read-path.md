@@ -30,6 +30,17 @@ Read paths exist to save the caller's context, which is why they return less tha
   reported as success. Do not give any of the three its own heading regex; the two agreeing is the
   invariant, and `test_markdown_headings.py` asserts set **equality** against the shared scanner
   because an earlier subset assertion passed with the divergence reintroduced.
+  **Read and write agree on the span and differ by one line inside it**: the read returns the
+  heading, `--replace-section` and `--append-section` write their own. Handing the read's
+  output straight to the write therefore spelled the heading twice, and nothing could take the
+  second one out — `replace_section` matches the first occurrence and keeps its line,
+  `append_section` adds a sibling, so the exit was `--replace-body --force`
+  (issue-9d4db5cd5f29). Text *opening* with the heading it is written under is now refused at
+  Tier 0, narrowly: a sub-heading first, the heading named further down and the heading quoted
+  in a fence are all ordinary content, and all three are pinned. `--remove-section` deletes a
+  heading and its span — first-match like everything else here, no `#`-marker guard (a body
+  already spelling `## ## X` has to be nameable to be repairable), and it is the only body edit
+  that takes a heading and no text.
 
 - **A document's `code` globs are validated for shape on write and for reality only in Tier 1.**
   Optional `code:` frontmatter names the code a document governs (issue-90aea6d1b891). Tier 0

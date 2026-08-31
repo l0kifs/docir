@@ -141,6 +141,7 @@ docir update <id> --type architecture --status draft   # retype; the id never ch
 docir update <id> --verified                     # stamp today as last-verified
 docir update <id> --append-section "Resolution" --body "Fixed in PR 42"
 docir update <id> --replace-section "Context" --body "..."
+docir update <id> --remove-section "Notes"       # delete a heading and its text
 docir update <id> --replace-body --force --body "..."   # full overwrite
 docir archive <id> | docir unarchive <id>
 docir delete <id> [--force]   # --force also unlinks it from referencing docs
@@ -190,6 +191,17 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
   if the file changed on disk — `docir get` first).
 - Name a section by its **text alone** — `"Resolution"`, not `"## Resolution"`.
   The `##` is written for you, and every section flag matches on the text.
+- **`--body` is what goes *under* the heading, never the heading itself.**
+  `docir get <id> --section "Notes"` returns the heading line too, so editing
+  that and passing it straight back would write `## Notes` twice; docir refuses
+  it and says so. Strip the first line, or pass only the replacement prose.
+- **`--remove-section "<heading>"` deletes a heading and the text under it**, and
+  takes no `--body` — passing one errors, because it would read as "delete this
+  text" and do something else. Reach for it when a document carries a heading twice
+  — `--replace-section` keeps the first heading line by contract and cannot undo
+  one, `--append-section` only adds another. A repeated heading resolves to the
+  first, so removing the second of two is the same command run twice.
+  `docir lint --deep` reports which documents have one (`ambiguous-heading`).
 - When a body edit changes what the doc is about, update `--set-description`
   in the same call; it drives search quality.
 

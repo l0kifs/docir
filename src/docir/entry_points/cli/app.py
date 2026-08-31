@@ -516,6 +516,10 @@ def update(
             "--replace-section", help="Overwrite this heading's section with the body text."
         ),
     ] = None,
+    remove_section: Annotated[
+        str | None,
+        typer.Option("--remove-section", help="Delete this heading and the text under it."),
+    ] = None,
     replace_body: Annotated[
         bool, typer.Option("--replace-body", help="Overwrite the whole body. Requires --force.")
     ] = False,
@@ -558,6 +562,23 @@ def update(
 
     Retyping works even when the current type is one the schema no longer
     declares, which is how a corpus leaves a type that `disable_types:` removed.
+
+    A body edit takes at most one mode. --append-section and --replace-section
+    both write the heading line themselves, so --body carries only the text that
+    goes *under* it: pasting back what `get --section` returned — which does
+    include the heading — is refused rather than writing the heading twice.
+
+    --remove-section deletes a heading and everything under it, and takes no
+    --body — passing one is refused, since "delete this text" is not what it
+    does. It is the way out of a body that already spells one heading twice,
+    which --replace-section cannot undo (it keeps the first heading line by
+    contract) and --append-section only adds to:
+
+        docir update adr-3f9a2b1c7d4e --remove-section "Notes"
+
+    A repeated heading resolves to the first, here as everywhere, so removing the
+    second of two means running it twice. `docir lint --deep` names the documents
+    that have one.
     """
     body_text = resolve_body(body, body_file, stdin, default="")
     payload: dict[str, object] = {
@@ -573,6 +594,11 @@ def update(
         "mark_verified": verified,
         "append_section": [append_section, body_text] if append_section else None,
         "replace_section": [replace_section, body_text] if replace_section else None,
+        "remove_section": remove_section,
+        # Carried whole as well as folded into a mode above: --remove-section
+        # consumes no text, and the dispatcher refuses it rather than dropping
+        # it silently.
+        "body": body_text,
         "replace_body": body_text if replace_body else None,
         "force": force,
         "allow_transition_override": override,
@@ -648,7 +674,10 @@ def get(
     documents are worth them.
 
     --section takes a heading and returns that heading plus the text under it —
-    the same span --replace-section would overwrite. It is the paired read for
+    the same span --replace-section addresses, with one difference that matters
+    when writing it back: --replace-section keeps the document's heading line and
+    replaces only what is under it, so the heading returned here is not part of
+    the text you hand it. It is the paired read for
     `context`: a long document can rank on one of its sections, and this reads
     that section without paying for a body that is often ten times its size. An
     unknown heading is an error listing the ones that exist.

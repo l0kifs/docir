@@ -287,6 +287,10 @@ class UpdateDocumentRequest:
     mark_verified: bool = False
     append_section: tuple[str, str] | None = None
     replace_section: tuple[str, str] | None = None
+    #: Delete a section outright — the one body edit that takes a heading and no
+    #: text. It is how a body carrying a heading twice is repaired without
+    #: ``replace_body`` (issue-9d4db5cd5f29).
+    remove_section: str | None = None
     replace_body: str | None = None
     force: bool = False
     allow_transition_override: bool = False

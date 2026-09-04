@@ -15,10 +15,18 @@ There are two graphs over the same documents. One is authored and gates merges; 
   hand-written and policed by `dangling`/`cycle`/`layering` and the delete guard. **Mentions**
   are derived: `Document.mentioned_ids(prefixes)` scans the body for ids and
   `uow.mentions.replace` stores them (table `mentions`, migration `0008`), rebuilt by
-  `reindex`, never written to frontmatter. **Exactly one check reads them — `orphan`** — which
-  is the whole point: it fired for every document whose author linked it by writing its id in
-  a sentence, and that false positive is half of why `--strict` had to stop failing on
-  warnings. Do not feed them to any other check: a cycle nobody wrote is noise, a `dangling`
+  `reindex`, never written to frontmatter. **No Tier 1 check reads them.** `orphan` did, and
+  adr-e98749aa457d took it away: an orphan triage is a list of orphan ids, so writing the
+  diagnosis cleared every id it diagnosed — including the four of ten this corpus's author had
+  just concluded were still unwired, and the triage document itself. "This id is fine standing
+  alone" and "this id still needs an edge" are the same characters, so no filter over prose can
+  separate them; the judgement had to become `isolated:` (below). The false positive that put
+  mentions in the check — `orphan` on a document its author linked in a sentence — is real and
+  is now answered by that field; removing prose from the check restored **zero** orphans on
+  this store's 194 live documents, because every one of them carries an authored edge.
+  `MentionRepository.all_resolved` went with the reader; the mention graph's remaining readers
+  are `context` expansion, `get`'s `mentions`/`mentioned_by`, and Tier 2 `unresolved-mention`.
+  Do not feed them to any check: a cycle nobody wrote is noise, a `dangling`
   *error* on a forward reference gates a merge, and a delete refused because a paragraph
   quotes an id is a corpus nobody can maintain. Load-bearing details: the grammar lives in
   `platform.naming` beside the tag-key rule (adr-289e788719a7) because `DocId` mints what the
@@ -40,6 +48,16 @@ There are two graphs over the same documents. One is authored and gates merges; 
   linking to it is a correct thing for a document to do. It *is* reported by `lint --deep` as
   `unresolved-mention`, one finding per document — Tier 2 is where opt-in, never-gating noise
   belongs, and "is this a typo?" is a real if low-yield question.
+  **`isolated:` is the exemption, and it is a reason rather than a flag.** Free text, empty
+  meaning not exempt, following `owner:`; a document carrying one is skipped by `orphan` and by
+  nothing else. `true` would record that somebody silenced the warning without recording what
+  they concluded, which leaves the next reviewer re-deciding from scratch — the state the
+  triage was written to end. Writing one is an ordinary edit and stamps `updated`, as
+  `--set-owner` and `--verified` do — the mechanical-rewrite rule covers the writes nobody
+  asked for, not this. `check --fix` must neither grant nor withdraw one, though: deciding a
+  document is meant to stand alone is exactly the guess `--fix` refuses to make. It lives in frontmatter, not the index, so a teammate
+  reviews it in a diff; an older docir reads a file carrying it and ignores it, but a *write*
+  through that build drops the key.
   **`context` expansion follows them, last and both ways, and that was measured before it
   shipped.** `benchmarks/run.py` could not decide it — that corpus allocates ids at load time,
   so its bodies cannot name one and the mention graph is empty there, the same wrong-instrument

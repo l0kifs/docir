@@ -114,7 +114,12 @@ opts out, at a measured cost to recall:
   worklist: `docir query --owner platform-team --stale` is one steward's review queue,
   cleared a document at a time with `docir update <id> --verified`.
 - **Relations are typed.** A `related` edge carries a *kind* (`supersedes`, `depends_on`,
-  `implements`, …) — a real graph, not a bag of links.
+  `implements`, …) — a real graph, not a bag of links. `docir check` warns about a document
+  with no edge at all (`orphan`), and only an edge closes it — naming an id in a paragraph
+  does not, or the triage of the orphan list would empty the list. A document that is meant
+  to stand alone says so instead:
+  `docir update <id> --set-isolated "scope deferred; nothing depends on it yet"`, audited
+  later with `docir query --expr "isolated"`.
 - **A document can name the code it governs.** Optional `code` globs
   (`docir add --code "src/auth/**"`) record which files a decision is about, and
   `docir query --code src/auth/login.py` asks it in reverse: which decisions govern the
@@ -143,6 +148,7 @@ outside change — so hand-editing is supported, but not on every field:
 | `code` | ❌ | `docir update <id> --set-code "src/auth/**"` |
 | `id` | ❌ never | it is the primary key; changing it orphans every inbound link |
 | `verified` | ❌ never | `docir update <id> --verified` — it asserts somebody re-read the doc |
+| `isolated` | ❌ never | `docir update <id> --set-isolated "<why>"` — it exempts the doc from `orphan` |
 
 **Then run `docir reindex && docir check`** — or let the daemon do the reindex for you.
 It watches `.docir/docs/` and rebuilds what changed within a second of the edit, which

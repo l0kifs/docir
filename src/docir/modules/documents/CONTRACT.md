@@ -60,7 +60,8 @@ files and the derived index never disagree.
   **before** the limit like `stale_only` and `code_paths` (adr-7316abc6be93). The projection
   it evaluates against is **public surface**, because a user's expression is written against
   it and cannot be broken silently:
-  `id type status title description tags owner verified created updated archived stale code`,
+  `id type status title description tags owner verified created updated archived stale code
+  isolated`,
   plus `related` (outgoing) and `related_by` (incoming), each entry `{to, kind, type, status}`
   with the *other* document's type and status resolved — `null` for both when the corpus no
   longer carries it. Adding a key is additive; renaming or removing one is not.
@@ -118,9 +119,11 @@ files and the derived index never disagree.
   the registry is empty, as it is for any schema predating typed edges), and `schema-drift` —
   how the active schema differs from the one the index was last rebuilt against, one finding per
   change.
-  `orphan` reads the derived mention graph as well as `related`, so a document linked only by
-  someone writing its id in a paragraph is not reported. It is the **only** check that does:
-  `dangling`, `cycle`, `layering` and the delete guard read the authored graph alone.
+  `orphan` reads the authored `related` graph **only**, in both directions — as do `dangling`,
+  `cycle`, `layering` and the delete guard. No check reads the derived mention graph
+  (adr-e98749aa457d): an id named in prose used to clear `orphan`, which made a triage of the
+  orphan list close every id on it. A document whose `isolated` reason is non-empty is exempt
+  and not reported.
   All warnings: the document stays readable and its edges resolve. Also `unmatched-code` — a
   governed glob that matches nothing — when the service was given a `CodeMatcher`; without one
   (no repository above the store) the finding is skipped rather than reported against a tree
@@ -222,6 +225,13 @@ narrowed to one.) A `related` entry is a typed edge
 `UpdateDocumentRequest` also carries `set_owner` and `mark_verified` (stamp the
 review clock). `MaintenanceService` requires a `Clock` (staleness needs "today").
 
+`isolated` is the reviewed exemption from `orphan`: free text saying why a document is *meant*
+to carry no relations, empty meaning not exempt (adr-e98749aa457d). Carried by both read
+shapes and by the projection, set by `AddDocumentRequest.isolated` and replaced by
+`UpdateDocumentRequest.set_isolated` (`None` leaves it, `""` withdraws the exemption). It is
+not an *embedding-relevant* change — no vector reads it — but it is an ordinary edit and stamps
+`updated`, as `set_owner` and `mark_verified` do.
+
 `code` is the repo-relative globs a document declares it governs
 (issue-90aea6d1b891). It is carried by both read shapes, set by
 `AddDocumentRequest.code` and replaced wholesale by
@@ -253,7 +263,9 @@ save (`Document.mentioned_ids(schema.prefixes())`), `reindex` rebuilds it from t
 `UnitOfWork.mentions` reads it. A mention whose target is not indexed is stored and not
 returned: a body routinely names a document that does not exist yet, so resolution is a
 read-time join rather than a foreign key. Self-mentions are excluded. `tags` writes documents
-without recomputing, because a tag rename never touches a body.
+without recomputing, because a tag rename never touches a body. No Tier 1 check reads it: its
+readers are `context` expansion, the `mentions`/`mentioned_by` lists on `get`, and the Tier 2
+`unresolved-mention` advisory (adr-e98749aa457d).
 
 ## Events published
 - none (no event bus; see adr-d3e3616400bf)
@@ -262,7 +274,8 @@ without recomputing, because a tag rename never touches a body.
 - none
 
 ## Owns
-- data: document metadata (including `owner`/`verified` stewardship fields and the
+- data: document metadata (including `owner`/`verified` stewardship fields, the `isolated`
+  exemption reason, and the
   `code` globs a document governs), the
   typed relation graph (each edge carries a `kind`), and the canonical markdown
   files. Physically these live in the shared index/filesystem owned by `platform`

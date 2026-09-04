@@ -21,6 +21,11 @@ index, the daemon, the model, the installation — see
   all four mean a file was edited outside the CLI), **`missing-required`**, **`schema-drift`**
   and **`stale-index-build`**. Run before finishing; the ones worth a recovery are spelled out
   below.
+- **Recovering from `orphan`** — two exits, and `SKILL.md` says which to reach for:
+  `docir update <id> --set-related <other>:refines`, or
+  `docir update <id> --set-isolated "no acceptance criterion references this flow"`. Audit the
+  exemptions with `docir query --expr "isolated"`; `--set-isolated ""` puts a document back in
+  the queue. Nothing mechanical closes this finding.
 - **`unblocked`** — a live document whose every `depends_on` target has closed. The one
   finding that is good news: it means the work is ready to start. Act on it by starting the
   work or by dropping an edge that is no longer true; nothing clears it mechanically.

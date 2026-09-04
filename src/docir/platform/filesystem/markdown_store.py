@@ -194,6 +194,11 @@ class MarkdownDocumentFileStore(DocumentFileStore):
         # this" a fact only the machine that stamped it could know.
         if document.verified_code:
             metadata["verified_code"] = dict(sorted(document.verified_code.items()))
+        # Same rule again, and here it is what makes the exemption reviewable:
+        # `isolated:` is a judgement about the corpus, so it belongs in the file
+        # a teammate reads in a diff, not in the gitignored index.
+        if document.isolated:
+            metadata["isolated"] = document.isolated
         post = frontmatter.Post(content=document.body)
         post.metadata.update(metadata)
         return frontmatter.dumps(post) + "\n"
@@ -218,6 +223,7 @@ class MarkdownDocumentFileStore(DocumentFileStore):
                 verified=None if verified_raw is None else _as_date(verified_raw),
                 code=_as_str_tuple(metadata.get("code")),
                 verified_code=_as_str_map(metadata.get("verified_code")),
+                isolated=str(metadata.get("isolated", "")),
             )
         except (KeyError, ValueError) as exc:
             # KeyError: a required field is absent. ValueError: a field is present

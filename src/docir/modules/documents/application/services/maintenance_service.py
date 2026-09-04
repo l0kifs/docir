@@ -328,7 +328,6 @@ class MaintenanceService:
             documents = uow.documents.all()
             relations = uow.documents.relations()
             known_tags = frozenset(tag.key for tag in uow.tags.all())
-            mentions = uow.mentions.all_resolved()
         issues = self._graph_checker.check(
             documents,
             relations,
@@ -336,7 +335,6 @@ class MaintenanceService:
             known_tags=known_tags,
             code_matches=self._resolve_code(documents),
             code_digests=self._resolve_code_digests(documents),
-            mentions=mentions,
         )
         issues.extend(self._unbuilt_index_issue())
         issues.extend(self._find_duplicate_ids())

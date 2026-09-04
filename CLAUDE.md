@@ -183,8 +183,9 @@ enough to stop a wrong edit and never enough to argue with.
 ### Relations and mentions — [`.claude/rules/relations-and-mentions.md`](.claude/rules/relations-and-mentions.md)
 
 - Two graphs: `related:` is authored and gates merges; **mentions** are derived from prose and
-  feed **exactly one** check, `orphan`. Do not feed them to another, and do not make an
-  unresolved one a finding.
+  feed **no** check. `orphan` was the one that read them and no longer does — prose that names
+  an orphan is usually the triage of it — so the exemption is the `isolated:` reason instead.
+  Do not feed mentions to a check, and do not make an unresolved one a finding.
 - `context` has one visibility predicate, used by ranked fusion *and* by expansion; expansion
   follows outgoing edges **and** incoming *successor* edges, successors first.
 - `dependency` and `blocking` are two properties, both read from the schema — never a hardcoded

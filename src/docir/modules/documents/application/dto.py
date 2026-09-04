@@ -50,6 +50,9 @@ class DocumentView:
     #: Repo-relative globs naming the code this document governs. Empty (and so
     #: dropped from the trimmed JSON) when it names none.
     code: tuple[str, ...] = ()
+    #: Why this document is meant to carry no relations; empty means it is not
+    #: exempt from the ``orphan`` warning.
+    isolated: str = ""
     stale: bool = False
     score: float | None = None
     via_graph: bool = False
@@ -101,6 +104,7 @@ class DocumentView:
             owner=document.owner,
             verified=None if document.verified is None else document.verified.isoformat(),
             code=document.code,
+            isolated=document.isolated,
             stale=stale,
             score=score,
             via_graph=via_graph,
@@ -172,6 +176,10 @@ class DocumentSummary:
     #: are a handful of tokens and they answer "does this document concern the
     #: code I am about to change" without a second fetch.
     code: tuple[str, ...] = ()
+    #: Rides along for the same reason, and one more: `query --expr "isolated"`
+    #: is how the exemptions from ``orphan`` are audited, and an audit that has
+    #: to fetch each document to read the reason is one nobody runs.
+    isolated: str = ""
     stale: bool = False
     score: float | None = None
     #: Raw cosine similarity to the query — the only field with absolute
@@ -225,6 +233,7 @@ class DocumentSummary:
             owner=document.owner,
             verified=None if document.verified is None else document.verified.isoformat(),
             code=document.code,
+            isolated=document.isolated,
             stale=stale,
             score=score,
             similarity=similarity,
@@ -252,6 +261,10 @@ class AddDocumentRequest:
     owner: str | None = None
     #: Repo-relative globs naming the code this document governs.
     code: tuple[str, ...] = ()
+    #: Why this document is meant to stand alone — the reviewed exemption from
+    #: the ``orphan`` warning. Available on create because a document that is
+    #: isolated by design is usually known to be so as it is written.
+    isolated: str | None = None
     #: Adopt an existing id instead of allocating one — for a repo migrating a
     #: numbered ADR corpus, where losing `adr-0007` breaks every historical
     #: cross-reference. It is *supplied*, never inferred, and validated against
@@ -284,6 +297,11 @@ class UpdateDocumentRequest:
     #: ``None`` leaves the governed globs unchanged; an empty tuple clears them,
     #: the same convention ``set_tags`` / ``set_related`` follow.
     set_code: tuple[str, ...] | None = None
+    #: Record (or, with an empty string, withdraw) the reason this document
+    #: carries no relations. ``None`` leaves it unchanged, the same convention
+    #: ``set_owner`` follows — including stamping ``updated``, which every flag
+    #: on this request does.
+    set_isolated: str | None = None
     mark_verified: bool = False
     append_section: tuple[str, str] | None = None
     replace_section: tuple[str, str] | None = None

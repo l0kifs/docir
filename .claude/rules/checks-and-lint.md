@@ -47,6 +47,12 @@ Three tiers, and mixing them is the documented overengineering trap. The recurri
   only way to keep CI green was to drop the gate, which also dropped duplicate-id detection.
   `CheckIssue` derives `severity` from `kind` in `__post_init__`, so a new check classifies itself
   by being added to `ERROR_KINDS` or not. `--strict-all` restores fail-on-anything.
+  **`orphan` reads the authored graph only, and is closed by an edge or by `isolated:`**
+  (adr-e98749aa457d). It used to read the derived mention graph too, which made it
+  self-clearing: an orphan triage is a list of orphan ids, so writing the diagnosis closed
+  every id it diagnosed. `isolated:` is the recorded exemption — free text saying why the
+  document is *meant* to stand alone, skipped by this check and by nothing else, audited with
+  `docir query --expr "isolated"`. `--fix` must neither grant nor withdraw one.
   **The last three carry a sharper version of the same argument and must not be promoted**: the
   schema they measure against ships in the *package* (the core and the profiles are merged in on
   every command), so a corpus that passed yesterday can fail today with no commit to point at.

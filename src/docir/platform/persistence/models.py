@@ -39,6 +39,10 @@ class DocumentRow(Base):
     # Stewardship metadata for staleness (both optional).
     owner: Mapped[str] = mapped_column(String, nullable=False, default="")
     verified: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Why this document is meant to carry no relations; empty means not exempt.
+    # Indexed because `orphan` reads it for every document in the corpus and
+    # `query --expr "isolated"` is how the exemptions are audited.
+    isolated: Mapped[str] = mapped_column(String, nullable=False, default="")
 
     tags: Mapped[list[DocumentTagRow]] = relationship(
         cascade="all, delete-orphan", passive_deletes=True

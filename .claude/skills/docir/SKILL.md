@@ -166,13 +166,27 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
   `src/auth.py` this session, stamping `--verified` on the decision that governs
   it certifies your own change and turns the signal into "the check is green".
   Report the finding instead and let the next reader — or the human — clear it.
-- **Naming a document's id in a body links to it.** `docir check` reads those
-  mentions, so a document you cite in a paragraph is not reported as an orphan,
-  and `docir get` shows both directions (`mentions`, `mentioned_by`) — including
-  the useful one, who cites *this* document. It is derived: it never appears in
-  frontmatter, and `docir reindex` rebuilds it. Use `--related` when the link is
-  a claim worth typing (`supersedes`, `refines`); prose is enough when you are
-  simply referring to something.
+- **Naming a document's id in a body is a soft link, not an edge.** `docir get`
+  shows both directions (`mentions`, `mentioned_by`) — including the useful one,
+  who cites *this* document — and `docir context` follows them. It is derived: it
+  never appears in frontmatter, and `docir reindex` rebuilds it. **It does not
+  clear `orphan`**, deliberately: the body most likely to name a list of orphan
+  ids is the triage of that list, so prose used to close the very queue it was
+  diagnosing. Use `--set-related` when the link is a claim worth typing
+  (`supersedes`, `refines`).
+- **An orphan ends in an edge or in a recorded reason.** `orphan` means no
+  `related:` edge in either direction. Close each one the honest way:
+
+  ```bash
+  docir update <id> --set-related <other-id>:refines            # it was unwired
+  docir update <id> --set-isolated "scope deferred; nothing depends on it yet"
+  ```
+
+  `--set-isolated` is for the document that stands alone *by design*, and it
+  records why — a reviewer reading `docir query --expr "isolated"` sees the
+  judgement, not just the silence. Withdraw one with `--set-isolated ""`.
+  Reach for it only when isolation is the conclusion; an edge is the usual
+  answer.
 - **If a test enforces the decision, govern that test.** docir has no rule
   engine and will not gain one: the test already fails when the code
   contradicts the decision, and `--code tests/test_x.py` records which decision

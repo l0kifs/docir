@@ -37,6 +37,7 @@ from docir.entry_points.federation import (
 )
 from docir.platform.clock import Clock
 from docir.platform.errors import DocirError
+from docir.platform.persistence.engine import head_revision
 
 
 class _FixedClock(Clock):
@@ -529,7 +530,10 @@ class TestPeerIndexedByOlderDocir:
         self._roll_back_to_0007(peer_home)
 
         reason = peer_status(peer_home)
-        assert "0007" in reason and "0008" in reason
+        # The head is read rather than spelled: this assertion named `0008`
+        # literally and failed on the next migration, which is a green suite
+        # turning red for a reason unrelated to what the test is about.
+        assert "0007" in reason and head_revision() in reason
         assert "docir reindex" in reason
 
     def test_the_local_store_still_answers(

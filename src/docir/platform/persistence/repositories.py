@@ -100,6 +100,7 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
         row.path = document.path
         row.content_hash = document.content_hash()
         row.owner = document.owner
+        row.isolated = document.isolated
         row.verified = None if document.verified is None else document.verified.isoformat()
 
         self._session.execute(delete(DocumentTagRow).where(DocumentTagRow.doc_id == document.id))
@@ -322,15 +323,6 @@ class SqlAlchemyMentionRepository(MentionRepository):
             )
         ).all()
         return [(src, tgt) for src, tgt in rows if src in indexed and tgt not in indexed]
-
-    def all_resolved(self) -> list[tuple[str, str]]:
-        indexed = set(self._session.scalars(select(DocumentRow.id)).all())
-        rows = self._session.execute(
-            select(MentionRow.source, MentionRow.target).order_by(
-                MentionRow.source, MentionRow.target
-            )
-        ).all()
-        return [(src, tgt) for src, tgt in rows if src in indexed and tgt in indexed]
 
 
 class SqlAlchemyTagRepository(TagRepository):
@@ -568,6 +560,7 @@ def _to_document(
         verified=None if row.verified is None else date.fromisoformat(row.verified),
         code=tuple(pattern for pattern, _ in code),
         verified_code={pattern: digest for pattern, digest in code if digest is not None},
+        isolated=row.isolated,
     )
 
 

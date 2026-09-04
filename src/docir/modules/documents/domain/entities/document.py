@@ -56,6 +56,15 @@ class Document:
     #: it was added after the last verification, or matched nothing then, and
     #: `check` reports nothing for it.
     verified_code: Mapping[str, str] = field(default_factory=dict)
+    #: Why this document is *meant* to carry no relations — the reviewed
+    #: exemption from the ``orphan`` warning (issue-77a09761e1d4).
+    #:
+    #: A free-form reason rather than a boolean, on the same argument as
+    #: :attr:`owner`: the field exists to turn "nobody has wired this yet" into
+    #: a recorded judgement, and a bare ``true`` records that somebody silenced
+    #: the warning without recording what they concluded. Empty means *not
+    #: exempt*, which is the default state of every document.
+    isolated: str = ""
 
     def embedding_text(self) -> str:
         """The text embedded for semantic search: title + description + body.
@@ -134,6 +143,12 @@ class Document:
         # `--replace-body` would refuse writes that lose nothing.
         if self.verified_code:
             parts.append(",".join(f"{p}={d}" for p, d in sorted(self.verified_code.items())))
+        # Appended under the same rule, and for the same reason: a store whose
+        # documents are all unexempt must hash exactly as it did before this
+        # field existed, or the whole corpus reads as edited out-of-band until
+        # the next reindex.
+        if self.isolated:
+            parts.append(self.isolated)
         digest = hashlib.sha256("\x1f".join(parts).encode("utf-8"))
         return digest.hexdigest()
 

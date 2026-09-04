@@ -100,6 +100,7 @@ class Dispatcher:
             status=_opt_str(payload, "status"),
             owner=_opt_str(payload, "owner"),
             code=_tuple(payload, "code"),
+            isolated=_opt_str(payload, "isolated"),
             doc_id=_opt_str(payload, "id"),
             wait_embeddings=_bool(payload, "wait_embeddings"),
         )
@@ -143,6 +144,7 @@ class Dispatcher:
             set_related=_opt_tuple(payload, "set_related"),
             set_owner=_opt_str(payload, "set_owner"),
             set_code=_opt_tuple(payload, "set_code"),
+            set_isolated=_opt_str(payload, "set_isolated"),
             mark_verified=_bool(payload, "mark_verified"),
             append_section=_opt_pair(payload, "append_section"),
             replace_section=_opt_pair(payload, "replace_section"),

@@ -82,6 +82,12 @@ class MentionRepository(ABC):
     those may see them: a cycle nobody wrote is noise, and refusing a delete
     because a paragraph quotes an id would make the corpus unmaintainable.
 
+    **No Tier 1 check reads this graph at all.** ``orphan`` used to, and
+    issue-77a09761e1d4 removed it: prose that names an orphan is most often
+    the triage listing it, so the finding cleared itself. The readers left are
+    `context` expansion, the neighbour lists on `get`, and the Tier 2
+    `unresolved-mention` advisory — none of which gates anything.
+
     Every method resolves against the indexed documents, so a body naming an id
     that does not exist is stored and simply not returned. Absent means
     *unresolved*, and it starts resolving the moment the target is written.
@@ -103,19 +109,11 @@ class MentionRepository(ABC):
     def unresolved(self) -> list[tuple[str, str]]:
         """Every ``(source, target)`` pair whose target is not indexed.
 
-        The complement of :meth:`all_resolved`, and read by exactly one caller:
-        the Tier 2 advisory report. It is deliberately **not** a Tier 1 finding
-        — measured on this project's own corpus, all 47 unresolved mentions were
-        documentation examples (`adr-0007` and friends, in the documents that
-        explain the id format), so a warning would fire only on correct usage.
-        """
-
-    @abstractmethod
-    def all_resolved(self) -> list[tuple[str, str]]:
-        """Every ``(source, target)`` pair where both documents are indexed.
-
-        The bulk read `docir check` needs: asking per document would be one
-        query per document, and the orphan check reads the whole graph anyway.
+        Read by exactly one caller: the Tier 2 advisory report. It is
+        deliberately **not** a Tier 1 finding — measured on this project's own
+        corpus, all 47 unresolved mentions were documentation examples
+        (`adr-0007` and friends, in the documents that explain the id format),
+        so a warning would fire only on correct usage.
         """
 
 

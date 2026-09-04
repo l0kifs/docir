@@ -73,6 +73,10 @@ def project(
         "archived": document.archived,
         "stale": stale,
         "code": list(document.code),
+        # ``None`` rather than ``""`` when absent, the same shape ``owner``
+        # takes: `isolated == `null`` then reads as "not exempt", and a bare
+        # `isolated` is the audit of every exemption in the corpus.
+        "isolated": document.isolated or None,
         "related": list(outgoing),
         "related_by": list(incoming),
     }
@@ -96,6 +100,7 @@ PROJECTION_FIELDS: frozenset[str] = frozenset(
         "archived",
         "stale",
         "code",
+        "isolated",
         "related",
         "related_by",
     }

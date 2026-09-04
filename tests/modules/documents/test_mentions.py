@@ -1,15 +1,18 @@
 """The derived mention graph: ids one document's body names in another.
 
 `related:` is the authored graph — typed, hand-written, and the thing every
-structural check polices. Mentions are inferred from prose and exist to answer
-one question the authored graph answered badly: *is this document connected to
-anything?* `orphan` fired for every document whose author had linked it by
-writing its id in a sentence, which is how most people link.
+structural check polices. Mentions are inferred from prose. They make a citation
+navigable: `docir get` shows both directions, `docir context` expands along them,
+and `lint --deep` reports the ones that resolve to nothing.
 
-Half of these tests are about what mentions must **not** do. The derived graph
+Most of these tests are about what mentions must **not** do. The derived graph
 shares a corpus with the authored one, and every check that reads `related`
 would be wrong to read this: a cycle nobody wrote is noise, and a delete refused
 because a paragraph quotes an id is a corpus nobody can maintain.
+
+`orphan` is the check that used to read them and no longer does
+(adr-e98749aa457d) — the class below is the guard on that, and
+`test_orphan_exemption.py` covers what replaced it.
 """
 
 from __future__ import annotations
@@ -63,8 +66,15 @@ class TestScanner:
         assert scan_document_ids("adr-1cfb1b212237", set()) == ()
 
 
-class TestOrphans:
-    """The finding this exists to fix."""
+class TestOrphansIgnoreProse:
+    """`orphan` reads the authored graph alone, and this is why.
+
+    Reading mentions made the finding clear itself: an orphan triage is a list
+    of orphan ids, so writing down "these four are still unwired" closed all
+    four (issue-77a09761e1d4). The two states are the same characters, so no
+    filter over prose can tell them apart — the exemption had to become a
+    recorded field instead.
+    """
 
     def _linked_in_prose(self, dispatcher: Dispatcher) -> tuple[str, str]:
         target = dispatcher.dispatch(
@@ -88,56 +98,66 @@ class TestOrphans:
             if issue["kind"] == "orphan"
         }
 
-    def test_naming_a_document_in_prose_connects_both(self, dispatcher: Dispatcher) -> None:
+    def test_naming_a_document_in_prose_connects_neither(self, dispatcher: Dispatcher) -> None:
         source, target = self._linked_in_prose(dispatcher)
-        assert self._orphans(dispatcher) == set()
-        # And the link really is prose-only: neither file gained an edge.
+        # Both, not one: the check reads both directions of `related:`, so
+        # neither citing nor being cited is what it measures.
+        assert self._orphans(dispatcher) == {source, target}
+        # And the link really was prose-only: neither file gained an edge.
         assert dispatcher.dispatch("get", {"doc_id": source})["related"] == ()
         assert dispatcher.dispatch("get", {"doc_id": target})["related"] == ()
 
+    def test_a_triage_naming_the_orphans_does_not_close_them(self, dispatcher: Dispatcher) -> None:
+        # The reported defect, end to end. Two unwired documents, then a third
+        # that diagnoses them by id — which is what an orphan triage is. Before
+        # the fix this returned nothing at all, including for the triage itself.
+        unwired = [
+            str(
+                dispatcher.dispatch(
+                    "add",
+                    {"type": "decision", "title": title, "description": "d", "body": "x"},
+                )["id"]
+            )
+            for title in ("Deferred scope", "Genuinely unwired")
+        ]
+        triage = dispatcher.dispatch(
+            "add",
+            {
+                "type": "architecture",
+                "title": "Orphan triage",
+                "description": "d",
+                "body": (
+                    f"- {unwired[0]} — isolated on purpose.\n"
+                    f"- {unwired[1]} — still needs an edge.\n"
+                ),
+            },
+        )["id"]
+        # Asserting the ids, not a count: a count cannot tell "the queue held"
+        # from "the check stopped looking".
+        assert self._orphans(dispatcher) == {*unwired, str(triage)}
+
+    def test_an_authored_edge_still_closes_it(self, dispatcher: Dispatcher) -> None:
+        # The other half of the contract. Without this the class above passes
+        # just as well with the check hardcoded to report everything.
+        target = dispatcher.dispatch(
+            "add", {"type": "decision", "title": "T", "description": "d", "body": "x"}
+        )["id"]
+        source = dispatcher.dispatch(
+            "add",
+            {
+                "type": "issue",
+                "title": "I",
+                "description": "d",
+                "related": [f"{target}:relates_to"],
+            },
+        )["id"]
+        assert self._orphans(dispatcher) & {str(source), str(target)} == set()
+
     def test_a_document_nobody_names_is_still_an_orphan(self, dispatcher: Dispatcher) -> None:
-        # The finding has to keep working, or this change traded a false
-        # positive for a check that reports nothing at all.
         alone = dispatcher.dispatch(
             "add", {"type": "decision", "title": "Alone", "description": "d", "body": "Nothing."}
         )["id"]
         assert alone in self._orphans(dispatcher)
-
-    def test_naming_an_id_that_does_not_exist_connects_nothing(
-        self, dispatcher: Dispatcher
-    ) -> None:
-        # Only resolved pairs count. A typo, or a document deleted since, is not
-        # a connection to anything — and must not silence the finding.
-        alone = dispatcher.dispatch(
-            "add",
-            {
-                "type": "decision",
-                "title": "Alone",
-                "description": "d",
-                "body": "As decided in adr-deadbeefcafe.",
-            },
-        )["id"]
-        assert alone in self._orphans(dispatcher)
-
-    def test_a_self_mention_is_not_a_link(self, dispatcher: Dispatcher) -> None:
-        # A document restating its own id is describing itself. Counting it
-        # would make every document non-orphan the moment it quoted its id.
-        created = dispatcher.dispatch(
-            "add", {"type": "decision", "title": "T", "description": "d", "body": "x"}
-        )["id"]
-        dispatcher.dispatch(
-            "update", {"doc_id": created, "replace_body": f"I am {created}.", "force": True}
-        )
-        assert created in self._orphans(dispatcher)
-
-    def test_removing_the_id_from_the_body_restores_the_finding(
-        self, dispatcher: Dispatcher
-    ) -> None:
-        source, target = self._linked_in_prose(dispatcher)
-        dispatcher.dispatch(
-            "update", {"doc_id": source, "replace_body": "Nothing points anywhere.", "force": True}
-        )
-        assert self._orphans(dispatcher) == {source, target}
 
 
 class TestDerivedNotAuthored:

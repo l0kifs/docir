@@ -12,7 +12,7 @@ warnings rather than failing an agent mid-task:
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
 
@@ -155,7 +155,6 @@ class GraphChecker:
         known_tags: frozenset[str] | None = None,
         code_matches: Mapping[str, bool] | None = None,
         code_digests: Mapping[str, str] | None = None,
-        mentions: Sequence[tuple[str, str]] = (),
     ) -> list[CheckIssue]:
         """Run every Tier 1 check over the indexed corpus.
 
@@ -166,9 +165,12 @@ class GraphChecker:
         would otherwise report every pattern in it as missing. ``code_digests``
         is the same shape for the *content* of what they match, and is compared
         against what each document recorded when it was last verified.
-        ``mentions`` are the resolved derived edges — ids one body names in
-        another — and are read by the orphan check alone, never by the checks
-        that police the authored graph.
+
+        No check here reads the derived mention graph. ``orphan`` was the one
+        that did, and issue-77a09761e1d4 took it away: a Tier 1 finding must
+        not be cleared by prose, least of all by the prose that triages it.
+        Mentions remain what they were built for — `context` expansion, the
+        neighbour lists on `get`, and the Tier 2 `unresolved-mention` advisory.
         """
         issues: list[CheckIssue] = []
         issues.extend(self.check_schema_conformance(documents, relations))
@@ -177,7 +179,7 @@ class GraphChecker:
             issues.extend(self._find_tag_key_format(known_tags))
         issues.extend(self._find_dangling(documents, relations))
         issues.extend(self._find_cycles(relations))
-        issues.extend(self._find_orphans(documents, relations, mentions))
+        issues.extend(self._find_orphans(documents, relations))
         issues.extend(self._find_layering_violations(documents, relations))
         issues.extend(self._find_unblocked(documents, relations))
         issues.extend(self._find_store_checks(documents, relations))
@@ -631,44 +633,49 @@ class GraphChecker:
         return issues
 
     def _find_orphans(
-        self,
-        documents: list[Document],
-        relations: list[Relation],
-        mentions: Sequence[tuple[str, str]] = (),
+        self, documents: list[Document], relations: list[Relation]
     ) -> list[CheckIssue]:
-        """Flag documents nothing connects to, by either graph.
+        """Flag documents no **authored** edge connects, in either direction.
 
-        ``mentions`` are the derived edges — ids one body names in another's
-        prose. They count here and nowhere else. The finding is meant to mean
-        "nobody has connected this to anything", and for most of this project's
-        life it meant "nobody edited its `related:` frontmatter", which fires on
-        a document whose author linked it three times in a paragraph. That made
-        `orphan` the loudest finding in a healthy corpus and is half the reason
-        the `--strict` gate had to stop failing on warnings.
+        Prose does not count, and that is the correction issue-77a09761e1d4
+        made. This check read the derived mention graph too, so an id named in
+        any body cleared it — and the body most likely to name a queue of orphan
+        ids is the triage that diagnoses them. Writing down "these four still
+        need wiring" therefore emptied the queue that tracked those four, which
+        makes the finding measure where somebody happened to type an id rather
+        than whether the document is connected. A judgement about a queue must
+        not empty it.
 
-        Only the *resolved* pairs arrive here: an id named in prose that no
-        document carries is not a connection to anything. And the check reads
-        both directions, as it always has — being cited is as much a connection
-        as citing.
+        The false positive that put mentions here in the first place — a warning
+        on a document its author linked in a sentence — is real, and is now
+        answered by :attr:`Document.isolated` instead: a reviewed exemption
+        somebody wrote on purpose, rather than a side effect of prose. The
+        alternative, a mention clearing the finding, cannot tell the two apart,
+        because "this id is fine unlinked" and "this id is still unwired" are
+        written in exactly the same characters.
+
+        Being cited still counts as much as citing — the check reads both
+        directions of ``related:``, as it always has.
         """
         connected: set[str] = set()
         for rel in relations:
             connected.add(rel.source)
             connected.add(rel.target)
-        for source, target in mentions:
-            connected.add(source)
-            connected.add(target)
         issues: list[CheckIssue] = []
         for doc in documents:
-            if doc.archived:
+            # An exempt document is not reported and not counted: `isolated` is
+            # the recorded answer to this finding, so re-asking is the noise it
+            # was written to remove.
+            if doc.archived or doc.isolated:
                 continue
             if doc.id not in connected:
                 issues.append(
                     CheckIssue(
                         kind="orphan",
                         message=(
-                            f"orphan document {doc.id!r} has no relations and is "
-                            f"named by no other document"
+                            f"orphan document {doc.id!r} has no relations — link it with "
+                            f"`docir update {doc.id} --set-related <id>:<kind>`, or record why "
+                            f"it stands alone with `--set-isolated '<reason>'`"
                         ),
                         doc_ids=(doc.id,),
                     )

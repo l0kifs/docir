@@ -411,6 +411,13 @@ def add(
         str | None,
         typer.Option("--code", help="Comma-separated repo-relative globs this document governs."),
     ] = None,
+    isolated: Annotated[
+        str | None,
+        typer.Option(
+            "--isolated",
+            help="Why this document is meant to carry no relations; exempts it from `orphan`.",
+        ),
+    ] = None,
     id: Annotated[
         str | None,
         typer.Option(
@@ -455,6 +462,7 @@ def add(
         "status": status,
         "owner": owner,
         "code": _split_csv(code),
+        "isolated": isolated,
         "id": id,
         "body": resolve_body(body, body_file, stdin),
         "wait_embeddings": wait_embeddings,
@@ -488,6 +496,16 @@ def update(
         typer.Option("--set-related", help="Comma-separated <id> or <id>:<kind> typed edges."),
     ] = None,
     set_owner: Annotated[str | None, typer.Option("--set-owner", help="Staleness steward.")] = None,
+    set_isolated: Annotated[
+        str | None,
+        typer.Option(
+            "--set-isolated",
+            help=(
+                "Why this document is meant to carry no relations; exempts it from `orphan`. "
+                'Pass "" to withdraw the exemption and put it back in the queue.'
+            ),
+        ),
+    ] = None,
     set_code: Annotated[
         str | None,
         typer.Option(
@@ -590,6 +608,7 @@ def update(
         "set_tags": None if set_tags is None else _split_csv(set_tags),
         "set_related": None if set_related is None else _split_csv(set_related),
         "set_owner": set_owner,
+        "set_isolated": set_isolated,
         "set_code": None if set_code is None else _split_csv(set_code),
         "mark_verified": verified,
         "append_section": [append_section, body_text] if append_section else None,
@@ -764,7 +783,7 @@ def query(
     directions, every edge carrying the other document's type and status:
 
         id type status title description tags owner verified created updated
-        archived stale code
+        archived stale code isolated
         related     [{to, kind, type, status}]   outgoing
         related_by  [{to, kind, type, status}]   incoming
 
@@ -773,6 +792,7 @@ def query(
 
         docir query --expr "stale && owner == `null`"
         docir query --type issue --expr "related[?status=='superseded']"
+        docir query --expr "isolated"          # every exemption from `orphan`
 
     docir ships no expressions of its own — this is the ability to state a rule,
     not a rule (adr-7316abc6be93).
@@ -1205,6 +1225,22 @@ def check(
     introduces. Warnings do not fail the build — `orphan` fires for every
     document with no relations, so gating on them fails a healthy corpus.
     Use --strict-all if you really do want every finding to be fatal.
+
+    `orphan` reads `related:` only. Naming an id in a paragraph does not clear
+    it, and a triage that lists the orphans is exactly the prose that used to:
+
+        docir check | jq -r '.[] | select(.kind=="orphan") | .doc_ids[0]'
+
+    Each id on that list ends one of two ways — an edge, or a recorded reason
+    for standing alone:
+
+        docir update adr-3f9a2b1c7d4e --set-related arch-ad342aae8293:refines
+        docir update adr-3f9a2b1c7d4e --set-isolated "scope deferred; nothing depends on it yet"
+
+    The second is a judgement, so it is auditable and reversible: list every
+    exemption with `docir query --expr "isolated"`, withdraw one with
+    `--set-isolated ""`. Both are ordinary edits and stamp `updated`, like every
+    other flag here.
     """
     state = get_state()
     if fix:

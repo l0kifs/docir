@@ -91,7 +91,11 @@ work in this order — the constraints below make any other order fail:
    step 3 because every `--related` target must already exist.
 5. **Validate**: `docir check` — it flags dangling links, duplicate ids, unknown
    types, and stale docs. Fix those. `orphan` findings just mean a doc has no
-   relations yet, which is normal; don't force links to silence them.
+   relations yet, which is normal after a migration; don't force links to
+   silence them. Wire the ones step 4 missed; where isolation is the right
+   answer, say so —
+   `docir update <id> --set-isolated "standalone glossary"` — which clears the
+   finding without inventing an edge.
 
 ## Working across git branches
 

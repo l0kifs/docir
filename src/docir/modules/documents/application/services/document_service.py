@@ -253,6 +253,7 @@ class DocumentService:
                 body=request.body,
                 owner=request.owner or "",
                 code=tuple(request.code),
+                isolated=request.isolated or "",
             )
             self._validator.validate_required_fields(document)
             path = self._file_store.write(document, create=True)
@@ -1121,6 +1122,13 @@ class DocumentService:
         self._apply_related(request, base, changes, uow, target_type)
         if request.set_owner is not None:
             changes["owner"] = request.set_owner
+        # Not an *embedding-relevant* change — no vector reads an exemption —
+        # which is all `content_changed` tracks. It still stamps `updated`, like
+        # every other flag `update` carries: the mechanical-rewrite rule governs
+        # the writes nobody asked for (a tag rename, `check --fix`, a forced
+        # delete's unlink), not an edit somebody typed.
+        if request.set_isolated is not None:
+            changes["isolated"] = request.set_isolated
         if request.set_code is not None:
             self._validator.validate_code(request.set_code)
             changes["code"] = tuple(request.set_code)

@@ -239,14 +239,15 @@ def build_mcp_server(
         and status:
 
             id type status title description tags owner verified created
-            updated archived stale code
+            updated archived stale code isolated
             related     [{to, kind, type, status}]   outgoing
             related_by  [{to, kind, type, status}]   incoming
 
         A truthy result keeps the document, so `related[?status=='superseded']`
         is a filter with no comparison bolted on. Applied before `limit`, like
         `stale`. Examples: `stale && owner == `null``,
-        `length(related_by[?kind!='relates_to']) == `0``.
+        `length(related_by[?kind!='relates_to']) == `0``, and `isolated` — every
+        document exempted from the `orphan` warning, with the recorded reason.
 
         `owner` plus `stale` is a review queue: the documents one steward is
         responsible for that are past their type's review cadence. Staleness is
@@ -377,6 +378,7 @@ def build_mcp_server(
         status: str | None = None,
         owner: str | None = None,
         code: list[str] | None = None,
+        isolated: str | None = None,
         wait_embeddings: bool = False,
     ) -> dict[str, Any]:
         """Create a document. The single write path — never write the file yourself.
@@ -399,6 +401,9 @@ def build_mcp_server(
             code: Repo-relative globs naming the code this document governs
                 (e.g. "src/docir/platform/persistence/**"). Only the shape is
                 checked: a pattern may name code that does not exist yet.
+            isolated: Why this document is meant to carry no relations, which
+                exempts it from the `orphan` warning. Set it only when the
+                isolation is the conclusion — an edge is the usual answer.
             wait_embeddings: Block until the vector is computed. Only needed
                 when the very next call is a `docir_context` that must find it.
         """
@@ -414,6 +419,7 @@ def build_mcp_server(
                 "status": status,
                 "owner": owner,
                 "code": code or [],
+                "isolated": isolated,
                 "wait_embeddings": wait_embeddings,
             },
         )
@@ -429,6 +435,7 @@ def build_mcp_server(
         set_related: list[str] | None = None,
         set_owner: str | None = None,
         set_code: list[str] | None = None,
+        set_isolated: str | None = None,
         verified: bool = False,
         append_section: str | None = None,
         replace_section: str | None = None,
@@ -463,6 +470,12 @@ def build_mcp_server(
             set_owner: Replace the staleness steward.
             set_code: Replace the governed globs wholesale (not a merge); an
                 empty list clears them.
+            set_isolated: Record why this document is meant to carry no
+                relations, which exempts it from the `orphan` warning. Pass ""
+                to withdraw the exemption and put it back in the queue.
+                Prefer `set_related` — an exemption is for
+                the document that is isolated by design, not the one nobody has
+                got round to wiring.
             verified: Stamp today as the last-verified date. Assert this only
                 when a human has actually re-read the document — it is the one
                 trust signal docir offers.
@@ -493,6 +506,7 @@ def build_mcp_server(
             "set_related": set_related,
             "set_owner": set_owner,
             "set_code": set_code,
+            "set_isolated": set_isolated,
             "mark_verified": verified,
             "remove_section": remove_section,
             "body": body,
@@ -588,6 +602,13 @@ def build_mcp_server(
         an edge pointing at nothing, a file that will not parse. `warning`
         describes shape or age (orphan, cycle, layering, staleness), and an
         orphan is the normal state of a new document, not a defect.
+
+        `orphan` reads `related:` alone. Naming an id in a paragraph does not
+        clear it — a triage that lists the orphans is exactly the prose that
+        would. Close each one with an edge (`docir_update(set_related=...)`),
+        or, when standing alone is the conclusion, with
+        `docir_update(set_isolated="<why>")`; `docir_query(expr="isolated")`
+        lists every exemption and `set_isolated=""` withdraws one.
         """
         return run.many("check", {})
 

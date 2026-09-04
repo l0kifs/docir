@@ -6,7 +6,7 @@ description: Naming an id in prose cleared the orphan warning, so writing the tr
 id: issue-77a09761e1d4
 owner: maintainer
 related: []
-status: open
+status: resolved
 tags:
 - cli
 - integrity

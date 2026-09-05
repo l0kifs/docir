@@ -35,6 +35,13 @@ Each finding carries a `kind`, a `severity` and the command that closes it:
   one file that will not parse, which `docir check` names as `malformed`.
 - `stale-index-build` — the index was built by a docir that is no longer installed.
   → `docir self upgrade` (below)
+- `store-unreachable` saying the index **is at schema `NNNN`, which this docir does not
+  ship** — a newer docir opened this store and migrated the index past what this build
+  knows. Every command that opens the index refuses (exit 8), including `reindex`. Two
+  builds are sharing one store: run the newer one, or delete `.docir/index.db*` and
+  `docir reindex` to rebuild at this build's schema — the newer build migrates it again
+  the next time it runs, so alternating between them costs a rebuild each way. Nothing is
+  lost either way; the index is derived from the files.
 - `schema-drift` — the types or cadences moved under the corpus with nothing in `git diff`.
   → `docir check` to read them, then `docir reindex`
 - `hashing-embedder` / `embeddings-pending` — `DOCIR_EMBEDDER` is overriding the model, or
@@ -73,7 +80,7 @@ what reports dangling edges, duplicate ids and staleness.
 
 ## Notes
 
-- Errors print `error: <message>` to **stderr** with a nonzero exit code (2=validation, 4=not-found, 5=conflict, 6=stale), so a captured stdout stays clean JSON.
+- Errors print `error: <message>` to **stderr** with a nonzero exit code (2=validation, 4=not-found, 5=conflict, 6=stale, 8=index unreadable by this build), so a captured stdout stays clean JSON.
 - `no document with id '<id>'` from `get` or `update` means what it says only when the message stops there. When the index holds nothing while `docs/` holds files it names that instead and asks for `docir reindex`; the document is on disk and nothing was lost. Opening a store normally rebuilds an index it finds empty, so this is the rare leftover — an index emptied under a running daemon. Do not go looking for a deletion and do not rewrite the document: rebuild the index and repeat the command.
 - Vectors are computed async; add `--wait-embeddings` to a write (or `docir embed --flush`) if you must `context`-search immediately after.
 - `docir context` matches on meaning, not just wording, so describe the task in your own words rather than guessing the documents' vocabulary. (If the store runs `DOCIR_EMBEDDER=deterministic` — a light, model-free fallback — matching is vocabulary-based instead; when a query under-retrieves there, retry with the terms the codebase actually uses.)

@@ -133,6 +133,28 @@ class StaleWriteError(DocirError):
     exit_code = 6
 
 
+class UnknownIndexRevisionError(DocirError):
+    """The index is stamped with a migration revision this build does not ship.
+
+    Raised before Alembic is asked to upgrade it, because Alembic's own answer
+    is a ``CommandError`` naming a revision id and nothing else — no store, no
+    versions, no recovery — raised through every command that opens the index,
+    ``reindex`` and ``doctor`` included (issue-38a4f13b1e61). Those two are the
+    documented repair paths, so the state that needs them was the one state they
+    could not be run in.
+
+    Refusing rather than skipping the upgrade is the deliberate half. The
+    equivalent peer check reads a newer index happily, on the grounds that every
+    query names its columns and extra ones are harmless — but a peer is opened
+    read-only and never migrated, while this build would go on to *write*
+    through a schema it cannot see. ``0009`` happens to be additive with a
+    server default; the next migration is not required to be, and there is no
+    way to ask from here.
+    """
+
+    exit_code = 8
+
+
 class DaemonError(DocirError):
     """The daemon transport failed in a way the caller must handle."""
 

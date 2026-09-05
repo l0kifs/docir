@@ -8,7 +8,7 @@ owner: maintainer
 related:
 - arch-0a3c2d6d54a6
 - issue-d891ab5501e6
-status: open
+status: resolved
 tags:
 - integrity
 - persistence

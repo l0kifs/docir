@@ -20,6 +20,8 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
+from docir.platform.errors import UnknownIndexRevisionError
+
 _ALEMBIC_DIR = Path(__file__).resolve().parent / "alembic"
 
 
@@ -51,8 +53,43 @@ def create_session_factory(engine: Engine) -> sessionmaker[Session]:
 
 
 def run_migrations(database_url: str) -> None:
-    """Upgrade the index database to the latest Alembic revision."""
+    """Upgrade the index database to the latest Alembic revision.
+
+    An index stamped with a revision this build does not ship is refused here,
+    by name, before Alembic sees it (issue-38a4f13b1e61). Alembic's own answer
+    is ``CommandError: Can't locate revision identified by '0009'`` — a raw
+    traceback naming neither the store, nor the two builds, nor what to do — and
+    it comes out of *every* command that opens the index, because the
+    composition root migrates on open. ``reindex`` and ``doctor`` are the
+    documented repair paths, so the one state that needs them was the one state
+    they could not run in.
+
+    The condition is already detectable: :func:`known_revisions` and
+    :func:`index_revision` exist for the federation peer check, which asks this
+    exact question of *someone else's* store and never asked it of this one.
+    """
+    db_path = _database_path(database_url)
+    recorded = index_revision(db_path)
+    if recorded is not None and recorded not in known_revisions():
+        raise UnknownIndexRevisionError(
+            f"the index at {db_path} is at schema {recorded}, "
+            f"which this docir ({head_revision()} is its newest) does not ship — it was "
+            "built by a newer docir. Use that one, or rebuild the index for this build "
+            "with `docir reindex` after deleting it (the newer build will migrate it "
+            "again the next time it runs)"
+        )
     command.upgrade(_alembic_config(database_url), "head")
+
+
+def _database_path(database_url: str) -> Path:
+    """The file behind a ``sqlite:///`` URL.
+
+    Only the shape :attr:`Settings.database_url` produces is understood; anything
+    else yields a path that does not exist, which :func:`index_revision` reports
+    as "cannot say" — the same answer as a store with no index yet, and the
+    answer that lets the upgrade proceed.
+    """
+    return Path(database_url.removeprefix("sqlite:///"))
 
 
 def _alembic_config(database_url: str = "") -> Config:

@@ -89,6 +89,12 @@ depends_on = [
 [[modules]]
 path = "docir.platform.persistence"
 depends_on = [
+    # The shared error taxonomy, the same non-deprecated edge
+    # `platform.filesystem` already declares: `platform.errors` is a leaf
+    # (`depends_on = []`), and raising a typed `DocirError` rather than letting
+    # a library exception escape is the rule everywhere. Not a widened
+    # baseline — nothing here reaches into a module.
+    "docir.platform.errors",
     "docir.platform.embedding",
     { path = "docir.modules.documents.domain", deprecated = true },
     { path = "docir.modules.tags.domain", deprecated = true },

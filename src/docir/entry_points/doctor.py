@@ -88,6 +88,10 @@ ERROR_KINDS = frozenset(
         "schema-unreadable",
         "no-embedder",
         "store-unreachable",
+        # docir cannot answer anything at all here, which is the definition of
+        # `error` — and unlike `stale-index-build`, its mirror image, no read
+        # succeeds meanwhile.
+        "index-from-newer-build",
         "model-probe-failed",
     }
 )
@@ -174,6 +178,14 @@ class Environment:
     schema_present: bool
     schema_error: str
     index_present: bool
+    #: The schema revision the index is stamped with, when this build does not
+    #: ship it — an index a *newer* docir migrated. Empty otherwise, which
+    #: covers both "this build knows it" and "cannot say" (no index yet, or one
+    #: that will not open). Read here rather than inferred from the store error
+    #: because the store cannot be opened at all in this state
+    #: (issue-38a4f13b1e61), and a cause that only exists as a message cannot be
+    #: given its own fix line.
+    index_revision_ahead: str
 
     # -- embedding
     embed_model: str | None
@@ -247,6 +259,7 @@ def snapshot(settings: Settings, version: str) -> Environment:
         schema_present=schema_present,
         schema_error=schema_error,
         index_present=settings.db_path.is_file(),
+        index_revision_ahead=_revision_ahead(settings.db_path),
         store_description=store_description(settings.home),
         unknown_peer_keys=unrecognised_keys(settings.home),
         embed_model=embed_model,
@@ -257,6 +270,20 @@ def snapshot(settings: Settings, version: str) -> Environment:
         watch=settings.watch,
         peers=_peers(settings),
     )
+
+
+def _revision_ahead(db_path: Path) -> str:
+    """The index's revision when it is one this build does not ship.
+
+    The counterpart to ``stale-index-build``, which covers an index built by an
+    *older* docir. That one is reported by the store itself; this one cannot be,
+    because the migration this build cannot resolve is what opening the store
+    runs first (issue-38a4f13b1e61).
+    """
+    from docir.platform.persistence.engine import index_revision, known_revisions
+
+    recorded = index_revision(db_path)
+    return "" if recorded is None or recorded in known_revisions() else recorded
 
 
 def _shadowed_home(home: Path) -> Path | None:
@@ -437,14 +464,33 @@ def _store_findings(
                 fix=f"declare it as a peer in {environment.home / 'stores.yaml'} to read both",
             )
         )
-    if store is None:
+    if environment.index_revision_ahead:
+        index = environment.home / "index.db"
         findings.append(
             DoctorFinding(
-                kind="store-unreachable",
-                message=store_error or "the store could not be opened",
-                fix="docir schema validate, then docir reindex",
+                kind="index-from-newer-build",
+                message=(
+                    f"the index is at schema {environment.index_revision_ahead}, which this "
+                    f"docir does not ship — a newer docir opened this store and migrated it. "
+                    "Every command that opens the index refuses, this one included"
+                ),
+                # Not `docir reindex`: it opens the index too, and refuses for
+                # the same reason. The index is derived and gitignored, so
+                # deleting it loses nothing — but the newer build migrates it
+                # again the next time it runs, so the durable answer is to use
+                # that build.
+                fix=f"run the newer docir instead, or rm {index}* && docir reindex",
             )
         )
+    if store is None:
+        if not environment.index_revision_ahead:
+            findings.append(
+                DoctorFinding(
+                    kind="store-unreachable",
+                    message=store_error or "the store could not be opened",
+                    fix="docir schema validate, then docir reindex",
+                )
+            )
         return findings
     stale_build = store.get("stale_index_build")
     if stale_build:

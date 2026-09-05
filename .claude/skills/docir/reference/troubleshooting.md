@@ -36,13 +36,12 @@ Each finding carries a `kind`, a `severity` and the command that closes it:
   one file that will not parse, which `docir check` names as `malformed`.
 - `stale-index-build` — the index was built by a docir that is no longer installed.
   → `docir self upgrade` (below)
-- `store-unreachable` saying the index **is at schema `NNNN`, which this docir does not
-  ship** — a newer docir opened this store and migrated the index past what this build
-  knows. Every command that opens the index refuses (exit 8), including `reindex`. Two
-  builds are sharing one store: run the newer one, or delete `.docir/index.db*` and
-  `docir reindex` to rebuild at this build's schema — the newer build migrates it again
-  the next time it runs, so alternating between them costs a rebuild each way. Nothing is
-  lost either way; the index is derived from the files.
+- `index-from-newer-build` — a newer docir opened this store and migrated the index past
+  what this build ships. The mirror image of `stale-index-build`, and an **error**: every
+  command that opens the index refuses (exit 8), `reindex` included. Two builds are
+  sharing one store, so run the newer one — or delete `.docir/index.db*` and
+  `docir reindex` to rebuild at this build's schema, knowing the newer build migrates it
+  again the next time it runs. Nothing is lost either way; the index is derived.
 - `schema-drift` — the types or cadences moved under the corpus with nothing in `git diff`.
   → `docir check` to read them, then `docir reindex`
 - `hashing-embedder` / `embeddings-pending` — `DOCIR_EMBEDDER` is overriding the model, or

@@ -20,6 +20,7 @@ output: every assertion below is preceded by a step that breaks something.
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -216,6 +217,79 @@ def test_an_index_built_by_another_version_is_reported(settings: Settings, uow_f
     _, report = _doctor()
     assert "stale-index-build" in _kinds(report)
     assert "0.0.1-other" in _message(report, "stale-index-build")
+
+
+def test_an_index_from_a_newer_build_is_its_own_finding(settings: Settings) -> None:
+    """The mirror image of `stale-index-build`, and it cannot be reported the
+    same way: that one is the store's own answer, and this store cannot be
+    opened at all — running the migration it cannot resolve is what opening it
+    does first (issue-38a4f13b1e61). So doctor reads the revision in `snapshot`,
+    like `index_present`, rather than inferring a cause from an error string."""
+    _add()
+    with sqlite3.connect(settings.db_path) as conn:
+        conn.execute("UPDATE alembic_version SET version_num = '9999'")
+
+    code, report = _doctor()
+
+    assert code == 0, "no --strict: a diagnosis does not fail by default"
+    assert "index-from-newer-build" in _kinds(report)
+    message = _message(report, "index-from-newer-build")
+    assert "9999" in message
+    # `docir reindex` alone is the one fix that cannot work — it opens the
+    # index too, and refuses for the same reason.
+    fix = _fix(report, "index-from-newer-build")
+    assert "rm " in fix and "docir reindex" in fix
+
+
+def test_it_replaces_the_generic_unreachable_finding_rather_than_doubling_it(
+    settings: Settings,
+) -> None:
+    # One cause, one finding: `store-unreachable` says "something went wrong"
+    # where this says what and what to do.
+    _add()
+    with sqlite3.connect(settings.db_path) as conn:
+        conn.execute("UPDATE alembic_version SET version_num = '9999'")
+
+    _, report = _doctor()
+
+    assert _kinds(report) == {"index-from-newer-build"}
+
+
+def test_it_is_an_error_that_strict_fails_on(settings: Settings) -> None:
+    _add()
+    with sqlite3.connect(settings.db_path) as conn:
+        conn.execute("UPDATE alembic_version SET version_num = '9999'")
+
+    code, report = _doctor("--strict")
+
+    assert code == 1
+    assert report["ok"] is False
+    # Named, not merely counted: `store-unreachable` is an error kind too, so a
+    # bare exit code cannot tell this finding from the generic one it replaces.
+    failing = {f["kind"] for f in report["findings"] if f["severity"] == "error"}
+    assert failing == {"index-from-newer-build"}
+
+
+def test_the_predicate_keys_on_unknown_not_on_behind(settings: Settings) -> None:
+    # Guards the guard: the finding must key on "not shipped by this build",
+    # not on "different from head" — every store between two migrations is the
+    # latter, and reporting those would fire it on the ordinary upgrade.
+    # Asserted on the predicate rather than through a doctor run: restamping a
+    # finished schema back to `0001` makes the *next* migration replay onto
+    # columns that already exist, which tests the fixture rather than the rule.
+    _add()
+    assert doctor._revision_ahead(settings.db_path) == ""
+
+    with sqlite3.connect(settings.db_path) as conn:
+        conn.execute("UPDATE alembic_version SET version_num = '0001'")
+    assert doctor._revision_ahead(settings.db_path) == "", "an older revision is known"
+
+    with sqlite3.connect(settings.db_path) as conn:
+        conn.execute("UPDATE alembic_version SET version_num = '9999'")
+    assert doctor._revision_ahead(settings.db_path) == "9999"
+
+    settings.db_path.unlink()
+    assert doctor._revision_ahead(settings.db_path) == "", "no index means cannot say"
 
 
 def test_schema_drift_is_reported_with_the_first_change_named(
@@ -456,6 +530,13 @@ def _message(report: dict, kind: str) -> str:
     raise AssertionError(f"no {kind} finding in {report['findings']}")
 
 
+def _fix(report: dict, kind: str) -> str:
+    for finding in report["findings"]:
+        if finding["kind"] == kind:
+            return str(finding["fix"])
+    raise AssertionError(f"no {kind} finding in {report['findings']}")
+
+
 class _BrokenEmbedder:
     """An embedder whose model will not load, the way a truncated cache fails."""
 
@@ -504,6 +585,7 @@ def _environment(**overrides) -> doctor.Environment:
         "schema_present": True,
         "schema_error": "",
         "index_present": True,
+        "index_revision_ahead": "",
         "embed_model": None,
         "embedder_env": "",
         "embedder_id": "fastembed:BAAI/bge-small-en-v1.5",

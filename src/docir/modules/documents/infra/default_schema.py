@@ -58,8 +58,9 @@ _SCHEMA_HEADER = """\
 # (frontmatter) for a typed edge.
 #
 # Staleness: give a type a `review_days` cadence; `docir check` flags documents
-# whose last `verified` date (or last edit) is older than that. Set `owner` and
-# stamp `docir update <id> --verified` to reset the clock.
+# whose last `verified` date — or, when they have never been verified, their
+# `created` date — is older than that. Editing a document does not reset the
+# clock. Set `owner` and stamp `docir update <id> --verified` to reset it.
 #
 # Run `docir schema show` to see the fully merged result, and
 # `docir schema validate` to check this file before it reaches a write.

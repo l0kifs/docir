@@ -543,6 +543,28 @@ class TestStalenessCheck:
         issues = GraphChecker(_stale_schema()).check([doc], [])
         assert not any(i.kind == "stale" for i in issues)
 
+    def test_a_recent_edit_does_not_reset_the_clock(self) -> None:
+        # The clock runs from `created`, never `updated` (issue-6726eabcf871):
+        # an edit is not a verification, and the edit an overdue document most
+        # often gets is the note saying it is still overdue.
+        doc = _doc("adr-0001", created=date(2026, 1, 1), updated=date(2026, 7, 7))
+        issues = GraphChecker(_stale_schema()).check([doc], [], today=date(2026, 7, 7))
+        assert any(i.kind == "stale" for i in issues)
+
+    def test_the_finding_says_the_document_was_never_verified(self) -> None:
+        doc = _doc("adr-0001", created=date(2026, 1, 1), updated=date(2026, 7, 7))
+        issues = GraphChecker(_stale_schema()).check([doc], [], today=date(2026, 7, 7))
+        message = next(i.message for i in issues if i.kind == "stale")
+        assert "never verified, created 2026-01-01" in message
+
+    def test_a_document_inside_its_cadence_is_not_stale(self) -> None:
+        # Absent `verified` is not "infinitely stale": the cadence still runs,
+        # or every unverified document in a store is in the queue from birth
+        # (adr-fad49eaa4648).
+        doc = _doc("adr-0001", created=date(2026, 7, 1), updated=date(2026, 7, 1))
+        issues = GraphChecker(_stale_schema()).check([doc], [], today=date(2026, 7, 7))
+        assert not any(i.kind == "stale" for i in issues)
+
 
 class TestCodeCheck:
     """The Tier 1 half of code linkage: a governed glob that matches nothing."""

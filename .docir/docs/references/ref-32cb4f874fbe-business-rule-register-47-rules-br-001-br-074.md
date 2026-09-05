@@ -47,7 +47,7 @@ tags:
 - schema
 title: Business rule register — 47 rules, BR-001..BR-074
 type: reference
-updated: '2026-08-15'
+updated: '2026-09-04'
 ---
 
 # Business rule register
@@ -393,18 +393,18 @@ zero, so dropping it would filter on embedding-queue staleness rather than relev
 
 ## BR-033
 
-**Statement.** While a document's type declares a review cadence, the system shall report it as stale once more days have elapsed since its last verification (or last edit, if never verified) than the cadence allows.
+**Statement.** While a document's type declares a review cadence, the system shall report it as stale once more days have elapsed since its last verification — or, if it has never been verified, since its creation — than the cadence allows.
 
 **Pattern:** state · **Flow:** arch-f220a644d654 · **Actor:** — · **Confidence:** observed · **Status:** assumed · **Owner:** repo maintainer
 
-**Boundaries:** exactly at cadence → NOT stale (strict >), cadence 0 → never stale, archived → never stale, unknown type → never stale
+**Boundaries:** exactly at cadence → NOT stale (strict >), cadence 0 → never stale, archived → never stale, unknown type → never stale, never verified → the clock runs from `created`, not from birth-as-stale
 
-**Notes:** Falling back to `updated` means any edit — including an administrative tag rename — resets the clock. → issue-9ed4905e0db8.
+**Notes:** The clock never reads `updated`. It used to fall back to it, so any edit reset it — an administrative tag rename (issue-9ed4905e0db8) and, more damagingly, a re-check written into an unanswered document, which took it out of the queue (issue-6726eabcf871). adr-fad49eaa4648 moved the fallback to `created` and rejected treating an absent `verified` as infinitely stale.
 
 **Evidence:**
-- `src/docir/modules/documents/domain/services/graph_checks.py:84-111`
-- `src/docir/modules/documents/domain/entities/document.py:73-75`
-- `docs/adr/adr-bd7c4f3c5764-staleness-as-data.md`
+- `src/docir/modules/documents/domain/services/graph_checks.py`
+- `src/docir/modules/documents/domain/entities/document.py`
+- adr-bd7c4f3c5764, adr-fad49eaa4648
 
 ## BR-034
 

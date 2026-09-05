@@ -770,6 +770,12 @@ def query(
     has vouched for it recently. It is not a claim that the content is wrong.
     Confirm with `docir update <id> --verified` once you have re-read it.
 
+    The clock runs from `verified`, or from `created` for a document that has
+    never been verified — never from the last edit. Writing into a document
+    does not take it off this queue, so a note recording that an open question
+    is *still* open is safe to add (adr-fad49eaa4648). Only `--verified` clears
+    an entry.
+
     `--code <path>` answers the other direction: which documents declared they
     govern this file. Repeat it to ask about several paths at once — the answer
     is any document matching any of them, which is what makes

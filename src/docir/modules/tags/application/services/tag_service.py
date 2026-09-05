@@ -129,12 +129,17 @@ class TagService:
         Returns the ids of the documents rewritten, so a bulk edit says what it
         touched rather than reporting a bare success.
 
-        Those documents keep their `updated` date. Staleness falls back to
-        `updated` when a document has no explicit `verified`, so bumping it here
-        would make every document carrying the tag report as freshly reviewed —
-        a bulk administrative edit silently forging the one trust signal the
-        product offers. Same reasoning as `check --fix` and `delete --force`:
-        a mechanical rewrite is not a re-verification.
+        Those documents keep their `updated` date. `updated` is the edit clock
+        every read view shows and every reviewer sorts on, and a bulk
+        administrative rewrite claiming the whole corpus was edited today is a
+        lie about it. Same reasoning as `check --fix` and `delete --force`: a
+        mechanical rewrite is not an edit anybody made.
+
+        Staleness used to ride on this too — the clock fell back to `updated`,
+        so bumping it here forged the review signal (issue-9ed4905e0db8). It no
+        longer does: the clock reads `verified`, else `created`
+        (adr-fad49eaa4648), because *any* edit forged it, not only a mechanical
+        one. This rule stands on `updated`'s own meaning now.
         """
         if old == new:
             # A self-merge used to delete the tag and leave every document still

@@ -112,7 +112,9 @@ opts out, at a measured cost to recall:
 - **Staleness is data, not a guess.** Optional `owner` / `verified` fields plus a per-type
   review cadence make "is this doc still true?" a first-class, checkable fact — and a
   worklist: `docir query --owner platform-team --stale` is one steward's review queue,
-  cleared a document at a time with `docir update <id> --verified`.
+  cleared a document at a time with `docir update <id> --verified`. Un-stamped documents age from
+  `created`, never from the last edit, so writing into one cannot quietly take it off the
+  queue.
 - **Relations are typed.** A `related` edge carries a *kind* (`supersedes`, `depends_on`,
   `implements`, …) — a real graph, not a bag of links. `docir check` warns about a document
   with no edge at all (`orphan`), and only an edge closes it — naming an id in a paragraph

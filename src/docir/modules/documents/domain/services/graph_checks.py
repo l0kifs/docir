@@ -537,6 +537,12 @@ class GraphChecker:
         Staleness is honest re-verification, not a heuristic: a type opts
         in with a ``review_days`` cadence, and a document resets the clock by
         being ``--verified``. Types with no cadence are never flagged.
+
+        The clock runs from :meth:`Document.stale_reference_date` — ``verified``,
+        else ``created``, never ``updated``. A document that has never been
+        verified says so in the message: without it the reader sees a document
+        they edited yesterday reported as overdue and reads the finding as a bug
+        rather than as the answer to "who has confirmed this is still true".
         """
         issues: list[CheckIssue] = []
         for doc in documents:
@@ -548,12 +554,18 @@ class GraphChecker:
             overdue_by = (today - doc.stale_reference_date()).days - cadence
             if overdue_by > 0:
                 owner = f" (owner: {doc.owner})" if doc.owner else ""
+                since = (
+                    f"never verified, created {doc.created.isoformat()}"
+                    if doc.verified is None
+                    else f"verified {doc.verified.isoformat()}"
+                )
                 issues.append(
                     CheckIssue(
                         kind="stale",
                         message=(
                             f"{doc.id!r} is {overdue_by} day(s) past its "
-                            f"{cadence}-day review cadence{owner}"
+                            f"{cadence}-day review cadence ({since}) — confirm it "
+                            f"with `docir update {doc.id} --verified`{owner}"
                         ),
                         doc_ids=(doc.id,),
                     )

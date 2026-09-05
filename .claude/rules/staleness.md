@@ -22,6 +22,21 @@ Staleness is the one trust signal the product offers, so the rules protect the c
   after the query and **before the limit** (`--stale --limit 10` means ten stale documents, not the
   stale ones among the first ten).
 
+- **The clock runs from `verified`, else `created` — never `updated` (adr-fad49eaa4648).**
+  The fallback has to be a date an edit cannot move, or the queue clears itself the moment
+  anybody reads it: writing a re-check into an overdue document took it out of
+  `query --stale`, and a re-check is the one edit an unanswered document reliably gets, so
+  the longer something went unanswered the more certainly it disappeared
+  (issue-6726eabcf871). `created` is the only date the write path sets once and never
+  rewrites. This is issue-9ed4905e0db8 one level out — that issue stopped `tag rename`
+  advancing `updated` because a bulk edit forged the clock; *every* edit forged it.
+  **Absent `verified` is not infinitely stale**, which was the other candidate and was
+  measured before it was rejected: on this store it reports 83 of 84 cadence-bearing
+  documents, ones written the day before included, and makes `review_days` inert for every
+  unverified document — issue-40d1792bc9f9's shape, a warning that fires on the product's
+  own defaults. The `stale` finding names which clock it read, because a reader who edited
+  the document yesterday will otherwise read the finding as a bug.
+
 - **Staleness has two halves: a calendar and evidence.** `verified`/`review_days` answer
   "how long since a human read this"; `verified_code` answers "has the code moved since they
   did". `update --verified` fingerprints what each `code:` glob matched

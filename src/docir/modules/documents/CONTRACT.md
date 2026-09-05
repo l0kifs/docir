@@ -225,6 +225,12 @@ narrowed to one.) A `related` entry is a typed edge
 `UpdateDocumentRequest` also carries `set_owner` and `mark_verified` (stamp the
 review clock). `MaintenanceService` requires a `Clock` (staleness needs "today").
 
+`stale` is computed from `Document.stale_reference_date()` — `verified`, else `created`, and
+never `updated` (adr-fad49eaa4648). Only `mark_verified` moves an entry out of the queue; no
+other write does, including a body edit, so recording that an open question is still open
+cannot silence the report of it (issue-6726eabcf871). Absent `verified` is not treated as
+infinitely stale: the cadence still runs, from `created`.
+
 `isolated` is the reviewed exemption from `orphan`: free text saying why a document is *meant*
 to carry no relations, empty meaning not exempt (adr-e98749aa457d). Carried by both read
 shapes and by the projection, set by `AddDocumentRequest.isolated` and replaced by

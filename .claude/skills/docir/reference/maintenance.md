@@ -83,7 +83,14 @@ For docs that need periodic re-confirmation, set an `--owner` and, when you
 (or a human) confirm a doc is still correct, run `docir update <id> --verified`.
 A type's review cadence (`review_days` in the schema) drives a non-blocking
 `stale` warning in `docir check` and a `stale` flag on read views. Editing the
-body does not equal verifying it — `--verified` is the explicit signal.
+body does not equal verifying it — `--verified` is the explicit signal, and the
+only thing that clears an entry.
+
+The cadence is measured against the `verified` stamp; with no stamp, against
+`created`. **An edit is not a stamp** — write a re-check into an overdue doc and
+it stays overdue, which is what makes "asked again, no answer" safe to record.
+Write the note; stamp `--verified` only once somebody has actually confirmed the
+doc is correct.
 
 Pull the review queue rather than reading `check` output for it:
 

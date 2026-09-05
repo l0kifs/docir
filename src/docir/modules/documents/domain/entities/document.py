@@ -153,8 +153,20 @@ class Document:
         return digest.hexdigest()
 
     def stale_reference_date(self) -> date:
-        """The date staleness is measured from: last verification, else last edit."""
-        return self.verified or self.updated
+        """The date staleness is measured from: last verification, else creation.
+
+        Never ``updated`` (issue-6726eabcf871). The fallback has to be a date an edit
+        cannot move, or the queue clears itself the moment anybody reads it: a
+        document nobody has vouched for left the queue because somebody wrote in
+        it, and writing down "still unanswered" was the most reliable way to make
+        it disappear. The re-check *is* the evidence it is not resolved.
+
+        ``created`` is the one date the write path sets once and never rewrites
+        — not a retype, not a tag rename, not `check --fix`. Absent
+        ``verified``, it is also the earliest moment docir can honestly claim
+        anybody looked at the document, so the cadence runs from there.
+        """
+        return self.verified or self.created
 
     def related_targets(self) -> tuple[str, ...]:
         """Just the target ids of the outgoing edges (kind-agnostic)."""

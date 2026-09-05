@@ -264,7 +264,9 @@ def build_mcp_server(
             statuses: Statuses to include.
             tags: Registered tag keys — a document must carry all of them.
             owner: The staleness steward to filter by.
-            stale: Only documents past their type's review cadence.
+            stale: Only documents past their type's review cadence. Measured
+                against `verified`, else `created` — never the last edit. Only
+                `update(verified=True)` clears an entry.
             code: Paths to find governing documents for; any match counts.
             include_archived: Also return archived documents.
             include_inactive: Also return documents in an inactive status.

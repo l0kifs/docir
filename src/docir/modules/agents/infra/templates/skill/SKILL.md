@@ -161,6 +161,10 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
   `--verified` only if it is. If it is not, fix the document first. Nothing
   mechanical clears the finding — `check --fix` deliberately leaves it, because
   a repair has nothing to read with.
+- **Writing in a document does not clear `stale`.** Only `--verified` does. A
+  doc nobody has stamped counts its cadence from the day it was written, so
+  recording that an open question is *still* open leaves it in
+  `docir query --stale` — where that note used to delete it.
 - **Do not verify inside the task that moved the code.** If you edited
   `src/auth.py` this session, stamping `--verified` on the decision that governs
   it certifies your own change and turns the signal into "the check is green".

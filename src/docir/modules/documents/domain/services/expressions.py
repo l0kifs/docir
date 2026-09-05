@@ -68,6 +68,9 @@ def project(
         "tags": list(document.tags),
         "owner": document.owner or None,
         "verified": None if document.verified is None else document.verified.isoformat(),
+        # The audit `verified` cannot answer: which documents had a verification
+        # and lost it, and when. `null` means none ever was.
+        "revoked": None if document.revoked is None else document.revoked.isoformat(),
         "created": document.created.isoformat(),
         "updated": document.updated.isoformat(),
         "archived": document.archived,
@@ -95,6 +98,7 @@ PROJECTION_FIELDS: frozenset[str] = frozenset(
         "tags",
         "owner",
         "verified",
+        "revoked",
         "created",
         "updated",
         "archived",

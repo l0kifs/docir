@@ -39,6 +39,12 @@ class DocumentRow(Base):
     # Stewardship metadata for staleness (both optional).
     owner: Mapped[str] = mapped_column(String, nullable=False, default="")
     verified: Mapped[str | None] = mapped_column(String, nullable=True)
+    # The date a standing verification was withdrawn; what the cadence runs from
+    # once `verified` is gone. Nullable: absent means nothing was ever revoked.
+    revoked: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Digest of the title/description/body a verification covered. Empty means
+    # unknown — a verification stamped before the field existed, or none at all.
+    verified_content: Mapped[str] = mapped_column(String, nullable=False, default="")
     # Why this document is meant to carry no relations; empty means not exempt.
     # Indexed because `orphan` reads it for every document in the corpus and
     # `query --expr "isolated"` is how the exemptions are audited.

@@ -183,6 +183,18 @@ class MarkdownDocumentFileStore(DocumentFileStore):
             metadata["owner"] = document.owner
         if document.verified is not None:
             metadata["verified"] = document.verified.isoformat()
+        # The other half of the review clock, and in the file for the same
+        # reason `verified` is: it is what the cadence runs from once a
+        # verification has been withdrawn, so a teammate who clones the repo has
+        # to be able to read why a document is not due yet.
+        if document.revoked is not None:
+            metadata["revoked"] = document.revoked.isoformat()
+        # In the file for the reason every other piece of review state is: the
+        # index is gitignored, so a digest that lived only there would make
+        # "this is not what was verified" a fact only the machine that stamped
+        # it could know.
+        if document.verified_content:
+            metadata["verified_content"] = document.verified_content
         # Same rule as the stewardship keys: absent rather than an empty list,
         # so a document that governs no code carries no `code:` line at all.
         if document.code:
@@ -206,6 +218,7 @@ class MarkdownDocumentFileStore(DocumentFileStore):
     def _to_document(self, metadata: dict[str, object], body: str, path: str) -> Document:
         try:
             verified_raw = metadata.get("verified")
+            revoked_raw = metadata.get("revoked")
             return Document(
                 id=str(metadata["id"]),
                 title=str(metadata["title"]),
@@ -221,6 +234,8 @@ class MarkdownDocumentFileStore(DocumentFileStore):
                 path=path,
                 owner=str(metadata.get("owner", "")),
                 verified=None if verified_raw is None else _as_date(verified_raw),
+                revoked=None if revoked_raw is None else _as_date(revoked_raw),
+                verified_content=str(metadata.get("verified_content", "")),
                 code=_as_str_tuple(metadata.get("code")),
                 verified_code=_as_str_map(metadata.get("verified_code")),
                 isolated=str(metadata.get("isolated", "")),

@@ -44,14 +44,23 @@ The CLI is the only write path, so every rule these paths break is one nothing e
   The variable is `disk_diverged`, not `stale` — in this codebase `stale` means a document
   past its review cadence, a different concept on a different clock.
 
-- **Only a content edit may move `updated`.** Staleness falls back to `updated` when a
-  document has no explicit `verified`, so any mechanical rewrite that bumps it launders the
-  review clock — the one trust signal the product offers (adr-bd7c4f3c5764). Three write paths rewrite
-  documents without touching `updated`: `check --fix`, `delete --force`, and `tag rename` /
+- **Only a content edit may move `updated`.** The reason is no longer staleness: since
+  adr-fad49eaa4648 the review clock does not read `updated` at all, and the rule stands on its
+  own ground — `updated` is the edit clock every read view shows, so a mechanical rewrite
+  claiming the corpus was edited today is a lie about that one. Three write paths rewrite
+  documents without touching it: `check --fix`, `delete --force`, and `tag rename` /
   `tag rm --force`. `TagService` therefore has **no `Clock`** — it was injected only to stamp
   the date it must not stamp. Adding a fourth mechanical rewrite? It does not set `updated`.
-  (The alternative — measure staleness from `verified` only — is rejected: it makes every
-  never-verified document stale from `created`, which is issue-9cb85759076d's failure mode again.)
+  What the review clock does read is in `.claude/rules/staleness.md`.
+
+- **A content edit withdraws a standing verification (adr-f4e6ade4afd0).** Same predicate as
+  the re-embed (`content_changed`), same transaction: `verified` is erased and `revoked`
+  stamped. `--verified` passed with the edit outranks it, and also records
+  `verified_content` — the digest of what it covered, taken from the document the write
+  produces, never from `base`. `--clear-verified` is the sibling write and not the same one:
+  it erases the stamp and leaves *no* `revoked`. A document carrying no verification is left
+  alone, and asking to withdraw one it does not have is refused. The argument, and the clock
+  both feed, is in `.claude/rules/staleness.md`.
 
 - **A forced delete compensates for the edges it breaks.** `delete --force` strips the edge
   from every referencing document in the same transaction and returns their ids (the CLI

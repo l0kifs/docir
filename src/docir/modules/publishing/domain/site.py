@@ -74,6 +74,10 @@ class SiteDocument:
     incoming: tuple[Edge, ...] = ()
     owner: str = ""
     verified: str | None = None
+    #: When a standing verification was withdrawn. Carried so the page does not
+    #: report a document as never verified when the corpus knows it was, and
+    #: knows when the claim lapsed.
+    revoked: str | None = None
     stale: bool = False
     archived: bool = False
     #: Repo-relative globs the document declares it governs. Published as text:
@@ -112,6 +116,7 @@ class SiteDocument:
             outgoing=_edges(view.get("related")),
             owner=_text(view, "owner"),
             verified=_optional_text(view, "verified"),
+            revoked=_optional_text(view, "revoked"),
             stale=bool(view.get("stale", False)),
             archived=bool(view.get("archived", False)),
             code=_texts(view, "code"),
@@ -247,6 +252,7 @@ def _replace_edges(
         incoming=incoming,
         owner=document.owner,
         verified=document.verified,
+        revoked=document.revoked,
         stale=document.stale,
         archived=document.archived,
         code=document.code,

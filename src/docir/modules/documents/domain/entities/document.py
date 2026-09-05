@@ -39,6 +39,25 @@ class Document:
     # ``verified`` is the date somebody last re-confirmed the doc is still true.
     owner: str = ""
     verified: date | None = None
+    #: The date a standing verification was withdrawn — by an edit to the
+    #: content that was verified, or by ``update --clear-verified``. It is what
+    #: the review cadence runs from once ``verified`` is gone, so a revocation
+    #: puts the document back in the queue one cadence later rather than
+    #: immediately (adr-f4e6ade4afd0).
+    #:
+    #: Stamped only where a verification actually stood. Editing a document that
+    #: carries none leaves it untouched, which is what keeps issue-6726eabcf871
+    #: closed: writing into an unverified document can still never move its
+    #: clock, and the one date that *can* move it costs a `--verified` first.
+    revoked: date | None = None
+    #: Digest of the text a verification covered — title, description and body —
+    #: taken at the moment it was stamped. The evidence half of the *calendar*,
+    #: as ``verified_code`` is the evidence half of the code: ``revoked`` records
+    #: that a CLI write moved the content, and this catches the same move made
+    #: any other way — a hand-edit, a merge, or a build that predates
+    #: revocation. Absent means *unknown*, never *unchanged*, so a document
+    #: verified before this field existed reports nothing.
+    verified_content: str = ""
     #: Repo-relative globs naming the code this document governs
     #: (issue-90aea6d1b891). Held as written, in the author's order: the
     #: patterns are matched against a working tree that is not this module's to
@@ -149,11 +168,35 @@ class Document:
         # the next reindex.
         if self.isolated:
             parts.append(self.isolated)
+        # And again, for the third field added after the hash existed: a corpus
+        # where nothing has been revoked must hash exactly as it did before.
+        if self.revoked is not None:
+            parts.append(self.revoked.isoformat())
+        # Appended under the same rule as the three fields above it.
+        if self.verified_content:
+            parts.append(self.verified_content)
         digest = hashlib.sha256("\x1f".join(parts).encode("utf-8"))
         return digest.hexdigest()
 
+    def verification_digest(self) -> str:
+        """Digest of the text a reviewer reads: title, description, body.
+
+        Exactly the three fields whose change withdraws a verification
+        (adr-f4e6ade4afd0), so what this records and what the write path revokes
+        on cannot come apart. Deliberately **not** :meth:`content_hash`, which
+        also covers the type, the status, the tags, the edges and the review
+        state itself — a status change would read as "the document you verified
+        has been rewritten", which is the one thing this must never say.
+
+        Truncated to 12 hex like the ``code`` digests: it is compared against
+        itself, never inverted, and a shorter field keeps the frontmatter
+        readable.
+        """
+        parts = [self.title, self.description, self.body.strip("\n")]
+        return hashlib.sha256("\x1f".join(parts).encode("utf-8")).hexdigest()[:12]
+
     def stale_reference_date(self) -> date:
-        """The date staleness is measured from: last verification, else creation.
+        """The date staleness is measured from: verification, revocation, creation.
 
         Never ``updated`` (issue-6726eabcf871). The fallback has to be a date an edit
         cannot move, or the queue clears itself the moment anybody reads it: a
@@ -165,8 +208,20 @@ class Document:
         — not a retype, not a tag rename, not `check --fix`. Absent
         ``verified``, it is also the earliest moment docir can honestly claim
         anybody looked at the document, so the cadence runs from there.
+
+        ``revoked`` sits between the two (adr-f4e6ade4afd0). It records the moment a
+        verification stopped being true, and a document that reaches it is not
+        a document nobody ever vouched for: somebody did, then the content moved
+        under the claim. Ageing it from ``created`` would report it overdue the
+        instant the edit landed, on a corpus older than its cadence — the
+        failure mode adr-fad49eaa4648 measured and rejected — so the cadence
+        restarts from the revocation instead.
+
+        It cannot be used to clear the queue by writing, because only a standing
+        ``verified`` can be revoked: a document with no verification has nothing
+        to withdraw, and an edit leaves its clock exactly where it was.
         """
-        return self.verified or self.created
+        return self.verified or self.revoked or self.created
 
     def related_targets(self) -> tuple[str, ...]:
         """Just the target ids of the outgoing edges (kind-agnostic)."""

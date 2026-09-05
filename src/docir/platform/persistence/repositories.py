@@ -102,6 +102,8 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
         row.owner = document.owner
         row.isolated = document.isolated
         row.verified = None if document.verified is None else document.verified.isoformat()
+        row.revoked = None if document.revoked is None else document.revoked.isoformat()
+        row.verified_content = document.verified_content
 
         self._session.execute(delete(DocumentTagRow).where(DocumentTagRow.doc_id == document.id))
         self._session.execute(delete(RelationRow).where(RelationRow.source == document.id))
@@ -558,6 +560,8 @@ def _to_document(
         path=row.path,
         owner=row.owner,
         verified=None if row.verified is None else date.fromisoformat(row.verified),
+        revoked=None if row.revoked is None else date.fromisoformat(row.revoked),
+        verified_content=row.verified_content,
         code=tuple(pattern for pattern, _ in code),
         verified_code={pattern: digest for pattern, digest in code if digest is not None},
         isolated=row.isolated,

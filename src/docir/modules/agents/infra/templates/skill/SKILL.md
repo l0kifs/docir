@@ -138,6 +138,7 @@ docir update <id> --set-owner platform-team     # assign a steward
 docir update <id> --set-code "src/auth/**"      # what code this doc governs
 docir update <id> --type architecture --status draft   # retype; the id never changes
 docir update <id> --verified                     # stamp today as last-verified
+docir update <id> --clear-verified               # take that stamp back
 docir update <id> --append-section "Resolution" --body "Fixed in PR 42"
 docir update <id> --replace-section "Context" --body "..."
 docir update <id> --remove-section "Notes"       # delete a heading and its text
@@ -165,6 +166,16 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
   doc nobody has stamped counts its cadence from the day it was written, so
   recording that an open question is *still* open leaves it in
   `docir query --stale` — where that note used to delete it.
+- **Editing a *verified* document withdraws the stamp.** Change its title,
+  description or body and `verified` is erased, `revoked` stamped today, and the
+  cadence restarts from there — what somebody read is not what is there now.
+  Pass `--verified` alongside the edit when you rewrote it *and* re-read it, and
+  `--clear-verified` when a stamp asserts a review nobody did — that one leaves no
+  window, so the doc ages from `created` again. A status, tag, edge or
+  `--set-code` change is not a content edit and keeps the stamp.
+- **A stamp cannot outlive a hand-edit either.** `--verified` fingerprints the
+  doc, and `docir check` raises `verification-outdated` once the file drifts from
+  that fingerprint — the edit that skipped the write path.
 - **Do not verify inside the task that moved the code.** If you edited
   `src/auth.py` this session, stamping `--verified` on the decision that governs
   it certifies your own change and turns the signal into "the check is green".

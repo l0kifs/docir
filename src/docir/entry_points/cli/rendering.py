@@ -195,6 +195,10 @@ def render_document(view: Mapping[str, object]) -> None:
         lines.append(f"[dim]owner:[/] {view['owner']}")
     if view.get("verified"):
         lines.append(f"[dim]verified:[/] {view['verified']}")
+    elif view.get("revoked"):
+        # Only when nothing stands: the pair reads as a contradiction otherwise,
+        # and a live `verified` is the one the cadence is running from.
+        lines.append(f"[dim]verification revoked:[/] {view['revoked']}")
     if view.get("stale"):
         lines.append("[yellow]⚠ stale — past its review cadence[/]")
     if view.get("archived"):

@@ -22,7 +22,43 @@ Staleness is the one trust signal the product offers, so the rules protect the c
   after the query and **before the limit** (`--stale --limit 10` means ten stale documents, not the
   stale ones among the first ten).
 
-- **The clock runs from `verified`, else `created` — never `updated` (adr-fad49eaa4648).**
+- **A verification does not outlive what it covered (adr-f4e6ade4afd0).** The trigger is
+  `content_changed` — the same three fields that queue a re-embed, and nothing else, because
+  everything a write can otherwise touch leaves the reviewed text exactly as it was and a
+  `status` is the first thing to move on a document somebody just finished reviewing. The
+  write erases `verified` and stamps `revoked`, and `--verified` in the same call outranks
+  it. `--clear-verified` is a *different* write, not the same one asked for by hand
+  (issue-b4813930bfca): it leaves no `revoked` at all, so the document ages from `created`.
+  An edit earns a restarted cadence because something true stopped being true; a withdrawal
+  earns none, or taking back a stamp that had nearly run out would push the due date further
+  away than leaving the wrong stamp in place. The cadence then
+  restarts **from the revocation**: ageing a revoked document from `created` reports it
+  overdue the instant the edit lands on any corpus older than its cadence, which is
+  adr-fad49eaa4648's own measurement arriving on the other clock. **Only a *standing*
+  verification is revoked**, and that is the load-bearing half — the automatic path skips a
+  document carrying none, and the flag is *refused* rather than idempotent, because a stamp
+  granted against no review is a fresh cadence bought by typing: issue-6726eabcf871 through
+  the new field. One verification buys one reset.
+
+- **`verified_content` catches the edits the write path cannot see.** `--verified` digests the
+  title/description/body it covered — hashed from the document the write *produces*, so
+  verifying alongside a rewrite records the rewrite — and `check` raises
+  `verification-outdated` wherever the two disagree: a hand-edit, a merge resolved into the
+  body, or a teammate on a build that predates revocation. The predicate is the digest and
+  **not** `verified < updated`, which was the obvious one and is unusable — a status or a tag
+  moves `updated` without touching a reviewed word, so it fires on the ordinary life of a
+  correctly verified document (issue-40d1792bc9f9's shape). Empty means *unknown*, so every
+  stamp older than the field is silent; both withdrawal paths clear it, since a digest under no
+  claim is evidence of nothing. A warning with two exits, a fresh `--verified` or a
+  `--clear-verified`, both judgements — so `check --fix` leaves it, exactly as for
+  `code-changed`.
+
+- The `verified_code` digests are **kept**:
+  they answer "has the code moved since somebody read this", which is exactly what is open on
+  a document whose calendar just reset — what adr-d9e6d5ccd0b4 forbids is an old digest under
+  a *fresh* `verified`, not one under none.
+
+- **The clock runs from `verified`, else `revoked`, else `created` — never `updated` (adr-fad49eaa4648).**
   The fallback has to be a date an edit cannot move, or the queue clears itself the moment
   anybody reads it: writing a re-check into an overdue document took it out of
   `query --stale`, and a re-check is the one edit an unanswered document reliably gets, so

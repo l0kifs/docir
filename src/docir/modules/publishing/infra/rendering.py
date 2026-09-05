@@ -1279,6 +1279,20 @@ def _type_dot(type_name: str) -> str:
     )
 
 
+def _verified_cell(document: SiteDocument) -> str:
+    """What the trust panel says about the document's review claim.
+
+    "never" is right for a document nobody vouched for and wrong for one whose
+    verification was withdrawn — the page would deny a review the corpus
+    records, and hide the date the cadence is now running from.
+    """
+    if document.verified:
+        return document.verified
+    if document.revoked:
+        return f"withdrawn {document.revoked}"
+    return "never"
+
+
 def _render_trust(document: SiteDocument) -> str:
     """Owner and verification as a panel — the trust signal, not a grey
     fragment in a dates line. Only what the payload carries: the site
@@ -1288,7 +1302,7 @@ def _render_trust(document: SiteDocument) -> str:
     the renderer guessing at it."""
     rows = [
         ("Owner", document.owner or "—"),
-        ("Verified", document.verified or "never"),
+        ("Verified", _verified_cell(document)),
         ("Created", document.created),
         ("Updated", document.updated),
     ]

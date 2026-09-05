@@ -146,6 +146,7 @@ class Dispatcher:
             set_code=_opt_tuple(payload, "set_code"),
             set_isolated=_opt_str(payload, "set_isolated"),
             mark_verified=_bool(payload, "mark_verified"),
+            clear_verified=_bool(payload, "clear_verified"),
             append_section=_opt_pair(payload, "append_section"),
             replace_section=_opt_pair(payload, "replace_section"),
             remove_section=remove_section,

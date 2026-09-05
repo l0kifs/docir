@@ -524,6 +524,17 @@ def update(
             ),
         ),
     ] = False,
+    clear_verified: Annotated[
+        bool,
+        typer.Option(
+            "--clear-verified",
+            help=(
+                "Withdraw the verification, leaving no review window: the "
+                "document ages from `created` again. Use it when a stamp asserts "
+                "a review nobody did. Refused when none is standing."
+            ),
+        ),
+    ] = False,
     append_section: Annotated[
         str | None,
         typer.Option("--append-section", help="Append the body text under this heading."),
@@ -597,6 +608,28 @@ def update(
     A repeated heading resolves to the first, here as everywhere, so removing the
     second of two means running it twice. `docir lint --deep` names the documents
     that have one.
+
+    --verified stamps today; --clear-verified takes the stamp back, erasing
+    `verified` and stamping `revoked` in its place. Editing the title, the
+    description or the body of a verified document does the same thing by
+    itself: the review covered that content, the content moved, so the
+    verification is withdrawn and the cadence restarts from the day it was:
+
+        docir update adr-3f9a2b1c7d4e --verified          # verified: 2026-09-05
+        docir update adr-3f9a2b1c7d4e --append-section H --body "..."
+                                                          # revoked: 2026-09-05
+        docir update adr-3f9a2b1c7d4e --clear-verified    # a stamp nobody earned
+                                                          # -> ages from `created`
+
+    Pass --verified alongside the edit to keep the stamp — that is "I rewrote it
+    and re-read it". A status, tag, type or edge change is not a content change
+    and leaves the verification standing. `docir query --stale` lists what the
+    cadence has caught up with; `docir query --expr "revoked"` lists what lapsed.
+
+    --verified also digests the text it covered, so `docir check` reports
+    (`verification-outdated`) a document edited *around* the CLI — a hand-edit, a
+    merge, or an older docir — where the stamp still stands over text nobody
+    read. Clear it by re-reading and stamping again, or by withdrawing it.
     """
     body_text = resolve_body(body, body_file, stdin, default="")
     payload: dict[str, object] = {
@@ -611,6 +644,7 @@ def update(
         "set_isolated": set_isolated,
         "set_code": None if set_code is None else _split_csv(set_code),
         "mark_verified": verified,
+        "clear_verified": clear_verified,
         "append_section": [append_section, body_text] if append_section else None,
         "replace_section": [replace_section, body_text] if replace_section else None,
         "remove_section": remove_section,
@@ -770,11 +804,16 @@ def query(
     has vouched for it recently. It is not a claim that the content is wrong.
     Confirm with `docir update <id> --verified` once you have re-read it.
 
-    The clock runs from `verified`, or from `created` for a document that has
-    never been verified — never from the last edit. Writing into a document
-    does not take it off this queue, so a note recording that an open question
-    is *still* open is safe to add (adr-fad49eaa4648). Only `--verified` clears
-    an entry.
+    The clock runs from `verified`, or from the day a verification was `revoked`,
+    or from `created` for a document nobody ever verified — never from the last
+    edit. Writing into an unverified document does not take it off this queue,
+    so a note recording that an open question is *still* open is safe to add
+    (adr-fad49eaa4648). Only `--verified` clears an entry.
+
+    Editing the title, description or body of a *verified* document withdraws
+    that verification and restarts the cadence from that day (adr-f4e6ade4afd0) — the
+    content somebody read is not the content that is there now. Pass `--verified`
+    with the edit to keep the stamp.
 
     `--code <path>` answers the other direction: which documents declared they
     govern this file. Repeat it to ask about several paths at once — the answer
@@ -788,8 +827,8 @@ def query(
     It sees each document's own fields plus its edges resolved in *both*
     directions, every edge carrying the other document's type and status:
 
-        id type status title description tags owner verified created updated
-        archived stale code isolated
+        id type status title description tags owner verified revoked created
+        updated archived stale code isolated
         related     [{to, kind, type, status}]   outgoing
         related_by  [{to, kind, type, status}]   incoming
 

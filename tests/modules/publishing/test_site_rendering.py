@@ -471,6 +471,16 @@ class TestShell:
         map_part = page[page.index("Local map") :]
         assert 'href="adr-0002.html"' in map_part[: map_part.index("</svg>")]
 
+    def test_the_trust_panel_says_a_verification_was_withdrawn(self) -> None:
+        """ "never" is right for a document nobody vouched for and wrong for one
+        whose verification was withdrawn — the page would deny a review the
+        store records, and hide the date the cadence now runs from."""
+        revoked = dict(_DOCS[0]) | {"verified": None, "revoked": "2026-02-01"}
+        page = render_site(build_site([revoked]), title="Docs", version="1")["adr-0001.html"]
+        rail = page[page.index("Trust") :]
+        assert "withdrawn 2026-02-01" in rail
+        assert "never" not in rail[: rail.index("Created")]
+
     def test_the_governed_globs_are_published_as_text_and_only_when_present(self) -> None:
         """A document's `code` globs reach the page (they are part of what the
         store knows), as plain patterns: the site has no repository to resolve

@@ -129,6 +129,44 @@ class TestHumanRenderers:
         for token in ("adr-0001", "BODY TEXT", "stale", "archived", "team", "adr-0002"):
             assert token in out
 
+    def test_render_document_shows_a_withdrawn_verification(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        # A revoked document carries no `verified:` line, so a panel that only
+        # knew that field would show nothing at all about its review state —
+        # and the cadence is running from the date it does not print.
+        rendering.render_document(
+            {
+                "id": "adr-0001",
+                "type": "decision",
+                "status": "accepted",
+                "title": "Auth",
+                "verified": None,
+                "revoked": "2026-02-01",
+            }
+        )
+        out = capsys.readouterr().out
+        assert "verification revoked" in out
+        assert "2026-02-01" in out
+
+    def test_a_standing_verification_hides_an_older_revocation(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        # The pair reads as a contradiction, and only one of them is the clock.
+        rendering.render_document(
+            {
+                "id": "adr-0001",
+                "type": "decision",
+                "status": "accepted",
+                "title": "Auth",
+                "verified": "2026-03-01",
+                "revoked": "2026-02-01",
+            }
+        )
+        out = capsys.readouterr().out
+        assert "2026-03-01" in out
+        assert "revoked" not in out
+
     def test_render_document_minimal(self, capsys: pytest.CaptureFixture[str]) -> None:
         rendering.render_document(
             {"id": "issue-0001", "type": "issue", "status": "open", "title": "T"}

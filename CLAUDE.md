@@ -214,6 +214,11 @@ enough to stop a wrong edit and never enough to argue with.
   neither the clock nor the cadence.
 - `verified_code` digests live in **frontmatter, not the index**, hash contents rather than
   mtimes, and absent always means *unverified*. It stays a warning, and `--fix` must not clear it.
+- A verification is withdrawn by the write that invalidates it, and `revoked` records when; the
+  cadence restarts there. Only a *standing* one can be — nothing an unverified document does
+  moves its clock. Withdrawing by hand records no date and earns no window.
+- `verified_content` is what `verification-outdated` compares against — keyed on the reviewed
+  text, never on `updated`, which moves without it.
 
 ### The schema — [`.claude/rules/schema.md`](.claude/rules/schema.md)
 

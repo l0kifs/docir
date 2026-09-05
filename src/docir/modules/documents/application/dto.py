@@ -47,6 +47,12 @@ class DocumentView:
     path: str | None
     owner: str = ""
     verified: str | None = None
+    #: When the document's standing verification was withdrawn — by an edit to
+    #: the content it covered, or by ``--clear-verified``. Absent (and so
+    #: dropped from the trimmed JSON) when none ever was. It is the date the
+    #: review cadence runs from while ``verified`` is empty, so a reader who
+    #: sees ``stale: false`` on an unverified document can tell why.
+    revoked: str | None = None
     #: Repo-relative globs naming the code this document governs. Empty (and so
     #: dropped from the trimmed JSON) when it names none.
     code: tuple[str, ...] = ()
@@ -103,6 +109,7 @@ class DocumentView:
             path=document.path,
             owner=document.owner,
             verified=None if document.verified is None else document.verified.isoformat(),
+            revoked=None if document.revoked is None else document.revoked.isoformat(),
             code=document.code,
             isolated=document.isolated,
             stale=stale,
@@ -172,6 +179,10 @@ class DocumentSummary:
     archived: bool
     owner: str = ""
     verified: str | None = None
+    #: Rides along for the same reason ``isolated`` does: `query --expr
+    #: "revoked"` is how a corpus is asked which verifications lapsed and when,
+    #: and an audit that has to fetch each document to answer is one nobody runs.
+    revoked: str | None = None
     #: The governed globs ride along on the skeleton, like tags and edges: they
     #: are a handful of tokens and they answer "does this document concern the
     #: code I am about to change" without a second fetch.
@@ -232,6 +243,7 @@ class DocumentSummary:
             archived=document.archived,
             owner=document.owner,
             verified=None if document.verified is None else document.verified.isoformat(),
+            revoked=None if document.revoked is None else document.revoked.isoformat(),
             code=document.code,
             isolated=document.isolated,
             stale=stale,
@@ -303,6 +315,14 @@ class UpdateDocumentRequest:
     #: on this request does.
     set_isolated: str | None = None
     mark_verified: bool = False
+    #: Withdraw the standing verification: ``verified`` is erased and ``revoked``
+    #: stamped today. The one way back from a stamp that asserts something
+    #: nobody asserted — without it the only recovery was the hand-edit the CLI
+    #: exists to prevent, which `docir check` then reports (issue-b4813930bfca).
+    #: Refused alongside ``mark_verified`` (the two say opposite things), and on
+    #: a document carrying no verification: the stamp restarts the cadence, and
+    #: one granted against no review is a review window bought by typing.
+    clear_verified: bool = False
     append_section: tuple[str, str] | None = None
     replace_section: tuple[str, str] | None = None
     #: Delete a section outright — the one body edit that takes a heading and no

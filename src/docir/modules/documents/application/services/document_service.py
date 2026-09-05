@@ -297,6 +297,12 @@ class DocumentService:
             changes: dict[str, object] = {}
             content_changed = self._apply_metadata(request, base, changes, uow)
             content_changed |= self._apply_body(request, base, changes, disk_diverged)
+            # After both, because the body is half of what a verification
+            # covers: whether the content moved is not known until the section
+            # or body edit has been staged.
+            if content_changed:
+                self._revoke_verification(request, base, changes)
+            self._record_verified_content(request, base, changes)
 
             if not changes:
                 return DocumentView.from_document(base, stale=self._is_stale(base))
@@ -1132,10 +1138,113 @@ class DocumentService:
         if request.set_code is not None:
             self._validator.validate_code(request.set_code)
             changes["code"] = tuple(request.set_code)
-        if request.mark_verified:
-            changes["verified"] = self._clock.today()
+        self._apply_verification(request, base, changes)
         self._apply_code_digests(request, base, changes)
         return content_changed
+
+    def _apply_verification(
+        self, request: UpdateDocumentRequest, base: Document, changes: dict[str, object]
+    ) -> None:
+        """Stage an explicit verification or an explicit withdrawal of one.
+
+        The two are refused together rather than ordered: ``--verified
+        --clear-verified`` is not a call with a winner, it is a caller that does
+        not know which one it meant.
+
+        Verifying clears ``revoked``. The clock reads ``verified`` first either
+        way, so leaving it would change no behaviour — and would leave a date in
+        the frontmatter asserting that this document's verification has been
+        withdrawn, which is the opposite of what the file now says.
+
+        Withdrawing needs a **standing** verification and is refused without
+        one, so the flag cannot manufacture review state on a document nobody
+        ever vouched for.
+
+        It erases the stamp and **leaves no ``revoked`` date**, which is what
+        separates it from the automatic revocation. The two answer different
+        questions. An edit says "this was true and the content moved", so the
+        cadence restarts from the edit. `--clear-verified` says "this was never
+        true", and a claim nobody made buys nothing: the document falls back to
+        ``created``, exactly where a never-verified one sits, and a bad stamp
+        that had nearly run out reports overdue at once instead of being handed
+        a fresh cadence by the act of withdrawing it (adr-f4e6ade4afd0).
+        """
+        if request.mark_verified and request.clear_verified:
+            raise ValidationError(
+                "--verified and --clear-verified say opposite things; pass one of them"
+            )
+        if request.mark_verified:
+            changes["verified"] = self._clock.today()
+            changes["revoked"] = None
+        elif request.clear_verified:
+            if base.verified is None:
+                raise ValidationError(self._nothing_to_withdraw(base))
+            changes["verified"] = None
+            changes["revoked"] = None
+            changes["verified_content"] = ""
+
+    @staticmethod
+    def _record_verified_content(
+        request: UpdateDocumentRequest, base: Document, changes: dict[str, object]
+    ) -> None:
+        """Record what the verified text looked like, for the check to compare against.
+
+        Last, and outside :meth:`_apply_metadata`, because it digests the
+        document the write is about to produce: a `--verified` passed with
+        `--replace-section` covers the section as rewritten, and hashing ``base``
+        would record the text the reviewer replaced.
+
+        Only ``--verified`` writes it. The withdrawal paths clear it, and every
+        other write leaves it exactly as it was — a status change must not be
+        able to re-certify a document by refreshing the evidence.
+        """
+        if not request.mark_verified:
+            return
+        changes["verified_content"] = base.with_updates(**changes).verification_digest()
+
+    @staticmethod
+    def _nothing_to_withdraw(base: Document) -> str:
+        """Why a ``--clear-verified`` was refused, in the caller's terms."""
+        if base.revoked is not None:
+            return (
+                f"{base.id!r} carries no verification to withdraw: it was already "
+                f"revoked on {base.revoked.isoformat()}"
+            )
+        return f"{base.id!r} carries no verification to withdraw"
+
+    def _revoke_verification(
+        self, request: UpdateDocumentRequest, base: Document, changes: dict[str, object]
+    ) -> None:
+        """Withdraw a standing verification the edit has just invalidated.
+
+        Fires when the write moved the **content** — title, description or body:
+        exactly what somebody read when they vouched for the document, and
+        exactly what ``content_changed`` already tracks for the embeddings. A
+        status change, a retype, a tag or an edge does not: none of them changes
+        a word of what was reviewed (adr-f4e6ade4afd0).
+
+        Two calls are deliberately not revocations. ``--verified`` in the same
+        command is the ordinary "rewrote it and re-read it" edit, and the
+        explicit stamp wins over the inferred withdrawal. ``--clear-verified``
+        has already withdrawn it.
+
+        Only a *standing* verification is revoked. A document with none has
+        nothing to withdraw, and stamping ``revoked`` on it anyway would hand
+        every unverified document a fresh cadence on every edit — the review
+        queue clearing itself the moment somebody writes in it, which is
+        issue-6726eabcf871 arriving by a new door. So the clock can be moved
+        forward at most once per verification, and moving it costs a
+        verification first.
+        """
+        if request.mark_verified or request.clear_verified or base.verified is None:
+            return
+        changes["verified"] = None
+        changes["revoked"] = self._clock.today()
+        # The digest went with the verification. Keeping it would leave the file
+        # asserting what the text looked like when somebody read it, under no
+        # claim that anybody did — and `revoked` already records the move it
+        # would be evidence of.
+        changes["verified_content"] = ""
 
     def _apply_code_digests(
         self, request: UpdateDocumentRequest, base: Document, changes: dict[str, object]

@@ -60,8 +60,8 @@ files and the derived index never disagree.
   **before** the limit like `stale_only` and `code_paths` (adr-7316abc6be93). The projection
   it evaluates against is **public surface**, because a user's expression is written against
   it and cannot be broken silently:
-  `id type status title description tags owner verified created updated archived stale code
-  isolated`,
+  `id type status title description tags owner verified revoked created updated archived stale
+  code isolated`,
   plus `related` (outgoing) and `related_by` (incoming), each entry `{to, kind, type, status}`
   with the *other* document's type and status resolved — `null` for both when the corpus no
   longer carries it. Adding a key is additive; renaming or removing one is not.
@@ -222,14 +222,43 @@ section. (Distinct from `DocumentView.section`, which says the body *was*
 narrowed to one.) A `related` entry is a typed edge
 (`RelatedView{target, kind}`); `AddDocumentRequest.related` /
 `UpdateDocumentRequest.set_related` accept `<id>` / `<id>:<kind>` tokens.
-`UpdateDocumentRequest` also carries `set_owner` and `mark_verified` (stamp the
-review clock). `MaintenanceService` requires a `Clock` (staleness needs "today").
+`UpdateDocumentRequest` also carries `set_owner`, `mark_verified` (stamp the
+review clock) and `clear_verified` (withdraw the stamp, refused when none is
+standing). The two verification flags are refused together.
+`MaintenanceService` requires a `Clock` (staleness needs "today").
 
-`stale` is computed from `Document.stale_reference_date()` — `verified`, else `created`, and
-never `updated` (adr-fad49eaa4648). Only `mark_verified` moves an entry out of the queue; no
-other write does, including a body edit, so recording that an open question is still open
-cannot silence the report of it (issue-6726eabcf871). Absent `verified` is not treated as
-infinitely stale: the cadence still runs, from `created`.
+`stale` is computed from `Document.stale_reference_date()` — `verified`, else `revoked`, else
+`created`, and never `updated` (adr-fad49eaa4648, adr-f4e6ade4afd0). Only `mark_verified` moves an
+entry out of the queue; no other write does, and an edit to an unverified document moves
+nothing, so recording that an open question is still open cannot silence the report of it
+(issue-6726eabcf871). Absent `verified` is not treated as infinitely stale: the cadence still
+runs, from `revoked` or `created`.
+
+`revoked` is when a *standing* verification was withdrawn, and both read shapes carry it. Two
+writes stamp it, and they are the same operation reached two ways (adr-f4e6ade4afd0):
+a content edit stamps it — `set_title`, `set_description`, or any body mode, exactly what
+`content_changed` already tracks — because the content somebody read is not the content that is
+now there. `mark_verified` in the same call wins and clears `revoked`; a status, type, tag, edge,
+owner, `isolated` or `code` change is not a content edit and leaves the verification standing. A
+document with no `verified` has nothing to withdraw and is left alone, which is what keeps an
+edit from ever moving an unverified document's clock. The digests in `verified_code` are **kept**
+across a revocation, so `code-changed` still reports on a document whose calendar has just been
+reset.
+
+`clear_verified` is the other half, and it is **not** the same write: it erases the stamp and
+leaves *no* `revoked`, so the document ages from `created` as one nobody ever verified does. An
+edit says "this was true and the content moved" and earns a restarted cadence; a withdrawal says
+"this was never true" and earns nothing — otherwise taking back a stamp that had nearly run out
+would push the document's due date further away than leaving it in place. It is refused when no
+verification is standing.
+
+`verified_content` is the digest of the title/description/body a verification covered, recorded
+by `mark_verified` from the document the write **produces** (so `--replace-section --verified`
+covers the section as rewritten) and cleared by both withdrawal paths. `check` compares it and
+reports `verification-outdated` — a Tier 1 warning — for a document edited around the CLI: a
+hand-edit, a merge, or a build predating revocation. Empty means *unknown*, so a verification
+stamped before the field existed reports nothing. Deliberately not `updated`: a status or tag
+change moves that without touching a word of what was reviewed.
 
 `isolated` is the reviewed exemption from `orphan`: free text saying why a document is *meant*
 to carry no relations, empty meaning not exempt (adr-e98749aa457d). Carried by both read

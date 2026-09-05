@@ -114,7 +114,12 @@ opts out, at a measured cost to recall:
   worklist: `docir query --owner platform-team --stale` is one steward's review queue,
   cleared a document at a time with `docir update <id> --verified`. Un-stamped documents age from
   `created`, never from the last edit, so writing into one cannot quietly take it off the
-  queue.
+  queue. And a stamp does not outlive what it covered: edit a verified document's title,
+  description or body and the verification is withdrawn, the cadence restarting from that day —
+  pass `--verified` with the edit if you re-read it. `--clear-verified` takes back a stamp that
+  asserts a review nobody did, and grants no window at all: that document ages from `created`
+  again. A verification also fingerprints what it covered, so `docir check` flags one that
+  outlived a hand-edit.
 - **Relations are typed.** A `related` edge carries a *kind* (`supersedes`, `depends_on`,
   `implements`, …) — a real graph, not a bag of links. `docir check` warns about a document
   with no edge at all (`orphan`), and only an edge closes it — naming an id in a paragraph
@@ -150,6 +155,8 @@ outside change — so hand-editing is supported, but not on every field:
 | `code` | ❌ | `docir update <id> --set-code "src/auth/**"` |
 | `id` | ❌ never | it is the primary key; changing it orphans every inbound link |
 | `verified` | ❌ never | `docir update <id> --verified` — it asserts somebody re-read the doc |
+| `revoked` | ❌ never | Set by editing a verified doc; the cadence runs from it |
+| `verified_content` | ❌ never | The digest `docir check` compares the reviewed text against |
 | `isolated` | ❌ never | `docir update <id> --set-isolated "<why>"` — it exempts the doc from `orphan` |
 
 **Then run `docir reindex && docir check`** — or let the daemon do the reindex for you.

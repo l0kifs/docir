@@ -162,6 +162,13 @@ class TestFieldMapping:
         assert document.verified is None
         assert document.stale is False
 
+    def test_a_withdrawn_verification_survives(self) -> None:
+        # Without it the page reports "Verified: never" for a document the
+        # corpus knows was verified, and hides the date its cadence runs from.
+        (document,) = build_site([dict(_A, revoked="2026-02-01")]).documents
+        assert document.verified is None
+        assert document.revoked == "2026-02-01"
+
     def test_staleness_and_ownership_survive(self) -> None:
         (document,) = build_site([_C]).documents
         assert document.stale is True

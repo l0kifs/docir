@@ -86,11 +86,35 @@ A type's review cadence (`review_days` in the schema) drives a non-blocking
 body does not equal verifying it — `--verified` is the explicit signal, and the
 only thing that clears an entry.
 
-The cadence is measured against the `verified` stamp; with no stamp, against
-`created`. **An edit is not a stamp** — write a re-check into an overdue doc and
-it stays overdue, which is what makes "asked again, no answer" safe to record.
-Write the note; stamp `--verified` only once somebody has actually confirmed the
-doc is correct.
+The cadence is measured against the `verified` stamp; with no stamp, against the
+date a verification was `revoked`; with neither, against `created`. **An edit is
+not a stamp** — write a re-check into an overdue doc and it stays overdue, which
+is what makes "asked again, no answer" safe to record. Write the note; stamp
+`--verified` only once somebody has actually confirmed the doc is correct.
+
+**A verified doc that is edited loses the stamp.** Changing its title,
+description or body erases `verified`, records `revoked` as today, and restarts
+the cadence from there: the review covered content that has since moved. Two
+ways to say otherwise, both explicit:
+
+```
+docir update <id> --replace-section Context --body "..." --verified
+                                             # rewrote it and re-read it
+docir update <id> --clear-verified           # this stamp was never earned
+```
+
+`--clear-verified` grants no review window — the doc ages from `created` again,
+where a never-verified one sits — and is refused when no verification is
+standing. Withdrawing a stamp is saying nobody vouched for this, so a bad stamp
+that had nearly run out goes back on the queue instead of buying a fresh cadence.
+
+`--verified` also digests the text it covered. `docir check` then reports
+`verification-outdated` for a doc edited **around** the CLI — a hand-edit, a
+merge, or a teammate on an older docir — where the stamp still stands over text
+nobody read. Two ways out, and both are yours to judge: re-read the doc, then
+either stamp it or take the claim back. `check --fix` makes neither call.
+
+`docir query --expr "revoked"` lists what a corpus has lost and when.
 
 Pull the review queue rather than reading `check` output for it:
 
@@ -126,7 +150,8 @@ hand-edited corpus, this is the contract:
 | `type` | ❌ | Must be in the schema, and the id prefix already encodes it (`check` reports `unknown-type`). |
 | `id` | ❌ **never** | It is the primary key. Changing it orphans every inbound link and can duplicate a live id. |
 | `created` / `updated` | ❌ | `updated` is the staleness clock's fallback. |
-| `verified` | ❌ **never** | It means "somebody re-read this and it is still true". Nothing can check that, so writing it by hand is simply a false statement. Use `docir update <id> --verified`. |
+| `verified` | ❌ **never** | It means "somebody re-read this and it is still true". Nothing can check that, so writing it by hand is simply a false statement. Use `docir update <id> --verified`, and `--clear-verified` to take one back. |
+| `revoked` | ❌ **never** | The date a verification was withdrawn, and the cadence runs from it — writing one by hand grants a review window nobody earned. Both spellings that set it are CLI writes. |
 
 **After any hand-edit: `docir reindex` then `docir check`.** Watch `documents_skipped`
 in the reindex output (above). `check` then catches `unknown-tag`, `unknown-status`,

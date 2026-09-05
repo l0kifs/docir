@@ -75,6 +75,7 @@ RESERVED_FINDING_KINDS: frozenset[str] = frozenset(
         "unblocked",
         "unmatched-code",
         "code-changed",
+        "verification-outdated",
         "tag-key-format",
         "unknown-type",
         "unknown-status",
@@ -89,8 +90,8 @@ RESERVED_FINDING_KINDS: frozenset[str] = frozenset(
 
 #: Everything else (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`,
 #: `unknown-status`, `unknown-tag`, `tag-key-format`, `unmatched-code`,
-#: `code-changed`, `missing-required`, `unknown-relation-kind`, `schema-drift`,
-#: `stale-index-build`, `unblocked`)
+#: `code-changed`, `verification-outdated`, `missing-required`,
+#: `unknown-relation-kind`, `schema-drift`, `stale-index-build`, `unblocked`)
 #: describes shape or classification, not
 #: damage. `orphan` in particular fires for any document with no relations — the
 #: default state of a new one — so treating these as build failures made the gate
@@ -189,6 +190,7 @@ class GraphChecker:
             issues.extend(self._find_unmatched_code(documents, code_matches))
         if code_digests is not None:
             issues.extend(self._find_changed_code(documents, code_digests))
+        issues.extend(self._find_outdated_verification(documents))
         return issues
 
     def check_schema_conformance(
@@ -295,6 +297,14 @@ class GraphChecker:
         this" to "CI is green", which is the laundering adr-bd7c4f3c5764 guards
         against, arriving by a different door.
 
+        The digests **outlive the verification they were taken with**. A
+        withdrawn verification (``revoked``) leaves them in place, so this keeps
+        answering the question it exists for — the code is not what somebody
+        read — on exactly the documents whose calendar has just been reset. The
+        combination the rule forbids is the opposite one: a digest from an older
+        review carried under a *fresh* ``verified`` date, which claims a review
+        covered code it never saw. Nothing here claims a verification stands.
+
         Three absences are all read as *unknown*, never as unchanged. A pattern
         missing from ``code_digests`` did not resolve (it matches nothing — the
         `unmatched-code` finding covers that, and reporting both would name one
@@ -316,7 +326,12 @@ class GraphChecker:
             if not moved:
                 continue
             joined = ", ".join(repr(pattern) for pattern in moved)
-            verified_on = "" if doc.verified is None else f" on {doc.verified.isoformat()}"
+            if doc.verified is not None:
+                verified_on = f" on {doc.verified.isoformat()}"
+            elif doc.revoked is not None:
+                verified_on = f" (a verification withdrawn on {doc.revoked.isoformat()})"
+            else:
+                verified_on = ""
             issues.append(
                 CheckIssue(
                     kind="code-changed",
@@ -324,6 +339,53 @@ class GraphChecker:
                         f"{doc.id!r} governs {joined}, which changed since it was "
                         f"verified{verified_on}; re-read it and run `docir update "
                         f"{doc.id} --verified`"
+                    ),
+                    doc_ids=(doc.id,),
+                )
+            )
+        return issues
+
+    def _find_outdated_verification(self, documents: list[Document]) -> list[CheckIssue]:
+        """Flag a standing verification whose text is no longer the text it covered.
+
+        The write path withdraws a verification the moment a CLI edit moves the
+        title, description or body (adr-f4e6ade4afd0). This is the same rule for
+        every other way the file can move: a hand-edit, a merge that resolves
+        into the body, or a teammate on a docir old enough not to revoke. All
+        three leave a `verified:` line standing over text nobody read, and
+        nothing else in `check` can see it — `stale` is a calendar and this
+        document's calendar was reset by the very stamp that is now wrong.
+
+        Compared against the digest recorded at verification time rather than
+        against ``updated``, which was the obvious predicate and is unusable: a
+        status or a tag moves ``updated`` without touching a word of what was
+        reviewed, so `verified < updated` fires on the ordinary life of a
+        correctly verified document — issue-40d1792bc9f9's shape, a warning that
+        goes off on the product's own workflow.
+
+        Absent is *unknown*, as everywhere else: a verification stamped before
+        the digest existed has nothing to differ from and reports nothing, which
+        is what keeps this silent on a corpus that predates it.
+
+        A warning, on the same argument as ``code-changed``: the repair is to
+        re-read the document and stamp `--verified`, or to withdraw the claim
+        with `--clear-verified`. Both are judgements, so `check --fix` cannot
+        make either.
+        """
+        issues: list[CheckIssue] = []
+        for doc in documents:
+            if doc.archived or doc.verified is None or not doc.verified_content:
+                continue
+            if doc.verification_digest() == doc.verified_content:
+                continue
+            issues.append(
+                CheckIssue(
+                    kind="verification-outdated",
+                    message=(
+                        f"{doc.id!r} was edited outside the CLI since it was verified on "
+                        f"{doc.verified.isoformat()}, so the stamp stands over text nobody "
+                        f"read — re-read it and run `docir update {doc.id} --verified`, or "
+                        f"withdraw it with `docir update {doc.id} --clear-verified`"
                     ),
                     doc_ids=(doc.id,),
                 )
@@ -539,9 +601,9 @@ class GraphChecker:
         being ``--verified``. Types with no cadence are never flagged.
 
         The clock runs from :meth:`Document.stale_reference_date` — ``verified``,
-        else ``created``, never ``updated``. A document that has never been
-        verified says so in the message: without it the reader sees a document
-        they edited yesterday reported as overdue and reads the finding as a bug
+        else ``revoked``, else ``created``, never ``updated``. Which of the three
+        it read is in the message: without it the reader sees a document they
+        edited yesterday reported as overdue and reads the finding as a bug
         rather than as the answer to "who has confirmed this is still true".
         """
         issues: list[CheckIssue] = []
@@ -554,11 +616,7 @@ class GraphChecker:
             overdue_by = (today - doc.stale_reference_date()).days - cadence
             if overdue_by > 0:
                 owner = f" (owner: {doc.owner})" if doc.owner else ""
-                since = (
-                    f"never verified, created {doc.created.isoformat()}"
-                    if doc.verified is None
-                    else f"verified {doc.verified.isoformat()}"
-                )
+                since = _clock_read(doc)
                 issues.append(
                     CheckIssue(
                         kind="stale",
@@ -859,3 +917,18 @@ class GraphChecker:
                     )
                 )
         return issues
+
+
+def _clock_read(doc: Document) -> str:
+    """Which of the three dates :meth:`Document.stale_reference_date` read.
+
+    The `stale` finding names it, because the three call for different actions
+    and only one of them is legible from the file: a document overdue since a
+    *revocation* carries no `verified:` line at all, so a message that said
+    "never verified" would describe it as something nobody ever vouched for.
+    """
+    if doc.verified is not None:
+        return f"verified {doc.verified.isoformat()}"
+    if doc.revoked is not None:
+        return f"verification revoked {doc.revoked.isoformat()}"
+    return f"never verified, created {doc.created.isoformat()}"

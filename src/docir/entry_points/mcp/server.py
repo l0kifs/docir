@@ -238,8 +238,8 @@ def build_mcp_server(
         resolved in **both** directions, each carrying the other document's type
         and status:
 
-            id type status title description tags owner verified created
-            updated archived stale code isolated
+            id type status title description tags owner verified revoked
+            created updated archived stale code isolated
             related     [{to, kind, type, status}]   outgoing
             related_by  [{to, kind, type, status}]   incoming
 
@@ -265,8 +265,11 @@ def build_mcp_server(
             tags: Registered tag keys — a document must carry all of them.
             owner: The staleness steward to filter by.
             stale: Only documents past their type's review cadence. Measured
-                against `verified`, else `created` — never the last edit. Only
-                `update(verified=True)` clears an entry.
+                against `verified`, else the date a verification was `revoked`,
+                else `created` — never the last edit. Only
+                `update(verified=True)` clears an entry; editing the title,
+                description or body of a verified document withdraws the stamp
+                and restarts the cadence from that day.
             code: Paths to find governing documents for; any match counts.
             include_archived: Also return archived documents.
             include_inactive: Also return documents in an inactive status.
@@ -439,6 +442,7 @@ def build_mcp_server(
         set_code: list[str] | None = None,
         set_isolated: str | None = None,
         verified: bool = False,
+        clear_verified: bool = False,
         append_section: str | None = None,
         replace_section: str | None = None,
         remove_section: str | None = None,
@@ -480,7 +484,16 @@ def build_mcp_server(
                 got round to wiring.
             verified: Stamp today as the last-verified date. Assert this only
                 when a human has actually re-read the document — it is the one
-                trust signal docir offers.
+                trust signal docir offers. Pass it alongside a body edit to keep
+                the stamp: that is "I rewrote it and re-read it", and without it
+                the edit withdraws the verification by itself. It also digests
+                the text it covers, so `check` reports a stamp left standing over
+                text edited around the CLI.
+            clear_verified: Withdraw the standing verification and leave no
+                review window: the document ages from `created` again, as one
+                nobody ever verified does. The way back from a stamp asserting a
+                review nobody did. Refused together with `verified`, and refused
+                when no verification is standing.
             append_section: Heading to append `body` under.
             replace_section: Heading whose section `body` replaces.
             remove_section: Heading to delete, with the text under it. Passing
@@ -510,6 +523,7 @@ def build_mcp_server(
             "set_code": set_code,
             "set_isolated": set_isolated,
             "mark_verified": verified,
+            "clear_verified": clear_verified,
             "remove_section": remove_section,
             "body": body,
             "replace_body": replace_body,

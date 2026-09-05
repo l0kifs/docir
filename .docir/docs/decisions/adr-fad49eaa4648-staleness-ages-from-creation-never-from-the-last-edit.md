@@ -14,7 +14,7 @@ tags:
 - schema
 title: Staleness ages from creation, never from the last edit
 type: decision
-updated: '2026-09-04'
+updated: '2026-09-05'
 ---
 
 ## Context
@@ -78,3 +78,14 @@ document that carries it would simply age from the later of it and `created`.
   staleness behind it, since `updated` no longer feeds the clock. It stands on its own ground:
   `updated` is the edit clock every read view shows, and a bulk rewrite claiming every document
   was edited today is a lie about that.
+- **Two builds reading one store disagree about `stale`, silently.** Measured by the
+  cross-version procedure adr-ab4598c6f707 requires: one document, `created: 2024-01-01`,
+  `updated` today, never verified, 365-day cadence — 0.23.0 reports `stale: false` and this
+  build reports `stale: true`, from the same file. Neither refuses, so it is not a break by
+  that decision's own test; it is the third thing that decision does not name, a field both
+  builds show with different values. `stale` is computed and carries no provenance, so nothing
+  reports the disagreement, and `doctor`'s `stale-index-build` does not cover it — a teammate
+  who runs `reindex` themselves clears that finding while still reading the old rule. It
+  resolves when everyone upgrades, and until then the review queue is per-build. This did not
+  appear on docir's own corpus, whose oldest document is younger than the shortest cadence in
+  its schema.

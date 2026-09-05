@@ -1,4 +1,4 @@
-<!-- docir:v0.23.0 — generated file, do not edit by hand; refresh with `docir agent update` after upgrading docir -->
+<!-- docir:v0.24.0 — generated file, do not edit by hand; refresh with `docir agent update` after upgrading docir -->
 # Setting up and adopting docir
 
 Putting a repo on docir, moving its existing markdown in, and keeping branches

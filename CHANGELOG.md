@@ -7,6 +7,99 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-09-05
+
+The review queue only works if the clock is honest, and three ways of lying to it turned up in
+one week. Writing into a document took it off the queue. A judgement about an orphan cleared
+the orphan. And a verification, once stamped, outlived the document it vouched for — nothing
+withdrew it, not the edit that made it untrue and not the person who stamped it by mistake.
+
+### Upgrade notes
+
+- **Editing a verified document withdraws the verification.** Change its title, description or
+  body and `verified` is erased, `revoked` is stamped, and the review cadence restarts from
+  that day. Pass `--verified` with the edit when you rewrote it *and* re-read it. A status,
+  tag, type, edge, `owner`, `isolated` or `code` change is not a content edit and keeps the
+  stamp.
+- **The staleness clock no longer reads `updated`.** It runs from `verified`, else `revoked`,
+  else `created`. On a corpus whose documents are edited more often than their cadence this
+  reports more documents than 0.23.0 did — correctly: those are the ones nobody has confirmed.
+- **`orphan` no longer reads prose.** A document whose id is only *mentioned* in another body
+  now reports as an orphan again. Give it an edge, or record why it stands alone with
+  `docir update <id> --set-isolated "<reason>"`.
+- **Two new frontmatter keys**, `revoked:` and `verified_content:`, plus `isolated:` from the
+  orphan fix. Older builds read a store carrying them without refusing, but drop the keys when
+  they write. Migrations `0009`–`0011` upgrade an existing index in place.
+- **Run `docir reindex` after upgrading**, or `docir self upgrade`, which does it for you.
+
+### Added
+
+- **`docir update <id> --clear-verified`** withdraws a verification (also
+  `docir_update(clear_verified=)` over MCP). It erases the stamp and records no revocation, so
+  the document ages from `created` again — a claim nobody made earns no review window, and a
+  bad stamp that had nearly run out returns to the queue instead of buying a fresh cadence. It
+  is refused when no verification is standing, and refused alongside `--verified`.
+
+  Until now a `verified:` line could be set and never unset, so correcting one meant the
+  hand-edit the CLI exists to prevent — which `docir check` then reported as a hand-edit.
+
+- **`revoked:`** records when a standing verification stopped being true, and the review
+  cadence runs from it. Two writes stamp it and they say different things: a content edit
+  performs the withdrawal, because the text somebody read is not the text that is there now.
+  Only a *standing* verification can be revoked, so writing into a document nobody vouched for
+  still moves nothing — one verification buys one reset, and buying it costs a verification.
+
+- **`verified_content:` and the `verification-outdated` finding.** `--verified` now digests the
+  title, description and body it covered, and `docir check` reports a stamp left standing over
+  text the CLI never saw move: a hand-edit, a merge resolved into the body, or a teammate on a
+  build that predates revocation. It is keyed on that digest and never on `updated`, which a
+  status or a tag moves without touching a reviewed word. An absent digest is *unknown*, so
+  every verification stamped before this release stays silent. A warning, cleared by re-reading
+  and stamping again or by withdrawing the claim — `check --fix` makes neither call.
+
+- **`isolated:`**, the reviewed exemption from `orphan`: free text saying why a document is
+  meant to carry no relations, set with `--set-isolated`, withdrawn with `--set-isolated ""`,
+  and audited with `docir query --expr "isolated"`.
+
+- **`docir doctor` reports `index-from-newer-build`** as its own error finding, the mirror of
+  `stale-index-build`, naming both real answers — run the newer docir, or delete the index and
+  reindex. The generic `store-unreachable` it replaced pointed at `reindex`, which refuses for
+  the same reason.
+
+### Fixed
+
+- **The review queue no longer empties when somebody writes in it.** `stale_reference_date()`
+  fell back to `updated` when a document carried no `verified`, and every edit moves `updated`
+  — so a document nobody had vouched for left `docir query --stale` the moment anybody wrote
+  in it, and the body an overdue document most reliably gets is the re-check saying it is
+  *still* unanswered. Recording the silence ended the report of it.
+
+- **A judgement about the orphan queue no longer empties it.** `orphan` read the derived
+  mention graph as well as `related:`, so an id named anywhere in any body cleared it — and an
+  orphan triage is a list of orphan ids, so writing one closed every orphan in it, plus the
+  triage document. Reported on a 418-document corpus where 12 orphans became 0 and 4 were
+  genuinely unwired. The mention graph still feeds `context` expansion, `get`'s neighbour lists
+  and the Tier 2 `unresolved-mention` advisory; it has no Tier 1 reader left.
+
+- **An index built by a newer docir is refused by name, not by traceback.** The composition
+  root migrates the index when it opens the store, so an index carrying a revision this build
+  does not ship took down every command with a raw `alembic.util.exc.CommandError`. It now
+  raises `UnknownIndexRevisionError` (exit 8) naming the store, both builds and the recovery.
+
+### Measured and rejected
+
+- **Ageing staleness from `verified` alone**, treating an absent stamp as infinitely stale —
+  the semantically cleanest reading. It reports 83 of this store's 84 cadence-bearing documents,
+  ones written the day before included, and makes `review_days` inert for every unverified
+  document: a warning that fires on the product's own defaults.
+- **Falling back to `created` after a revocation.** No new field and no migration, but it
+  reports a document overdue the instant an edit lands, on any corpus older than its cadence —
+  which makes verifying a document that is still being written strictly worse than never
+  verifying it.
+- **Keying the new finding on `verified < updated`**, the obvious predicate. A status or a tag
+  change moves `updated` without touching a reviewed word, so it fires on the ordinary life of
+  a correctly verified document.
+
 ## [0.23.0] - 2026-08-31
 
 Reading a section and writing it back is the round trip the section read path exists to
@@ -2197,7 +2290,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/l0kifs/docir/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/l0kifs/docir/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/l0kifs/docir/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/l0kifs/docir/compare/v0.20.0...v0.21.0

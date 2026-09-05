@@ -1,4 +1,4 @@
-<!-- docir:v0.23.0 — generated file, do not edit by hand; refresh with `docir agent update` after upgrading docir -->
+<!-- docir:v0.24.0 — generated file, do not edit by hand; refresh with `docir agent update` after upgrading docir -->
 # Editing `docs-schema.yaml`
 
 The one file you edit by hand — there is no CLI write path for it. Read

@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-09-06
+
+`docir self upgrade` could not finish on a large corpus, and the reason it took so long was
+work it never needed to do. Two halves of one failure: the client bounded the daemon's reply
+at a flat 300s, and the command that always makes docir's most expensive request was bounded
+by a number chosen for an ordinary one — while that request re-embedded every vector in the
+store on every release, including the ones that changed neither the model nor the chunking.
+
+### Upgrade notes
+
+- **The reply timeout no longer bounds how long a command may take.** The daemon sends a
+  keepalive every few seconds while it works, and each frame re-arms the socket, so
+  `DOCIR_REQUEST_TIMEOUT` now answers "has the daemon died?" — there is no corpus size it has
+  to be raised for. If you raised it, you can put it back.
+- **Migration `0012` adds `embeddings.input_digest`.** It upgrades an existing index in place.
+  The first `docir reindex` after upgrading recomputes every vector once, because a row
+  written by an older build carries no record of what produced it; every rebuild after that
+  recomputes only what moved.
+- **An index at schema `0012` is refused by docir 0.24.0 and earlier**, by name, with the
+  rebuild that fixes it. The index is derived and gitignored, so a teammate on an older build
+  deletes it and reindexes; `docir doctor` reports it as `index-from-newer-build`. Upgrading
+  everyone who shares a store is the shorter path.
+- **Run `docir reindex` after upgrading**, or `docir self upgrade`, which does it for you.
+
+### Fixed
+
+- **`docir self upgrade` timed out instead of finishing.** It runs `reindex --resync`, which
+  after the package step is always the full pass, so its cost is the size of the corpus. The
+  client gave up at 300s while the daemon completed the rebuild and committed it — leaving an
+  error, a rebuilt store, instruction files that were never refreshed, and no `check` report.
+  Past roughly 1,500 documents the command could not succeed at all.
+
+  The daemon now keepalives while a request runs and the client discards those frames, so the
+  timeout measures silence rather than work. A wedged daemon still fails, and says so in those
+  terms rather than advising a bigger number. Verified against this repository's corpus: 146s
+  of rebuild under an 8s reply budget, over both the CLI and MCP.
+
+- **Every release re-embedded the whole corpus.** A full rebuild re-saves every document,
+  which queues every one for embedding, and the drain recomputed them all — 1,547 vectors and
+  146s against 205 documents, on a release that had changed nothing the model reads.
+
+  Vectors now record a digest of what produced them: the model id, the document's embedding
+  text, and every chunk it would be split into. The drain compares it and skips a document
+  whose inputs are unchanged. The same `docir self upgrade` now costs **2.6s**. A chunking
+  change still forces the full recompute adr-6a4718fa7a7d requires, by itself — different
+  splitting is a different digest, with no version constant for anyone to remember to bump.
+
+  The skip also requires the stored chunk count to match, because chunks live in their own
+  table and are dropped by their own calls: a matching digest alone would have made `reindex`
+  stop being the repair for a wiped chunk set.
+
+### Changed
+
+- **`docir reindex` reports the vectors it actually recomputed**, which for a corpus nobody
+  has edited is now `0` rather than all of them. The document count is unchanged: a rebuild
+  still re-reads every file.
+
 ## [0.24.0] - 2026-09-05
 
 The review queue only works if the clock is honest, and three ways of lying to it turned up in
@@ -2290,7 +2347,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/l0kifs/docir/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/l0kifs/docir/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/l0kifs/docir/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/l0kifs/docir/compare/v0.21.0...v0.22.0

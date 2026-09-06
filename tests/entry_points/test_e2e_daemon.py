@@ -27,7 +27,7 @@ from docir.platform.errors import DaemonError, DaemonTimeoutError
 from docir.platform.transport import client as client_module
 from docir.platform.transport.client import DaemonClient
 from docir.platform.transport.messages import Request, RequestExecutor, Response
-from docir.platform.transport.protocol import recv_json, send_json
+from docir.platform.transport.protocol import is_keepalive, recv_json, send_json
 from docir.platform.transport.server import DaemonServer
 
 
@@ -191,6 +191,149 @@ class TestReplyTimeoutIsSeparateFromConnect:
                 conn.close()
             listener.close()
             settings.socket_path.unlink(missing_ok=True)
+
+
+class _ExplodingExecutor(RequestExecutor):
+    """Stands in for a daemon that crashes rather than answering."""
+
+    def execute(self, request: Request) -> Response:
+        raise RuntimeError("boom")
+
+
+class _FinishingExecutor(RequestExecutor):
+    """Slow work that announces when it got all the way through."""
+
+    def __init__(self, delay: float) -> None:
+        self._delay = delay
+        self.done = threading.Event()
+
+    def execute(self, request: Request) -> Response:
+        time.sleep(self._delay)
+        self.done.set()
+        return Response(ok=True, data={"finished": True})
+
+
+class TestKeepaliveBoundsSilenceNotWork:
+    """`docir self upgrade` could not finish on a large corpus.
+
+    It runs `reindex --resync`, which after a package upgrade is always the full
+    pass — it re-embeds every vector, so its cost is the size of the corpus
+    (58.4s for 315 documents on this repository). The client bounded the *reply*
+    at a flat 300s, so past roughly 1,500 documents the one command guaranteed
+    to make docir's most expensive request could never complete, while the
+    daemon finished the rebuild regardless.
+
+    The fix is not a bigger number: the daemon now sends a keepalive frame while
+    it works, and each frame re-arms the socket, so the budget measures silence.
+    These tests pin both halves — long work passes, a silent daemon still fails.
+    """
+
+    @contextlib.contextmanager
+    def _serving(
+        self, settings: Settings, executor: RequestExecutor, *, keepalive_interval: float
+    ) -> Iterator[None]:
+        settings.ensure_directories()
+        server = DaemonServer(
+            settings.socket_path,
+            executor,
+            idle_timeout=30.0,
+            keepalive_interval=keepalive_interval,
+        )
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        probe = DaemonClient(settings.socket_path, request_timeout=30.0)
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline and not probe.is_available():
+            time.sleep(0.02)
+        try:
+            yield
+        finally:
+            with contextlib.suppress(DaemonError):
+                probe.send(Request(command="shutdown"))
+            thread.join(timeout=5)
+
+    def test_work_far_outlasting_the_reply_budget_still_returns(self, settings: Settings) -> None:
+        # 0.9s of work against a 0.15s budget: six times over, which is the
+        # shape of a 40-minute reindex against 300s. Without the keepalives this
+        # raises DaemonTimeoutError.
+        executor = _SlowExecutor(0.9)
+        with self._serving(settings, executor, keepalive_interval=0.05):
+            response = DaemonClient(settings.socket_path, request_timeout=0.15).send(
+                Request(command="reindex")
+            )
+        assert response.ok
+        assert response.data == {"slept": True}
+        assert executor.calls == 1
+
+    def test_the_frames_on_the_wire_are_keepalives_then_one_response(
+        self, settings: Settings
+    ) -> None:
+        # Reading the raw frames, because "it returned in time" cannot tell a
+        # working keepalive apart from a test whose timing happened to be kind.
+        with self._serving(settings, _SlowExecutor(0.5), keepalive_interval=0.05):
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.settimeout(5.0)
+            try:
+                sock.connect(str(settings.socket_path))
+                send_json(sock, Request(command="reindex").to_dict())
+                frames = []
+                while True:
+                    frame = recv_json(sock)
+                    assert frame is not None
+                    frames.append(frame)
+                    if not is_keepalive(frame):
+                        break
+            finally:
+                sock.close()
+        assert len(frames) > 1, "the daemon sent no keepalive while it worked"
+        assert all(is_keepalive(frame) for frame in frames[:-1])
+        assert frames[-1] == {"ok": True, "data": {"slept": True}, "error": None}
+
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
+    def test_a_daemon_that_sends_nothing_still_times_out(self, settings: Settings) -> None:
+        # The budget must still bite. A keepalive interval longer than the work
+        # is a daemon that never speaks — exactly the wedged case the timeout
+        # exists for, and the one this change must not have deleted.
+        #
+        # The server thread then dies sending its answer to a client that left,
+        # which is unchanged and harmless: the transaction has already committed
+        # and the daemon is respawned by the next command. Hence the filter.
+        with (
+            self._serving(settings, _SlowExecutor(1.0), keepalive_interval=30.0),
+            pytest.raises(DaemonTimeoutError) as raised,
+        ):
+            DaemonClient(settings.socket_path, request_timeout=0.15).send(
+                Request(command="reindex")
+            )
+        assert "went silent" in str(raised.value)
+
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
+    def test_a_client_that_walks_away_does_not_abandon_the_work(self, settings: Settings) -> None:
+        # A failed keepalive stops the keepalives and nothing else. The request
+        # is one transaction, and killing it halfway leaves an index describing
+        # neither the old corpus nor the new one — so the work must still run to
+        # completion with nobody left to hear the answer.
+        executor = _FinishingExecutor(0.4)
+        with self._serving(settings, executor, keepalive_interval=0.05):
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            sock.connect(str(settings.socket_path))
+            send_json(sock, Request(command="reindex").to_dict())
+            sock.close()
+            assert executor.done.wait(timeout=10)
+
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
+    def test_a_crashing_request_closes_the_connection_without_a_reply(
+        self, settings: Settings
+    ) -> None:
+        # Running the work on a thread must not turn an unhandled crash into an
+        # `ok=False` response: the closed connection is what tells SocketExecutor
+        # the daemon is broken and the request is safe to respawn and retry.
+        with (
+            self._serving(settings, _ExplodingExecutor(), keepalive_interval=0.05),
+            pytest.raises(DaemonError) as raised,
+        ):
+            DaemonClient(settings.socket_path, request_timeout=5.0).send(Request(command="reindex"))
+        assert not isinstance(raised.value, DaemonTimeoutError)
 
 
 class _ScriptedClient:

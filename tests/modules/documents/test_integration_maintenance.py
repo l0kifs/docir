@@ -150,12 +150,23 @@ class TestARebuildIsHowVectorsAreRecomputed:
     (adr-6a4718fa7a7d, issue-b24e14474820).
     """
 
-    def test_a_rebuild_reports_the_documents_it_re_embedded(self, seeded: Dispatcher) -> None:
-        # It always re-embedded them and never said so, which is what made a
-        # separate flag look necessary. The count is documents, not vectors —
-        # the queue is keyed by document, and each writes one per `##` section
-        # as well as its own.
-        assert seeded.dispatch("reindex", {})["embeddings_recomputed"] >= 1
+    def test_a_rebuild_reports_the_documents_it_re_embedded(
+        self, seeded: Dispatcher, settings: Settings
+    ) -> None:
+        # It re-embedded them and never said so, which is what made a separate
+        # flag look necessary. The count is documents, not vectors — the queue
+        # is keyed by document, and each writes one per `##` section as well as
+        # its own.
+        #
+        # The rebuild recomputes what is *owed*, not everything it re-saves
+        # (issue-77dd42e3a03a), so the document has to have actually moved. A
+        # hand-edit is the case `reindex` exists for and the only one that
+        # reaches the drain without going through the CLI's own embed.
+        document = next(settings.docs_root.rglob("*.md"))
+        document.write_text(
+            document.read_text(encoding="utf-8") + "\nedited outside the CLI\n", encoding="utf-8"
+        )
+        assert seeded.dispatch("reindex", {})["embeddings_recomputed"] == 1
 
     def test_vectors_written_is_the_real_vector_count(
         self, dispatcher: Dispatcher, settings: Settings
@@ -167,6 +178,11 @@ class TestARebuildIsHowVectorsAreRecomputed:
         used to call that number "vectors" outright. Asserted against the rows
         actually in the index rather than against `1 + len(sections)` recomputed
         here, which would only prove the arithmetic agrees with itself.
+
+        Run against a store with no record of what its vectors were computed
+        from — an index built before migration ``0012``, which is the state
+        every adopter upgrades from, and the one where a rebuild still
+        recomputes everything (issue-77dd42e3a03a).
         """
         dispatcher.dispatch(
             "add",
@@ -177,6 +193,9 @@ class TestARebuildIsHowVectorsAreRecomputed:
                 "body": "## One\n\nalpha\n\n## Two\n\nbeta\n\n## Three\n\ngamma",
             },
         )
+        with closing(sqlite3.connect(settings.db_path)) as conn:
+            conn.execute("UPDATE embeddings SET input_digest = NULL")
+            conn.commit()
         result = dispatcher.dispatch("reindex", {})
         with closing(sqlite3.connect(settings.db_path)) as conn:
             stored = (
@@ -204,14 +223,17 @@ class TestARebuildIsHowVectorsAreRecomputed:
 
 
 class TestResyncRebuildsOnlyWhenTheBuildMoved:
-    """`docir self upgrade` paid for a full re-embed of an unchanged corpus.
+    """`docir self upgrade` re-read the whole corpus on every release.
 
-    A full pass re-embeds every document it re-saves, which measured 58.4 s
-    against 1.5 s for the changed pass on a 315-document store — 96% of the
-    command, recomputing vectors byte-identical to the ones already indexed.
     The build stamp is the only thing that separates "the reader moved under
     these documents" from "nothing to do", so `resync` reads it *before* the
     rebuild: both modes write it, so a cheap pass would erase the evidence.
+
+    What it decides is now the *metadata* pass alone. It used to decide the
+    embedding pass too, which measured 58.4 s against 1.5 s on a 315-document
+    store and recomputed vectors byte-identical to the ones already indexed;
+    the drain answers that question for itself now (issue-77dd42e3a03a), so a
+    version bump costs a re-read and no re-embed.
     """
 
     @staticmethod
@@ -233,7 +255,9 @@ class TestResyncRebuildsOnlyWhenTheBuildMoved:
         self._stamp(uow_factory, "0.0.1")
         result = seeded.dispatch("reindex", {"resync": True})
         assert result["documents_indexed"] >= 1
-        assert result["embeddings_recomputed"] >= 1
+        # The full pass, and free of the vectors: nothing the model reads moved,
+        # so the version bump buys a re-read of the metadata and nothing else.
+        assert result["embeddings_recomputed"] == 0
 
     def test_a_downgrade_rebuilds_too(
         self, seeded: Dispatcher, uow_factory: Callable[[], UnitOfWork]

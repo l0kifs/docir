@@ -231,7 +231,7 @@ class TestEmbeddingRepository:
             uow.commit()
         with uow_factory() as uow:
             assert uow.embeddings.dirty_ids(_MODEL) == ["adr-0001"]
-            uow.embeddings.set_vector("adr-0001", Embedding((1.0, 0.0)), _MODEL)
+            uow.embeddings.set_vector("adr-0001", Embedding((1.0, 0.0)), _MODEL, input_digest="d1")
             uow.commit()
         with uow_factory() as uow:
             assert uow.embeddings.dirty_ids(_MODEL) == []
@@ -246,8 +246,8 @@ class TestEmbeddingRepository:
         with uow_factory() as uow:
             uow.documents.save(_doc("adr-0001"))
             uow.documents.save(_doc("adr-0002", archived=True))
-            uow.embeddings.set_vector("adr-0001", Embedding((1.0, 0.0)), _MODEL)
-            uow.embeddings.set_vector("adr-0002", Embedding((0.0, 1.0)), _MODEL)
+            uow.embeddings.set_vector("adr-0001", Embedding((1.0, 0.0)), _MODEL, input_digest="d1")
+            uow.embeddings.set_vector("adr-0002", Embedding((0.0, 1.0)), _MODEL, input_digest="d2")
             uow.commit()
         with uow_factory() as uow:
             ids = [doc_id for doc_id, _vec in uow.embeddings.active_vectors(_MODEL)]
@@ -262,7 +262,9 @@ class TestEmbeddingRepository:
         # `docir context` raise "dimension mismatch" in every existing store.
         with uow_factory() as uow:
             uow.documents.save(_doc("adr-0001"))
-            uow.embeddings.set_vector("adr-0001", Embedding((1.0, 0.0)), "old-model")
+            uow.embeddings.set_vector(
+                "adr-0001", Embedding((1.0, 0.0)), "old-model", input_digest="d1"
+            )
             uow.commit()
         with uow_factory() as uow:
             assert uow.embeddings.active_vectors("new-model") == []

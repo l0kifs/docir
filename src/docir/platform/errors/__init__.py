@@ -162,15 +162,19 @@ class DaemonError(DocirError):
 
 
 class DaemonTimeoutError(DaemonError):
-    """The daemon took the request but did not answer within the time allowed.
+    """The daemon took the request and then stopped sending anything at all.
 
     Separate from :class:`DaemonError` because the two demand opposite responses.
     A refused connection or a dead peer means the request never landed, so
     respawning the daemon and resending is safe — and is what
-    ``SocketExecutor`` does. A reply timeout means the daemon *has* the request
-    and may still be executing it; resending would run the command a second
-    time, which for a write means a duplicate document. So this one is never
-    retried.
+    ``SocketExecutor`` does. This one means the daemon *has* the request and may
+    still be executing it; resending would run the command a second time, which
+    for a write means a duplicate document. So this one is never retried.
+
+    A running command keepalives every few seconds, so slow work no longer
+    raises this — it means wedged or killed. That is why the message says so:
+    the advice it used to give ("raise the timeout for a large corpus") pointed
+    at the one cause that can no longer produce it.
     """
 
 

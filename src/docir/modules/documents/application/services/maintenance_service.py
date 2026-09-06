@@ -193,8 +193,10 @@ class MaintenanceService:
         counted, so "rebuilt 12 documents" cannot quietly mean "of 13 on disk".
         ``docir check`` reports each one individually as a ``malformed`` finding.
 
-        A full rebuild re-embeds everything it re-saves, which is why there is
-        no "recompute the vectors too" mode: the one that existed skipped the
+        A full rebuild re-saves every document and so queues every one for
+        embedding, but the drain recomputes only the vectors whose inputs
+        actually moved (issue-77dd42e3a03a) — which is why there is still no
+        "recompute the vectors too" mode: the one that existed skipped the
         rebuild rather than adding to it, and so recomputed exactly these
         vectors while writing neither the schema baseline nor the build stamp
         (adr-6a4718fa7a7d, issue-b24e14474820).
@@ -274,15 +276,19 @@ class MaintenanceService:
     def resync(self) -> ReindexResult:
         """Rebuild only what the build stamp says is not already indexed.
 
-        What ``docir self upgrade`` runs. A full rebuild re-embeds every
-        document it re-saves, and on a 300-document store that is ~96% of the
-        command — the right price exactly once, when the code that *reads*
-        documents has moved under them (adr-6a4718fa7a7d: a release that changes
-        chunking is a full rebuild). Paid again against a store this same build
-        already indexed, it recomputes vectors byte-identical to the ones
-        already there, which is what made an upgrade of an unchanged corpus cost
-        a minute: measured at 58.4 s against 1.5 s for the same store's changed
-        pass, 315 documents and 1,326 vectors.
+        What ``docir self upgrade`` runs. The stamp decides whether every
+        document's *metadata* is re-read — the FTS row, the relation and mention
+        edges, the frontmatter the index projects — because a release can change
+        how a document is read without changing the document
+        (adr-6a4718fa7a7d), and that is the question the version answers.
+
+        It no longer decides what gets embedded. The full pass used to re-embed
+        every document it re-saved, which was ~96% of the command and made an
+        upgrade of an *unchanged* corpus cost 146s against this repository's 205
+        documents; the drain now compares what the model would read against what
+        it read last time and skips what matches (issue-77dd42e3a03a). So the
+        expensive half is paid when the chunking or the model moved, which is
+        what adr-6a4718fa7a7d actually asked for, rather than on every release.
 
         The stamp has to be read *before* the rebuild: both modes write it, so a
         cheap pass would erase the evidence that a full one was needed.

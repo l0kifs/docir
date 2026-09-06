@@ -139,7 +139,8 @@ opts out, at a measured cost to recall:
 - **Only embeddings are deferred.** A content change flags the vector dirty and returns;
   the file, metadata, full-text index and relations are all current when the command
   returns. Force a flush with `--wait-embeddings`, `docir embed --flush`, or a full
-  `docir reindex`, which re-embeds every document it re-saves and reports how many.
+  `docir reindex`, which re-embeds every document whose text or chunking has moved
+  since its vectors were written, and reports how many.
 
 ## What you may edit by hand
 

@@ -14,6 +14,7 @@ Both share :func:`drain_dirty`, which does the actual work.
 
 from __future__ import annotations
 
+import hashlib
 import threading
 from collections.abc import Callable
 from typing import Protocol
@@ -42,6 +43,20 @@ def drain_dirty(uow_factory: UnitOfWorkFactory, embedder: Embedder) -> DrainResu
     drained and the vectors that cost, which is ``1 + sections`` each. A dirty
     row whose document has vanished is dropped so it cannot wedge the queue
     forever, and counts as neither.
+
+    **A document whose inputs are unchanged is skipped, not re-embedded**
+    (issue-77dd42e3a03a). Being on the queue means something asked for a
+    recompute; :func:`_input_digest` is what answers whether one is owed. The
+    caller with no other way to ask is ``reindex``: a full rebuild re-saves
+    every document and so marks every one dirty, and before this it recomputed
+    1,547 vectors byte-identical to the stored ones on every release — 146s of
+    ``docir self upgrade`` against this repository's 205 documents.
+
+    The digest covers the model id, the document's embedding text *and* every
+    chunk triple, so it is not merely a content hash: a release that changes how
+    a body is split changes the triples and so the digest, and the recompute
+    adr-6a4718fa7a7d requires happens with no version constant for anybody to
+    remember to bump.
     """
     documents = 0
     vectors = 0
@@ -53,7 +68,28 @@ def drain_dirty(uow_factory: UnitOfWorkFactory, embedder: Embedder) -> DrainResu
                 uow.embeddings.remove(doc_id)
                 uow.chunks.remove(doc_id)
                 continue
-            uow.embeddings.set_vector(doc_id, embedder.embed(document.embedding_text()), model_id)
+            expected = document.embedding_chunks()
+            digest = _input_digest(document, model_id)
+            if digest == uow.embeddings.get_input_digest(doc_id) and uow.chunks.count(
+                doc_id
+            ) == len(expected):
+                # Everything the model reads is what it read last time, and it
+                # is deterministic, so the vectors it would write are the ones
+                # already there. Clearing the flag is the whole of the work.
+                #
+                # The chunk count is not redundant with the digest: chunks live
+                # in their own table and are dropped by their own calls, so a
+                # document whose set was removed carries a digest that still
+                # matches and would otherwise never be rebuilt — which is what
+                # `reindex` after a chunk wipe exists to repair.
+                uow.embeddings.clear_dirty(doc_id)
+                continue
+            uow.embeddings.set_vector(
+                doc_id,
+                embedder.embed(document.embedding_text()),
+                model_id,
+                input_digest=digest,
+            )
             chunks = _chunks_for(document, embedder)
             uow.chunks.replace(doc_id, chunks, model_id)
             documents += 1
@@ -75,7 +111,31 @@ class _Chunkable(Protocol):
     fastembed adapter uses for its model handle (adr-ab9c454b760c).
     """
 
+    def embedding_text(self) -> str: ...
+
     def embedding_chunks(self) -> tuple[tuple[int, str, str], ...]: ...
+
+
+def _input_digest(document: _Chunkable, model_id: str) -> str:
+    """Everything that decides what the vectors for a document will be.
+
+    The model id, the document vector's text, and each chunk triple — the same
+    inputs :func:`drain_dirty` is about to hand the embedder, in the order it
+    hands them over. Anything the model reads is in here, and nothing else is,
+    so equality means the stored vectors are the ones a recompute would write.
+
+    Framed rather than concatenated: the separators keep a heading that ends
+    where the next section's text begins from hashing the same as the pair the
+    other way round.
+    """
+    hasher = hashlib.sha256()
+    hasher.update(model_id.encode("utf-8"))
+    hasher.update(b"\0text\0")
+    hasher.update(document.embedding_text().encode("utf-8"))
+    for ordinal, heading, text in document.embedding_chunks():
+        hasher.update(f"\0chunk\0{ordinal}\0{heading}\0".encode())
+        hasher.update(text.encode("utf-8"))
+    return hasher.hexdigest()
 
 
 def _chunks_for(document: _Chunkable, embedder: Embedder) -> list[StoredChunk]:

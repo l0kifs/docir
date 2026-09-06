@@ -447,12 +447,19 @@ class SqlAlchemyEmbeddingRepository(EmbeddingRepository):
         )
         return list(self._session.scalars(stmt).all())
 
-    def set_vector(self, doc_id: str, embedding: Embedding, model_id: str) -> None:
+    def set_vector(
+        self, doc_id: str, embedding: Embedding, model_id: str, *, input_digest: str
+    ) -> None:
         row = self._get_or_create(doc_id)
         row.vector = embedding.to_bytes()
         row.model_id = model_id
+        row.input_digest = input_digest
         row.dirty = False
         self._session.flush()
+
+    def get_input_digest(self, doc_id: str) -> str | None:
+        row = self._session.get(EmbeddingRow, doc_id)
+        return None if row is None or row.vector is None else row.input_digest
 
     def get_vector(self, doc_id: str) -> Embedding | None:
         row = self._session.get(EmbeddingRow, doc_id)
@@ -493,6 +500,14 @@ class SqlAlchemyChunkEmbeddingRepository(ChunkEmbeddingRepository):
 
     def __init__(self, session: Session) -> None:
         self._session = session
+
+    def count(self, doc_id: str) -> int:
+        stmt = (
+            select(func.count())
+            .select_from(ChunkEmbeddingRow)
+            .where(ChunkEmbeddingRow.doc_id == doc_id)
+        )
+        return int(self._session.scalar(stmt) or 0)
 
     def replace(self, doc_id: str, chunks: Sequence[StoredChunk], model_id: str) -> None:
         self._session.execute(delete(ChunkEmbeddingRow).where(ChunkEmbeddingRow.doc_id == doc_id))

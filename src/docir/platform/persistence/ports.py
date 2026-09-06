@@ -269,8 +269,24 @@ class EmbeddingRepository(ABC):
         """
 
     @abstractmethod
-    def set_vector(self, doc_id: str, embedding: Embedding, model_id: str) -> None:
-        """Persist a computed vector, record which model made it, clear the flag."""
+    def set_vector(
+        self, doc_id: str, embedding: Embedding, model_id: str, *, input_digest: str
+    ) -> None:
+        """Persist a computed vector, record what produced it, clear the flag.
+
+        ``input_digest`` is keyword-only because it and ``model_id`` are both
+        strings, and a caller that swapped them would store a row that looks
+        current and describes nothing.
+        """
+
+    @abstractmethod
+    def get_input_digest(self, doc_id: str) -> str | None:
+        """The digest of what the stored vectors were computed from.
+
+        ``None`` for a row written before migration ``0012``, or one with no
+        vector yet: absent means *unknown*, so the drain recomputes rather than
+        trusting it (issue-77dd42e3a03a).
+        """
 
     @abstractmethod
     def get_vector(self, doc_id: str) -> Embedding | None:
@@ -310,6 +326,17 @@ class ChunkEmbeddingRepository(ABC):
         Wholesale rather than incremental: an edit renumbers the sections after
         it, so a diff would have to rewrite most of them anyway, and a partial
         failure would leave chunks describing two different bodies.
+        """
+
+    @abstractmethod
+    def count(self, doc_id: str) -> int:
+        """How many chunk rows a document currently has.
+
+        The drain's skip cannot rest on the document row's digest alone: chunks
+        live in their own table and are removed by their own calls, so a
+        document whose chunk rows were dropped still carries a digest that
+        matches and would be skipped forever. The count is what notices the set
+        is not there (issue-77dd42e3a03a).
         """
 
     @abstractmethod

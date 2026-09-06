@@ -11,7 +11,9 @@ started from.
 from __future__ import annotations
 
 import json
+import sqlite3
 from collections.abc import Callable
+from contextlib import closing
 
 from typer.testing import CliRunner
 
@@ -28,6 +30,19 @@ def _add() -> None:
         app, ["--no-daemon", "add", "--type", "decision", "--title", "A", "--description", "d"]
     )
     assert result.exit_code == 0, result.output
+
+
+def _forget_what_the_vectors_were(settings: Settings) -> None:
+    """Put the index in the state every adopter upgrades from.
+
+    A store indexed before migration ``0012`` has vectors and no record of what
+    produced them, so the first drain after the upgrade recomputes them — which
+    is the one state in which `self upgrade` still reports a re-embed, now that
+    a rebuild alone does not force one (issue-77dd42e3a03a).
+    """
+    with closing(sqlite3.connect(settings.db_path)) as conn:
+        conn.execute("UPDATE embeddings SET input_digest = NULL")
+        conn.commit()
 
 
 def _upgrade(project_root: str):
@@ -101,11 +116,11 @@ def test_a_second_upgrade_does_not_rebuild_what_the_first_one_built(
 ) -> None:
     """The command a user runs when it turns out there was nothing to upgrade.
 
-    The rebuild re-embeds every document it re-saves — 96% of the command's
-    runtime, ~58 s on a 315-document store — and running it against an index
-    this same build produced recomputes vectors identical to the ones already
-    stored. The first upgrade stamps the running version; the second one reads
-    that stamp and re-saves nothing.
+    The first upgrade stamps the running version; the second reads that stamp
+    and re-saves nothing. The stamp is now only half the saving — the drain
+    skips a document whose inputs are unchanged whether or not it was re-saved
+    (issue-77dd42e3a03a) — but re-reading and re-writing every document's
+    metadata is still work nobody asked for.
     """
     _add()
     assert _upgrade(str(tmp_path))["reindex"]["documents_indexed"] == 1
@@ -164,6 +179,7 @@ def test_the_re_embed_count_and_the_vector_count_are_both_reported(
         ],
     )
     assert result.exit_code == 0, result.output
+    _forget_what_the_vectors_were(settings)
 
     result = runner.invoke(
         app, ["--no-daemon", "--pretty", "self", "upgrade", str(tmp_path), "--no-package"]
@@ -178,6 +194,7 @@ def test_a_vector_count_equal_to_the_document_count_is_not_printed(
     # A document with no `##` sections writes exactly one vector, and
     # "1 re-embedded (1 vectors)" is both redundant and ungrammatical.
     _add()
+    _forget_what_the_vectors_were(settings)
     result = runner.invoke(
         app, ["--no-daemon", "--pretty", "self", "upgrade", str(tmp_path), "--no-package"]
     )

@@ -28,13 +28,17 @@ HOME_ENV = "DOCIR_HOME"
 NO_DAEMON_ENV = "DOCIR_NO_DAEMON"
 #: Idle timeout (seconds) before the daemon shuts itself down.
 DEFAULT_IDLE_TIMEOUT = 900.0
-#: How long a client waits for the daemon's *reply* before giving up (seconds).
-#: Deliberately generous, and deliberately not the connect timeout: connecting to
-#: a local Unix socket either succeeds at once or not at all, while the reply
-#: arrives only after the daemon has done the work — a ``reindex`` over a large
-#: corpus is one request that legitimately runs for minutes. Sizing this like a
+#: How long a client waits for the daemon to say *anything* before giving up
+#: (seconds). Deliberately generous, and deliberately not the connect timeout:
+#: connecting to a local Unix socket either succeeds at once or not at all, while
+#: the reply arrives only after the daemon has done the work. Sizing this like a
 #: connect budget is what made ``reindex`` fail on a 65-document store while the
-#: daemon completed it. Raise ``DOCIR_REQUEST_TIMEOUT`` for a slower corpus.
+#: daemon completed it.
+#:
+#: It bounds *silence*, not work: a running command sends a keepalive frame every
+#: few seconds, and each frame re-arms the socket. So this is the answer to "has
+#: the daemon died?", and there is no corpus size it has to be raised for — the
+#: reason it once had to be is exactly the bug the keepalive removed.
 DEFAULT_REQUEST_TIMEOUT = 300.0
 #: The per-project store directory name, discovered by walking up from the CWD
 #: (the ``.git`` model). ``docir init`` creates one; commands then scope to it.

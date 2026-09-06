@@ -25,6 +25,23 @@ The daemon is a cache for a warm model and a lock for SQLite, nothing else. Ever
   because the daemon still has it and the old blanket retry killed it mid-transaction and ran
   the command twice (for `add`, a second document). Do not collapse either pair back together.
 
+- **The reply timeout bounds silence, not work — the daemon keepalives while it runs
+  (adr-56d29d521620).** A reply is one or more frames: zero or more `{"keepalive": true}`,
+  then exactly one response; the client discards keepalives and each frame re-arms the
+  socket, so the budget is never a deadline on the work. It has to be, because
+  `docir self upgrade` always runs the *full* resync — the package step is what makes the
+  build stamp unequal — which re-embeds every vector at 58.4s per 315 documents. A flat 300s
+  meant that past ~1,500 documents the upgrade could not finish, failing after the package
+  was already replaced and before `agent update` and `check`. **Do not "simplify" this back
+  to a single reply read, and do not answer a slow corpus with a bigger number** — that was
+  the advice the old error message gave, and it asks the user to predict an embedding time.
+  Two details are load-bearing: the request runs on a worker thread (safe because the watcher
+  already executes off the main thread through the same `SerializingExecutor`), and the
+  worker's exception is **re-raised**, not turned into an `ok=False` — the connection closing
+  without a reply is what tells `SocketExecutor` the daemon is broken and the request is safe
+  to respawn and retry. A client that gave up only stops the keepalives; the work is one
+  transaction and is never abandoned halfway.
+
 - **The daemon watches `docs/` and reindexes what changes, and both halves of that
   are load-bearing.** Hand-editing is *permitted* (the README's by-hand table), so the
   window between an edit and a `reindex` was one where every read answered from a stale

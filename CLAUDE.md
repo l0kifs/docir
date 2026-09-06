@@ -258,6 +258,8 @@ enough to stop a wrong edit and never enough to argue with.
   the ~104-char `AF_UNIX` limit.
 - Connect and reply are timed separately and raise **different** exceptions: a refused connect is
   retried, an unanswered reply is never resent. Do not collapse either pair.
+- The daemon keepalives while a request runs, so the reply timeout bounds **silence, not work** —
+  a slow corpus is never answered with a bigger number.
 - The daemon watches `docs/` and reindexes what changes; the watcher and the socket server share
   **one** `SerializingExecutor`, and the watcher swallows its failures on purpose.
 - The daemon is disposable and respawned by the client. Its pid file records a code stamp, and a

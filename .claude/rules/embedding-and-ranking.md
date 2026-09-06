@@ -23,6 +23,19 @@ Every claim here was measured. Run `uv run python benchmarks/run.py` before and 
   the rebuild instead of adding to it, so it recomputed exactly those vectors and wrote neither
   the schema baseline nor the build stamp. Do not move embedding onto the synchronous write path.
 
+- **The queue says somebody asked; the input digest says whether a recompute is owed
+  (issue-77dd42e3a03a).** `embeddings.input_digest` (migration `0012`) hashes the model id, the
+  document's `embedding_text()` and every `embedding_chunks()` triple; `drain_dirty` compares it
+  and, on a match, clears the flag and embeds nothing. This is not an optimisation to trim: a full
+  `reindex` re-saves every document and so marks every one dirty, which made `docir self upgrade`
+  recompute 1,547 byte-identical vectors — 146s against 205 documents — on every release. The
+  digest covers the **chunk triples**, not just the body, which is what makes adr-6a4718fa7a7d's
+  "a release that changes chunking is a full rebuild" happen by itself: different splitting is a
+  different digest, with no version constant for anybody to remember to bump. `None` means
+  *unknown* (a pre-`0012` row) and must always read as *recompute*, never as unchanged. Keep the
+  digest and `set_vector` in one call — `input_digest` is keyword-only because it and `model_id`
+  are both strings, and a row that swapped them looks current and describes nothing.
+
 - **Every section is embedded, because the model never read the whole body (adr-927aa43d9635).**
   `bge-small-en-v1.5` reads ~512 tokens (~1,900 chars of prose) and silently ignores the rest —
   appending text past it returns a bit-identical vector. 84 of docir's own 103 documents exceed

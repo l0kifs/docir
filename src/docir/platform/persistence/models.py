@@ -140,6 +140,9 @@ class EmbeddingRow(Base):
     vector: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     dirty: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     model_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    #: What the model read to produce this row and its chunks (migration
+    #: ``0012``). ``None`` means unknown, which the drain reads as *recompute*.
+    input_digest: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class ChunkEmbeddingRow(Base):

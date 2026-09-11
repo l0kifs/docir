@@ -506,22 +506,71 @@ TREE = _cli_tree()
 # adr-354a4270ecd8 exists for.
 
 #: `tool -> CLI command` for the tools that mirror one directly.
+#:
+#: The **write** path was absent from this map until it was noticed that the two
+#: largest surfaces in the CLI — `add` (14 flags) and `update` (21) — were the
+#: two nothing checked. Read tools drifted once and were pinned; the same drift
+#: on `update` would cost an MCP agent a way to edit a document at all, which is
+#: worse than a missing `--explain`.
 _MIRRORED = {
     "docir_context": "context",
     "docir_search": "search",
     "docir_query": "query",
     "docir_get": "get",
     "docir_bench": "bench",
+    "docir_add": "add",
+    "docir_update": "update",
+    "docir_delete": "delete",
+    "docir_reindex": "reindex",
+    "docir_check": "check",
+    "docir_lint": "lint",
 }
 
-#: CLI flag -> tool property, where the two deliberately differ. The tool takes
-#: lists and says so in the plural; the CLI repeats a singular flag. Renaming a
-#: tool argument breaks an agent's saved prompts, so the difference is kept and
-#: declared rather than reconciled.
+#: command -> {CLI flag: tool property}, where the two deliberately differ.
+#: Renaming a tool argument breaks an agent's saved prompts, so a difference is
+#: kept and declared rather than reconciled.
+#:
+#: Keyed by command because one flag spells two different properties: `--type`
+#: is `types` on `query` (the tool takes a list and says so in the plural, where
+#: the CLI repeats a singular flag) and `set_type` on `update` (the tool names
+#: every write field `set_*`, and `type` there would read as the type to create).
+#: A flat map cannot hold both, and the one it holds silently excuses the other.
 _FLAG_ALIASES = {
-    "type": "types",
-    "status": "statuses",
-    "tag": "tags",
+    "query": {"type": "types", "status": "statuses", "tag": "tags"},
+    "update": {"type": "set_type"},
+    "reindex": {"changed": "changed_only"},
+}
+
+#: command -> {CLI flag: why it reaches no tool}. A difference has to be stated
+#: here to pass, so "the tool is missing this" and "the tool is not meant to
+#: have this" stop looking identical to a reader — and a reason nobody can write
+#: is the signal that the flag is drift rather than design.
+_CLI_ONLY = {
+    "add": {
+        "id": (
+            "ids are never chosen by the caller — `docir_add` says so in its own "
+            "docstring. `--id` exists to adopt an id while migrating a numbered "
+            "corpus, which is a human's one-off, not an agent's write."
+        ),
+        "body-file": "a shell-side way to produce `body`; the tool takes the string directly",
+        "stdin": "a shell-side way to produce `body`; the tool takes the string directly",
+    },
+    "update": {
+        "body-file": "a shell-side way to produce `body`; the tool takes the string directly",
+        "stdin": "a shell-side way to produce `body`; the tool takes the string directly",
+    },
+    "check": {
+        "fix": "a different command (`repair`), exposed under its own name as `docir_check_fix`",
+        "strict": "shapes the process exit code for CI; a tool result has no exit code",
+        "strict-all": "shapes the process exit code for CI; a tool result has no exit code",
+    },
+    "lint": {
+        "deep": (
+            "a confirmation guard on the CLI, documented as 'without it lint does "
+            "nothing'. `docir_lint` is the deep run, so a tool flag would have "
+            "exactly one legal value."
+        ),
+    },
 }
 
 #: Flags that shape *rendering*, not the request. They never reach a tool
@@ -548,21 +597,57 @@ def _cli_flags(command: str) -> set[str]:
 
 @pytest.mark.parametrize("tool", sorted(_MIRRORED))
 def test_every_cli_flag_reaches_its_tool(server, tool: str) -> None:
+    command = _MIRRORED[tool]
+    flags = _cli_flags(command)
+    # Without this the test passes loudest when it is checking nothing: a broken
+    # TREE lookup, or a command whose options moved behind a subcommand, yields
+    # an empty set and so an empty `missing`. Every mirrored command has at
+    # least one flag — that is why it is worth mirroring.
+    assert flags, f"`docir {command}` reports no flags — _cli_flags is not reading the CLI"
     properties = set(list_tools(server)[tool].inputSchema.get("properties", {}))
+    aliases = _FLAG_ALIASES.get(command, {})
     missing = {
         flag
-        for flag in _cli_flags(_MIRRORED[tool])
-        if _FLAG_ALIASES.get(flag.replace("-", "_"), flag.replace("-", "_")) not in properties
+        for flag in flags - set(_CLI_ONLY.get(command, {}))
+        if aliases.get(flag, flag).replace("-", "_") not in properties
     }
     assert not missing, (
-        f"{tool} cannot be asked for {sorted(missing)} — `docir {_MIRRORED[tool]}` can. "
-        f"Add the argument, or declare the difference in _FLAG_ALIASES."
+        f"{tool} cannot be asked for {sorted(missing)} — `docir {command}` can. "
+        f"Add the argument, alias it in _FLAG_ALIASES, or say why it is CLI-only in _CLI_ONLY."
     )
 
 
-@pytest.mark.parametrize("flag", sorted(_FLAG_ALIASES))
-def test_every_alias_is_still_needed(flag: str) -> None:
+@pytest.mark.parametrize(
+    ("command", "flag"),
+    sorted((command, flag) for command, flags in _FLAG_ALIASES.items() for flag in flags),
+)
+def test_every_alias_is_still_needed(command: str, flag: str) -> None:
     """A stale alias would silently excuse a genuinely missing argument."""
-    assert any(flag in _cli_flags(command) for command in _MIRRORED.values()), (
-        f"{flag!r} is aliased and no mirrored command has it — drop it from _FLAG_ALIASES"
+    assert command in _MIRRORED.values(), (
+        f"{command!r} is aliased and no longer mirrored — drop it from _FLAG_ALIASES"
+    )
+    assert flag in _cli_flags(command), (
+        f"`docir {command}` has no --{flag} — drop it from _FLAG_ALIASES"
+    )
+
+
+@pytest.mark.parametrize(
+    ("command", "flag"),
+    sorted((command, flag) for command, flags in _CLI_ONLY.items() for flag in flags),
+)
+def test_every_cli_only_flag_is_still_cli_only(server, command: str, flag: str) -> None:
+    """A stale exemption excuses a missing argument exactly as a stale alias does.
+
+    Both halves matter. A flag dropped from the CLI leaves a reason standing for
+    nothing; a flag that later *gained* a tool argument leaves this map claiming
+    a difference that no longer exists, which is how the next reader concludes
+    the omission was meant.
+    """
+    assert flag in _cli_flags(command), (
+        f"`docir {command}` has no --{flag} — drop it from _CLI_ONLY"
+    )
+    tool = next(name for name, mirrored in _MIRRORED.items() if mirrored == command)
+    properties = set(list_tools(server)[tool].inputSchema.get("properties", {}))
+    assert flag.replace("-", "_") not in properties, (
+        f"{tool} now takes {flag!r} — drop it from _CLI_ONLY, it is no longer CLI-only"
     )

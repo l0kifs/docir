@@ -10,7 +10,7 @@ related:
 - adr-a343140d72e2
 - kind: refines
   to: adr-a1754eb79fe7
-status: open
+status: resolved
 tags:
 - architecture
 - cosmetic
@@ -49,3 +49,26 @@ recording rather than a failure to act.
 Treating it needs a sweep rather than a single behaviour-preserving move, so it
 is the one finding here that does not fit the local refactoring loop the rest of
 the branch used.
+
+## Resolution
+
+Split into seven modules under `publishing/infra/`, one per reason to change:
+`assets` (the inlined CSS and scripts), `chips` (the classification vocabulary),
+`page_shell` (the HTML shell and the filenames), `markdown` (the token pipeline
+and cross-references), `index_page`, `document_page`, and `rendering` itself —
+now 114 lines holding `render_site` and `render_search_index` and nothing else.
+
+Dependencies run one way, `assets <- chips <- page_shell <- markdown`, with the
+two page renderers above and `rendering` on top. `publishing` is still a leaf
+that takes documents as data.
+
+Behaviour is unchanged and was checked three ways rather than asserted: every
+one of the 422 files `docir build` produces from this store is byte-identical
+before and after; every function body is AST-identical to its pre-split
+counterpart once the renames are normalised; and the suite passes unmodified.
+
+The measured decisions moved with the code they explain — the grid index, the
+relation placement, the chip vocabulary, the dropped leading title, the scoped
+class names. That was the condition this issue set, and it took two
+fresh-context audits to actually meet: the first pass left eleven explanations
+stranded in a file whose own docstring claimed they had moved.

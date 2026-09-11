@@ -16,6 +16,7 @@ from docir.platform.errors import (
     DuplicateDocumentIdError,
     ValidationError,
 )
+from docir.platform.filesystem import markdown_format
 from docir.platform.filesystem.code_matcher import RepositoryCodeMatcher
 from docir.platform.filesystem.markdown_store import MarkdownDocumentFileStore
 from docir.platform.filesystem.tag_store import YamlTagFileStore
@@ -189,7 +190,7 @@ class TestRelocate:
         # rmdir'ing the store's docs root would take the whole corpus with it.
         store = MarkdownDocumentFileStore(tmp_path)
         (tmp_path / "adr-0001-loose.md").write_text(
-            store._render(_doc()),
+            markdown_format.render(_doc()),
             encoding="utf-8",
         )
         store.relocate(_doc(type="product_decision"), from_path="adr-0001-loose.md")

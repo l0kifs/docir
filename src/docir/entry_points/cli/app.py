@@ -8,8 +8,6 @@ agents). The CLI is a thin client: all business logic lives in the use cases.
 from __future__ import annotations
 
 import json
-import os
-import sys
 from dataclasses import asdict
 from pathlib import Path
 from typing import Annotated, Any
@@ -21,52 +19,36 @@ from typer.main import get_command
 from docir import __version__
 from docir.config.settings import Settings, new_store_home
 from docir.entry_points import doctor as doctor_report
-from docir.entry_points.cli import rendering
+from docir.entry_points.cli import emit, rendering
+from docir.entry_points.cli.agent_cmds import agent_app
 from docir.entry_points.cli.body_input import resolve_body
 from docir.entry_points.cli.runner import (
     CliState,
     execute,
-    execute_with,
     get_state,
     help_wants_json,
     run_local,
     set_state,
     try_execute,
     use_json,
-    with_executor,
 )
+from docir.entry_points.cli.schema_cmds import schema_app
+from docir.entry_points.cli.self_cmds import self_app
+from docir.entry_points.cli.tag_cmds import tag_app
 from docir.entry_points.composition import (
     DEFAULT_INIT_ID_STYLE,
     InitResult,
-    SchemaValidation,
-    UpgradeResult,
-    active_embedder_id,
     initialize_store,
-    upgrade_store,
-    validate_schema,
 )
 from docir.entry_points.daemon.cmds import daemon_app
 from docir.entry_points.federation import LOCAL_ONLY_KEY
 from docir.entry_points.mcp.cmds import mcp_app
-from docir.modules.agents.api import (
-    AGENT_NAMES,
-    DEFAULT_AGENTS,
-    InstalledFile,
-    InstallRequest,
-    SetupResult,
-    UpdateRequest,
-    build_agent_service,
-)
 from docir.modules.documents.api import (
     DEFAULT_CONTEXT_EXPAND,
     ID_STYLES,
     PROFILE_NAMES,
-    describe_schema,
-    load_schema,
 )
 from docir.modules.publishing.api import PublishRequest, PublishResult, build_site_builder
-from docir.modules.release.api import ReleaseStatus, build_release_service
-from docir.modules.tags.api import DEFAULT_TAG_PAGE
 from docir.platform.errors import ValidationError
 
 #: How many documents one `build` enumerates. `query` pages, and a site build
@@ -79,10 +61,6 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
-tag_app = typer.Typer(help="Manage the tag registry.", no_args_is_help=True)
-agent_app = typer.Typer(help="Install AI-assistant instructions for docir.", no_args_is_help=True)
-schema_app = typer.Typer(help="Inspect and validate the document schema.", no_args_is_help=True)
-self_app = typer.Typer(help="Maintain the docir installation itself.", no_args_is_help=True)
 app.add_typer(tag_app, name="tag")
 app.add_typer(agent_app, name="agent")
 app.add_typer(schema_app, name="schema")
@@ -206,7 +184,7 @@ def init(
     result = run_local(
         lambda: initialize_store(
             settings,
-            profiles=_split_csv(profiles),
+            profiles=emit.split_csv(profiles),
             force=force,
             force_schema=force_schema,
             id_style=id_style,
@@ -274,7 +252,7 @@ def build(
     An .mjs runtime is refused with that URL in the message, rather than copied
     into a page whose script never runs.
     """
-    _warn_on_global_fallback()
+    emit.warn_on_global_fallback()
     state = get_state()
     # Local only, explicitly: a site is a projection of *one* repository's
     # corpus (adr-fb938175f72a). `query` and `get` federate by default, so
@@ -289,7 +267,7 @@ def build(
             LOCAL_ONLY_KEY: True,
         },
     )
-    ids = [str(row["id"]) for row in _as_mappings(skeletons) if row.get("id")]
+    ids = [str(row["id"]) for row in emit.as_mappings(skeletons) if row.get("id")]
     # A second pass for the bodies, deliberately absent from every list path
     # (the skeleton contract) — but one batched `get`, since a site build reads
     # the whole corpus deeply, which is the shape the batch exists for. Two
@@ -298,8 +276,8 @@ def build(
     # rather than an error; and an empty store skips the pass instead of being
     # tolerated by `get`, because nothing to read is not asking for nothing.
     documents = (
-        _as_mappings(
-            _as_mapping(execute("get", {"doc_ids": ids, LOCAL_ONLY_KEY: True})).get("documents")
+        emit.as_mappings(
+            emit.as_mapping(execute("get", {"doc_ids": ids, LOCAL_ONLY_KEY: True})).get("documents")
         )
         if ids
         else []
@@ -325,66 +303,6 @@ def build(
 # Both commands run in-process, bypassing the daemon/dispatcher, because
 # ``build_container`` loads the schema: a file too broken to start the store
 # would otherwise make the very commands meant to diagnose it unreachable.
-
-
-@schema_app.command("show")
-def schema_show() -> None:
-    """Print the fully merged schema (core + profiles + inline overrides).
-
-    This is what validation actually enforces — the raw docs-schema.yaml only
-    lists the ingredients.
-    """
-    settings = get_state().settings
-    schema = run_local(lambda: load_schema(settings.schema_path))
-    _emit_schema(describe_schema(schema))
-
-
-@schema_app.command("validate")
-def schema_validate() -> None:
-    """Check docs-schema.yaml parses and merges cleanly; exit nonzero if not.
-
-    Rejects a status name that no type declares — a transition target, a
-    `default_status`, or an `inactive_statuses` entry. That typo used to load
-    happily and surface later as "invalid transition 'open' -> 'closed'",
-    naming a status that IS declared and pointing at the write rather than the
-    schema.
-
-    A "dead end" warning (a live status with no outgoing transitions) was built
-    and then dropped: measured against the bundled profiles it fired on 5 of the
-    15 shipped types — `release_note.published`, `postmortem.published`,
-    `experiment.complete`, `hypothesis.supported`, `obligation.breached` — every
-    one a correct terminal state for a document that stays relevant. A warning
-    that fires on the product's own defaults is issue-40d1792bc9f9 again.
-
-    It also reports what the schema costs the corpus: how many documents carry a
-    type, status, required field or relation kind this schema does not accept.
-    That is `docir check`'s answer, given by the command you actually run after
-    editing the schema — which used to say `valid: true` while a corpus fell out
-    of the type system. The exit code does not change: the file is valid, and it
-    is the documents that have moved. Read from the files rather than the index,
-    since a schema edit is a hand edit and that is exactly when the index is
-    behind.
-    """
-    settings = get_state().settings
-    payload = _validation_payload(run_local(lambda: validate_schema(settings)))
-    state = get_state()
-    if use_json(state):
-        rendering.emit_json(payload, trim=state.trim)
-    else:
-        rendering.render_schema_valid(payload)
-
-
-def _validation_payload(result: SchemaValidation) -> dict[str, object]:
-    """`docir schema validate` as JSON. `valid` stays first and stays a bool."""
-    return {
-        "valid": True,
-        "path": str(result.path),
-        "types": result.types,
-        "documents": result.corpus.documents,
-        "unreadable": result.corpus.unreadable,
-        "affected": result.corpus.affected,
-        "findings": [asdict(finding) for finding in result.corpus.findings],
-    }
 
 
 # -- write path -------------------------------------------------------------
@@ -457,18 +375,18 @@ def add(
         "type": type,
         "title": title,
         "description": description,
-        "tags": _split_csv(tags),
-        "related": _split_csv(related),
+        "tags": emit.split_csv(tags),
+        "related": emit.split_csv(related),
         "status": status,
         "owner": owner,
-        "code": _split_csv(code),
+        "code": emit.split_csv(code),
         "isolated": isolated,
         "id": id,
         "body": resolve_body(body, body_file, stdin),
         "wait_embeddings": wait_embeddings,
     }
-    _warn_on_global_fallback()
-    _emit_document(execute("add", payload))
+    emit.warn_on_global_fallback()
+    emit.emit_document(execute("add", payload))
 
 
 @app.command()
@@ -638,11 +556,11 @@ def update(
         "set_type": set_type,
         "set_title": set_title,
         "set_description": set_description,
-        "set_tags": None if set_tags is None else _split_csv(set_tags),
-        "set_related": None if set_related is None else _split_csv(set_related),
+        "set_tags": None if set_tags is None else emit.split_csv(set_tags),
+        "set_related": None if set_related is None else emit.split_csv(set_related),
         "set_owner": set_owner,
         "set_isolated": set_isolated,
-        "set_code": None if set_code is None else _split_csv(set_code),
+        "set_code": None if set_code is None else emit.split_csv(set_code),
         "mark_verified": verified,
         "clear_verified": clear_verified,
         "append_section": [append_section, body_text] if append_section else None,
@@ -657,26 +575,26 @@ def update(
         "allow_transition_override": override,
         "wait_embeddings": wait_embeddings,
     }
-    _warn_on_global_fallback()
+    emit.warn_on_global_fallback()
     data = execute("update", payload)
     forced = data.get("forced_transition") if isinstance(data, dict) else None
     if forced:
         # Loud at the moment of the bypass, but not written to the file: git
         # records the status change, and docir has no actors to attribute it to.
         rendering.render_warning(f"forced illegal transition {forced}")
-    _emit_document(data)
+    emit.emit_document(data)
 
 
 @app.command()
 def archive(doc_id: Annotated[str, typer.Argument(help="Document id.")]) -> None:
     """Soft-remove a document from active search."""
-    _emit_document(execute("archive", {"doc_id": doc_id}))
+    emit.emit_document(execute("archive", {"doc_id": doc_id}))
 
 
 @app.command()
 def unarchive(doc_id: Annotated[str, typer.Argument(help="Document id.")]) -> None:
     """Restore an archived document to active search."""
-    _emit_document(execute("unarchive", {"doc_id": doc_id}))
+    emit.emit_document(execute("unarchive", {"doc_id": doc_id}))
 
 
 @app.command()
@@ -701,7 +619,7 @@ def delete(
     message = f"deleted {doc_id}"
     if unlinked:
         message += f"; unlinked from {', '.join(unlinked)}"
-    _emit_or_message(data, message)
+    emit.emit_or_message(data, message)
 
 
 # -- read path --------------------------------------------------------------
@@ -749,11 +667,11 @@ def get(
     did resolve instead of failing the whole read. --section takes one document;
     with several, write the '#' form.
     """
-    _warn_on_global_fallback()
+    emit.warn_on_global_fallback()
     if len(doc_ids) == 1:
-        _emit_document(execute("get", {"doc_id": doc_ids[0], "section": section}))
+        emit.emit_document(execute("get", {"doc_id": doc_ids[0], "section": section}))
         return
-    _emit_batch(execute("get", {"doc_ids": doc_ids, "section": section}))
+    emit.emit_batch(execute("get", {"doc_ids": doc_ids, "section": section}))
 
 
 @app.command()
@@ -847,7 +765,7 @@ def query(
         "statuses": tuple(status or ()),
         "tags": tuple(tag or ()),
         "include_archived": include_archived,
-        "include_inactive": _include_inactive(include_inactive, include_resolved),
+        "include_inactive": emit.wants_inactive(include_inactive, include_resolved),
         "owner": owner,
         "stale": stale,
         "expr": expr,
@@ -855,8 +773,8 @@ def query(
         "limit": limit,
         "offset": offset,
     }
-    _warn_on_global_fallback()
-    _emit_document_list(execute("query", payload))
+    emit.warn_on_global_fallback()
+    emit.emit_document_list(execute("query", payload))
 
 
 @app.command()
@@ -884,11 +802,11 @@ def search(
         "text": text,
         "limit": limit,
         "offset": offset,
-        "include_inactive": _include_inactive(include_inactive, include_resolved),
+        "include_inactive": emit.wants_inactive(include_inactive, include_resolved),
         "explain": explain,
     }
-    _warn_on_global_fallback()
-    _emit_document_list(execute("search", payload))
+    emit.warn_on_global_fallback()
+    emit.emit_document_list(execute("search", payload))
 
 
 @app.command()
@@ -983,222 +901,22 @@ def context(
         "task": task,
         "limit": limit,
         "expand": expand,
-        "include_inactive": _include_inactive(include_inactive, include_resolved),
+        "include_inactive": emit.wants_inactive(include_inactive, include_resolved),
         "min_score": min_score,
         "explain": explain,
         "also": list(also or ()),
     }
-    _warn_on_global_fallback()
-    _emit_document_list(execute("context", payload))
+    emit.warn_on_global_fallback()
+    emit.emit_document_list(execute("context", payload))
 
 
 # -- tags -------------------------------------------------------------------
 
 
-@tag_app.command("add")
-def tag_add(
-    key: Annotated[str, typer.Argument(help="Tag key to register.")],
-    description: Annotated[
-        str, typer.Option("--description", help="What the tag means; shown by `tag list`.")
-    ],
-) -> None:
-    """Register a new tag."""
-    data = execute("tag_add", {"key": key, "description": description})
-    _emit_or_message(data, f"registered tag {key}")
-
-
-@tag_app.command("list")
-def tag_list(
-    limit: Annotated[
-        int, typer.Option("--limit", help="Maximum tags to return.")
-    ] = DEFAULT_TAG_PAGE,
-    offset: Annotated[int, typer.Option("--offset", help="Tags to skip; page with --limit.")] = 0,
-) -> None:
-    """List registered tags, key-ordered, with a usage count each.
-
-    `usage` counts the indexed documents carrying the tag, archived included —
-    the same set `tag rm` refuses to remove over, so `0` means the tag is dead
-    and `tag rm` will take it without --force.
-
-    Paged: a page shorter than --limit means you have reached the end. There is
-    no total in the response — it is a bare JSON array, and a wrapper to carry
-    one would break every existing caller.
-    """
-    data = execute("tag_list", {"limit": limit, "offset": offset})
-    state = get_state()
-    if use_json(state):
-        rendering.emit_json(data, trim=state.trim)
-    else:
-        rendering.render_tags(_as_list(data))
-
-
-@tag_app.command("rename")
-def tag_rename(
-    old: Annotated[str, typer.Argument(help="Existing tag key.")],
-    new: Annotated[str, typer.Argument(help="New tag key.")],
-    merge: Annotated[
-        bool,
-        typer.Option("--merge", help="Fold `old` into an existing `new` instead of failing."),
-    ] = False,
-) -> None:
-    """Rename a tag across the registry and all documents.
-
-    Renaming onto a tag that already exists is refused unless you pass --merge,
-    which folds the two together: every document carrying `old` gets `new`, a
-    document carrying both keeps one, and `new`'s description survives. Without
-    the flag the refusal stands — a merge discards a description, which is not
-    what someone fixing a typo means.
-    """
-    data = execute("tag_rename", {"old": old, "new": new, "merge": merge})
-    touched = data.get("documents") if isinstance(data, dict) else None
-    count = len(touched) if isinstance(touched, list) else 0
-    verb = "merged" if merge else "renamed"
-    _emit_or_message(data, f"{verb} {old} -> {new} across {count} document(s)")
-
-
-@tag_app.command("rm")
-def tag_rm(
-    key: Annotated[str, typer.Argument(help="Tag key to remove.")],
-    force: Annotated[
-        bool, typer.Option("--force", help="Remove even while documents still carry the tag.")
-    ] = False,
-) -> None:
-    """Remove a tag (blocked while in use unless forced)."""
-    data = execute("tag_remove", {"key": key, "force": force})
-    stripped = data.get("documents") if isinstance(data, dict) else None
-    count = len(stripped) if isinstance(stripped, list) else 0
-    message = f"removed tag {key}"
-    if count:
-        message += f"; stripped it from {count} document(s)"
-    _emit_or_message(data, message)
-
-
 # -- agent instructions -----------------------------------------------------
 
 
-@agent_app.command("install")
-def agent_install(
-    directory: Annotated[Path, typer.Argument(help="Project directory.")] = Path("."),
-    agent: Annotated[
-        list[str] | None,
-        typer.Option("--agent", help=f"Target(s): {', '.join(AGENT_NAMES)}. Repeatable."),
-    ] = None,
-    use_global: Annotated[
-        bool,
-        typer.Option("--global", help="Install the skill under ~/ instead of the project."),
-    ] = False,
-) -> None:
-    """Install docir's agent instructions (a Claude skill; AGENTS.md links to it)."""
-    service = build_agent_service(__version__)
-    request = InstallRequest(
-        project_root=directory.resolve(),
-        global_root=Path.home(),
-        agents=tuple(agent) if agent else DEFAULT_AGENTS,
-        use_global=use_global,
-    )
-    _emit_setup(run_local(lambda: service.install(request)))
-
-
-@agent_app.command("update")
-def agent_update(
-    directory: Annotated[Path, typer.Argument(help="Project directory.")] = Path("."),
-    agent: Annotated[
-        list[str] | None,
-        typer.Option("--agent", help="Add a target that isn't installed yet. Repeatable."),
-    ] = None,
-    use_global: Annotated[
-        bool,
-        typer.Option("--global", help="Refresh the skill under ~/ instead of the project."),
-    ] = False,
-) -> None:
-    """Refresh already-installed agent instructions to the current docir version."""
-    service = build_agent_service(__version__)
-    request = UpdateRequest(
-        project_root=directory.resolve(),
-        global_root=Path.home(),
-        agents=tuple(agent) if agent else (),
-        use_global=use_global,
-    )
-    _emit_setup(run_local(lambda: service.update(request)))
-
-
 # -- the installation itself -------------------------------------------------
-
-
-@self_app.command("status")
-def self_status(
-    refresh: Annotated[
-        bool,
-        typer.Option("--refresh", help="Ask PyPI now instead of reading the last answer."),
-    ] = False,
-) -> None:
-    """Report the docir installation: how it was installed, and whether it is current.
-
-    A file read by default — the newest release is whatever was last fetched, and
-    `checked_on` says when that was. `--refresh` asks PyPI (docir's only network
-    call), and skips it when the answer is already from today.
-
-    An absent `latest` means *unknown*, never "up to date": nothing has been
-    checked, or the check could not reach the index. Set DOCIR_UPDATE_CHECK=1 to
-    have the daemon keep it fresh and every command say so on stderr.
-    """
-    state = get_state()
-    service = build_release_service(__version__, state.settings.release_cache_path)
-    if refresh:
-        # The cached read is instant; only --refresh goes to the network.
-        with rendering.progress("asking PyPI for the newest release"):
-            status_result = run_local(lambda: service.status(refresh=True))
-    else:
-        status_result = run_local(lambda: service.status(refresh=False))
-    _emit_release_status(status_result)
-
-
-@self_app.command("upgrade")
-def self_upgrade(
-    directory: Annotated[Path, typer.Argument(help="Project directory.")] = Path("."),
-    no_package: Annotated[
-        bool,
-        typer.Option("--no-package", help="Skip the package upgrade; only resync this store."),
-    ] = False,
-    upgraded_from: Annotated[
-        str | None,
-        typer.Option("--upgraded-from", hidden=True),
-    ] = None,
-) -> None:
-    """Upgrade docir, then bring this store and its generated files in line with it.
-
-    Four things in one command. It upgrades the package where docir owns its
-    environment (a uv tool, a pipx install, a virtualenv) — and where it does
-    not, says why and carries on. Then it rebuilds the index (derived,
-    gitignored, and the only place the schema baseline and the build version are
-    recorded), refreshes any installed agent instruction file to the running
-    version, and reports what `check` still finds — `check` last, so the findings
-    describe the state you are left in.
-
-    The package step re-executes docir before doing the rest, because this
-    process is the code being replaced: every step after the install would
-    otherwise be the old build's work, starting with the stamp saying which
-    version built the index. Pass --no-package to skip the install and only
-    resync the store.
-
-    The rebuild is the expensive half — it re-embeds every document it re-saves —
-    so it runs in full only when the index carries a different version's build
-    stamp. Against a store this build already indexed there is nothing for a full
-    pass to recompute, and the run reports 0 documents rather than paying for it.
-    """
-    if not no_package and upgraded_from is None:
-        _upgrade_the_package_then_restart()
-
-    with rendering.progress("rebuilding the store"):
-        result = with_executor(
-            lambda executor: upgrade_store(
-                lambda command, payload: execute_with(executor, command, payload),
-                project_root=directory.resolve(),
-                version=__version__,
-                upgraded_from=upgraded_from,
-            )
-        )
-    _emit_upgrade(result)
 
 
 # -- maintenance ------------------------------------------------------------
@@ -1234,7 +952,7 @@ def reindex(
             f"{skipped} file(s) could not be parsed and are NOT in the index; "
             "run `docir check` to see which, then fix the frontmatter by hand."
         )
-    _emit_or_message(data, str(data))
+    emit.emit_or_message(data, str(data))
 
 
 @app.command()
@@ -1305,14 +1023,14 @@ def check(
         with rendering.progress("repairing the corpus"):
             result = execute("repair", {})
         payload = result if isinstance(result, dict) else {}
-        issues = _as_list(payload.get("remaining"))
+        issues = emit.as_list(payload.get("remaining"))
         if use_json(state):
             rendering.emit_json(result, trim=state.trim)
         else:
-            rendering.render_repair(_as_list(payload.get("actions")), issues)
+            rendering.render_repair(emit.as_list(payload.get("actions")), issues)
     else:
         data = execute("check", {})
-        issues = _as_list(data)
+        issues = emit.as_list(data)
         if use_json(state):
             rendering.emit_json(data, trim=state.trim)
         else:
@@ -1399,7 +1117,7 @@ def lint(
     if use_json(state):
         rendering.emit_json(data, trim=state.trim)
     else:
-        rendering.render_findings(_as_list(data), empty="no advisory findings")
+        rendering.render_findings(emit.as_list(data), empty="no advisory findings")
 
 
 @app.command()
@@ -1445,7 +1163,7 @@ def bench(
     if use_json(state):
         rendering.emit_json(data, trim=state.trim)
     else:
-        rendering.render_bench(_as_mapping(data))
+        rendering.render_bench(emit.as_mapping(data))
 
 
 def _read_fixture(path: Path) -> list[object]:
@@ -1483,7 +1201,7 @@ def embed(
         raise typer.Exit(code=0)
     with rendering.progress("recomputing embeddings"):
         data = execute("embed_flush", {})
-    _emit_or_message(data, str(data))
+    emit.emit_or_message(data, str(data))
 
 
 # -- helpers ----------------------------------------------------------------
@@ -1502,131 +1220,6 @@ def _init_home(directory: Path | None) -> Path:
         return new_store_home(directory, explicit)
     except ValueError as exc:
         raise ValidationError(str(exc)) from exc
-
-
-def _include_inactive(include_inactive: bool, include_resolved: bool) -> bool:
-    """Resolve the flag and its deprecated alias, warning on the old spelling.
-
-    The flag was `--include-resolved`, but the concept it controls is the
-    schema's `inactive_statuses` — `rejected`/`superseded` for a decision,
-    `deprecated` for architecture, `retired` for a policy. `resolved` is a
-    status of only two of the fifteen shipped types, so the name described the
-    minority case and gave a user querying decisions no reason to guess which
-    flag surfaces superseded ones. The wire field was already `include_inactive`.
-
-    The old spelling keeps working (hidden, undocumented) because it appears in
-    scripts and in agent instructions installed before this release. The notice
-    goes to stderr so a captured JSON payload on stdout is untouched.
-    """
-    if include_resolved:
-        rendering.render_warning(
-            "--include-resolved is deprecated; use --include-inactive "
-            "(it covers every inactive status, not just `resolved`)."
-        )
-    return include_inactive or include_resolved
-
-
-def _split_csv(value: str | None) -> tuple[str, ...]:
-    if not value:
-        return ()
-    return tuple(item.strip() for item in value.split(",") if item.strip())
-
-
-def _as_list(data: object) -> list[dict[str, object]]:
-    # Tuples too, not just lists: ``dataclasses.asdict`` preserves the field's
-    # container type, so a DTO with ``tuple`` fields arrives as a tuple in-process
-    # and as a JSON array over the daemon. Accepting only ``list`` made the table
-    # renderer silently show nothing while ``--json`` printed the full payload.
-    if not isinstance(data, list | tuple):
-        return []
-    result: list[dict[str, object]] = []
-    for item in data:
-        if isinstance(item, dict):
-            result.append({str(key): value for key, value in item.items()})
-    return result
-
-
-def _emit_document(data: object) -> None:
-    state = get_state()
-    if isinstance(data, dict):
-        data = _with_store(_as_mapping(data))
-    if use_json(state):
-        rendering.emit_json(data, trim=state.trim)
-    elif isinstance(data, dict):
-        rendering.render_document({str(key): value for key, value in data.items()})
-
-
-def _emit_batch(data: object) -> None:
-    """Render a batched deep read: the documents, then the addresses that missed.
-
-    The misses go to stderr in the human view and stay in the payload in the
-    JSON one. They are not an error — the request succeeded and most of it
-    resolved — but they are the half a reader would otherwise have to notice by
-    counting the panels.
-    """
-    state = get_state()
-    payload = _as_mapping(data)
-    documents = [_with_store(row) for row in _as_mappings(payload.get("documents"))]
-    missing = _as_mappings(payload.get("missing"))
-    if use_json(state):
-        rendering.emit_json({"documents": documents, "missing": missing}, trim=state.trim)
-        return
-    for row in documents:
-        rendering.render_document(row)
-    for row in missing:
-        rendering.render_warning(f"{row.get('ref')}: {row.get('error')}")
-
-
-def _with_store(row: dict[str, object]) -> dict[str, object]:
-    """Name the store a deep read came from, without overwriting a peer's.
-
-    Federation stamps a document with the store that answered for it, so the
-    local home may only fill the gap when nothing did — writing it unconditionally
-    told the reader that a peer's document lived here.
-    """
-    return {"store": str(get_state().settings.home), **row}
-
-
-def _warn_on_global_fallback() -> None:
-    """Say so when a command is about to use the global store from inside a repo.
-
-    Called on reads as well as writes. The read paths deliberately do *not* carry
-    the `store` field the write paths do: it is one absolute path, identical for
-    every row, and a list response has nowhere to put it once — per-row it would
-    cost far more than the 4.7% one small field added to `context`. A stderr
-    warning answers the same question ("am I reading the corpus I think I am?")
-    for nothing on stdout.
-
-    The reported `path` is relative to the *store*, so in a repository that was
-    never `docir init`-ed it reads as repo-local while the file goes to the
-    user's home directory — ungitted and invisible to teammates, with no error
-    at any point. Only this case warns: outside a repository the global store is
-    unambiguous, and warning on correct usage is how a check gets ignored.
-    """
-    settings = get_state().settings
-    if not settings.is_unintended_global_fallback():
-        return
-    rendering.render_warning(
-        f"using the global store {settings.home} — this directory is inside a "
-        "git repository with no .docir/. Run `docir init` to scope docs to the repo, "
-        "or set DOCIR_HOME to silence this."
-    )
-
-
-def _emit_document_list(data: object) -> None:
-    state = get_state()
-    if use_json(state):
-        rendering.emit_json(data, trim=state.trim)
-    else:
-        rendering.render_document_list(_as_list(data))
-
-
-def _emit_or_message(data: object, message: str) -> None:
-    state = get_state()
-    if use_json(state):
-        rendering.emit_json(data, trim=state.trim)
-    else:
-        rendering.render_message(message)
 
 
 def _emit_init(result: InitResult) -> None:
@@ -1662,31 +1255,6 @@ def _emit_init(result: InitResult) -> None:
         rendering.render_init(data)
 
 
-def _as_mapping(data: object) -> dict[str, object]:
-    """One response object, or an empty mapping if the payload was not one."""
-    return {str(key): value for key, value in data.items()} if isinstance(data, dict) else {}
-
-
-def _as_mappings(data: object) -> list[dict[str, object]]:
-    """Coerce a dispatcher payload into typed mappings, dropping anything else.
-
-    The executor's return type is deliberately ``object`` — one boundary, many
-    commands — so every caller that wants fields has to narrow. Rebuilding the
-    dicts rather than casting keeps the key type honest: the wire is JSON, where
-    keys are strings whatever the producer thought.
-
-    Tuples count as lists here: in-process a dataclass field arrives as the
-    tuple it was declared as, and over the socket the same field arrives as a
-    JSON array. Accepting only one of the two makes a command work in one mode
-    and silently return nothing in the other.
-    """
-    if not isinstance(data, list | tuple):
-        return []
-    return [
-        {str(key): value for key, value in row.items()} for row in data if isinstance(row, dict)
-    ]
-
-
 def _emit_build(result: PublishResult, *, settings_home: str) -> None:
     data = {
         "out": str(result.out),
@@ -1717,85 +1285,6 @@ def _emit_build(result: PublishResult, *, settings_home: str) -> None:
             rendering.render_message(
                 f"[yellow]{result.stale}[/] past their review cadence — flagged on the index"
             )
-
-
-def _emit_schema(data: dict[str, object]) -> None:
-    state = get_state()
-    if use_json(state):
-        rendering.emit_json(data, trim=state.trim)
-    else:
-        rendering.render_schema(data)
-
-
-def _upgrade_the_package_then_restart() -> None:
-    """Run the installer, then hand off to the docir it just installed.
-
-    Returns normally when nothing was installed — an environment docir does not
-    own (a checkout, a lockfile-managed project, an ephemeral `uvx` run), where
-    the rest of the command is still worth doing. On a successful install it does
-    not return at all: the process is replaced by the new build, carrying
-    `--upgraded-from` so the report can still name the version that was here.
-    """
-    state = get_state()
-    service = build_release_service(__version__, state.settings.release_cache_path)
-    rendering.render_notice("upgrading the docir package")
-    outcome = run_local(service.upgrade_package)
-    if not outcome.ran:
-        rendering.render_warning(f"package not upgraded — {outcome.message}")
-        return
-    if not outcome.ok:
-        rendering.render_error(
-            {"message": f"`{' '.join(outcome.command)}` failed: {outcome.message}"}
-        )
-        raise typer.Exit(code=1)
-    _restart_as_the_new_build()
-
-
-def _restart_as_the_new_build() -> None:
-    """Replace this process with the docir that was just installed.
-
-    `-m docir` rather than `sys.argv[0]`: the console script is a generated
-    shebang wrapper, and the interpreter is the one thing that is certainly the
-    upgraded environment's.
-    """
-    sys.stdout.flush()
-    sys.stderr.flush()
-    argv = [sys.executable, "-m", "docir", *sys.argv[1:], "--upgraded-from", __version__]
-    os.execv(sys.executable, argv)
-
-
-def _emit_release_status(status: ReleaseStatus) -> None:
-    state = get_state()
-    payload: dict[str, object] = {
-        "installed": status.installed,
-        "latest": status.latest,
-        "update_available": status.update_available,
-        "checked_on": status.checked_on,
-        "method": status.method,
-        "upgrade_command": list(status.upgrade_command),
-        "explanation": status.explanation,
-        "embedder": _active_embedder(state.settings),
-    }
-    if use_json(state):
-        rendering.emit_json(payload, trim=state.trim)
-    else:
-        rendering.render_release_status(payload)
-
-
-def _active_embedder(settings: Settings) -> str:
-    """Which model this store's reads would embed with.
-
-    Reported here because nothing else says it: a store can be configured for a
-    different model, or fall back to the hashing embedder, and every read is
-    quietly worse with no finding to name it.
-
-    The schema file is read only if it already exists — ``load_schema`` writes
-    the default when it does not, and a status command must not create a store
-    as a side effect of reporting on one.
-    """
-    schema_path = settings.schema_path
-    model = load_schema(schema_path).embed_model if schema_path.exists() else None
-    return active_embedder_id(model)
 
 
 def _emit_doctor(report: doctor_report.DoctorReport) -> None:
@@ -1866,7 +1355,7 @@ def _store_reply(payload: object) -> dict[str, object] | None:
 
     ``None`` is the store-unreachable signal doctor turns into a finding, so a
     reply that is not a mapping has to read the same way — a payload nobody can
-    interpret is not a store that answered. Distinct from :func:`_as_mapping`,
+    interpret is not a store that answered. Distinct from :func:`emit.as_mapping`,
     which coerces a missing reply to ``{}`` because its callers are rendering a
     result they already know arrived.
     """
@@ -1877,56 +1366,6 @@ def _store_reply(payload: object) -> dict[str, object] | None:
 
 def _opt_str_path(path: Path | None) -> str | None:
     return None if path is None else str(path)
-
-
-def _emit_upgrade(result: UpgradeResult) -> None:
-    """Emit one report for the three steps, rather than three commands' output."""
-    agents = [_setup_file(file) for file in result.agents]
-    findings = list(result.findings)
-    state = get_state()
-    if use_json(state):
-        payload: dict[str, object] = {
-            "version": result.version,
-            "upgraded_from": result.upgraded_from,
-            "reindex": result.reindex,
-            "agents": agents,
-            "findings": findings,
-        }
-        rendering.emit_json(payload, trim=state.trim)
-    else:
-        rendering.render_upgrade(result.reindex, agents, findings, result.upgraded_from)
-
-
-def _setup_file(file: InstalledFile) -> dict[str, object]:
-    """The one JSON shape for an installed file — `agent` and `self upgrade` share it.
-
-    There were two of these, and adding a field to one is how `self upgrade`
-    came to report an install without saying which reference files it wrote.
-    Both commands describe the same event, so one of them describing it
-    differently is always a defect, never a choice.
-    """
-    return {
-        "target": file.target,
-        "path": file.path,
-        "action": file.action.value,
-        "previous_version": file.previous_version,
-        "new_version": file.new_version,
-        "note": file.note,
-        # A skill is a directory: `path` is the entry point, so without these the
-        # agent reading this JSON cannot see which reference files it now has —
-        # nor that an install deleted one.
-        "extras": list(file.extras),
-        "removed": list(file.removed),
-    }
-
-
-def _emit_setup(result: SetupResult) -> None:
-    files = [_setup_file(file) for file in result.files]
-    state = get_state()
-    if use_json(state):
-        rendering.emit_json(files, trim=state.trim)
-    else:
-        rendering.render_setup(files)
 
 
 def _install_json_help(command: Any, seen: set[int] | None = None) -> None:

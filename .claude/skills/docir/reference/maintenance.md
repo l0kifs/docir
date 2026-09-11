@@ -18,7 +18,8 @@ index, the daemon, the model, the installation — see
   **`dangling`** (a `related` link pointing at nothing), **`duplicate-id`**, **`stale`** (past
   the type's review cadence), **`unknown-type`** / **`unknown-status`** / **`unknown-tag`** /
   **`unknown-relation-kind`** (a type, status, tag or relation kind the schema does not know —
-  all four mean a file was edited outside the CLI), **`missing-required`**, **`schema-drift`**
+  all four mean a file was edited outside the CLI), **`unresolved-link`** (a `[[...]]` in a body
+  naming no document), **`missing-required`**, **`schema-drift`**
   and **`stale-index-build`**. Run before finishing; the ones worth a recovery are spelled out
   below.
 - **Recovering from `orphan`** — two exits, and `SKILL.md` says which to reach for:
@@ -26,6 +27,23 @@ index, the daemon, the model, the installation — see
   `docir update <id> --set-isolated "no acceptance criterion references this flow"`. Audit the
   exemptions with `docir query --expr "isolated"`; `--set-isolated ""` puts a document back in
   the queue. Nothing mechanical closes this finding.
+- **Recovering from `unresolved-link`** — you wrote `[[something]]` in a body and nothing in
+  the store is called that. It is the prose twin of `dangling`, and resolution is generous: the
+  target may be the document id, its filename stem, its title slug or the title itself, and
+  inactive and archived documents resolve too — so a finding means the target does not exist,
+  never that it is merely closed. `[[...]]` inside a code span or fence is not a link and is
+  never reported, which is how you show the syntax without tripping the check. Find what you
+  meant and rewrite the body:
+
+  ```bash
+  docir check | jq -r '.[] | select(.kind=="unresolved-link") | .message'
+  docir search "the words from the broken target"        # find the real document
+  docir update <id> --replace-section "<heading>" --body-file fixed.md
+  ```
+
+  Nothing mechanical closes it — `docir check --fix` leaves it, because only you know which
+  document the link meant. Prefer `[[<the id>]]`: the site renders the target's *current* title
+  whatever form you wrote, so the id is the form that cannot go stale.
 - **`unblocked`** — a live document whose every `depends_on` target has closed. The one
   finding that is good news: it means the work is ready to start. Act on it by starting the
   work or by dropping an edge that is no longer true; nothing clears it mechanically.
@@ -155,8 +173,8 @@ hand-edited corpus, this is the contract:
 
 **After any hand-edit: `docir reindex` then `docir check`.** Watch `documents_skipped`
 in the reindex output (above). `check` then catches `unknown-tag`, `unknown-status`,
-`unknown-type`, `unknown-relation-kind`, `missing-required`, `dangling` and
-`duplicate-id`.
+`unknown-type`, `unknown-relation-kind`, `missing-required`, `dangling`,
+`unresolved-link` and `duplicate-id`.
 
 It cannot catch everything: a plausible-but-wrong `verified` date, or edited
 `created`/`updated`, are indistinguishable from real ones. Those are the fields

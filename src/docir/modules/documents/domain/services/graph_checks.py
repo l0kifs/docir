@@ -27,6 +27,12 @@ from docir.modules.documents.domain.services.expressions import (
 )
 from docir.modules.documents.domain.services.validation import is_absent
 from docir.platform.naming import TAG_KEY_RULE, is_valid_tag_key
+from docir.platform.naming.links import (
+    LinkIndex,
+    LinkResolution,
+    LinkTarget,
+    scan_wikilinks,
+)
 
 # DFS coloring states for cycle detection.
 _WHITE, _GREY, _BLACK = 0, 1, 2
@@ -85,6 +91,7 @@ RESERVED_FINDING_KINDS: frozenset[str] = frozenset(
         "schema-drift",
         "stale-index-build",
         "empty-index",
+        "unresolved-link",
     }
 )
 
@@ -179,6 +186,7 @@ class GraphChecker:
             issues.extend(self._find_unknown_tag(documents, known_tags))
             issues.extend(self._find_tag_key_format(known_tags))
         issues.extend(self._find_dangling(documents, relations))
+        issues.extend(self._find_unresolved_links(documents))
         issues.extend(self._find_cycles(relations))
         issues.extend(self._find_orphans(documents, relations))
         issues.extend(self._find_layering_violations(documents, relations))
@@ -654,6 +662,62 @@ class GraphChecker:
             )
         return issues
 
+    def _find_unresolved_links(self, documents: list[Document]) -> list[CheckIssue]:
+        """Flag ``[[...]]`` prose links whose target is no document.
+
+        The same defect as ``dangling`` in the other syntax, and a *warning*
+        rather than an error for a reason: a `related:` edge is a declared,
+        typed claim the write path validated, so one that resolves to nothing
+        means the corpus was damaged after the fact. A prose link is
+        navigational — it carries no kind, gates no merge and feeds no graph —
+        so a broken one costs a reader a click, not a wrong decision.
+
+        **Why this is Tier 1 when `unresolved-mention` is not.** They look like
+        the same check and are not. An id *named* in a sentence is a citation:
+        writing `adr-0007` while explaining the id format is correct usage, and
+        measured on this corpus all 47 unresolved mentions were exactly that, so
+        the warning would fire only on documents doing their job
+        (adr-e86c5040d626). `[[...]]` is not a citation. It is link syntax and
+        has no second reading — whoever typed the brackets meant to point at a
+        document, so one that points at nothing is a defect by construction. The
+        one false positive available, a body demonstrating the syntax, is
+        already excluded because :func:`scan_wikilinks` skips code, and that
+        filter costs nothing here where it would have cost the mention graph
+        12% of its edges.
+
+        Resolution reads **every** document, archived and inactive included: a
+        link to a resolved issue or a superseded decision works, and following
+        one is the point of publishing the graph. Only the *sources* are
+        filtered — an archived document's broken links are nobody's queue.
+
+        Nothing repairs it, which keeps it out of ``check --fix``: a target that
+        resolves to nothing needs somebody to say which document was meant, and
+        a repair has nothing to read *with*. The near-miss the finding was built
+        from is a slug guessed one word short of the title, which no rule can
+        distinguish from a link to a document not written yet.
+        """
+        index = LinkIndex(
+            LinkTarget(doc_id=doc.id, title=doc.title, stem=_stem(doc.path)) for doc in documents
+        )
+        issues: list[CheckIssue] = []
+        for doc in documents:
+            if doc.archived:
+                continue
+            seen: set[str] = set()
+            for link in scan_wikilinks(doc.body):
+                resolution = index.resolve(link.target)
+                if resolution.doc_id is not None or link.target in seen:
+                    continue
+                seen.add(link.target)
+                issues.append(
+                    CheckIssue(
+                        kind="unresolved-link",
+                        message=_unresolved_link_message(doc.id, link.target, resolution),
+                        doc_ids=(doc.id,),
+                    )
+                )
+        return issues
+
     def _find_cycles(self, relations: list[Relation]) -> list[CheckIssue]:
         adjacency: dict[str, list[str]] = {}
         for rel in relations:
@@ -932,3 +996,30 @@ def _clock_read(doc: Document) -> str:
     if doc.revoked is not None:
         return f"verification revoked {doc.revoked.isoformat()}"
     return f"never verified, created {doc.created.isoformat()}"
+
+
+def _stem(path: str | None) -> str:
+    """The filename stem of a stored document, or ``""`` before it has one."""
+    if not path:
+        return ""
+    return path.replace("\\", "/").rsplit("/", 1)[-1].removesuffix(".md")
+
+
+def _unresolved_link_message(doc_id: str, target: str, resolution: LinkResolution) -> str:
+    """What to tell whoever has to fix the link.
+
+    An ambiguous target and a missing one are different problems with different
+    repairs — disambiguate, or find the document — so they do not share a
+    sentence. Both name the command that produces the right target, because the
+    failure this check exists for is somebody typing a slug from memory.
+    """
+    if resolution.is_ambiguous:
+        joined = ", ".join(repr(candidate) for candidate in resolution.candidates)
+        return (
+            f"{doc_id!r} links to [[{target}]], which names {len(resolution.candidates)} "
+            f"documents ({joined}) — link the id instead"
+        )
+    return (
+        f"{doc_id!r} links to [[{target}]], which names no document — "
+        f"find it with `docir search {target.replace('-', ' ')!r}` and link its id"
+    )

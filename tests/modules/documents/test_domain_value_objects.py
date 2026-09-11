@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from docir.modules.documents.domain.services.slugify import slugify
 from docir.modules.documents.domain.value_objects.doc_ref import DocRef
 from docir.modules.documents.domain.value_objects.identifiers import DocId
 from docir.platform.embedding.vector import Embedding
 from docir.platform.errors import ValidationError
+from docir.platform.naming.slug import slugify
 
 
 class TestDocId:

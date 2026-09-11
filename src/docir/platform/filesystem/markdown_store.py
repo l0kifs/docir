@@ -18,7 +18,6 @@ import frontmatter
 import yaml
 
 from docir.modules.documents.domain.entities.document import Document
-from docir.modules.documents.domain.services.slugify import slugify
 from docir.modules.documents.domain.value_objects.relations import (
     DEFAULT_RELATION_KIND,
     RelatedRef,
@@ -29,6 +28,7 @@ from docir.platform.errors import (
     ValidationError,
 )
 from docir.platform.filesystem.ports import DocumentFileStore
+from docir.platform.naming.slug import slugify
 
 
 class MarkdownDocumentFileStore(DocumentFileStore):

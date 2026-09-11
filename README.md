@@ -127,6 +127,14 @@ opts out, at a measured cost to recall:
   to stand alone says so instead:
   `docir update <id> --set-isolated "scope deferred; nothing depends on it yet"`, audited
   later with `docir query --expr "isolated"`.
+- **Prose links resolve too.** A `[[...]]` written mid-sentence is navigation rather than a
+  typed edge, and docir reads it: the target may be a document id, a filename stem, a title
+  slug or the title, and inactive and archived documents resolve — a link to a resolved issue
+  is a working link. `docir build` renders it as the target's *current* title, so a retitle
+  cannot leave a link displaying a name that no longer exists, and `docir check` reports the
+  ones that point at nothing (`unresolved-link`, a warning). Showing the syntax costs nothing:
+  docir reads a code span or fence as code. It stays out of the graph — `orphan` reads
+  `related:` alone.
 - **A document can name the code it governs.** Optional `code` globs
   (`docir add --code "src/auth/**"`) record which files a decision is about, and
   `docir query --code src/auth/login.py` asks it in reverse: which decisions govern the
@@ -176,7 +184,7 @@ never watch, so CI still needs the explicit command.
 | `docir context <query>` | Ranked relevant set (skeletons) — full-text + vector, fused (`--also` to add a phrasing you could defend, `--min-score` to filter noise, `--explain` for the trace) |
 | `docir search` / `query` | Full-text search (title/description/body — **not tags**) / structured filter. Both page with `--limit`/`--offset`; `query --owner X --stale` is a review queue, `query --code <path>` the decisions governing a file, `query --expr` a JMESPath question over fields and resolved edges |
 | `docir get <id> [<id>...]` | Full documents with bodies — several in one command, and `<id>#<heading>` for just one section of one |
-| `docir check` | Structural findings — duplicate ids, dangling edges, staleness (`--strict` gates CI on errors, `--fix` repairs them) |
+| `docir check` | Structural findings — duplicate ids, dangling edges, broken `[[...]]` links, staleness (`--strict` gates CI on errors, `--fix` repairs them) |
 | `docir doctor` | Diagnose the *environment* — the installation, this store's index, the embedding model, the daemon, the peers (`--strict` gates a setup step on errors) |
 | `docir agent install` | Teach this repo's AI agent to drive docir |
 | `docir self upgrade` | Upgrade docir, then resync this store: reindex, refresh the agent files, report what `check` finds |

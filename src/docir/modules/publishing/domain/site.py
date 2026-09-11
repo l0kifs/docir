@@ -15,7 +15,9 @@ contract instead of a second reader of the aggregate.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+
+from docir.platform.naming.links import LinkIndex, LinkTarget
 
 #: Relation kinds whose *incoming* direction answers "is this still current?".
 #: A `supersedes` edge points from the new document to the old one, so the
@@ -84,6 +86,12 @@ class SiteDocument:
     #: the site has no repository to resolve them against, so it shows what the
     #: document claims and never whether the claim still holds.
     code: tuple[str, ...] = ()
+    #: The document's filename stem, which is one of the three forms a
+    #: ``[[...]]`` prose link may name it by. Carried rather than derived from
+    #: the title: ``update --set-title`` keeps the original filename, so a
+    #: retitled document's stem is the slug of a title it no longer has — and
+    #: the links written against it are exactly the ones that must keep working.
+    stem: str = ""
 
     @property
     def successors(self) -> tuple[Edge, ...]:
@@ -120,6 +128,7 @@ class SiteDocument:
             stale=bool(view.get("stale", False)),
             archived=bool(view.get("archived", False)),
             code=_texts(view, "code"),
+            stem=_stem(_text(view, "path")),
         )
 
 
@@ -176,6 +185,29 @@ def build_site(views: Sequence[Mapping[str, object]]) -> Site:
         for type_name in sorted({document.type for document in ordered})
     )
     return Site(documents=ordered, groups=groups)
+
+
+def link_index(site: Site) -> LinkIndex:
+    """The resolver for ``[[...]]`` prose links on this site.
+
+    Built from the documents the site actually publishes, which is narrower
+    than what ``docir check`` resolves against: `build` omits archived
+    documents unless asked, and a link to a page that does not exist here
+    cannot be a link. Such a target publishes as the literal ``[[...]]`` it was
+    written as — the same rule a dangling edge follows, where the site shows the
+    broken reference rather than hiding it.
+    """
+    return LinkIndex(
+        LinkTarget(doc_id=document.id, title=document.title, stem=document.stem)
+        for document in site.documents
+    )
+
+
+def _stem(path: str) -> str:
+    """The filename stem of a ``docir get`` payload's ``path``."""
+    if not path:
+        return ""
+    return path.replace("\\", "/").rsplit("/", 1)[-1].removesuffix(".md")
 
 
 def graph_payload(site: Site) -> dict[str, list[dict[str, object]]]:
@@ -238,25 +270,15 @@ def _replace_edges(
     outgoing: tuple[Edge, ...],
     incoming: tuple[Edge, ...] = (),
 ) -> SiteDocument:
-    return SiteDocument(
-        id=document.id,
-        title=document.title,
-        description=document.description,
-        type=document.type,
-        status=document.status,
-        created=document.created,
-        updated=document.updated,
-        body=document.body,
-        tags=document.tags,
-        outgoing=outgoing,
-        incoming=incoming,
-        owner=document.owner,
-        verified=document.verified,
-        revoked=document.revoked,
-        stale=document.stale,
-        archived=document.archived,
-        code=document.code,
-    )
+    """The document with its edges resolved, and everything else carried over.
+
+    ``dataclasses.replace`` rather than a hand-written constructor call: the
+    enumerated version silently dropped any field added after it was written,
+    and the first one added — the filename ``stem`` a prose link resolves
+    against — came back empty on every page while resolving correctly
+    everywhere else.
+    """
+    return replace(document, outgoing=outgoing, incoming=incoming)
 
 
 def _text(view: Mapping[str, object], key: str) -> str:

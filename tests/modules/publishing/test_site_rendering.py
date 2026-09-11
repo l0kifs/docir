@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import re
 
+import pytest
+
 from docir.modules.publishing.api import PublishRequest, build_site, build_site_builder
 from docir.modules.publishing.infra.rendering import render_site
 
@@ -882,3 +884,98 @@ class TestDocRefLinks:
         """A self-link reads as a live cross-reference and goes nowhere."""
         main = self._main("This is adr-0001, for the record.\n")
         assert 'class="docref" href="adr-0001.html"' not in main
+
+
+class TestWikiLinks:
+    """A `[[...]]` in a body gets a link to the document it names.
+
+    The other cross-reference syntax, and the one that published *worse* than
+    untouched: the bracketed id matched the id pass, so `[[adr-0002]]` rendered
+    as a link wearing two stray brackets and `[[adr-0002-new-way]]` as a link
+    with the slug hanging outside it (adr-ae631a356639).
+
+    Text is the target's **current title**, because the slug a link was written
+    against goes stale the day somebody retitles the document — which is the
+    failure that made these worth resolving at all.
+    """
+
+    @staticmethod
+    def _main(body: str, *, path: str = "decisions/adr-0002-new-way.md") -> str:
+        docs = [dict(_DOCS[0], body=body), dict(_DOCS[1], path=path)]
+        page = render_site(build_site(docs), title="Docs", version="1")["adr-0001.html"]
+        return page[page.index("<main class=") : page.index("</main>")]
+
+    @staticmethod
+    def _body(main: str) -> str:
+        """Just the rendered body — the rail and the pager link it by edge too."""
+        return main[main.index('<div class="body">') : main.index('<nav class="pn">')]
+
+    @pytest.mark.parametrize(
+        ("target", "form"),
+        [
+            ("adr-0002", "the id"),
+            ("adr-0002-new-way", "the filename stem"),
+            ("new-way", "the title slug"),
+            ("New way", "the title"),
+        ],
+    )
+    def test_every_written_form_becomes_one_link(self, target: str, form: str) -> None:
+        main = self._main(f"Replaced by [[{target}]].\n")
+        assert '<a class="wikiref" href="adr-0002.html">New way</a>' in main, form
+        assert "[[" not in main, f"{form}: the brackets are markup, not text"
+
+    def test_the_link_text_is_the_current_title_not_the_written_slug(self) -> None:
+        # A retitle keeps the filename, so the stem outlives the title it came
+        # from. Rendering the target as written would publish a name that no
+        # document has.
+        main = self._main(
+            "Replaced by [[adr-0002-the-old-slug]].\n", path="d/adr-0002-the-old-slug.md"
+        )
+        assert ">New way</a>" in main
+        assert "the-old-slug" not in main
+
+    def test_an_explicit_label_wins(self) -> None:
+        main = self._main("Replaced by [[adr-0002|the newer decision]].\n")
+        assert '<a class="wikiref" href="adr-0002.html">the newer decision</a>' in main
+
+    def test_a_section_becomes_the_heading_anchor(self) -> None:
+        main = self._main("See [[adr-0001#Context]].\n")
+        # Self-links stay text, so this reads the other direction: the anchor
+        # shape is what the heading pass produces for the same text.
+        assert "[[adr-0001#Context]]" in main
+
+    def test_a_target_naming_nothing_stays_visible(self) -> None:
+        # The same rule a dangling edge follows: the site shows the broken
+        # reference `docir check` reports rather than hiding it.
+        main = self._main("Replaced by [[no-such-document]].\n")
+        assert "[[no-such-document]]" in main
+        assert "wikiref" not in main
+
+    def test_a_bracketed_id_is_not_linked_twice(self) -> None:
+        # The reported rendering defect. One pass handles both syntaxes, so the
+        # id pass can no longer fire inside a `[[...]]` span.
+        body = self._body(self._main("Replaced by [[adr-0002]].\n"))
+        assert "docref" not in body
+        assert body.count('href="adr-0002.html"') == 1
+
+    def test_a_stem_link_does_not_leave_its_slug_outside_the_anchor(self) -> None:
+        main = self._main("Replaced by [[adr-0002-new-way]].\n")
+        assert "-new-way]]" not in main
+        assert "new-way</a>" not in main
+
+    def test_a_link_inside_code_is_left_alone(self) -> None:
+        # A body showing the syntax is not using it, and the check agrees —
+        # `scan_wikilinks` skips code for the same reason.
+        assert "wikiref" not in self._main("Write `[[adr-0002]]` to link it.\n")
+        assert "wikiref" not in self._main("```\n[[adr-0002]]\n```\n")
+
+    def test_a_document_does_not_link_to_itself(self) -> None:
+        main = self._main("This is [[adr-0001]], for the record.\n")
+        assert "wikiref" not in main
+        assert "[[adr-0001]]" in main
+
+    def test_surrounding_prose_and_bare_ids_survive(self) -> None:
+        main = self._main("Both [[adr-0002]] and adr-0002 apply, unlike foo-bar.\n")
+        assert 'class="wikiref" href="adr-0002.html"' in main
+        assert 'class="docref" href="adr-0002.html"' in main
+        assert "apply, unlike foo-bar." in main

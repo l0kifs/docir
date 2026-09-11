@@ -1271,8 +1271,21 @@ def check(
     document with no relations, so gating on them fails a healthy corpus.
     Use --strict-all if you really do want every finding to be fatal.
 
-    `orphan` reads `related:` only. Naming an id in a paragraph does not clear
-    it, and a triage that lists the orphans is exactly the prose that used to:
+    `unresolved-link` is the prose half of `dangling`: a `[[...]]` in a body
+    whose target is no document. A target may be an id, a filename stem, a title
+    slug or the title itself, and it resolves against every document — a link to
+    a resolved issue or a superseded decision works, so "not in the default
+    query" is never why one is reported. Links inside code are not links and are
+    skipped. A warning, not an error: a prose link carries no kind, gates no
+    merge and feeds no graph, so a broken one costs a reader a click. Find them,
+    then find what each one meant:
+
+        docir check | jq -r '.[] | select(.kind=="unresolved-link") | .message'
+        docir search "the words from the broken target"
+
+    `orphan` reads `related:` only — and so does every other check here. Neither
+    an id named in a paragraph nor a `[[...]]` link clears it, and a triage that
+    lists the orphans is exactly the prose that used to:
 
         docir check | jq -r '.[] | select(.kind=="orphan") | .doc_ids[0]'
 

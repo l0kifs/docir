@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`[[...]]` prose links resolve, render and are checked.** A body cites another document two
+  ways, and docir read only one: `related:` frontmatter was validated and drawn, while a
+  `[[...]]` written mid-sentence was parsed by nothing — it published as literal brackets (or,
+  worse, as a link wearing them), and a retitle broke every inbound one in silence. A target
+  may now be a document id, a filename stem, a title slug or the title itself, and resolution
+  reads **every** document, inactive and archived included: a link to a resolved issue is a
+  working link. `docir build` renders a resolved one as the target's *current* title, so a
+  retitle cannot leave a link displaying a name no document has; `[[target|label]]` keeps the
+  label and `[[target#heading]]` links the anchor.
+- **`unresolved-link`, a Tier 1 warning** — the prose half of `dangling`, one finding per
+  (document, target). A `[[...]]` inside a code span or fence is not a link and is never
+  reported, which is what keeps the check off a document explaining the syntax. It stays out
+  of the graph: `orphan` still reads `related:` alone. Nothing repairs it, so `check --fix`
+  leaves it. See the decision in the store for why this is Tier 1 where `unresolved-mention`
+  is Tier 2.
+
 ## [0.25.0] - 2026-09-06
 
 `docir self upgrade` could not finish on a large corpus, and the reason it took so long was

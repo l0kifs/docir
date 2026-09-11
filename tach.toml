@@ -82,6 +82,10 @@ depends_on = ["docir.platform.errors"]
 path = "docir.platform.filesystem"
 depends_on = [
     "docir.platform.errors",
+    # The filename's slug half comes from `platform.naming.slug`, which is also
+    # what resolves a `[[title-slug]]` prose link — one rule, three readers
+    # (adr-289e788719a7). platform -> platform, in the sanctioned direction.
+    "docir.platform.naming",
     { path = "docir.modules.documents.domain", deprecated = true },
     { path = "docir.modules.tags.domain", deprecated = true },
 ]
@@ -262,7 +266,13 @@ depends_on = []
 
 [[modules]]
 path = "docir.modules.publishing.domain"
-depends_on = []
+# `platform.naming` is the shared name-grammar leaf (adr-289e788719a7), in the
+# sanctioned direction (modules -> platform). A `[[...]]` prose link resolves
+# against ids, filename stems and title slugs; `documents` reports the
+# unresolved ones from `docir check` and this module renders the resolved ones,
+# and a rule written twice is how a link comes to resolve for one and dangle
+# for the other.
+depends_on = ["docir.platform.naming"]
 
 [[modules]]
 path = "docir.modules.publishing.infra"
@@ -272,7 +282,11 @@ path = "docir.modules.publishing.infra"
 # and has to reject a missing file or an unsupported format with a typed
 # error, so the CLI exits with the right code; raising a bare exception here
 # and translating it one layer up would be the taxonomy with extra steps.
-depends_on = ["docir.modules.publishing.domain", "docir.platform.errors"]
+depends_on = [
+    "docir.modules.publishing.domain",
+    "docir.platform.errors",
+    "docir.platform.naming",
+]
 
 [[modules]]
 path = "docir.modules.publishing.application"

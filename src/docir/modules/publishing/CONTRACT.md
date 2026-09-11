@@ -117,6 +117,13 @@ the `files` written.
   `supersedes`/`contradicts` inbound edges are surfaced as a banner, not
   buried in a list, and come first in the local map. Document pages carry
   previous/next within their type, in the listing's order.
+- **A `[[...]]` prose link renders as a link to the target's current title**, resolved against
+  the published corpus by id, filename stem, title slug or title (`domain.site.link_index`,
+  the rule in `platform.naming.links`). The *title* and not the written target: a slug goes
+  stale the day somebody retitles the document, which is the failure that made these worth
+  resolving. `[[target|label]]` keeps the label; `[[target#heading]]` links the heading anchor.
+  A target this site does not publish — an archived document, or nothing at all — publishes as
+  the literal `[[...]]` it was written as, for the same reason a dangling edge does.
 - **A dangling edge stays visible** as a bare id, so the site shows the same
   broken reference `docir check` reports.
 - **Pages are offline-complete.** CSS, the filter script and the theme rules are

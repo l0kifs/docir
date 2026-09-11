@@ -124,6 +124,17 @@ files and the derived index never disagree.
   (adr-e98749aa457d): an id named in prose used to clear `orphan`, which made a triage of the
   orphan list close every id on it. A document whose `isolated` reason is non-empty is exempt
   and not reported.
+  Also **`unresolved-link`** — a `[[...]]` in a body whose target names no document, one finding
+  per (document, target) pair. A target may be a document id, a filename stem, a title slug or
+  the title itself, and resolution reads **every** document, inactive and archived included: a
+  link to a resolved issue is a working link. `[[...]]` inside a code span or fence is skipped,
+  which is what keeps the check off a document explaining the syntax. An ambiguous target — a
+  title slug two documents share — is reported with its candidates rather than resolved to one.
+  A **warning**, and Tier 1 where `unresolved-mention` is Tier 2, because the two are not the
+  same defect: an id *named* in a sentence is a citation and needs no target, while `[[...]]` is
+  link syntax with no second reading. It feeds no graph — `orphan` does not see it — and
+  `repair()` leaves it, since a target that resolves to nothing needs somebody to say what was
+  meant (adr-ae631a356639).
   All warnings: the document stays readable and its edges resolve. Also `unmatched-code` — a
   governed glob that matches nothing — when the service was given a `CodeMatcher`; without one
   (no repository above the store) the finding is skipped rather than reported against a tree

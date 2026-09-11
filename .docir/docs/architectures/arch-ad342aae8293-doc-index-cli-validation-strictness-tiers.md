@@ -11,7 +11,7 @@ tags:
 - architecture
 title: Doc-Index CLI — validation strictness tiers
 type: architecture
-updated: '2026-08-17'
+updated: '2026-09-11'
 ---
 
 ## Validation strictness tiers
@@ -78,6 +78,7 @@ being added to `ERROR_KINDS` or not.
 | `missing-required` | warning | the *rule* moved under a document that was valid when written |
 | `schema-drift` | warning | the resolved schema differs from the one the index was built against |
 | `stale-index-build` | warning | a different docir built this index |
+| `unresolved-link` | warning | a `[[...]]` in a body naming no document — the prose half of `dangling` |
 | `tag-key-format` | warning | a registry key that is not a usable tag |
 
 The last group must not be promoted to errors: the schema they measure against
@@ -94,6 +95,17 @@ correct commit. Clearing it is a judgement — read the document against the cod
 and stamp `--verified` — and the one thing the rule forbids is making that
 judgement inside the task that moved the code, which certifies its own change.
 See adr-d9e6d5ccd0b4.
+
+**`unresolved-link` is Tier 1 where `unresolved-mention` is Tier 2**, and the two
+look like the same check. An id *named* in a sentence is a citation and needs no
+target — writing `adr-0007` while explaining the id format is correct usage, which
+is why that one stays advisory. `[[...]]` is link syntax with no second reading, so
+one that points at nothing is a defect by construction. The single false positive
+available, a body demonstrating the syntax, is excluded because the scan skips code
+spans and fences — free here, and not free for mentions, where 56 resolved edges
+live only inside code. Resolution reads every document, inactive and archived
+included, and it feeds no graph: `orphan` still reads `related:` alone
+(adr-ae631a356639).
 
 **Layering is opt-in per relation kind.** The check reads only edges the schema
 marks `dependency: true` — `depends_on` and `refines` among the core six. It is

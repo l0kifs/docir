@@ -619,12 +619,20 @@ def build_mcp_server(
         describes shape or age (orphan, cycle, layering, staleness), and an
         orphan is the normal state of a new document, not a defect.
 
-        `orphan` reads `related:` alone. Naming an id in a paragraph does not
-        clear it — a triage that lists the orphans is exactly the prose that
-        would. Close each one with an edge (`docir_update(set_related=...)`),
-        or, when standing alone is the conclusion, with
-        `docir_update(set_isolated="<why>")`; `docir_query(expr="isolated")`
-        lists every exemption and `set_isolated=""` withdraws one.
+        `unresolved-link` is `dangling` in the other syntax: a `[[...]]` in a
+        body naming no document. The target may be an id, a filename stem, a
+        title slug or the title, and it resolves against inactive and archived
+        documents too — so a report means the link is broken, not merely
+        pointing somewhere `docir_query` hides. Find what it meant with
+        `docir_search`, then rewrite the body to name the id.
+
+        `orphan` reads `related:` alone. Neither an id named in a paragraph nor
+        a `[[...]]` link clears it — a triage that lists the orphans is exactly
+        the prose that would. Close each one with an edge
+        (`docir_update(set_related=...)`), or, when standing alone is the
+        conclusion, with `docir_update(set_isolated="<why>")`;
+        `docir_query(expr="isolated")` lists every exemption and
+        `set_isolated=""` withdraws one.
         """
         return run.many("check", {})
 

@@ -69,6 +69,37 @@ color-scheme:light}
 """
 )
 
+
+#: The page furniture every page of the site wears: the reset, the link colour,
+#: the focus ring, the wordmark and the top-bar controls. Beside the tokens for
+#: the same reason they are here — both stylesheets declared these twelve rules
+#: identically, and the docstring in ``assets`` records what that costs: a
+#: `.sub` utility tuned on one side shrank the wordmark's tail on the pages but
+#: not on the graph, whose stylesheet had no such rule. One brand, two sizes.
+#:
+#: Only the rules that were byte-identical in both. The six that differ —
+#: ``body``, ``.topbar``, ``.main``, ``.chip`` and the two ``:root`` blocks —
+#: differ because the graph is a full-viewport application and the pages
+#: scroll, which is a real difference and not drift.
+CSS_CHROME = """\
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.brand{display:flex;align-items:center;gap:.55rem;font-weight:600;color:var(--fg);
+white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand:hover{text-decoration:none}
+.brand .sub{color:var(--muted);font-weight:400}
+.brandmark{height:22px;width:auto;max-width:10rem;flex:none;display:block;
+object-fit:contain;color:var(--fg)}
+.toplnk{color:var(--muted);font-size:.9rem;white-space:nowrap;border:0;background:none;
+cursor:pointer;font-family:inherit;padding:0}
+.toplnk:hover{color:var(--fg);text-decoration:none}
+.iconbtn{width:34px;height:34px;border:1px solid var(--line);border-radius:8px;
+display:inline-flex;align-items:center;justify-content:center;flex:none;font-size:.95rem}
+.iconbtn:hover{background:var(--chip)}
+"""
+
 #: Restores a chosen theme before the stylesheet parses, so the page paints
 #: in the right colours on load. Lives beside the tokens because every page —
 #: the shell pages *and* the graph — must honour the same choice; the graph

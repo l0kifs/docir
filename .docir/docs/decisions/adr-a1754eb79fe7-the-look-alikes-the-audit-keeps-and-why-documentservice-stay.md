@@ -111,6 +111,26 @@ is how it comes back.
 
 Treat it only alongside a reason to touch the public contract anyway.
 
+## Exempt: assets.py holds styles and scripts together
+
+`publishing/infra/assets.py` holds two kinds of thing and says so in its own
+docstring: `STYLES` is ~380 lines that change for branding and layout, and
+`FILTER_JS`/`SHELL_JS` are ~400 that change for behaviour — facet filtering, the
+search palette, keyboard navigation, the sort keys. By the same test the rest of
+this register applies, that is Divergent Change, and splitting it into
+`styles.py` and `scripts.py` would be the treatment.
+
+It is kept as one module because both are the same *kind* of thing to the code
+that uses them: a string inlined into every page, for the reason the docstring
+gives — a published site must work from `file://` with no CDN reachable, so
+there is no asset pipeline and no second delivery mechanism to separate them
+into. Neither half is logic; a reader never traces execution through either.
+
+Recorded rather than left unstated because it was introduced deliberately, in
+the commit that split `rendering.py`, and an unstated one reads as an oversight.
+Revisit it if a third asset appears, or if either half stops being a single
+constant.
+
 ## What would overturn one of these
 
 Each exemption above is a reading of the code as it is, not a rule. The

@@ -19,7 +19,7 @@ the keyboard navigation, the sort keys.
 from __future__ import annotations
 
 from docir.modules.publishing.infra import diagrams
-from docir.modules.publishing.infra.theme import CSS_TOKENS, THEME_TOGGLE_JS
+from docir.modules.publishing.infra.theme import CSS_CHROME, CSS_TOKENS, THEME_TOGGLE_JS
 
 #: Below this width the index collapses to one column. Taken from the
 #: measurement that prompted it: the old table needed 426px at a 390px viewport.
@@ -28,35 +28,28 @@ _NARROW = "40rem"
 
 STYLES = (
     CSS_TOKENS
+    + CSS_CHROME
     + """\
-*{box-sizing:border-box}
 /* The [hidden] attribute only maps to display:none in the UA stylesheet, and
    any author display (the grid rows, the flex facet labels) overrides it —
    so a filtered-out row stayed visible whenever its section did not hide
    with it. The reset makes hidden mean hidden everywhere. */
-[hidden]{display:none!important}
 html{scroll-behavior:smooth}
 body{margin:0;background:var(--bg);color:var(--fg);
 font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;
 -webkit-font-smoothing:antialiased}
-a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 code,kbd{font-family:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 /* ---- the shell: top bar, corpus sidebar, content, optional rail ---- */
 .topbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:.9rem;
 height:56px;padding:0 1.25rem;background:var(--bg);border-bottom:1px solid var(--line)}
 .menubtn{display:none;border:1px solid var(--line);border-radius:8px;background:none;
 color:var(--muted);cursor:pointer;font:inherit;padding:.15rem .55rem}
-.brand{display:flex;align-items:center;gap:.55rem;font-weight:600;color:var(--fg);
-white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.brand:hover{text-decoration:none}
 /* The tail is the same size as the wordmark, lighter and muted — not smaller.
    A bare `.sub{font-size:.9rem}` utility (the landing's old stats line, long
    since renamed) captured this selector too, so the same brand measured
    14.4px on a page and 16px on the graph, which has no such rule. Scoped
    names only in here: a two-word class is a collision waiting for a page that
    does not share the intent. */
-.brand .sub{color:var(--muted);font-weight:400}
 /* The mark is supplied art (docir's own, or the publisher's), so this sizes
    it and nothing else. Height-locked with a free width: docir's mark is
    square but a publisher's is as likely to be a wordmark lockup, and a fixed
@@ -65,20 +58,12 @@ white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
    docir's mark draws its bracket in `currentColor` and the mark sits inside
    an <a>: inheriting made the bracket accent-blue on the graph page, where
    the link is not the same colour as the text. */
-.brandmark{height:22px;width:auto;max-width:10rem;flex:none;display:block;
-object-fit:contain;color:var(--fg)}
 .searchbtn{display:flex;align-items:center;gap:.6rem;margin-left:auto;cursor:pointer;
 border:1px solid var(--line);border-radius:8px;background:var(--chip);color:var(--muted);
 font:inherit;font-size:.88rem;padding:.38rem .6rem .38rem .75rem;min-width:15rem}
 .searchbtn:hover{border-color:var(--faint)}
 .searchbtn kbd{margin-left:auto;border:1px solid var(--line);border-bottom-width:2px;
 border-radius:5px;padding:0 .35rem;font-size:.72rem;background:var(--bg);color:var(--muted)}
-.toplnk{color:var(--muted);font-size:.9rem;white-space:nowrap;border:0;background:none;
-cursor:pointer;font-family:inherit;padding:0}
-.toplnk:hover{color:var(--fg);text-decoration:none}
-.iconbtn{width:34px;height:34px;border:1px solid var(--line);border-radius:8px;
-display:inline-flex;align-items:center;justify-content:center;flex:none;font-size:.95rem}
-.iconbtn:hover{background:var(--chip)}
 .queue{display:inline-flex;align-items:center;gap:.4rem}
 .queue .qn{background:var(--warn-bg);color:var(--warn);font-weight:600;font-size:.75rem;
 border-radius:99px;padding:.05rem .45rem}

@@ -523,7 +523,8 @@ function extractTokens(final){
   TOKEN.lastIndex=0;
   while((m=TOKEN.exec(text))){
     const end=m.index+m[0].length;
-    if(!final&&end===text.length&&!/\\s$/.test(text))continue; // still typing
+    // Still typing — uncommitted, so it filters as free text and shows none.
+    if(!final&&end===text.length&&!/\\s$/.test(text))continue;
     found.push({neg:m[2]==='-',key:m[3].toLowerCase(),val:m[4].toLowerCase(),str:m[0]});
   }
   for(const t of found){

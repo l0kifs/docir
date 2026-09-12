@@ -16,3 +16,15 @@ The site is derived like the index, which is why the build deletes before it wri
   absent from every list path by contract (the skeleton rule), so a build that stopped at
   `query` would report the right count and publish empty pages, which looks exactly like
   success. `test_e2e_build.py::test_bodies_reach_the_pages` pins that.
+
+- **A typed filter token commits on a space or Enter, not on the keystroke that
+  completes it.** `extractTokens` skips a `field:value` sitting at the cursor with no
+  whitespace after it, so passing through `type:dec` on the way to `type:decision` does
+  not filter to nothing. The consequence is the part worth knowing: an uncommitted token
+  is still matched as *free text*, and no document body contains a colon-pair, so the
+  index reads "0 shown / No documents match" until a space or Enter converts it into a
+  facet chip. That intermediate state is indistinguishable from a broken filter, and has
+  been reported as one — from a browser session that typed the token and never pressed
+  anything else. Before concluding the filter is broken, press Enter. The checkbox
+  facets and the URL parameters reach the same state by a different door
+  (`?type=decision`), which is the quickest way to tell a parsing bug from this.

@@ -117,6 +117,26 @@ def build_mcp_server(
     mcp: FastMCP = FastMCP(name="docir", instructions=INSTRUCTIONS, version=version)
     run = _Gateway(executor)
 
+    _register_read_tools(mcp, run, describe_schema=describe_schema)
+    _register_write_tools(mcp, run)
+    _register_tag_tools(mcp, run)
+    _register_maintenance_tools(mcp, run)
+
+    return mcp
+
+
+def _register_read_tools(
+    mcp: FastMCP,
+    run: _Gateway,
+    *,
+    describe_schema: Callable[[], dict[str, object]],
+) -> None:
+    """The tools that only read: ranking, filtering, fetching, and the schema.
+
+    ``docir_tag_list`` is here rather than with the tag registry because this
+    is the read surface, and an agent reaching for the tag vocabulary is
+    reading it — registering one is the write that belongs next to a rename.
+    """
     # -- read path ----------------------------------------------------------
 
     @mcp.tool(annotations=_READ_ONLY)
@@ -368,6 +388,9 @@ def build_mcp_server(
         """
         return run.many("tag_list", {"limit": limit, "offset": offset})
 
+
+def _register_write_tools(mcp: FastMCP, run: _Gateway) -> None:
+    """The document write path — the only sanctioned way to change a file."""
     # -- write path ---------------------------------------------------------
 
     @mcp.tool
@@ -572,6 +595,9 @@ def build_mcp_server(
         """
         return run.one("delete", {"doc_id": doc_id, "force": force})
 
+
+def _register_tag_tools(mcp: FastMCP, run: _Gateway) -> None:
+    """The tag registry: a tag must exist here before a document may carry it."""
     # -- tag registry -------------------------------------------------------
 
     @mcp.tool
@@ -608,6 +634,9 @@ def build_mcp_server(
         """
         return run.one("tag_remove", {"key": key, "force": force})
 
+
+def _register_maintenance_tools(mcp: FastMCP, run: _Gateway) -> None:
+    """Rebuilding, checking and repairing the derived index."""
     # -- maintenance --------------------------------------------------------
 
     @mcp.tool(annotations=_READ_ONLY)
@@ -745,5 +774,3 @@ def build_mcp_server(
         you just wrote.
         """
         return run.one("embed_flush", {})
-
-    return mcp

@@ -69,9 +69,9 @@ class Guarded:
 #: (adr-354a4270ecd8), so their invariant is that the two *agree* — a different
 #: test, and one this file does not make.
 GUARDED = [
-    Guarded(InstalledFile, site="cli/app.py"),
-    Guarded(ReleaseStatus, site="cli/app.py"),
-    Guarded(ConformanceReport, site="cli/app.py"),
+    Guarded(InstalledFile, site="cli/agent_cmds.py"),
+    Guarded(ReleaseStatus, site="cli/self_cmds.py"),
+    Guarded(ConformanceReport, site="cli/schema_cmds.py"),
     Guarded(
         PublishResult,
         site="cli/app.py",
@@ -157,7 +157,7 @@ def test_the_installed_file_serializer_emits_every_field_when_called() -> None:
     Reads the real values through, so a key present but wired to the wrong
     attribute still has to survive the round trip.
     """
-    from docir.entry_points.cli.app import _setup_file
+    from docir.entry_points.cli.agent_cmds import _setup_file
 
     emitted = set(
         _setup_file(

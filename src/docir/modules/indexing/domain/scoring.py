@@ -90,6 +90,63 @@ def _turn_order(rankings: list[list[FusedScore]]) -> list[str]:
     return order
 
 
+@dataclass(slots=True)
+class _Fusion:
+    """One document's fusion terms, accumulating across every pass.
+
+    Six parallel dictionaries keyed on the same ``doc_id`` said this less
+    clearly, and made "present in one of them, missing from another" a state
+    every reader of the six had to hold in their head. As one record it is a
+    state that cannot be written down.
+
+    ``lexical``/``semantic`` sum across passes; the three "best" fields keep the
+    single best pass, because a rank, a similarity and a section each describe
+    one match and averaging them describes none.
+    """
+
+    lexical: float = 0.0
+    semantic: float = 0.0
+    lexical_rank: int | None = None
+    semantic_rank: int | None = None
+    similarity: float | None = None
+    section: str | None = None
+
+    def add_lexical(self, rank: int, contribution: float) -> None:
+        self.lexical += contribution
+        self.lexical_rank = _better(self.lexical_rank, rank)
+
+    def add_semantic(self, rank: int, contribution: float, hit: SemanticHit) -> None:
+        self.semantic += contribution
+        self.semantic_rank = _better(self.semantic_rank, rank)
+        # The similarity and section of the *best* pass, for the same reason the
+        # rank is: they describe one match, not an average.
+        #
+        # The floor is -1.0 rather than "unset", which is what the dictionary
+        # this replaces defaulted to. Cosine similarity bottoms out there, so a
+        # first hit of exactly -1.0 records no similarity — preserved on purpose
+        # rather than tidied, because this is a refactoring.
+        if hit.similarity > (-1.0 if self.similarity is None else self.similarity):
+            self.similarity = hit.similarity
+            self.section = hit.section
+
+    def to_score(self, doc_id: str) -> FusedScore:
+        return FusedScore(
+            doc_id=doc_id,
+            score=self.lexical + self.semantic,
+            lexical=self.lexical,
+            semantic=self.semantic,
+            similarity=self.similarity,
+            section=self.section,
+            lexical_rank=self.lexical_rank,
+            semantic_rank=self.semantic_rank,
+        )
+
+
+def _better(current: int | None, rank: int) -> int:
+    """The better (lower) of a recorded rank and a new one."""
+    return rank if current is None or rank < current else current
+
+
 class HybridScorer:
     """Combines lexical (BM25) and semantic (cosine) rankings via RRF."""
 
@@ -169,24 +226,14 @@ class HybridScorer:
         for one of your queries" is the fact a reader wants.
         """
 
-        lexical_component: dict[str, float] = {}
-        lexical_rank: dict[str, int] = {}
-        semantic_component: dict[str, float] = {}
-        semantic_rank: dict[str, int] = {}
-        similarity: dict[str, float] = {}
-        section: dict[str, str | None] = {}
+        fusions: dict[str, _Fusion] = {}
 
-        def better(current: dict[str, int], doc_id: str, rank: int) -> None:
-            existing = current.get(doc_id)
-            if existing is None or rank < existing:
-                current[doc_id] = rank
+        def of(doc_id: str) -> _Fusion:
+            return fusions.setdefault(doc_id, _Fusion())
 
         for lexical, semantic in passes:
             for rank, hit in enumerate(lexical):
-                lexical_component[hit.doc_id] = lexical_component.get(hit.doc_id, 0.0) + 1.0 / (
-                    self._k + rank + 1
-                )
-                better(lexical_rank, hit.doc_id, rank + 1)
+                of(hit.doc_id).add_lexical(rank + 1, 1.0 / (self._k + rank + 1))
 
             seen_here: set[str] = set()
             for rank, semantic_hit in enumerate(semantic):
@@ -196,30 +243,11 @@ class HybridScorer:
                 if semantic_hit.doc_id in seen_here:
                     continue
                 seen_here.add(semantic_hit.doc_id)
-                semantic_component[semantic_hit.doc_id] = semantic_component.get(
-                    semantic_hit.doc_id, 0.0
-                ) + 1.0 / (self._k + rank + 1)
-                better(semantic_rank, semantic_hit.doc_id, rank + 1)
-                # The similarity and section of the *best* pass, for the same
-                # reason the rank is: they describe one match, not an average.
-                if semantic_hit.similarity > similarity.get(semantic_hit.doc_id, -1.0):
-                    similarity[semantic_hit.doc_id] = semantic_hit.similarity
-                    section[semantic_hit.doc_id] = semantic_hit.section
+                of(semantic_hit.doc_id).add_semantic(
+                    rank + 1, 1.0 / (self._k + rank + 1), semantic_hit
+                )
 
-        all_ids = set(lexical_component) | set(semantic_component)
-        fused = [
-            FusedScore(
-                doc_id=doc_id,
-                score=lexical_component.get(doc_id, 0.0) + semantic_component.get(doc_id, 0.0),
-                lexical=lexical_component.get(doc_id, 0.0),
-                semantic=semantic_component.get(doc_id, 0.0),
-                similarity=similarity.get(doc_id),
-                section=section.get(doc_id),
-                lexical_rank=lexical_rank.get(doc_id),
-                semantic_rank=semantic_rank.get(doc_id),
-            )
-            for doc_id in all_ids
-        ]
+        fused = [fusion.to_score(doc_id) for doc_id, fusion in fusions.items()]
         fused.sort(key=lambda f: (f.score, f.doc_id), reverse=True)
         if len(passes) == 1:
             return fused

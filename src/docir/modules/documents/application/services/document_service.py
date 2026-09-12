@@ -15,7 +15,6 @@ from docir.modules.documents.application.dto import (
     AddDocumentRequest,
     BenchRequest,
     BenchResult,
-    BenchTask,
     ContextRequest,
     DocumentBatch,
     DocumentSummary,
@@ -23,11 +22,16 @@ from docir.modules.documents.application.dto import (
     MissingDocument,
     QueryRequest,
     SearchRequest,
-    StrategyScore,
     UpdateDocumentRequest,
 )
+from docir.modules.documents.application.services.document_patch import (
+    DocumentPatch,
+    parse_related_refs,
+)
+from docir.modules.documents.application.services.document_saving import save_with_mentions
 from docir.modules.documents.application.services.id_generator import IdGenerator
 from docir.modules.documents.application.services.maintenance_service import index_is_empty
+from docir.modules.documents.application.services.retrieval_bench import RetrievalBench
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.schema import SEQUENTIAL_ID_STYLE, Schema
 from docir.modules.documents.domain.services.code_globs import governs_any
@@ -38,17 +42,12 @@ from docir.modules.documents.domain.services.expressions import (
     project,
 )
 from docir.modules.documents.domain.services.markdown_sections import (
-    append_section,
     extract_section,
-    remove_section,
-    replace_section,
 )
-from docir.modules.documents.domain.services.retrieval_scoring import mean, score_task
 from docir.modules.documents.domain.services.validation import Tier0Validator
 from docir.modules.documents.domain.value_objects.doc_ref import DocRef
 from docir.modules.documents.domain.value_objects.identifiers import DocId
 from docir.modules.documents.domain.value_objects.queries import DocumentFilter
-from docir.modules.documents.domain.value_objects.relations import RelatedRef
 from docir.modules.indexing.api import (
     DEFAULT_RRF_K,
     EmbeddingScheduler,
@@ -62,8 +61,6 @@ from docir.platform.errors import (
     DanglingReferenceError,
     DocumentNotFoundError,
     DuplicateDocumentIdError,
-    InvalidStatusError,
-    StaleWriteError,
     ValidationError,
 )
 from docir.platform.filesystem.ports import CodeMatcher, DocumentFileStore
@@ -85,11 +82,6 @@ _SEARCH_OVERFETCH = 2
 #: ``Schema.successor_relation_kinds()``. It was a frozenset of two names here,
 #: which meant a custom kind with exactly this shape — `replaced_by`, `revokes` —
 #: could not be followed backwards at all, and nothing said so.
-
-
-def _parse_refs(tokens: tuple[str, ...]) -> tuple[RelatedRef, ...]:
-    """Parse ``<id>`` / ``<id>:<kind>`` CLI tokens into typed edges."""
-    return tuple(RelatedRef.parse(token) for token in tokens if token.strip())
 
 
 def _unique_refs(tokens: Iterable[str]) -> tuple[DocRef, ...]:
@@ -197,27 +189,6 @@ class DocumentService:
         # object graphs in one run (adr-e86c5040d626).
         self._expand_mentions = expand_mentions
 
-    def _save(self, uow: UnitOfWork, document: Document) -> None:
-        """Persist a document and the derived edges its body implies.
-
-        One helper rather than two calls at each write site, for the reason the
-        embedding queue does the opposite and gets away with it: a missed
-        `mark_dirty` leaves a vector stale until the next write, while a missed
-        mention silently makes `orphan` report a document whose author *did*
-        link it — the exact false positive this graph exists to remove.
-
-        The scan is derivation, not storage, so it happens here and not in the
-        repository: `platform.persistence` translates rows and entities and has
-        no business knowing what a body means (it may not import
-        `platform.naming` either, which is tach saying the same thing).
-
-        `tags` writes documents too and deliberately does not call this: a tag
-        rename rewrites frontmatter and never the body, so the mentions it would
-        recompute are the ones already stored.
-        """
-        uow.documents.save(document)
-        uow.mentions.replace(document.id, document.mentioned_ids(self._prefixes))
-
     # -- write path ---------------------------------------------------------
 
     def add(self, request: AddDocumentRequest) -> DocumentView:
@@ -225,7 +196,7 @@ class DocumentService:
         status = request.status or self._schema.default_status_for(request.type)
         self._validator.validate_status(request.type, status)
         today = self._clock.today()
-        refs = _parse_refs(request.related)
+        refs = parse_related_refs(request.related)
 
         with self._uow_factory() as uow:
             self._validator.validate_tags(request.tags, [tag.key for tag in uow.tags.all()])
@@ -258,7 +229,7 @@ class DocumentService:
             self._validator.validate_required_fields(document)
             path = self._file_store.write(document, create=True)
             document = document.with_updates(path=path)
-            self._save(uow, document)
+            save_with_mentions(uow, document, self._prefixes)
             uow.search.index(document)
             uow.embeddings.mark_dirty(document.id)
             uow.commit()
@@ -294,15 +265,17 @@ class DocumentService:
             disk_diverged = indexed.content_hash() != base.content_hash()
 
             forced = self._forced_transition(request, base)
-            changes: dict[str, object] = {}
-            content_changed = self._apply_metadata(request, base, changes, uow)
-            content_changed |= self._apply_body(request, base, changes, disk_diverged)
-            # After both, because the body is half of what a verification
-            # covers: whether the content moved is not known until the section
-            # or body edit has been staged.
-            if content_changed:
-                self._revoke_verification(request, base, changes)
-            self._record_verified_content(request, base, changes)
+            patch = DocumentPatch(
+                request,
+                base,
+                schema=self._schema,
+                validator=self._validator,
+                clock=self._clock,
+                code_matcher=self._code_matcher,
+            )
+            patch.stage(uow, disk_diverged=disk_diverged)
+            changes = patch.changes
+            content_changed = patch.content_changed
 
             if not changes:
                 return DocumentView.from_document(base, stale=self._is_stale(base))
@@ -319,7 +292,7 @@ class DocumentService:
                 path = self._file_store.write(updated)
             updated = updated.with_updates(path=path)
 
-            self._save(uow, updated)
+            save_with_mentions(uow, updated, self._prefixes)
             uow.search.index(updated)
             if content_changed:
                 uow.embeddings.mark_dirty(updated.id)
@@ -342,7 +315,7 @@ class DocumentService:
                 return DocumentView.from_document(document, stale=self._is_stale(document))
             updated = document.with_updates(archived=True, updated=self._clock.today())
             self._file_store.write(updated)
-            self._save(uow, updated)
+            save_with_mentions(uow, updated, self._prefixes)
             uow.search.remove(doc_id)
             uow.embeddings.remove(doc_id)
             uow.commit()
@@ -356,7 +329,7 @@ class DocumentService:
                 return DocumentView.from_document(document, stale=self._is_stale(document))
             updated = document.with_updates(archived=False, updated=self._clock.today())
             self._file_store.write(updated)
-            self._save(uow, updated)
+            save_with_mentions(uow, updated, self._prefixes)
             uow.search.index(updated)
             uow.embeddings.mark_dirty(doc_id)
             uow.commit()
@@ -397,7 +370,7 @@ class DocumentService:
                 kept = tuple(ref for ref in referrer.related if ref.target != doc_id)
                 stripped = referrer.with_updates(related=kept)
                 self._file_store.write(stripped)
-                self._save(uow, stripped)
+                save_with_mentions(uow, stripped, self._prefixes)
                 uow.search.index(stripped)
             if document.path:
                 self._file_store.delete(document.path)
@@ -505,79 +478,13 @@ class DocumentService:
     def bench(self, request: BenchRequest) -> BenchResult:
         """Score this store's read path against judged tasks (``docir bench``).
 
-        The instrument ``benchmarks/`` was, made portable: the numbers docir
-        publishes are measured on docir's corpus, and an adopter had no way to
-        find out whether their own behaves the same way (issue-c6d184704682).
-
-        Three strategies, chosen because together they say *which part* of
-        retrieval is working. ``context`` is the shipped default. ``context
-        --expand 0`` removes graph expansion, which lifts every embedder and
-        hides the difference between them (ref-e7534f1c812d) — the pair is what
-        isolates the semantic signal. ``search`` is full-text alone, the floor
-        anything semantic has to beat.
-
-        Ids the corpus no longer carries are **reported, not dropped quietly**:
-        removing one shrinks recall's denominator and raises the score for the
-        wrong reason. A task left with no resolvable ids is dropped whole and
-        named, because scoring it would count a certain miss against retrieval
-        that never had anything to find.
+        The scoring itself is :class:`RetrievalBench`, which measures these read
+        paths and owns none of them. ``limit`` is validated here, where the other
+        three read paths validate theirs.
         """
         _require_positive_limit(request.limit)
-        with self._uow_factory() as uow:
-            known = {
-                doc_id
-                for doc_id in {ref for task in request.tasks for ref in task.relevant}
-                if uow.documents.exists(doc_id)
-            }
-        unresolved = sorted({ref for task in request.tasks for ref in task.relevant} - known)
-
-        judged: list[tuple[BenchTask, tuple[str, ...]]] = []
-        dropped: list[str] = []
-        for task in request.tasks:
-            keep = tuple(ref for ref in task.relevant if ref in known)
-            if keep:
-                judged.append((task, keep))
-            else:
-                dropped.append(task.id)
-
-        runs: dict[str, Callable[[str], list[DocumentSummary]]] = {
-            "context": lambda text: self.context(
-                ContextRequest(task=text, limit=request.limit, expand=request.expand)
-            ),
-            "context --expand 0": lambda text: self.context(
-                ContextRequest(task=text, limit=request.limit, expand=0)
-            ),
-            "search": lambda text: self.search(SearchRequest(text=text, limit=request.limit)),
-        }
-
-        strategies: list[StrategyScore] = []
-        for name, run in runs.items():
-            recalls: list[float] = []
-            precisions: list[float] = []
-            rrs: list[float] = []
-            for task, relevant in judged:
-                retrieved = [summary.id for summary in run(task.task)]
-                scored = score_task(retrieved, relevant)
-                recalls.append(scored.recall)
-                precisions.append(scored.precision)
-                rrs.append(scored.reciprocal_rank)
-            strategies.append(
-                StrategyScore(
-                    name=name,
-                    recall=mean(recalls),
-                    precision=mean(precisions),
-                    mrr=mean(rrs),
-                    tasks=len(judged),
-                )
-            )
-
-        return BenchResult(
-            strategies=tuple(strategies),
-            limit=request.limit,
-            expand=request.expand,
-            scored=len(judged),
-            unresolved=tuple(unresolved),
-            dropped=tuple(dropped),
+        return RetrievalBench(self._uow_factory, context=self.context, search=self.search).run(
+            request
         )
 
     def query(self, request: QueryRequest) -> list[DocumentSummary]:
@@ -1096,341 +1003,6 @@ class DocumentService:
         if document.archived:
             return False
         return include_inactive or document.status not in self._schema.inactive_statuses()
-
-    def _apply_metadata(
-        self,
-        request: UpdateDocumentRequest,
-        base: Document,
-        changes: dict[str, object],
-        uow: UnitOfWork,
-    ) -> bool:
-        """Stage metadata changes; return whether embedding-relevant text moved.
-
-        The type is resolved first, because it selects the grammar every other
-        field is checked against — the status enum, the relation whitelist, the
-        required fields. On a retype those are all checked against the *target*
-        type, never the one the document is leaving, which is also what lets a
-        retype run on a document whose current type the schema no longer
-        declares (adr-f8cce745d0d5).
-        """
-        content_changed = False
-        target_type = self._apply_type(request, base, changes)
-        if request.set_title is not None:
-            changes["title"] = request.set_title
-            content_changed = True
-        if request.set_description is not None:
-            changes["description"] = request.set_description
-            content_changed = True
-        self._apply_status(request, base, changes, target_type)
-        if request.set_tags is not None:
-            self._validator.validate_tags(request.set_tags, [tag.key for tag in uow.tags.all()])
-            changes["tags"] = tuple(request.set_tags)
-        self._apply_related(request, base, changes, uow, target_type)
-        if request.set_owner is not None:
-            changes["owner"] = request.set_owner
-        # Not an *embedding-relevant* change — no vector reads an exemption —
-        # which is all `content_changed` tracks. It still stamps `updated`, like
-        # every other flag `update` carries: the mechanical-rewrite rule governs
-        # the writes nobody asked for (a tag rename, `check --fix`, a forced
-        # delete's unlink), not an edit somebody typed.
-        if request.set_isolated is not None:
-            changes["isolated"] = request.set_isolated
-        if request.set_code is not None:
-            self._validator.validate_code(request.set_code)
-            changes["code"] = tuple(request.set_code)
-        self._apply_verification(request, base, changes)
-        self._apply_code_digests(request, base, changes)
-        return content_changed
-
-    def _apply_verification(
-        self, request: UpdateDocumentRequest, base: Document, changes: dict[str, object]
-    ) -> None:
-        """Stage an explicit verification or an explicit withdrawal of one.
-
-        The two are refused together rather than ordered: ``--verified
-        --clear-verified`` is not a call with a winner, it is a caller that does
-        not know which one it meant.
-
-        Verifying clears ``revoked``. The clock reads ``verified`` first either
-        way, so leaving it would change no behaviour — and would leave a date in
-        the frontmatter asserting that this document's verification has been
-        withdrawn, which is the opposite of what the file now says.
-
-        Withdrawing needs a **standing** verification and is refused without
-        one, so the flag cannot manufacture review state on a document nobody
-        ever vouched for.
-
-        It erases the stamp and **leaves no ``revoked`` date**, which is what
-        separates it from the automatic revocation. The two answer different
-        questions. An edit says "this was true and the content moved", so the
-        cadence restarts from the edit. `--clear-verified` says "this was never
-        true", and a claim nobody made buys nothing: the document falls back to
-        ``created``, exactly where a never-verified one sits, and a bad stamp
-        that had nearly run out reports overdue at once instead of being handed
-        a fresh cadence by the act of withdrawing it (adr-f4e6ade4afd0).
-        """
-        if request.mark_verified and request.clear_verified:
-            raise ValidationError(
-                "--verified and --clear-verified say opposite things; pass one of them"
-            )
-        if request.mark_verified:
-            changes["verified"] = self._clock.today()
-            changes["revoked"] = None
-        elif request.clear_verified:
-            if base.verified is None:
-                raise ValidationError(self._nothing_to_withdraw(base))
-            changes["verified"] = None
-            changes["revoked"] = None
-            changes["verified_content"] = ""
-
-    @staticmethod
-    def _record_verified_content(
-        request: UpdateDocumentRequest, base: Document, changes: dict[str, object]
-    ) -> None:
-        """Record what the verified text looked like, for the check to compare against.
-
-        Last, and outside :meth:`_apply_metadata`, because it digests the
-        document the write is about to produce: a `--verified` passed with
-        `--replace-section` covers the section as rewritten, and hashing ``base``
-        would record the text the reviewer replaced.
-
-        Only ``--verified`` writes it. The withdrawal paths clear it, and every
-        other write leaves it exactly as it was — a status change must not be
-        able to re-certify a document by refreshing the evidence.
-        """
-        if not request.mark_verified:
-            return
-        changes["verified_content"] = base.with_updates(**changes).verification_digest()
-
-    @staticmethod
-    def _nothing_to_withdraw(base: Document) -> str:
-        """Why a ``--clear-verified`` was refused, in the caller's terms."""
-        if base.revoked is not None:
-            return (
-                f"{base.id!r} carries no verification to withdraw: it was already "
-                f"revoked on {base.revoked.isoformat()}"
-            )
-        return f"{base.id!r} carries no verification to withdraw"
-
-    def _revoke_verification(
-        self, request: UpdateDocumentRequest, base: Document, changes: dict[str, object]
-    ) -> None:
-        """Withdraw a standing verification the edit has just invalidated.
-
-        Fires when the write moved the **content** — title, description or body:
-        exactly what somebody read when they vouched for the document, and
-        exactly what ``content_changed`` already tracks for the embeddings. A
-        status change, a retype, a tag or an edge does not: none of them changes
-        a word of what was reviewed (adr-f4e6ade4afd0).
-
-        Two calls are deliberately not revocations. ``--verified`` in the same
-        command is the ordinary "rewrote it and re-read it" edit, and the
-        explicit stamp wins over the inferred withdrawal. ``--clear-verified``
-        has already withdrawn it.
-
-        Only a *standing* verification is revoked. A document with none has
-        nothing to withdraw, and stamping ``revoked`` on it anyway would hand
-        every unverified document a fresh cadence on every edit — the review
-        queue clearing itself the moment somebody writes in it, which is
-        issue-6726eabcf871 arriving by a new door. So the clock can be moved
-        forward at most once per verification, and moving it costs a
-        verification first.
-        """
-        if request.mark_verified or request.clear_verified or base.verified is None:
-            return
-        changes["verified"] = None
-        changes["revoked"] = self._clock.today()
-        # The digest went with the verification. Keeping it would leave the file
-        # asserting what the text looked like when somebody read it, under no
-        # claim that anybody did — and `revoked` already records the move it
-        # would be evidence of.
-        changes["verified_content"] = ""
-
-    def _apply_code_digests(
-        self, request: UpdateDocumentRequest, base: Document, changes: dict[str, object]
-    ) -> None:
-        """Stage the per-pattern evidence that goes with a verification.
-
-        Runs after the code patterns are staged, and fingerprints the *resulting*
-        set: `--set-code` and `--verified` in one call means the human read the
-        document against the globs they just wrote, not the ones being replaced.
-
-        Two rules, both instances of "absent means unknown":
-
-        * With no matcher the digests are **dropped**, not carried over. A stale
-          digest under a fresh ``verified`` date is the one combination that
-          lies in the dangerous direction — it would report code as changed that
-          the verification already covered, or hold evidence from a review two
-          reviews ago.
-        * Changing the globs without verifying **prunes** the digests of the
-          patterns that went away and keeps the rest. Each surviving pattern was
-          genuinely verified on the recorded date; a pattern just added was not,
-          and gets no entry until someone verifies it.
-
-        This is a mechanical field, so nothing here touches ``updated`` — the
-        rule ``check --fix`` and the tag rewrites follow. It is deliberately not
-        an embedding-relevant change either: no vector reads a digest.
-        """
-        patterns = base.code if request.set_code is None else tuple(request.set_code)
-        if request.mark_verified:
-            changes["verified_code"] = self._fingerprint_all(patterns)
-        elif request.set_code is not None:
-            kept = set(patterns)
-            changes["verified_code"] = {
-                pattern: digest for pattern, digest in base.verified_code.items() if pattern in kept
-            }
-
-    def _fingerprint_all(self, patterns: tuple[str, ...]) -> dict[str, str]:
-        """Digest each pattern, dropping the ones that cannot be resolved."""
-        if self._code_matcher is None:
-            return {}
-        digests = {}
-        for pattern in patterns:
-            digest = self._code_matcher.fingerprint(pattern)
-            if digest is not None:
-                digests[pattern] = digest
-        return digests
-
-    def _apply_type(
-        self, request: UpdateDocumentRequest, base: Document, changes: dict[str, object]
-    ) -> str:
-        """Stage a retype and return the type the rest of the write is checked against.
-
-        The id is deliberately untouched. It is the corpus's only address —
-        every ``related`` edge that points here spells it out, as does anything
-        outside the store — so a document retyped from ``decision`` keeps its
-        ``adr-`` prefix under a type whose prefix is something else. The prefix
-        records which type *minted* the id, not which type owns it now.
-
-        A retype is not marked as a content change: ``type`` is in
-        ``content_hash`` (a write must not silently lose one) but not in
-        ``embedding_text``, so the vectors are unaffected and re-embedding the
-        corpus to rename it would be pure cost.
-        """
-        if request.set_type is None or request.set_type == base.type:
-            return base.type
-        # Unknown target: raises naming the types that exist. The *source* type
-        # is never looked up, which is what keeps the retype available as the
-        # exit from a type `disable_types` has just removed.
-        self._schema.get(request.set_type)
-        changes["type"] = request.set_type
-        return request.set_type
-
-    def _apply_status(
-        self,
-        request: UpdateDocumentRequest,
-        base: Document,
-        changes: dict[str, object],
-        target_type: str,
-    ) -> None:
-        """Stage the status, validated against ``target_type``.
-
-        On a retype the check is *membership*, not transition: the type the
-        document is leaving has its own transition graph, and that graph says
-        nothing about a different type's. The current status is carried over
-        when the new type declares it and the write is refused when it does
-        not — never quietly reset to the new type's ``default_status``, which
-        across a corpus rewrites every ``accepted`` to ``draft`` and reports
-        success.
-        """
-        if target_type != base.type:
-            status = base.status if request.status is None else request.status
-            if request.status is None and not self._schema.get(target_type).is_valid_status(status):
-                valid = ", ".join(self._schema.get(target_type).statuses)
-                raise InvalidStatusError(
-                    f"cannot retype {base.id!r} to {target_type!r}: its status {status!r} "
-                    f"is not one that type declares. Pass --status with one of: {valid}"
-                )
-            self._validator.validate_status(target_type, status)
-            if status != base.status:
-                changes["status"] = status
-            return
-        if request.status is not None and request.status != base.status:
-            if request.allow_transition_override:
-                self._validator.validate_status(base.type, request.status)
-            else:
-                self._validator.validate_transition(base.type, base.status, request.status)
-            changes["status"] = request.status
-
-    def _apply_related(
-        self,
-        request: UpdateDocumentRequest,
-        base: Document,
-        changes: dict[str, object],
-        uow: UnitOfWork,
-        target_type: str,
-    ) -> None:
-        """Stage the edges, and re-check the existing ones when the type moved.
-
-        ``allowed_relations`` is a property of the *source* type, so a retype can
-        carry a document under a whitelist its untouched edges do not satisfy.
-        They are validated even though this call did not supply them, because
-        this is the write that would persist them.
-        """
-        retyped = target_type != base.type
-        if request.set_related is None and not (retyped and base.related):
-            return
-        id_to_type = {doc.id: doc.type for doc in uow.documents.all()}
-        if request.set_related is None:
-            self._validator.validate_relation_kinds(target_type, base.related, id_to_type)
-            return
-        refs = _parse_refs(request.set_related)
-        targets = [ref.target for ref in refs]
-        self._validator.validate_related(targets, id_to_type, source_id=base.id)
-        self._validator.validate_relation_kinds(target_type, refs, id_to_type)
-        changes["related"] = refs
-
-    def _apply_body(
-        self,
-        request: UpdateDocumentRequest,
-        base: Document,
-        changes: dict[str, object],
-        disk_diverged: bool,
-    ) -> bool:
-        """Stage a body edit (at most one mode); return whether the body moved.
-
-        ``disk_diverged`` is consulted only by ``replace_body`` — see
-        :meth:`update` for why that is the only mode it can apply to. The
-        parameter is named for what it measures rather than "stale", which in
-        this codebase means a document past its review cadence: a different
-        concept on a different clock.
-        """
-        modes = [
-            request.append_section,
-            request.replace_section,
-            request.remove_section,
-            request.replace_body,
-        ]
-        if sum(mode is not None for mode in modes) > 1:
-            raise ValidationError("only one body edit mode may be used per call")
-
-        if request.append_section is not None:
-            heading, body = request.append_section
-            changes["body"] = append_section(base.body, heading, body)
-            return True
-        if request.replace_section is not None:
-            heading, body = request.replace_section
-            changes["body"] = replace_section(base.body, heading, body)
-            return True
-        if request.remove_section is not None:
-            # A deletion composes with an out-of-band change like the other
-            # section modes: it is resolved against the body as it is on disk,
-            # so it never needs `disk_diverged`.
-            changes["body"] = remove_section(base.body, request.remove_section)
-            return True
-        if request.replace_body is not None:
-            if not request.force:
-                raise ValidationError(
-                    "--replace-body requires --force (it overwrites the whole body)"
-                )
-            if disk_diverged:
-                raise StaleWriteError(
-                    f"{base.id!r} changed on disk since it was indexed; "
-                    f"refetch with `docir get {base.id}` before replacing the body"
-                )
-            changes["body"] = request.replace_body
-            return True
-        return False
 
     def _read_current(self, indexed: Document) -> Document:
         """The current on-disk document (source of truth) for an update base."""

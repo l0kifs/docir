@@ -341,14 +341,16 @@ def _parse_types_mapping(types_raw: object, default_id_style: str) -> dict[str, 
     }
 
 
-def _parse_type(name: str, spec: object, default_id_style: str) -> TypeSchema:
-    if not isinstance(spec, dict):
-        raise SchemaError(f"type {name!r} must be a mapping")
+def _parse_statuses(name: str, spec: dict) -> tuple[tuple[str, ...], dict[str, frozenset[str]]]:
+    """The declared statuses and the transitions between them.
 
-    prefix = spec.get("prefix")
-    if not isinstance(prefix, str) or not prefix:
-        raise SchemaError(f"type {name!r} must define a string 'prefix'")
-
+    Every status name referenced anywhere must be one this type declares.
+    Without this, `statuses: {open: [closd]}` loaded happily and the typo only
+    surfaced much later as "invalid transition 'open' -> 'closed'" — a message
+    naming a status that IS declared, pointing the reader at their write
+    instead of at the schema. `schema validate` exists to catch exactly this
+    and passed it.
+    """
     statuses_raw = spec.get("statuses")
     if not isinstance(statuses_raw, dict) or not statuses_raw:
         raise SchemaError(f"type {name!r} must define a non-empty 'statuses' mapping")
@@ -363,13 +365,6 @@ def _parse_type(name: str, spec: object, default_id_style: str) -> TypeSchema:
 
     statuses = tuple(str(s) for s in statuses_raw)
     declared = set(statuses)
-
-    # Every status name referenced anywhere must be one this type declares.
-    # Without this, `statuses: {open: [closd]}` loaded happily and the typo only
-    # surfaced much later as "invalid transition 'open' -> 'closed'" — a message
-    # naming a status that IS declared, pointing the reader at their write
-    # instead of at the schema. `schema validate` exists to catch exactly this
-    # and passed it.
     for status, targets in transitions.items():
         unknown = sorted(targets - declared)
         if unknown:
@@ -378,7 +373,11 @@ def _parse_type(name: str, spec: object, default_id_style: str) -> TypeSchema:
                 f"type {name!r} status {status!r} transitions to undeclared "
                 f"status(es) {', '.join(repr(u) for u in unknown)}; declared: {known}"
             )
+    return statuses, transitions
 
+
+def _parse_default_status(name: str, spec: dict, declared: set[str]) -> str:
+    """The status a new document of this type starts in; must be declared."""
     default_status = spec.get("default_status")
     if not isinstance(default_status, str):
         raise SchemaError(f"type {name!r} must define a string 'default_status'")
@@ -388,16 +387,23 @@ def _parse_type(name: str, spec: object, default_id_style: str) -> TypeSchema:
             f"type {name!r} 'default_status' {default_status!r} is not a declared "
             f"status; declared: {known}"
         )
+    return default_status
 
+
+def _parse_required(name: str, spec: dict) -> list:
+    """The fields a document of this type must carry.
+
+    Every name must be a field a document can actually carry. Tier 0 reads a
+    required field off the document, so a name that is not one is not an
+    unknown key — it is unsatisfiable, and every write of the type fails
+    forever with a message naming the write instead of the schema. The same
+    class of defect as an undeclared status target in :func:`_parse_statuses`,
+    and reported the same way: at load, naming what would have worked
+    (issue-e3c4dfad4f7b).
+    """
     required = spec.get("required", []) or []
     if not isinstance(required, list):
         raise SchemaError(f"type {name!r} 'required' must be a list")
-    # Every name must be a field a document can actually carry. Tier 0 reads a
-    # required field off the document, so a name that is not one is not an
-    # unknown key — it is unsatisfiable, and every write of the type fails
-    # forever with a message naming the write instead of the schema. The same
-    # class of defect as an undeclared status target above, and reported the
-    # same way: at load, naming what would have worked (issue-e3c4dfad4f7b).
     unknown_required = sorted({str(f) for f in required} - REQUIRABLE_FIELDS)
     if unknown_required:
         known = ", ".join(sorted(REQUIRABLE_FIELDS))
@@ -405,7 +411,11 @@ def _parse_type(name: str, spec: object, default_id_style: str) -> TypeSchema:
             f"type {name!r} 'required' names field(s) no document can carry: "
             f"{', '.join(repr(f) for f in unknown_required)}; a document's fields are: {known}"
         )
+    return required
 
+
+def _parse_inactive_statuses(name: str, spec: dict, declared: set[str]) -> list:
+    """The statuses that take a document out of the default read paths."""
     inactive = spec.get("inactive_statuses", []) or []
     if not isinstance(inactive, list):
         raise SchemaError(f"type {name!r} 'inactive_statuses' must be a list")
@@ -416,21 +426,42 @@ def _parse_type(name: str, spec: object, default_id_style: str) -> TypeSchema:
             f"type {name!r} 'inactive_statuses' names undeclared status(es) "
             f"{', '.join(repr(u) for u in unknown_inactive)}; declared: {known}"
         )
+    return inactive
 
-    level = spec.get("level", 0)
-    if not isinstance(level, int) or isinstance(level, bool):
-        raise SchemaError(f"type {name!r} 'level' must be an integer")
 
-    review_days = spec.get("review_days", 0)
-    if not isinstance(review_days, int) or isinstance(review_days, bool):
-        raise SchemaError(f"type {name!r} 'review_days' must be an integer")
+def _require_integer(name: str, key: str, value: object) -> int:
+    """One integer check for the three numeric type fields.
 
+    ``bool`` is excluded explicitly: it is a subclass of ``int``, so
+    ``level: true`` would otherwise load as ``level: 1``.
+    """
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise SchemaError(f"type {name!r} {key!r} must be an integer")
+    return value
+
+
+def _parse_type(name: str, spec: object, default_id_style: str) -> TypeSchema:
+    if not isinstance(spec, dict):
+        raise SchemaError(f"type {name!r} must be a mapping")
+
+    prefix = spec.get("prefix")
+    if not isinstance(prefix, str) or not prefix:
+        raise SchemaError(f"type {name!r} must define a string 'prefix'")
+
+    statuses, transitions = _parse_statuses(name, spec)
+    declared = set(statuses)
+
+    default_status = _parse_default_status(name, spec, declared)
+
+    required = _parse_required(name, spec)
+    inactive = _parse_inactive_statuses(name, spec, declared)
+    level = _require_integer(name, "level", spec.get("level", 0))
+    review_days = _require_integer(name, "review_days", spec.get("review_days", 0))
     # Absent inherits the linter's default; 0 means "never too long".
-    max_body_chars = spec.get("max_body_chars")
-    if max_body_chars is not None and (
-        not isinstance(max_body_chars, int) or isinstance(max_body_chars, bool)
-    ):
-        raise SchemaError(f"type {name!r} 'max_body_chars' must be an integer")
+    raw_max_body = spec.get("max_body_chars")
+    max_body_chars = (
+        None if raw_max_body is None else _require_integer(name, "max_body_chars", raw_max_body)
+    )
 
     # A type without its own ``id_style`` inherits the schema-wide default.
     id_style = (

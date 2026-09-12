@@ -19,6 +19,7 @@ from typer.testing import CliRunner
 
 from docir.config.settings import Settings
 from docir.entry_points.cli import app as cli_app
+from docir.entry_points.cli import read_cmds
 from docir.entry_points.composition import (
     Container,
     build_container,
@@ -794,7 +795,7 @@ class TestOlderDocirCanStillReadTheseStores:
     def test_the_cli_docstring_example_declares_stores(self) -> None:
         """`docir context --help` is JSON when piped, so it is the example an
         agent parses rather than reads."""
-        doc = cli_app.context.__doc__ or ""
+        doc = read_cmds.context.__doc__ or ""
         marker = "# .docir/stores.yaml"
         assert marker in doc, "the context docstring no longer shows the file"
         block = doc.split(marker, 1)[1].split("\n\n", 1)[0]

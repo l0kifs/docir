@@ -28,7 +28,12 @@ import json
 
 from docir.modules.publishing.domain.site import INBOUND_KIND, Site, graph_payload
 from docir.modules.publishing.infra.branding import DOCIR_BRANDING, Branding, brand_html
-from docir.modules.publishing.infra.theme import CSS_TOKENS, THEME_SCRIPT, THEME_TOGGLE_JS
+from docir.modules.publishing.infra.theme import (
+    CSS_CHROME,
+    CSS_TOKENS,
+    THEME_SCRIPT,
+    THEME_TOGGLE_JS,
+)
 
 #: Colour per document type — the categorical dimension. The values are the
 #: site's ``--t-*`` theme tokens (``theme.CSS_TOKENS``), not hex: the tokens
@@ -60,9 +65,7 @@ _GRAPH_CSS = """\
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
 --edge:#3a4250;--edge-hi:#9aa0aa}}
 :root[data-theme="dark"]{--edge:#3a4250;--edge-hi:#9aa0aa}
-*{box-sizing:border-box}
 /* [hidden] must survive author display rules — see the site stylesheet. */
-[hidden]{display:none!important}
 html,body{height:100%}
 /* The same type stack as the pages. The map is an application view and its
    own labels are sized in px against the SVG, but every piece of chrome on it
@@ -71,8 +74,6 @@ body{margin:0;background:var(--bg);color:var(--fg);overflow:hidden;
 font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;
 -webkit-font-smoothing:antialiased}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
-a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 /* ---- the top bar: the site's, to the pixel ----
    It used to be its own thing — padding-derived height, wrapping onto two
    rows, no theme control — so the one page reached from a call-to-action on
@@ -80,16 +81,10 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
    height, same padding, same gap, same order: identity left, controls right. */
 .topbar{display:flex;align-items:center;gap:.9rem;height:56px;padding:0 1.25rem;
 background:var(--bg);border-bottom:1px solid var(--line);flex:none}
-.brand{display:flex;align-items:center;gap:.55rem;font-weight:600;color:var(--fg);
-white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.brand:hover{text-decoration:none}
-.brand .sub{color:var(--muted);font-weight:400}
 /* Sized, not painted — the art is supplied (see infra/branding.py). `color`
    is pinned because the mark lives inside a link and docir's draws its
    bracket in `currentColor`: inherited, the bracket came out accent-blue
    instead of the kit's ink (paper on dark). */
-.brandmark{height:22px;width:auto;max-width:10rem;flex:none;display:block;
-object-fit:contain;color:var(--fg)}
 /* Where the page listing marks the open document in the sidebar, the map has
    no sidebar to mark — this says which page you are on. Same treatment as a
    document's type chip. */
@@ -113,12 +108,6 @@ white-space:nowrap}
 background:color-mix(in srgb,var(--accent) 8%,transparent)}
 .count{color:var(--faint);font-size:.84rem;font-variant-numeric:tabular-nums;
 white-space:nowrap}
-.toplnk{color:var(--muted);font-size:.9rem;white-space:nowrap;border:0;background:none;
-cursor:pointer;font-family:inherit;padding:0}
-.toplnk:hover{color:var(--fg);text-decoration:none}
-.iconbtn{width:34px;height:34px;border:1px solid var(--line);border-radius:8px;
-display:inline-flex;align-items:center;justify-content:center;flex:none;font-size:.95rem}
-.iconbtn:hover{background:var(--chip)}
 .chip{display:inline-flex;align-items:center;gap:.35rem;padding:.1rem .6rem;
 border-radius:999px;border:1px solid var(--line);font-size:.76rem;color:var(--muted);
 white-space:nowrap;background:var(--bg);line-height:1.5}
@@ -771,7 +760,7 @@ _SHELL = """<!doctype html>
 <title>Graph &#8212; __TITLE__</title>
 __FAVICON__
 <script>__THEME__</script>
-<style>__TOKENS____CSS__</style>
+<style>__TOKENS____CHROME____CSS__</style>
 </head><body>
 <div class="wrap">
   <header class="topbar">
@@ -832,6 +821,7 @@ def render_graph_page(site: Site, *, title: str, branding: Branding = DOCIR_BRAN
         .replace("__FAVICON__", branding.favicon)
         .replace("__THEME__", THEME_SCRIPT)
         .replace("__TOKENS__", CSS_TOKENS)
+        .replace("__CHROME__", CSS_CHROME)
         .replace("__CSS__", _GRAPH_CSS)
         .replace("__JS__", script)
     )

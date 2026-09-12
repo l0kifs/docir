@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-09-12
+
+A body cites another document two ways, and docir read only one. `related:` frontmatter was
+validated on write, reported by `dangling` and drawn on the graph; a `[[...]]` written
+mid-sentence was parsed by nothing — not the renderer, not a check, not the index. It
+published as literal brackets, and a retitle broke every inbound one in silence. This release
+makes the prose link a link docir reads: it resolves, `docir build` renders it, and `docir
+check` names the ones that point at nothing. Underneath, the six largest classes in the
+codebase were split by reason to change, with every surface held byte-identical.
+
+### Upgrade notes
+
+- **No migration.** The index schema is unchanged, so `docir doctor` reports only
+  `stale-index-build` until the first `docir reindex` after upgrading. `docir self upgrade`
+  runs it and refreshes the generated instruction files, whose maintenance reference now
+  documents `unresolved-link`.
+- **A store that already writes `[[...]]` sees its broken ones on the next `docir check`.**
+  They were broken before; this is the first build that says so. Each is a warning, so
+  `--strict` still passes, and `check --fix` leaves them — a target nobody can name is not a
+  repair without a guess. A retitle was never the cause: resolution accepts the id, the
+  filename stem, the title slug and the title, and reads archived and inactive documents too.
+
 ### Added
 
 - **`[[...]]` prose links resolve, render and are checked.** A body cites another document two
@@ -24,6 +46,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of the graph: `orphan` still reads `related:` alone. Nothing repairs it, so `check --fix`
   leaves it. See the decision in the store for why this is Tier 1 where `unresolved-mention`
   is Tier 2.
+
+### Internal
+
+- **The six largest classes and modules are split by reason to change**, each on a seam the
+  file had already drawn with a section comment: `DocumentService` into the write path plus
+  `DocumentPatch` and `RetrievalBench`; `MaintenanceService` into `IndexRebuilder` and
+  `StoreRepairer`; `GraphChecker` into four rule families under `checks/`; `cli/app.py`
+  (1,968 lines to 428) into one module per command group; the markdown format out of the file
+  store; `publishing/infra/rendering.py` (2,072 lines) into seven modules; `build_mcp_server`
+  (646 lines to 22) into one registration function per path. No `api.py` signature and no
+  `CONTRACT.md` moved. Held byte-identical rather than asserted: the whole Typer tree (40
+  commands, every flag, default and help string), `tools/list`, every finding `check` and
+  `schema validate` report against the released 0.25.0, all 422 files `docir build` produces
+  from this store, and ranking — 300 randomised differential trials of the fusion and the
+  benchmark before and after. (adr-a1754eb79fe7, issue-55cc9295302a)
+- **What the audit kept is on record** as adr-a1754eb79fe7: the eleven shapes that look like
+  catalogue smells and stay — the CLI and MCP signatures that are the agent contract, the
+  uniform guard sequences, the composition root — and why `DocumentService` is not split
+  further: its read and write halves share `_is_visible`, the predicate whose docstring
+  records the leak that two of them caused.
+- **The MCP argument-parity guard now covers every mirrored command**, eleven rather than
+  five. `docir_add` (14 flags) and `docir_update` (21) were the two largest surfaces and the
+  two nothing checked — the class of drift the guard was written for after `--also` and
+  `--explain` shipped to no tool. A flag that deliberately reaches no tool now has to state
+  why, so "the tool is missing this" and "the tool is not meant to have this" stop reading
+  alike.
+- **`publishing.domain._replace_edges` enumerated every field by hand**, so a field added
+  after it was written came back empty on every page while resolving correctly everywhere
+  else. The first field added — the prose links — is what found it.
+- **Two stylesheets declared thirteen rules alike**, and the cost was already on record: a
+  `.sub` utility tuned on the pages shrank the wordmark's tail there and not on the graph. The
+  shared chrome is declared once, and a guard compares all three sources, so copying a rule
+  back into either sheet fails by name.
 
 ## [0.25.0] - 2026-09-06
 
@@ -2365,7 +2420,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.26.0...HEAD
+[0.26.0]: https://github.com/l0kifs/docir/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/l0kifs/docir/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/l0kifs/docir/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/l0kifs/docir/compare/v0.22.0...v0.23.0

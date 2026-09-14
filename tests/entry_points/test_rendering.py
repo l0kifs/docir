@@ -249,6 +249,63 @@ class TestHumanRenderers:
         )
         assert "kept existing" in capsys.readouterr().out
 
+    def test_render_init_suggests_the_optional_feedback_skill(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """adr-7144cf291b1a: opt-in works only if adoption is told it exists.
+
+        `docir init` is the first of the two moments a human is setting docir
+        up, and the skill is never selected for them — so a suggestion that
+        stops being printed is the whole feature silently gone.
+        """
+        rendering.render_init(
+            {
+                "home": "/x/.docir",
+                "profiles": ["software"],
+                "schema_written": True,
+                "gitignore_written": True,
+            }
+        )
+        out = capsys.readouterr().out
+        assert "claude-feedback" in out
+        assert "you review and file" in out.replace("\n", " ")
+
+    def test_render_setup_suggests_the_feedback_skill_when_it_is_absent(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        rendering.render_setup(
+            [
+                {
+                    "target": "claude",
+                    "path": "/p",
+                    "action": "created",
+                    "previous_version": None,
+                    "new_version": "0.1.0",
+                    "note": None,
+                }
+            ]
+        )
+        assert "claude-feedback" in capsys.readouterr().out
+
+    def test_render_setup_stops_suggesting_what_is_already_installed(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        # A suggestion that survives the install reads as "it did not work".
+        rendering.render_setup(
+            [
+                {
+                    "target": "claude-feedback",
+                    "path": "/p",
+                    "action": "created",
+                    "previous_version": None,
+                    "new_version": "0.1.0",
+                    "note": None,
+                }
+            ]
+        )
+        out = capsys.readouterr().out
+        assert "--agent claude-feedback" not in out.replace("\n", " ")
+
     def test_render_setup_created_and_updated(self, capsys: pytest.CaptureFixture[str]) -> None:
         rendering.render_setup(
             [

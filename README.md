@@ -57,6 +57,8 @@ docir init
 
 # 3. teach this repo's AI agent to drive docir (writes a Claude Code skill)
 docir agent install            # --agent claude-writing adds the doc-writing rules;
+                               # --agent claude-feedback lets it report docir's own bugs
+                               #   upstream instead of working around them (recommended);
                                # --agent agents links the skills from AGENTS.md
 
 # 4. capture a decision…
@@ -186,7 +188,7 @@ never watch, so CI still needs the explicit command.
 | `docir get <id> [<id>...]` | Full documents with bodies — several in one command, and `<id>#<heading>` for just one section of one |
 | `docir check` | Structural findings — duplicate ids, dangling edges, broken `[[...]]` links, staleness (`--strict` gates CI on errors, `--fix` repairs them) |
 | `docir doctor` | Diagnose the *environment* — the installation, this store's index, the embedding model, the daemon, the peers (`--strict` gates a setup step on errors) |
-| `docir agent install` | Teach this repo's AI agent to drive docir |
+| `docir agent install` | Teach this repo's AI agent to drive docir (`--agent claude-writing` the writing rules, `--agent claude-feedback` upstream bug reports) |
 | `docir self upgrade` | Upgrade docir, then resync this store: reindex, refresh the agent files, report what `check` finds |
 | `docir bench fixture.yaml` | Score this store's retrieval against tasks whose answers you know |
 | `docir build --out site/` | Render the store as a self-contained static site for humans |
@@ -260,6 +262,16 @@ extra to reach it. The tools are named `docir_context`, `docir_get`, `docir_add`
 return the same body-less skeletons the CLI does. Transports, the writing skill and which
 path to choose are in
 [Connect an agent to docir](https://l0kifs.github.io/docir/run-00b9e9f30914.html).
+
+**When docir is the problem.** An agent that hits a docir bug or a missing flag will
+route around it — a wrapper script, a "docir gets this wrong, always do Y" rule, a
+hand-edited file. That fixes your repo and leaves the bug in everyone else's.
+`docir agent install --agent claude-feedback` installs a third, opt-in skill that
+makes the agent do the other thing: reproduce on a throwaway store, redact, and leave
+a drafted bug report for **you** to read and file. It is never installed unless you
+ask for it, it never sends anything, and no report leaves your machine without you
+running the command yourself. Worth adding on day one — it costs nothing until the
+agent has something to report.
 
 ## Schema: core + profiles
 

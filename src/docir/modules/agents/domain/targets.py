@@ -1,14 +1,17 @@
 """The catalogue of AI-assistant instruction targets docir can install.
 
 A *target* is one place an AI coding assistant reads its instructions from, plus
-the *form* those instructions take there. docir ships three — two skills and the
-index that lists them (adr-3a2d5ee7bc84, adr-735ba7f6209b):
+the *form* those instructions take there. docir ships four — three skills and the
+index that lists them (adr-3a2d5ee7bc84, adr-735ba7f6209b, adr-7144cf291b1a):
 
 - ``claude`` — a Claude Code *skill*: a directory whose ``SKILL.md`` the
   assistant auto-loads by its frontmatter ``description``, plus the reference
   files that entry point links to. Installable per-project or globally.
 - ``claude-writing`` — a second skill, opt-in, covering how to write the
   documents rather than how to drive the CLI (adr-735ba7f6209b).
+- ``claude-feedback`` — a third skill, opt-in, covering how to report a docir
+  defect or gap *upstream* instead of working around it locally
+  (adr-7144cf291b1a). It drafts a report to a file; a human files it.
 - ``agents`` — a marker-delimited block merged into the cross-assistant
   ``AGENTS.md`` convention at the repo root. Project-only (no global equivalent).
 
@@ -101,6 +104,13 @@ CLAUDE_WRITING = AgentTarget(
     supports_global=True,
     template="writing",
 )
+CLAUDE_FEEDBACK = AgentTarget(
+    name="claude-feedback",
+    form=AgentForm.SKILL,
+    relative_path=(".claude", "skills", "docir-feedback", "SKILL.md"),
+    supports_global=True,
+    template="feedback",
+)
 AGENTS = AgentTarget(
     name="agents",
     form=AgentForm.POINTER,
@@ -112,10 +122,14 @@ AGENTS = AgentTarget(
 #: Every target docir knows how to install, keyed by ``--agent`` name. Order is
 #: install order: skills before the pointer that indexes them.
 AGENT_TARGETS: dict[str, AgentTarget] = {
-    target.name: target for target in (CLAUDE, CLAUDE_WRITING, AGENTS)
+    target.name: target for target in (CLAUDE, CLAUDE_WRITING, CLAUDE_FEEDBACK, AGENTS)
 }
 
 #: What ``docir agent install`` writes when no ``--agent`` is given. The writing
 #: skill is deliberately absent: both skills match on the same work, so a repo
 #: that does not want the second one should not pay its context on every session.
+#: The feedback skill is absent for a second, stronger reason (adr-7144cf291b1a):
+#: it ends in something leaving the machine, so it is installed only by a human
+#: who chose it — a default that drafts reports about its user's corpus is one
+#: nobody consented to. It is *suggested* loudly instead, never selected.
 DEFAULT_AGENTS: tuple[str, ...] = (CLAUDE.name,)

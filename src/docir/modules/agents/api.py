@@ -20,12 +20,21 @@ from docir.modules.agents.application.service import (
     UpdateRequest,
 )
 from docir.modules.agents.domain.results import InstallAction, InstalledFile
-from docir.modules.agents.domain.targets import AGENT_TARGETS, DEFAULT_AGENTS
+from docir.modules.agents.domain.targets import (
+    AGENT_TARGETS,
+    CLAUDE_FEEDBACK,
+    DEFAULT_AGENTS,
+)
 from docir.modules.agents.infra.file_sink import FilesystemSink
 from docir.modules.agents.infra.template_provider import PackagedTemplateProvider
 
 #: Valid ``--agent`` names, for CLI validation / help.
 AGENT_NAMES: tuple[str, ...] = tuple(AGENT_TARGETS)
+
+#: The opt-in upstream-feedback skill (adr-7144cf291b1a). Exported because the
+#: CLI *suggests* it in human output and must name it exactly; a literal in the
+#: renderer would survive a rename of the target and print a command that fails.
+FEEDBACK_AGENT: str = CLAUDE_FEEDBACK.name
 
 
 def build_agent_service(version: str) -> AgentSetupService:
@@ -36,6 +45,7 @@ def build_agent_service(version: str) -> AgentSetupService:
 __all__ = [
     "AGENT_NAMES",
     "DEFAULT_AGENTS",
+    "FEEDBACK_AGENT",
     "AgentSetupService",
     "InstallAction",
     "InstallRequest",

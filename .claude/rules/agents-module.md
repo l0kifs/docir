@@ -24,7 +24,14 @@ This module writes files into *other* people's repositories. Edit the packaged t
   `<!-- docir:vX -->` stamp so `update` reports a version transition; a foreign `AGENTS.md` is
   never rewritten (only docir's marker block is).
 
-- **There are two skills, and the second is opt-in (adr-735ba7f6209b).** `claude` teaches the CLI;
+- **There are three skills, and two are opt-in (adr-735ba7f6209b, adr-7144cf291b1a).** `claude`
+  teaches the CLI; `claude-feedback` (template `feedback/`) teaches an agent to report a docir
+  defect *upstream* instead of papering over it with a wrapper script or a project rule — it only
+  ever drafts a file, and a human files it, which is why it is absent from `DEFAULT_AGENTS` and
+  suggested instead from the two Rich renderers a person setting docir up actually reads
+  (`render_init`, `render_setup` — never the JSON, where the suggestion would reach the wrong
+  reader). Its counter-pressure ships even to repos that decline it, as a section of the default
+  skill's `reference/troubleshooting.md`.
   `claude-writing` (`.claude/skills/docir-writing/SKILL.md`, template `writing.md`) teaches how to
   write the documents — one name per concept, one purpose per document, state each fact once and
   link it, and keep each `##` section under ~1,200 chars. That last number is `MAX_CHUNK_CHARS`,
@@ -32,7 +39,7 @@ This module writes files into *other* people's repositories. Edit the packaged t
   topic-based standards reject one and `similarity_lint.py` already warns on size. It stays out
   of `DEFAULT_AGENTS` since both skills match the same work and a repo that did not ask for the
   second should not pay its context. `TemplateProvider.template(name)` is a keyed catalogue, so a
-  third skill is a template plus a catalogue entry — do not grow either skill into a grab-bag.
+  fourth skill is a template plus a catalogue entry — do not grow any of them into a grab-bag.
 
 - **The `AGENTS.md` block points at the skills; it does not contain them (adr-6ed847e02fe5).** It
   carries the template's frontmatter `description` verbatim plus a repo-relative link, so docir's

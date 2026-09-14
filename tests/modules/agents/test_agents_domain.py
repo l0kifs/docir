@@ -15,8 +15,18 @@ POINTERS = (rendering.SkillPointer(description="drive docir", path=SKILL_PATH),)
 
 class TestTargets:
     def test_the_registered_targets(self) -> None:
-        assert set(AGENT_TARGETS) == {"claude", "claude-writing", "agents"}
+        assert set(AGENT_TARGETS) == {"claude", "claude-writing", "claude-feedback", "agents"}
         assert DEFAULT_AGENTS == ("claude",)
+
+    def test_the_feedback_skill_is_never_installed_unasked(self) -> None:
+        """The consent guarantee of adr-7144cf291b1a, at its source.
+
+        Everything else about that skill ends in a report leaving the machine,
+        so the one thing that must not be possible is acquiring it by default.
+        Asserts the name explicitly rather than trusting the tuple above: a
+        later release adding a fourth default would keep that assertion true.
+        """
+        assert "claude-feedback" not in DEFAULT_AGENTS
 
     def test_skills_come_before_the_index_that_lists_them(self) -> None:
         # Catalogue order is install order: the pointer reads what is on disk,
@@ -29,6 +39,8 @@ class TestTargets:
         assert AGENT_TARGETS["claude"].supports_global is True
         assert AGENT_TARGETS["claude-writing"].form is AgentForm.SKILL
         assert AGENT_TARGETS["claude-writing"].supports_global is True
+        assert AGENT_TARGETS["claude-feedback"].form is AgentForm.SKILL
+        assert AGENT_TARGETS["claude-feedback"].supports_global is True
         assert AGENT_TARGETS["agents"].form is AgentForm.POINTER
         assert AGENT_TARGETS["agents"].supports_global is False
 

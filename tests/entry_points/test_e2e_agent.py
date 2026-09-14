@@ -36,6 +36,10 @@ def _writing(root: Path) -> Path:
     return root / ".claude" / "skills" / "docir-writing" / "SKILL.md"
 
 
+def _feedback(root: Path) -> Path:
+    return root / ".claude" / "skills" / "docir-feedback" / "SKILL.md"
+
+
 class TestAgentInstall:
     def test_install_writes_claude_skill(self, tmp_path: Path) -> None:
         result = run("agent", "install", str(tmp_path))
@@ -45,6 +49,32 @@ class TestAgentInstall:
         text = skill.read_text(encoding="utf-8")
         assert text.startswith("---\nname: docir")
         assert "docir:v" in text
+
+    def test_a_plain_install_does_not_write_the_feedback_skill(self, tmp_path: Path) -> None:
+        """The consent guarantee end to end (adr-7144cf291b1a).
+
+        The skill's whole subject is data leaving the machine, so acquiring it
+        without asking is the one outcome that must be impossible. Runs the
+        real CLI rather than the catalogue, because a default is only a default
+        where the command reads it.
+        """
+        assert run("agent", "install", str(tmp_path)).exit_code == 0
+        assert _skill(tmp_path).exists()
+        assert not _feedback(tmp_path).exists()
+
+    def test_installing_the_feedback_skill_when_asked(self, tmp_path: Path) -> None:
+        result = run("agent", "install", str(tmp_path), "--agent", "claude-feedback")
+        assert result.exit_code == 0
+        text = _feedback(tmp_path).read_text(encoding="utf-8")
+        assert text.startswith("---\nname: docir-feedback")
+        assert "docir:v" in text
+
+    def test_update_does_not_acquire_the_feedback_skill(self, tmp_path: Path) -> None:
+        # `update` refreshes what is installed. Growing the set on an upgrade
+        # would opt a repo in on a release note it never read.
+        assert run("agent", "install", str(tmp_path)).exit_code == 0
+        assert run("agent", "update", str(tmp_path)).exit_code == 0
+        assert not _feedback(tmp_path).exists()
 
     def test_install_agents_preserves_existing_file(self, tmp_path: Path) -> None:
         agents = tmp_path / "AGENTS.md"

@@ -460,8 +460,11 @@ UnitOfWorkFactory = Callable[[], UnitOfWork]
 
 # -- store initialization (``docir init``) ----------------------------------
 
-#: What ``docir init`` gitignores inside the store: the derived index and the
-#: daemon's runtime files. Only ``docs/`` + ``docs-schema.yaml`` are committed.
+#: What ``docir init`` gitignores inside the store: the derived index, the
+#: daemon's runtime files, and the upstream-feedback drafts (adr-7144cf291b1a) —
+#: a report about docir written *here* is correspondence, not corpus, and it
+#: holds the one thing in the store nobody reviewed for redaction yet. Only
+#: ``docs/`` + ``docs-schema.yaml`` are committed.
 _STORE_GITIGNORE = """\
 # docir derived index + daemon runtime — rebuildable from docs/, do not commit.
 index.db
@@ -470,6 +473,8 @@ index.db-wal
 index.db-shm
 daemon.pid
 daemon.log
+# Drafted upstream bug reports, awaiting a human's review — never committed.
+feedback/
 """
 
 

@@ -21,6 +21,7 @@ from rich.table import Table
 
 from docir import __version__
 from docir.entry_points.payload import trim as trim_payload
+from docir.modules.agents.api import FEEDBACK_AGENT
 
 console = Console()
 error_console = Console(stderr=True)
@@ -434,6 +435,25 @@ def render_schema_valid(result: Mapping[str, object]) -> None:
     console.print("[dim]`docir check` lists them all; the schema itself is fine[/]")
 
 
+def _render_feedback_suggestion() -> None:
+    """Offer the opt-in upstream-feedback skill (adr-7144cf291b1a).
+
+    Printed at the two moments a *human* is setting docir up, and nowhere else:
+    the skill ends in a report leaving the machine, so it is never installed by
+    default and never chosen for the user. Suggesting it loudly is the whole
+    reason it can stay opt-in and still be adopted.
+
+    Rich path only. The JSON path is what an agent parses, and a suggestion
+    aimed at the person would arrive there as an instruction to the wrong
+    reader — which is exactly the consent this skill exists to preserve.
+    """
+    console.print(f"[dim]optional:[/] docir agent install --agent {FEEDBACK_AGENT}")
+    console.print(
+        "  [dim]lets this repo's agent report docir's own bugs and gaps upstream instead of"
+        " working around them — it drafts locally, you review and file.[/]"
+    )
+
+
 def render_init(result: Mapping[str, object]) -> None:
     """Render the outcome of ``docir init``."""
     console.print(f"[green]initialized[/] docir store at [bold]{result.get('home')}[/]")
@@ -451,6 +471,10 @@ def render_init(result: Mapping[str, object]) -> None:
     console.print(
         "[dim]commit docs/ and docs-schema.yaml under the store; the index is gitignored.[/]"
     )
+    console.print(
+        "[dim]next:[/] docir agent install  [dim]— teach this repo's agent to drive docir[/]"
+    )
+    _render_feedback_suggestion()
 
 
 def render_setup(files: Sequence[Mapping[str, object]]) -> None:
@@ -483,6 +507,8 @@ def render_setup(files: Sequence[Mapping[str, object]]) -> None:
         if isinstance(removed, Sequence) and not isinstance(removed, str):
             for name in removed:
                 console.print(f"[yellow]removed  [/] [dim]{name} — no longer shipped[/]")
+    if not any(file.get("target") == FEEDBACK_AGENT for file in files):
+        _render_feedback_suggestion()
 
 
 def render_release_status(status: Mapping[str, object]) -> None:

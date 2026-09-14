@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from docir.modules.agents.api import AGENT_NAMES, build_agent_service
+from docir.modules.agents.api import AGENT_NAMES, FEEDBACK_AGENT, build_agent_service
 from docir.modules.agents.application.ports import ENTRY_FILE
 from docir.modules.agents.application.service import InstallRequest
 from docir.modules.agents.domain import rendering
@@ -125,7 +125,11 @@ class TestFilesystemSink:
 
 class TestApiBuilder:
     def test_agent_names(self) -> None:
-        assert set(AGENT_NAMES) == {"claude", "claude-writing", "agents"}
+        assert set(AGENT_NAMES) == {"claude", "claude-writing", "claude-feedback", "agents"}
+
+    def test_feedback_agent_names_a_real_target(self) -> None:
+        # The CLI prints this name inside a command it tells a human to run.
+        assert FEEDBACK_AGENT in AGENT_NAMES
 
     def test_build_and_install_end_to_end(self, tmp_path: Path) -> None:
         service = build_agent_service("3.1.4")
@@ -133,3 +137,116 @@ class TestApiBuilder:
         skill = tmp_path / ".claude" / "skills" / "docir" / "SKILL.md"
         assert skill.exists()
         assert "<!-- docir:v3.1.4" in skill.read_text(encoding="utf-8")
+
+
+class TestFeedbackTemplate:
+    """The packaged upstream-feedback skill (adr-7144cf291b1a).
+
+    This template is the only one whose failure mode is other people's data and
+    other people's inboxes, so its load-bearing sentences are asserted rather
+    than trusted to survive an edit.
+    """
+
+    def _text(self) -> str:
+        return PackagedTemplateProvider().template("feedback")[ENTRY_FILE]
+
+    def test_it_is_a_loadable_skill(self) -> None:
+        text = self._text()
+        assert text.startswith("---\nname: docir-feedback")
+        assert rendering.parse_description(text)
+
+    def test_the_description_fires_before_the_workaround_is_written(self) -> None:
+        """What this skill is *for*: it has to load while the agent is still
+        deciding, not after the wrapper script exists. A description that only
+        described reporting would arrive too late to prevent anything."""
+        description = rendering.parse_description(self._text()) or ""
+        assert "before you write a wrapper script" in description
+
+    def test_it_names_the_workaround_signals(self) -> None:
+        text = self._text()
+        for signal in ("wrapper", "CLAUDE.md", "pinning an older docir", "second source of truth"):
+            assert signal in text, f"the workaround signal {signal!r} is no longer named"
+
+    def test_it_reproduces_away_from_the_user_corpus(self) -> None:
+        text = self._text()
+        assert "scratch store" in text
+        assert "mktemp" in text
+        assert "never on this corpus" in text.lower()
+
+    def test_it_unblocks_the_user_before_it_prohibits_anything(self) -> None:
+        """Measured, not guessed: with the skill loaded, Sonnet refused the task in
+        3 of 3 runs — "I won't hand you a wrapper script or project rule" — where its
+        baseline diagnosed the bug and offered a way forward. The permission existed,
+        eight paragraphs below seven prohibitions, and the model kept the prohibition.
+        So the grant has to come first, in the section's own heading.
+        """
+        text = self._text()
+        section = text.split("## Unblock them first, then report it")[1]
+        grant = section.index("Give the user the working answer")
+        first_prohibition = section.index("What you must not do")
+        assert grant < first_prohibition, "the prohibition leads again; the refusal returns"
+
+    def test_the_gates_do_not_gate_helping(self) -> None:
+        """The other half of the same refusal: "Pass all four or stop" read as a gate
+        on answering at all, so a run with no shell stopped instead of handing over
+        what it had."""
+        section = self._text().split("## Four gates")[1].split("\n1. ")[0]
+        assert "never gate the answer you owe the user" in section
+        assert "hand over" in section
+
+    def test_the_disclosure_sits_inside_the_body_the_agent_copies(self) -> None:
+        """It landed in roughly one run in three when it was only a separate section:
+        the model reproduces the fenced skeleton, so the line has to be in it."""
+        skeleton = self._text().split("````markdown")[1].split("````")[0]
+        assert "Drafted by an AI coding agent" in skeleton
+
+    def test_the_scratch_recipe_never_runs_init(self) -> None:
+        """Found by following the skill instead of re-reading it (adr-7d9fbbf976e8).
+
+        The recipe opened with `docir init .`, and running it from a repo root
+        resolves against the *current directory*: the "throwaway store" step
+        re-initialized the user's own store. The store is created by the first
+        write, so the line was never needed either.
+        """
+        block = self._text().split("## Reproduce on a scratch store")[1].split("```bash")[1]
+        block = block.split("```")[0]
+        assert "docir init" not in block, "the scratch recipe would touch the real store"
+        assert "DOCIR_HOME" in block and "mktemp" in block
+
+    def test_the_draft_location_comes_from_a_command_that_answers_when_empty(self) -> None:
+        """The second one the walkthrough caught: the skill said to read the
+        store path from the `store` field of any reply, and a query matching
+        nothing returns `[]` — no path, and no way for the agent to recover
+        one. `docir doctor` reports `store.home` in an empty store."""
+        section = self._text().split("## Draft the file")[1].split("## Redact")[0]
+        assert "docir doctor" in section
+        assert "store.home" in section
+
+    def test_it_never_files_by_itself(self) -> None:
+        """Draft-only is the decision; the agent prints a command, the human runs it."""
+        text = self._text()
+        assert "**The human runs that command.**" in text
+        assert "no edit to the title or body after their approval" in text
+
+    def test_it_carries_the_redaction_checklist_and_the_disclosure(self) -> None:
+        text = self._text()
+        assert "## Redact before you hand it over" in text
+        assert "Drafted by an AI coding agent" in text
+
+    def test_it_routes_a_vulnerability_away_from_a_public_issue(self) -> None:
+        text = self._text()
+        assert "never a public issue" in text
+
+
+class TestDefaultSkillPushesBack:
+    def test_troubleshooting_points_at_the_optional_feedback_skill(self) -> None:
+        """The counter-pressure has to reach repos that never install it.
+
+        Without this line an agent in a default install meets a docir defect
+        with no instruction but its own judgement, which is what produces the
+        silent workaround in the first place.
+        """
+        files = PackagedTemplateProvider().template("skill")
+        text = files["reference/troubleshooting.md"]
+        assert "docir agent install --agent claude-feedback" in text
+        assert "do not route around it" in text

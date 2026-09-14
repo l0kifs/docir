@@ -10,6 +10,7 @@ ids, staleness — is [`reference/maintenance.md`](maintenance.md).
 
 - `docir doctor` — every finding and the command that closes it
 - Keeping the installation current — `docir self upgrade`, `docir self status`
+- When docir itself is the defect — report it, do not route around it
 - Notes — exit codes, async vectors, where state lives
 
 ## `docir doctor` first
@@ -77,6 +78,29 @@ what reports dangling edges, duplicate ids and staleness.
   has checked*, not "up to date". `--refresh` asks PyPI now (docir's only network call, and
   it is skipped if the answer is already from today). Set `DOCIR_UPDATE_CHECK=1` to have the
   daemon keep it fresh and every command say on stderr when a newer docir is out.
+
+## When docir itself is the defect
+
+Some failures survive `doctor`, `reindex` and an upgrade because they are docir's,
+not this store's. The cheap response is a local workaround, and it is the wrong one:
+a wrapper script around a wrong output, a project rule saying "docir gets X wrong, so
+always do Y", a hand-edited `docs/*.md` because a flag is missing, a pinned older
+version, a second source of truth docir cannot hold. Each is a private fix for a
+public bug — it keeps failing for everyone else, and it deletes the evidence.
+
+So when you catch yourself about to write one: **stop and tell the human what docir
+did, what you expected, and what the workaround would cost.** Write the workaround
+too if the task needs it today — but say it is one.
+
+If they want it reported upstream, docir ships an opt-in skill that does it properly
+(reproduce on a throwaway store, redact, draft a report they review and file):
+
+```bash
+docir agent install --agent claude-feedback
+```
+
+It is never installed by default and it never sends anything itself. Anything
+exploitable goes to a private advisory instead, never a public issue.
 
 ## Notes
 

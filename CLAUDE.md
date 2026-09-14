@@ -279,8 +279,9 @@ enough to stop a wrong edit and never enough to argue with.
 - `docir agent install/update` runs in-process, bypassing the daemon and the dispatcher. Installing
   **regenerates** the skill directory: every packaged `.md` this build does not ship is deleted.
 - Edit the packaged template, never this repo's installed copies, then run `docir agent update`.
-- Two skills, the second opt-in. The `AGENTS.md` block **points at** them and does not contain
-  them; a third skill is a template plus a catalogue entry.
+- Three skills, two of them opt-in — including `claude-feedback`, which reports docir's own
+  defects upstream and is never installed unasked, only suggested. The `AGENTS.md` block
+  **points at** them and does not contain them; a fourth is a template plus a catalogue entry.
 
 ### The other entry points
 

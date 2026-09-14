@@ -58,6 +58,16 @@ alternative to a copy is a typed edge.
 - Link rather than restate: `docir update adr-0007 --set-related adr-0001:depends_on`.
   A reader following an edge gets the current text; a quoted passage freezes on
   the day you pasted it.
+- Cite inside the sentence with `[[adr-0001]]`. The published site shows it as
+  that document's title as it stands today; `[[adr-0001|the retry budget]]`
+  fixes the wording and `[[adr-0001#Consequences]]` points at a section. Write
+  the id: a title or a filename resolves as well, but a retitle keeps the file
+  and moves the name, and the id is the one spelling that follows both. Inside
+  a code span the brackets are text, which is how this bullet exists.
+- A prose link is navigation, not an edge. `docir context` follows `related:`
+  and the graph checks read nothing else, so when the relationship is real the
+  edge still has to exist. `docir check` reports a `[[...]]` that names no
+  document as `unresolved-link`.
 - Copy only what you would still keep if the source changed — a name, a number,
   a status. Anything you would then have to go and fix belongs behind a link.
 - The kinds carry meaning. `supersedes` marks a replacement, `depends_on` a
@@ -109,6 +119,7 @@ is not the opening paragraph of the body.
 - One purpose, and the `type` says which.
 - Every concept named the way the rest of the corpus names it.
 - No fact stated here that another document owns — linked instead.
+- Every `[[...]]` names a document that exists, and every real relationship is an edge.
 - Every `##` section under ~1,200 characters, under a heading worth reading.
 - A `description` written for someone who has not read the body.
 - `docir check` and `docir lint --deep` run, and every finding understood.

@@ -484,6 +484,108 @@ def test_every_bundled_profile_still_loads(profile: str) -> None:
     assert schema.types
 
 
+class TestPartialTypeOverrides:
+    """A type block that cannot stand alone overlays the one the package ships.
+
+    Before this, setting one key on `decision` meant restating the whole type,
+    which pins its statuses, transitions, level and cadence against whatever the
+    package declared that day — silently, since the resolved schema does not
+    move and `schema-drift` has nothing to report (adr-6aa2e2f5f403).
+    """
+
+    def test_a_partial_block_keeps_every_key_it_did_not_name(self) -> None:
+        schema = parse_schema(
+            {"profiles": ["software"], "types": {"decision": {"max_body_chars": 8000}}}
+        )
+        decision = schema.types["decision"]
+        core = parse_schema({"profiles": ["software"]}).types["decision"]
+        assert decision.max_body_chars == 8000
+        assert (decision.prefix, decision.level, decision.review_days) == (
+            core.prefix,
+            core.level,
+            core.review_days,
+        )
+        assert decision.statuses == core.statuses
+        assert decision.transitions == core.transitions
+        assert decision.inactive_statuses == core.inactive_statuses
+
+    def test_a_profile_type_can_be_overlaid_too(self) -> None:
+        schema = parse_schema({"profiles": ["software"], "types": {"issue": {"review_days": 90}}})
+        assert schema.types["issue"].review_days == 90
+        assert schema.types["issue"].prefix == "issue"
+
+    def test_a_complete_block_still_replaces_wholesale(self) -> None:
+        # Load-bearing: omitting an optional key in a whole declaration means
+        # "this type does not have it". A store restating `issue` without
+        # `inactive_statuses` is saying `resolved` should be visible, and
+        # inheriting the profile's value back would overrule it.
+        schema = parse_schema(
+            {
+                "profiles": ["software"],
+                "types": {
+                    "issue": {
+                        "prefix": "issue",
+                        "default_status": "open",
+                        "statuses": {"open": ["resolved"], "resolved": []},
+                    }
+                },
+            }
+        )
+        assert schema.types["issue"].inactive_statuses == ()
+        assert schema.types["issue"].level == 0
+
+    def test_an_overlay_of_a_type_nobody_declares_is_refused(self) -> None:
+        # The typo that would otherwise create a half-type, or silently do
+        # nothing. The message names what is declared so far, since the usual
+        # cause is a profile that is not enabled.
+        with pytest.raises(SchemaError, match="decison") as caught:
+            parse_schema({"profiles": ["software"], "types": {"decison": {"level": 9}}})
+        assert "profiles" in str(caught.value)
+
+    def test_an_overlay_is_still_validated_against_the_merged_result(self) -> None:
+        # Parsed once, at the end: `default_status` inherited from the base must
+        # name a status the overlay's own `statuses` declares.
+        with pytest.raises(SchemaError, match="default_status"):
+            parse_schema(
+                {
+                    "profiles": ["software"],
+                    "types": {
+                        "decision": {
+                            "statuses": {"draft": [], "live": []},
+                            "inactive_statuses": [],
+                        }
+                    },
+                }
+            )
+
+    def test_statuses_in_an_overlay_replace_rather_than_add(self) -> None:
+        # One level deep on purpose: a per-status merge could not express
+        # dropping a status the base declares.
+        schema = parse_schema(
+            {
+                "profiles": ["software"],
+                "types": {
+                    "decision": {
+                        "statuses": {"draft": ["live"], "live": []},
+                        "default_status": "draft",
+                        "inactive_statuses": [],
+                    }
+                },
+            }
+        )
+        assert schema.types["decision"].statuses == ("draft", "live")
+
+    def test_disable_types_still_catches_a_contradicting_overlay(self) -> None:
+        with pytest.raises(SchemaError):
+            parse_schema(
+                {
+                    "profiles": ["software"],
+                    "disable_types": ["decision"],
+                    "types": {"decision": {"max_body_chars": 8000}},
+                }
+            )
+
+
 class TestMaxBodyChars:
     """One key, both tiers (adr-bc45b0bb1023) — and the loader refuses a dead one.
 

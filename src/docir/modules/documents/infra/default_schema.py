@@ -44,6 +44,26 @@ _SCHEMA_HEADER = """\
 # You can enable several at once, and add your own inline `types:` /
 # `relation_types:` here — they are merged last and win on name conflicts.
 #
+# To change ONE key of a type a profile already ships, leave out `prefix`,
+# `statuses` and `default_status`; docir reads that as an overlay and keeps
+# everything you did not name:
+#
+#   types:
+#     decision:
+#       max_body_chars: 8000     # statuses, level, review_days stay the core's
+#
+# Writing all three of those keys makes it a full declaration instead, which
+# takes the type over: your copy becomes the definition and stops tracking the
+# package. Do that only when you want to own the grammar.
+#
+# One cost to know before you overlay: a docir older than the release that added
+# the form does not recognise it, and says so as
+#   error: type 'decision' must define a string 'prefix'
+# -- on EVERY command, since the schema loads on all of them. Do not answer that
+# by adding the missing keys; that silently takes the type over. Upgrade the
+# docir doing the reading, or write the type out in full while teammates and
+# federated peers are still on an older build.
+#
 # Merging only adds. To drop a type the core or a profile contributed — because
 # this corpus calls it something else, and leaving the old name addable would
 # split the corpus across two — list it under `disable_types:`:

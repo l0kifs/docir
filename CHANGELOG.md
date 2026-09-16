@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that fixes it. The mechanical rewrites (`tag rename`, a forced delete's edge-strip, `check
   --fix`) never reach the check: one refusing halfway through a corpus-wide rewrite leaves it
   half-applied.
+- **A partial `types:` block now overlays the type the package ships
+  (adr-6aa2e2f5f403).** Leave out `prefix` / `statuses` / `default_status` and docir folds the
+  block into the resolved type key by key, so `decision: {max_body_chars: 8000}` is two lines
+  instead of a copy of the whole type. Before this, changing one property of a core or profile
+  type meant restating it inline — and the copy then wins permanently, so a later docir that
+  adds a status or moves a cadence never reaches the store, with nothing to report it. A
+  *complete* block still replaces the type wholesale, which is what keeps this strictly
+  additive: a partial block is a load error today, so no schema that currently loads changes
+  meaning.
 - **`max_body_chars_enforce: false`** keeps the number and restores exactly what it did before:
   nothing is refused, `lint --deep` still names the document, and the write carries the message
   back — on stderr, and as `body_limit_notice` in the JSON, so an agent on MCP sees it too.
@@ -27,6 +36,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Upgrade notes
 
+- **A store that adopts the overlay syntax stops being readable by older docir, and the error it
+  prints names the wrong cause.** The check lives in the *reading* build, so a
+  `docs-schema.yaml` leaving out `prefix` / `statuses` / `default_status` fails every command on
+  any docir predating this release: empty output, exit 3, and `error: type 'decision' must
+  define a string 'prefix'`. **Do not answer that by adding the missing keys** — it reads like
+  the fix and is not: writing all three converts the overlay into a full declaration, which
+  takes the type over, stops it inheriting anything later releases change, and reports nothing
+  afterwards. `docir doctor` is the one command that still runs; it shows `schema-unreadable`
+  beside the version doing the reading. The upgrade is the fix, and inside a repository that
+  pins docir the answer is to run the project's own build. A federated peer on an older build
+  degrades more quietly — it skips the store and contributes nothing. Restate the type in full
+  while teammates or peers are still on an older build; the overlay is worth adopting once they
+  are not. The packaged skill's troubleshooting reference carries all of this, and the generated
+  `docs-schema.yaml` says it at the point the choice is made.
 - **No type ships with a limit, so nothing is refused until you set one,** and no store has to
   rename a key. Absent means no ceiling (and `lint --deep` falls back to its 8000 default); `0`
   still means both halves off, which is what it already meant.

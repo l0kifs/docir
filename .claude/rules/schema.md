@@ -24,6 +24,25 @@ The schema resolves as core -> profiles -> inline on every command, so it can ch
   deliberately so: every change class needs somebody to decide, which is what `check --fix`
   already refuses to guess at).
 
+- **A type block that cannot stand alone overlays the resolved type; a complete one replaces it
+  (adr-6aa2e2f5f403).** "Complete" is the three keys the loader already requires — `prefix`,
+  `statuses`, `default_status`. Missing any of them, the block is folded in key by key, so a
+  store can set `decision: {max_body_chars: 8000}` without restating the type. Before this,
+  changing one property of a core or profile type meant copying the whole thing inline, and the
+  copy then wins forever: a later docir that adds a status or moves a cadence never reaches the
+  store, and **nothing reports it** — `schema-drift` compares the resolved schema to the index
+  baseline, and the inline copy is what keeps the resolved schema from moving. Three rules hold
+  it up, and each is load-bearing. It keys on *completeness* rather than merging always, which
+  is what makes it strictly additive: a partial block is a load error today, so no schema that
+  currently loads changes meaning — and a store restating `issue` without `inactive_statuses`
+  is saying `resolved` should be visible, which inheriting the profile's value back would
+  overrule. It is **one level deep**: `statuses:` in an overlay replaces the whole mapping,
+  because a per-status merge could not express *removing* a status. And the merge accumulates
+  **raw specs, parsed once at the end**, so an overlay meets the same validation a declaration
+  does — a `default_status` inherited from the base must still name a status the overlay's
+  `statuses` declares. An overlay of a type nobody declares is refused, listing what is declared
+  at that point, since the usual cause is a profile that is not enabled.
+
 - **Merging only adds, so `disable_types:` is how a schema subtracts (adr-f8cce745d0d5).**
   It is applied *after* core+profiles+inline resolve, and the reason it exists is not the
   name but the **prefix**: `Schema.__post_init__` refuses two types sharing one, so while

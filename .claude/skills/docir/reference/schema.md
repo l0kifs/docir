@@ -11,6 +11,7 @@ to do when they do not fit.
 - Optional keys — `required`, `inactive_statuses`, `level`, `review_days`, `id_style`
 - `max_body_chars` — the one schema key that can refuse a write
 - `relation_types` — declaring what a relation kind means
+- Changing one key of a type a profile ships — write a *partial* block
 - `disable_types` — giving up a type to free its prefix, and moving the documents
 - `checks:` — a store's own rules, as JMESPath expressions
 - `allowed_relations` — the whitelist trap
@@ -66,6 +67,33 @@ types:
     level: 3
     review_days: 180
 ```
+
+## Changing one key of a type a profile ships
+
+`types:` entries are usually *new* types. To adjust one the core or a profile
+already declares, write a block that leaves out `prefix` / `statuses` /
+`default_status` — docir reads that as an overlay and keeps everything you did
+not name:
+
+```yaml
+profiles: [software]
+types:
+  decision:
+    max_body_chars: 8000      # statuses, level, review_days all still the core's
+```
+
+**Do not paste the whole type in to change one key.** With all three required
+keys present the block is a *declaration*, and it takes the type over: from then
+on your copy is the definition, and upgrades to docir stop reaching it. Write it
+out only when you want to own the grammar.
+
+Check which you got with `docir schema show`, which prints the resolved type —
+an overlay that landed shows your key beside the ones you did not write.
+
+Two limits. `statuses:` inside an overlay swaps the mapping out entirely (there
+is no way to add a single status), and an overlay of a name nothing else
+declares is an error that lists the available names for you — nine times in ten
+it is a `profiles:` entry you meant to add.
 
 ## `max_body_chars` — the one schema key that can refuse a write
 

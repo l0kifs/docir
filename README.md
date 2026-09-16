@@ -288,6 +288,13 @@ docir schema show                   # the merged result — what validation enfo
 docir schema validate               # check an edit before it reaches a write
 ```
 
+A type can also carry a hard body ceiling (`max_body_chars: 8000`), and a write that
+would push a document past it fails with exit 9 instead of landing. No type ships with
+one, so nothing is capped until you choose to cap it. Shrinking is always allowed, which
+is what keeps an over-ceiling document editable back down to size; set
+`max_body_chars_enforce: false` to be told rather than stopped. `docir lint --deep` reads
+the same number and still only suggests, so there is no second threshold to keep in sync.
+
 `schema validate` answers two things: whether the file loads, and what it costs the
 corpus — how many documents carry a type, status, required field or relation kind this
 schema no longer accepts. It reads the files rather than the index, so it works on a

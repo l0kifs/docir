@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`max_body_chars` now refuses the write, not just the lint (adr-bc45b0bb1023).** It used to
+  be a `lint --deep` suggestion and nothing more, so a store had no way to say "documents of
+  this type do not get longer than this" and have it hold. The same number is now read by both
+  tiers: `docir add`, and any `docir update` whose result is over it **and longer than the body
+  already was**, is refused with exit **9**, while `lint --deep` still reports a document
+  already over it as `scope-creep`. Growth is the trigger rather than size — a document already
+  over the limit still takes `--set-title`, `--status`, `--set-tags`, `--type` and a *shorter*
+  `--replace-body`, because refusing every write to an oversized document blocks the one edit
+  that fixes it. The mechanical rewrites (`tag rename`, a forced delete's edge-strip, `check
+  --fix`) never reach the check: one refusing halfway through a corpus-wide rewrite leaves it
+  half-applied.
+- **`max_body_chars_enforce: false`** keeps the number and restores exactly what it did before:
+  nothing is refused, `lint --deep` still names the document, and the write carries the message
+  back — on stderr, and as `body_limit_notice` in the JSON, so an agent on MCP sees it too.
+  Setting it without a positive `max_body_chars` to relax is a `SchemaError`.
+
+### Upgrade notes
+
+- **No type ships with a limit, so nothing is refused until you set one,** and no store has to
+  rename a key. Absent means no ceiling (and `lint --deep` falls back to its 8000 default); `0`
+  still means both halves off, which is what it already meant.
+- **A store that set `max_body_chars` as advice now has a ceiling at that number.** Add
+  `max_body_chars_enforce: false` beside it to keep the old behaviour. It is not silent for
+  long: only growth is refused, so the first write that crosses names the type and the number.
+- **`max_body_chars_enforce` joins `docir schema show`,** so the first `docir check` after
+  upgrading reports one `schema-drift` warning per type — `max_body_chars_enforce None -> True`,
+  measured on a store built by 0.26.0. It is a warning, `--strict` still passes, and `docir
+  reindex` (or `docir self upgrade`) clears it.
+
 ## [0.26.0] - 2026-09-12
 
 A body cites another document two ways, and docir read only one. `related:` frontmatter was

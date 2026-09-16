@@ -86,12 +86,26 @@ class TypeSchema:
     # Review cadence in days for staleness. ``0`` means the type is never
     # considered stale (no re-verification is expected).
     review_days: int = 0
-    # Body size (characters) past which Tier 2 suggests splitting the document.
-    # ``None`` inherits the linter's default; ``0`` means never — which is the
-    # right answer for a type that exists to hold a register. One threshold for
-    # every type made a glossary, a rule register and a probe log permanently
-    # "too long", and a document split in half is two half-registers (issue-5d6a5e854d11).
+    # The body-size limit (characters) for this type — one number read by both
+    # tiers (adr-bc45b0bb1023). Tier 0 refuses a write that would leave the body
+    # over it; Tier 2's ``scope-creep`` reports a document already over it.
+    #
+    # ``None`` (absent) inherits the linter's default for the Tier 2 half and
+    # sets *no ceiling* at all for the Tier 0 half — the gate is opt-in per
+    # type, deliberately without a default: the schema ships in the package and
+    # re-merges on every command, so a default ceiling would start refusing
+    # writes to documents that were legal when they were written, with nothing
+    # in `git diff`. ``0`` means neither — no ceiling and never "too long",
+    # which is the right answer for a type that exists to hold a register, since
+    # a glossary split in half is two half-glossaries (issue-5d6a5e854d11).
     max_body_chars: int | None = None
+    # Whether ``max_body_chars`` refuses the write or merely reports it. False
+    # is exactly the behaviour the key had before it gained a tier: `lint
+    # --deep` still names the document, and the write goes through carrying a
+    # notice. It is a SchemaError without a positive ``max_body_chars`` to
+    # relax, since a key that reads as configuration and configures nothing is
+    # worse than one that is refused.
+    max_body_chars_enforce: bool = True
 
     def is_valid_status(self, status: str) -> bool:
         return status in self.statuses

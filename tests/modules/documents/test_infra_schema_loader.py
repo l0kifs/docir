@@ -485,52 +485,93 @@ def test_every_bundled_profile_still_loads(profile: str) -> None:
 
 
 class TestMaxBodyChars:
-    """issue-5d6a5e854d11: the Tier 2 size threshold is per type, not one constant."""
+    """One key, both tiers (adr-bc45b0bb1023) — and the loader refuses a dead one.
+
+    issue-5d6a5e854d11 made the size threshold per type; this class covers the
+    same key now that `max_body_chars_enforce` decides whether it also blocks.
+    """
 
     def _schema(self, tmp_path, body: str):
         path = tmp_path / "s.yaml"
         path.write_text(body)
         return load_schema(path)
 
+    def _type(self, tmp_path, keys: str):
+        schema = self._schema(
+            tmp_path,
+            "types:\n  note:\n    prefix: nt\n    default_status: active\n"
+            "    statuses:\n      active: []\n" + keys,
+        )
+        return schema.types["note"]
+
+    def test_no_shipped_type_declares_a_ceiling(self) -> None:
+        # The gate is opt-in per type. A default would refuse writes to
+        # documents that were legal when they were written, on a release
+        # nobody's `git diff` shows.
+        schema = parse_schema({"profiles": ["software", "research", "ops", "qa", "legal"]})
+        assert [t.name for t in schema.types.values() if t.max_body_chars] == []
+
     def test_absent_leaves_it_unset_so_the_linter_default_applies(self, tmp_path) -> None:
         schema = self._schema(tmp_path, "profiles: [software]\n")
         assert schema.types["issue"].max_body_chars is None
 
-    def test_zero_is_kept_and_is_not_confused_with_absent(self, tmp_path) -> None:
-        # 0 means "never too long"; None means "use the default". A loader that
-        # collapsed them would silently re-enable the check on a register.
-        schema = self._schema(
-            tmp_path,
-            "types:\n  register:\n    prefix: reg\n    default_status: active\n"
-            "    statuses:\n      active: []\n    max_body_chars: 0\n",
-        )
-        assert schema.types["register"].max_body_chars == 0
+    def test_a_limit_is_read(self, tmp_path) -> None:
+        assert self._type(tmp_path, "    max_body_chars: 1200\n").max_body_chars == 1200
 
-    def test_a_custom_limit_is_read(self, tmp_path) -> None:
-        schema = self._schema(
-            tmp_path,
-            "types:\n  note:\n    prefix: nt\n    default_status: active\n"
-            "    statuses:\n      active: []\n    max_body_chars: 1200\n",
-        )
-        assert schema.types["note"].max_body_chars == 1200
+    def test_zero_is_kept_and_is_not_confused_with_absent(self, tmp_path) -> None:
+        # 0 means "no ceiling and never too long"; None means "no ceiling, and
+        # use the linter's default". A loader that collapsed them would silently
+        # re-enable `scope-creep` on a register.
+        assert self._type(tmp_path, "    max_body_chars: 0\n").max_body_chars == 0
 
     def test_a_non_integer_is_refused(self, tmp_path) -> None:
         with pytest.raises(SchemaError, match="max_body_chars"):
+            self._type(tmp_path, "    max_body_chars: lots\n")
+
+    def test_a_negative_ceiling_is_refused(self, tmp_path) -> None:
+        # Every body is over -1, so an unrefused negative turns into a type no
+        # write can ever touch — a footgun that surfaces one command later.
+        with pytest.raises(SchemaError, match="max_body_chars"):
+            self._type(tmp_path, "    max_body_chars: -1\n")
+
+    def test_enforcement_is_on_by_default(self, tmp_path) -> None:
+        assert self._type(tmp_path, "    max_body_chars: 100\n").max_body_chars_enforce is True
+
+    def test_enforcement_can_be_turned_off(self, tmp_path) -> None:
+        note = self._type(tmp_path, "    max_body_chars: 100\n    max_body_chars_enforce: false\n")
+        assert note.max_body_chars == 100
+        assert note.max_body_chars_enforce is False
+
+    def test_relaxing_a_ceiling_that_does_not_exist_is_refused(self, tmp_path) -> None:
+        # It reads as "the limit here is advisory" and configures nothing at
+        # all. A rule that loads and enforces nothing is worse than one refused.
+        with pytest.raises(SchemaError, match="max_body_chars_enforce"):
+            self._type(tmp_path, "    max_body_chars_enforce: false\n")
+
+    def test_relaxing_a_zero_ceiling_is_refused_too(self, tmp_path) -> None:
+        with pytest.raises(SchemaError, match="max_body_chars_enforce"):
+            self._type(tmp_path, "    max_body_chars: 0\n    max_body_chars_enforce: false\n")
+
+    def test_a_non_boolean_enforce_is_refused(self, tmp_path) -> None:
+        with pytest.raises(SchemaError, match="max_body_chars_enforce"):
+            self._type(
+                tmp_path, "    max_body_chars: 100\n    max_body_chars_enforce: yes please\n"
+            )
+
+    def test_schema_show_reports_both_keys(self, tmp_path) -> None:
+        # They join the drift report by being rendered, so a store learns its
+        # ceiling moved under it the same way it learns a prefix did.
+        described = describe_schema(
             self._schema(
                 tmp_path,
                 "types:\n  note:\n    prefix: nt\n    default_status: active\n"
-                "    statuses:\n      active: []\n    max_body_chars: lots\n",
+                "    statuses:\n      active: []\n    max_body_chars: 100\n"
+                "    max_body_chars_enforce: false\n",
             )
-
-    def test_schema_show_reports_it(self, tmp_path) -> None:
-        schema = self._schema(
-            tmp_path,
-            "types:\n  note:\n    prefix: nt\n    default_status: active\n"
-            "    statuses:\n      active: []\n    max_body_chars: 0\n",
         )
-        described = describe_schema(schema)
         note = next(t for t in described["types"] if t["name"] == "note")
-        assert note["max_body_chars"] == 0
+        assert note["max_body_chars"] == 100
+        assert note["max_body_chars_enforce"] is False
 
 
 def _minimal_type(prefix: str) -> dict[str, object]:

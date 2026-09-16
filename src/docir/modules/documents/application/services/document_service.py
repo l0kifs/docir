@@ -227,6 +227,8 @@ class DocumentService:
                 isolated=request.isolated or "",
             )
             self._validator.validate_required_fields(document)
+            # Before the file is written, so a refusal leaves nothing behind.
+            body_notice = self._validator.check_body_size(document)
             path = self._file_store.write(document, create=True)
             document = document.with_updates(path=path)
             save_with_mentions(uow, document, self._prefixes)
@@ -235,7 +237,9 @@ class DocumentService:
             uow.commit()
 
         self._schedule_embedding(document.id, wait=request.wait_embeddings)
-        return DocumentView.from_document(document, stale=self._is_stale(document))
+        return DocumentView.from_document(
+            document, stale=self._is_stale(document), body_limit_notice=body_notice
+        )
 
     def update(self, request: UpdateDocumentRequest) -> DocumentView:
         """Patch metadata and/or edit the body (``docir update``).
@@ -283,6 +287,9 @@ class DocumentService:
             changes["updated"] = self._clock.today()
             updated = base.with_updates(**changes)
             self._validator.validate_required_fields(updated)
+            # `base` is the document as it is on disk, so a body already over
+            # the ceiling only blocks the writes that make it worse.
+            body_notice = self._validator.check_body_size(updated, previous=base)
             # A retype moves the file: the directory names the type, so leaving
             # it where it was makes the layout disagree with the frontmatter on
             # every document a corpus-wide rename touches.
@@ -301,7 +308,10 @@ class DocumentService:
         if content_changed:
             self._schedule_embedding(updated.id, wait=request.wait_embeddings)
         return DocumentView.from_document(
-            updated, stale=self._is_stale(updated), forced_transition=forced
+            updated,
+            stale=self._is_stale(updated),
+            forced_transition=forced,
+            body_limit_notice=body_notice,
         )
 
     def archive(self, doc_id: str) -> DocumentView:

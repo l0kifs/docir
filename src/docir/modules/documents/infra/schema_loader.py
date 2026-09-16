@@ -457,11 +457,11 @@ def _parse_type(name: str, spec: object, default_id_style: str) -> TypeSchema:
     inactive = _parse_inactive_statuses(name, spec, declared)
     level = _require_integer(name, "level", spec.get("level", 0))
     review_days = _require_integer(name, "review_days", spec.get("review_days", 0))
-    # Absent inherits the linter's default; 0 means "never too long".
-    raw_max_body = spec.get("max_body_chars")
-    max_body_chars = (
-        None if raw_max_body is None else _require_integer(name, "max_body_chars", raw_max_body)
-    )
+    # One number for both tiers. Absent inherits the linter's default and sets
+    # no ceiling; 0 means neither. A negative would be a ceiling every body is
+    # over, so it is refused here rather than refusing every write afterwards.
+    max_body_chars = _parse_body_chars(name, "max_body_chars", spec)
+    max_body_chars_enforce = _parse_enforce(name, spec, max_body_chars)
 
     # A type without its own ``id_style`` inherits the schema-wide default.
     id_style = (
@@ -483,7 +483,40 @@ def _parse_type(name: str, spec: object, default_id_style: str) -> TypeSchema:
         allowed_relations=_parse_allowed_relations(name, spec.get("allowed_relations")),
         review_days=review_days,
         max_body_chars=max_body_chars,
+        max_body_chars_enforce=max_body_chars_enforce,
     )
+
+
+def _parse_body_chars(name: str, key: str, spec: dict) -> int | None:
+    """Parse the body-size limit; ``None`` means the key is absent."""
+    raw = spec.get(key)
+    if raw is None:
+        return None
+    value = _require_integer(name, key, raw)
+    if value < 0:
+        raise SchemaError(f"type {name!r} {key!r} must not be negative (0 disables it)")
+    return value
+
+
+def _parse_enforce(name: str, spec: dict, max_body_chars: int | None) -> bool:
+    """Parse ``max_body_chars_enforce``, refusing one with nothing to demote.
+
+    ``false`` without a positive ``max_body_chars`` reads as "the ceiling is
+    advisory here" and means nothing at all — there is no ceiling. The loader
+    names what it can name at load time rather than letting the store believe a
+    limit is configured.
+    """
+    raw = spec.get("max_body_chars_enforce")
+    if raw is None:
+        return True
+    if not isinstance(raw, bool):
+        raise SchemaError(f"type {name!r} 'max_body_chars_enforce' must be true or false")
+    if not raw and not max_body_chars:
+        raise SchemaError(
+            f"type {name!r} sets 'max_body_chars_enforce: false' with no 'max_body_chars' to "
+            f"relax; set a limit, or drop the key"
+        )
+    return raw
 
 
 def _parse_allowed_relations(name: str, value: object) -> dict[str, tuple[str, ...]]:

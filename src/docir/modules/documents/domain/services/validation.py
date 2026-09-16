@@ -5,6 +5,12 @@ They are deterministic and essentially free of false positives: missing
 required fields, invalid status values/transitions, and dangling ``tags`` /
 ``related`` references. Graph-shape and content heuristics deliberately live in
 Tier 1/2, not here.
+
+:meth:`Tier0Validator.check_body_size` is the one rule here that looks at the
+text, and it is not a heuristic: it enforces a number this store wrote down and
+does nothing when none is set. Tier 2's ``scope-creep`` reads the same
+``max_body_chars`` and still only suggests — what separates the tiers is the
+``max_body_chars_enforce`` flag, not a second threshold (adr-bc45b0bb1023).
 """
 
 from __future__ import annotations
@@ -16,6 +22,7 @@ from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.schema import CORE_REQUIRED_FIELDS, Schema
 from docir.modules.documents.domain.value_objects.relations import RelatedRef
 from docir.platform.errors import (
+    BodyTooLargeError,
     DisallowedRelationError,
     InvalidCodeReferenceError,
     MissingRequiredFieldError,
@@ -84,6 +91,47 @@ class Tier0Validator:
                     f"code pattern {pattern!r} escapes the repository with '..'; "
                     f"a document governs code in its own repository"
                 )
+
+    def check_body_size(
+        self, document: Document, *, previous: Document | None = None
+    ) -> str | None:
+        """Refuse (or report) a body over its type's ``max_body_chars`` ceiling.
+
+        The one Tier 0 rule about *content* rather than shape (adr-bc45b0bb1023),
+        and it earns the tier by being a number somebody wrote down for this
+        store: absent, it does nothing at all. Tier 2's ``scope-creep`` reads
+        the same ``max_body_chars``, and a type opts the write half out with
+        ``max_body_chars_enforce: false`` — which is what keeps the heuristic
+        from being *promoted*: the number is the type's own, and so is the tier
+        it acts at.
+
+        **Growth is the trigger, not size.** A document already over the ceiling
+        can still be trimmed, retyped, retagged and related; only a write that
+        leaves it both over and *longer than it was* is refused. The alternative
+        locks an oversized document out of the very edit that would fix it,
+        leaving hand-editing markdown as the only repair — which is the one
+        thing the CLI-is-the-only-write-path thesis forbids. ``previous`` is
+        ``None`` on a create, where there is no smaller version to preserve, so
+        any over-ceiling body is refused outright.
+
+        Returns the message when the type sets ``max_body_chars_enforce: false``
+        (the caller carries it back as a notice), ``None`` when there is nothing
+        to say, and raises otherwise.
+        """
+        type_schema = self._schema.get(document.type)
+        ceiling = type_schema.max_body_chars
+        size = len(document.body)
+        if not ceiling or size <= ceiling:
+            return None
+        if previous is not None and len(previous.body) >= size:
+            return None
+        message = f"body is {size} chars, over the {ceiling}-char limit for type {document.type!r}"
+        if not type_schema.max_body_chars_enforce:
+            return message
+        raise BodyTooLargeError(
+            f"{message} — split it into linked documents, or raise "
+            f"`max_body_chars` for {document.type!r} in docs-schema.yaml"
+        )
 
     def validate_status(self, doc_type: str, status: str) -> None:
         """Ensure a status value is part of the type's enum."""

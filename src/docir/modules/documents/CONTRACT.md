@@ -286,6 +286,30 @@ Tier 0 validates the **shape only** — absolute paths, `..` segments, backslash
 separators and empty entries are refused; a pattern that currently matches
 nothing is accepted, because a decision may precede the code it governs.
 
+`max_body_chars` is the per-type **body-size limit**, and the one Tier 0 rule that reads the
+text rather than the shape (adr-bc45b0bb1023). One number, read by both tiers: Tier 0 refuses a
+write over it, and Tier 2's `scope-creep` reports a document already over it (absent inherits
+the linter's 8000 there, `0` means never). What separates the tiers is
+`max_body_chars_enforce`, not a second threshold — a type that refuses a write at N has already
+said what "too long" means for it.
+
+For the Tier 0 half, absent (the default) and `0` both mean **no ceiling**, so the gate is
+opt-in per type: the schema ships in the package and re-merges on every command, and a default
+ceiling would start refusing writes to documents that were legal when they were written, with
+nothing in `git diff` to point at. A write is refused with `BodyTooLargeError` (exit **9**, not
+`ValidationError`'s 2 — the fix is to split the document, not to rewrite a field) when the
+resulting body is over the limit **and longer than it was**. Growth is the trigger, never size:
+a document already over it can still be trimmed, retyped, retagged and related, because locking
+it out of the edit that would fix it leaves hand-editing markdown as the only repair. `add` has
+no previous version, so any over-limit create is refused outright.
+
+`max_body_chars_enforce: false` is the behaviour the key had before it gained a tier: the write
+succeeds carrying `DocumentView.body_limit_notice` (the string says by how much; like
+`forced_transition` it is not persisted), and `lint --deep` still names the document. It is a
+`SchemaError` without a positive `max_body_chars` to relax. The mechanical rewrites
+(`TagService` renames, a forced delete stripping edges, `check --fix`) never reach this check:
+they do not run through `add`/`update`, and a repair that refuses to run is not a repair.
+
 `mark_verified` also records what each of those globs matched, when the service
 was given a `CodeMatcher` (`DocumentService(..., code_matcher=...)`, optional for
 the same reason `check`'s is). The digests live in the document's frontmatter,

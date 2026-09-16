@@ -145,8 +145,14 @@ class SimilarityLinter:
         The threshold is per type. One constant for every type made a glossary,
         a rule register and a probe log permanently "too long" — and a register
         split in half is two half-registers, so the advice could not be taken
-        (issue-5d6a5e854d11). A type may set ``max_body_chars`` in the schema, with ``0``
-        meaning never; absent, it inherits this linter's default.
+        (issue-5d6a5e854d11). A type may set ``max_body_chars`` in the schema, with
+        ``0`` meaning never; absent, it inherits this linter's default.
+
+        That is the same key Tier 0 reads as a ceiling (adr-bc45b0bb1023), and
+        one number on purpose: a type that refuses a write at N has already said
+        what "too long" means for it, and a second threshold could only disagree
+        with the first. Being *over* the number is still reported here — the
+        ceiling stops growth, not documents that were already there.
 
         ``schema`` is optional for the same reason ``linked_pairs`` is: a caller
         with no schema to offer gets the flat default rather than a signature it
@@ -180,8 +186,8 @@ class SimilarityLinter:
 
         Tier 2 on purpose, and it stays there. A long section is a *smell*: a
         reference table split in half is two half-tables, and the fix for one of
-        those is to leave it alone — the same argument ``max_body_chars`` exists
-        for (issue-5d6a5e854d11). It reports the shape and lets a human decide.
+        those is to leave it alone — the same argument ``max_body_chars: 0``
+        exists for (issue-5d6a5e854d11). It reports the shape and lets a human decide.
         """
         findings: list[LintFinding] = []
         for doc in documents:

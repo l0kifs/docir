@@ -81,6 +81,20 @@ class InvalidCodeReferenceError(ValidationError):
     """
 
 
+class BodyTooLargeError(ValidationError):
+    """The write would leave the body over its type's ``max_body_chars``.
+
+    Its own exit code rather than :class:`ValidationError`'s, because the
+    caller's next move is different in kind. Every other Tier 0 refusal names a
+    field that was written wrong and is fixed by writing it right; this one
+    names a document that outgrew its type, and is fixed by splitting it (or by
+    deciding the limit is wrong). An agent branching on exit 2 would retry the
+    same body forever.
+    """
+
+    exit_code = 9
+
+
 # --- Lookups ---------------------------------------------------------------
 
 

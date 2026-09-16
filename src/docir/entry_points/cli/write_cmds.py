@@ -78,6 +78,17 @@ def add(
     (`src/docir/platform/persistence/**`). Only the shape is validated — a
     pattern that matches nothing today is allowed, because a decision is often
     written before the code it decides, or after that code moved.
+
+    A type may declare a body ceiling, and a create over it is refused with exit
+    9 before anything is written:
+
+        error: body is 9120 chars, over the 8000-char limit for type 'issue'
+        — split it into linked documents, or raise `max_body_chars` for
+        'issue' in docs-schema.yaml
+
+    No type ships with one — set `max_body_chars: 8000` on a type in
+    `docs-schema.yaml` to turn it on, `max_body_chars_enforce: false` beside it
+    to warn instead of refuse. `docir schema show` prints the ceiling in force.
     """
     payload: dict[str, object] = {
         "type": type,
@@ -94,7 +105,9 @@ def add(
         "wait_embeddings": wait_embeddings,
     }
     emit.warn_on_global_fallback()
-    emit.emit_document(execute("add", payload))
+    data = execute("add", payload)
+    _warn_on_body_limit(data)
+    emit.emit_document(data)
 
 
 def update(
@@ -255,6 +268,18 @@ def update(
     (`verification-outdated`) a document edited *around* the CLI — a hand-edit, a
     merge, or an older docir — where the stamp still stands over text nobody
     read. Clear it by re-reading and stamping again, or by withdrawing it.
+
+    When the type declares `max_body_chars`, an edit that leaves the body over
+    that ceiling **and longer than it already was** is refused with exit 9:
+
+        docir update adr-3f9a2b1c7d4e --append-section "Notes" --body "..."
+        error: body is 9120 chars, over the 8000-char limit for type 'decision'
+
+    Growth is the trigger, not size. A document already over its ceiling still
+    takes --set-title, --status, --set-tags, --type and a *shorter*
+    --replace-body, so the edit that fixes it is never the edit that is blocked.
+    `max_body_chars_enforce: false` on the type warns instead, on stderr and as
+    `body_limit_notice` in the JSON.
     """
     body_text = resolve_body(body, body_file, stdin, default="")
     payload: dict[str, object] = {
@@ -289,7 +314,21 @@ def update(
         # Loud at the moment of the bypass, but not written to the file: git
         # records the status change, and docir has no actors to attribute it to.
         rendering.render_warning(f"forced illegal transition {forced}")
+    _warn_on_body_limit(data)
     emit.emit_document(data)
+
+
+def _warn_on_body_limit(data: object) -> None:
+    """Say so when a write went over a ceiling the type declined to enforce.
+
+    The write succeeded, so this is stderr rather than an exit code — but it is
+    louder than nothing, because `max_body_chars_enforce: false` is a store
+    saying "tell me", not "ignore it". The JSON payload carries the same string
+    in `body_limit_notice`, so an agent on either transport sees it.
+    """
+    notice = data.get("body_limit_notice") if isinstance(data, dict) else None
+    if notice:
+        rendering.render_warning(str(notice))
 
 
 def archive(doc_id: Annotated[str, typer.Argument(help="Document id.")]) -> None:

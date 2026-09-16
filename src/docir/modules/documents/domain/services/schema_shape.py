@@ -36,6 +36,7 @@ _TYPE_FIELDS: tuple[str, ...] = (
     "level",
     "review_days",
     "max_body_chars",
+    "max_body_chars_enforce",
     "id_style",
     "allowed_relations",
 )
@@ -72,6 +73,7 @@ def describe(schema: Schema) -> dict[str, object]:
                 "level": type_schema.level,
                 "review_days": type_schema.review_days,
                 "max_body_chars": type_schema.max_body_chars,
+                "max_body_chars_enforce": type_schema.max_body_chars_enforce,
                 "id_style": type_schema.id_style,
                 "allowed_relations": {
                     kind: list(targets)

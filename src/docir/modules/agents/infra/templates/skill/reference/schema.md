@@ -8,7 +8,9 @@ to do when they do not fit.
 
 - Required keys on every type — `prefix`, `statuses`, `default_status`
 - Optional keys — `required`, `inactive_statuses`, `level`, `review_days`, `id_style`
+- `max_body_chars` — the one schema key that can refuse a write
 - `relation_types` — declaring what a relation kind means
+- Changing one key of a type a profile ships — write a *partial* block
 - `disable_types` — giving up a type to free its prefix, and moving the documents
 - `checks:` — a store's own rules, as JMESPath expressions
 - `allowed_relations` — the whitelist trap
@@ -42,7 +44,8 @@ on the next command rather than surviving until a write. That check runs on
 
 Optional: `required` (extra frontmatter fields), `inactive_statuses` (hidden from
 default reads), `level` (int; see below), `review_days` (staleness cadence; 0 =
-never stale), `id_style` (`sequential` | `random`), `allowed_relations`.
+never stale), `id_style` (`sequential` | `random`), `allowed_relations`,
+`max_body_chars` (see below).
 
 `level` only bites on **dependency** edges: a `depends_on` or `refines` edge from
 a higher-level type to a lower-level one is a Tier 1 `layering` warning. Ordinary
@@ -63,6 +66,82 @@ types:
     level: 3
     review_days: 180
 ```
+
+## Changing one key of a type a profile ships
+
+`types:` entries are usually *new* types. To adjust one the core or a profile
+already declares, write a block that leaves out `prefix` / `statuses` /
+`default_status` — docir reads that as an overlay and keeps everything you did
+not name:
+
+```yaml
+profiles: [software]
+types:
+  decision:
+    max_body_chars: 8000      # statuses, level, review_days all still the core's
+```
+
+**Do not paste the whole type in to change one key.** With all three required
+keys present the block is a *declaration*, and it takes the type over: from then
+on your copy is the definition, and upgrades to docir stop reaching it. Write it
+out only when you want to own the grammar.
+
+Check which you got with `docir schema show`, which prints the resolved type —
+an overlay that landed shows your key beside the ones you did not write.
+
+Two limits. `statuses:` inside an overlay swaps the mapping out entirely (there
+is no way to add a single status), and an overlay of a name nothing else
+declares is an error that lists the available names for you — nine times in ten
+it is a `profiles:` entry you meant to add.
+
+## `max_body_chars` — the one schema key that can refuse a write
+
+Every other key here shapes what a document may *say*. This one caps how long it
+may get, and it is the only Tier 0 rule that reads the body:
+
+```yaml
+types:
+  test_plan:
+    max_body_chars: 8000            # absent and 0 both mean no ceiling
+    max_body_chars_enforce: false   # optional: warn instead of refusing
+```
+
+**No type ships with a ceiling.** Until you set one, nothing is refused for
+length — so turning this on is a deliberate act, and the number is yours.
+
+`docir add`, and any `docir update` that leaves the body over the ceiling **and
+longer than it already was**, exits **9**:
+
+```
+error: body is 9120 chars, over the 8000-char limit for type 'test_plan'
+— split it into linked documents, or raise `max_body_chars` for 'test_plan'
+in docs-schema.yaml
+```
+
+Growth is the trigger, not size. A document already over its ceiling still takes
+`--set-title`, `--status`, `--set-tags`, `--type` and a *shorter*
+`--replace-body`, so you are never locked out of the edit that fixes it. When
+you hit this, the move is to split — lift a section into its own document and
+link the two — not to raise the number:
+
+```bash
+docir get tp-0001 --section "Rollback"                  # read the section out
+docir add --type test_plan --title "Rollback" \
+  --description "..." --related tp-0001 --body "..."    # ...into its own doc
+docir update tp-0001 --remove-section "Rollback"        # ...and out of this one
+```
+
+`max_body_chars_enforce: false` keeps the ceiling and reports instead of
+refusing: the write succeeds, the warning goes to stderr, and the JSON carries
+`body_limit_notice`. Setting it without a `max_body_chars` to relax is a
+`SchemaError` — there would be nothing to make advisory.
+
+The same number is what `docir lint --deep` reports as `scope-creep`, which is
+all this key did before it gained a tier. Absent, the lint falls back to 8000;
+`0` turns off both halves, the right answer for a type that holds a register (a
+glossary split in half is two half-glossaries). So `max_body_chars_enforce:
+false` is the way to keep the old advisory behaviour exactly — one line, no
+renaming.
 
 `relation_types` also takes a **mapping**, which is how you declare what a kind
 *means*. Three optional properties, all defaulting to false:

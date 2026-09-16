@@ -9,6 +9,7 @@ ids, staleness — is [`reference/maintenance.md`](maintenance.md).
 ## Contents
 
 - `docir doctor` — every finding and the command that closes it
+- A store written by a newer docir — what it looks like, and the repair to refuse
 - Keeping the installation current — `docir self upgrade`, `docir self status`
 - When docir itself is the defect — report it, do not route around it
 - Notes — exit codes, async vectors, where state lives
@@ -60,6 +61,49 @@ embedding model); `warning` means it works less well than you think. Only `error
 
 The corpus is a different question: `docir doctor` never scans the graph, and `docir check` is
 what reports dangling edges, duplicate ids and staleness.
+
+## A store written by a newer docir
+
+A store is a committed artifact, so the docir reading it is not always the one
+that wrote it. Most of that skew is harmless — an older build ignores a
+frontmatter field or a schema key it does not know. Two shapes are not, and both
+look like a broken repository rather than an old binary.
+
+**`error: type '<name>' must define a string 'prefix'`, on every command.** The
+store uses a schema *overlay* — a `types:` block that deliberately omits
+`prefix` / `statuses` / `default_status` so the rest of the type keeps coming
+from the core or a profile. A build predating that form reads the block as a
+malformed declaration — and since no command can run without resolving the
+schema first, the failure is total: `docir get`, `docir query`, `docir check`,
+all of them, with an empty payload and exit 3.
+
+**Do not add the missing keys.** The message names the repair that breaks the
+store quietly: writing all three turns the overlay into a full declaration,
+which takes the type over — the file then owns that type, stops inheriting
+anything later releases change, and nothing reports the divergence afterwards.
+You would be committing that to everybody else's checkout too.
+
+Tell it apart from a genuinely broken schema with the one command that still
+runs:
+
+```bash
+docir doctor          # snapshots the environment BEFORE opening the store
+```
+
+It reports `schema-unreadable` next to `installation.version`. If that version
+is older than the one the store's teammates run, the store is fine and the
+binary is behind:
+
+```bash
+docir self upgrade    # where docir owns its environment
+```
+
+Inside a repository that pins docir (a lockfile, a checkout), run the project's
+own build instead — `uv run docir ...` — rather than a globally installed one,
+which is how this mismatch usually arises.
+
+**`index-from-newer-build`** is the same story for the index rather than the
+schema, and `docir doctor` names it directly; the entry above says what to do.
 
 ## Keeping the installation current
 

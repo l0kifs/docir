@@ -24,6 +24,7 @@ from docir.modules.documents.domain.services.validation import Tier0Validator
 from docir.modules.documents.domain.value_objects.relations import RelatedRef
 from docir.platform.embedding.vector import Embedding
 from docir.platform.errors import (
+    BodyTooLargeError,
     DisallowedRelationError,
     MissingRequiredFieldError,
     UnknownRelatedError,
@@ -985,3 +986,116 @@ class TestRemoveSection:
     def test_a_heading_inside_a_fence_is_not_a_boundary(self) -> None:
         body = "## A\n\n```md\n## B\n```\n\n## C\n\nc\n"
         assert remove_section(body, "A") == "## C\n\nc\n"
+
+
+def _ceiling_schema(limit: int | None, *, enforce: bool = True) -> Schema:
+    """A one-type schema differing only in its body-size limit."""
+    return Schema(
+        types={
+            "decision": TypeSchema(
+                "decision",
+                "adr",
+                (),
+                ("proposed",),
+                "proposed",
+                {"proposed": frozenset()},
+                max_body_chars=limit,
+                max_body_chars_enforce=enforce,
+            )
+        }
+    )
+
+
+class TestBodyCeiling:
+    """`max_body_chars` as a Tier 0 gate, and the growth rule that keeps it usable."""
+
+    def test_no_ceiling_by_default(self) -> None:
+        # Absent means absent: the schema ships in the package and re-merges on
+        # every command, so a default ceiling would start refusing writes to
+        # documents that were legal when they were written.
+        validator = Tier0Validator(_ceiling_schema(None))
+        assert validator.check_body_size(_doc("adr-0001", body="x" * 100_000)) is None
+
+    def test_zero_is_no_ceiling_too(self) -> None:
+        validator = Tier0Validator(_ceiling_schema(0))
+        assert validator.check_body_size(_doc("adr-0001", body="x" * 100_000)) is None
+
+    def test_a_create_over_the_ceiling_is_refused(self) -> None:
+        validator = Tier0Validator(_ceiling_schema(50))
+        with pytest.raises(BodyTooLargeError) as caught:
+            validator.check_body_size(_doc("adr-0001", body="x" * 51))
+        # The message has to carry both numbers and the key to change: an agent
+        # that only reads "too large" cannot tell by how much, or where to look.
+        assert "51 chars" in str(caught.value)
+        assert "50-char" in str(caught.value)
+        assert "max_body_chars" in str(caught.value)
+
+    def test_exactly_at_the_ceiling_passes(self) -> None:
+        validator = Tier0Validator(_ceiling_schema(50))
+        assert validator.check_body_size(_doc("adr-0001", body="x" * 50)) is None
+
+    def test_its_exit_code_is_not_the_generic_validation_one(self) -> None:
+        # The caller's move differs in kind: every other Tier 0 refusal is fixed
+        # by rewriting a field, this one by splitting the document. A script
+        # branching on 2 would retry the same body forever.
+        assert BodyTooLargeError.exit_code == 9
+        assert BodyTooLargeError.exit_code != ValidationError.exit_code
+
+    def test_an_edit_that_grows_an_over_ceiling_body_is_refused(self) -> None:
+        validator = Tier0Validator(_ceiling_schema(50))
+        before = _doc("adr-0001", body="x" * 80)
+        with pytest.raises(BodyTooLargeError):
+            validator.check_body_size(_doc("adr-0001", body="x" * 81), previous=before)
+
+    def test_an_over_ceiling_body_may_still_be_trimmed(self) -> None:
+        # The alternative locks the document out of the one edit that fixes it,
+        # leaving hand-editing markdown as the only repair — which is exactly
+        # what the CLI-is-the-only-write-path thesis forbids.
+        validator = Tier0Validator(_ceiling_schema(50))
+        before = _doc("adr-0001", body="x" * 80)
+        assert validator.check_body_size(_doc("adr-0001", body="x" * 60), previous=before) is None
+
+    def test_an_unchanged_over_ceiling_body_passes(self) -> None:
+        # A metadata patch or a retype leaves the body alone, and refusing those
+        # would make an oversized document unmanageable rather than shorter.
+        validator = Tier0Validator(_ceiling_schema(50))
+        before = _doc("adr-0001", body="x" * 80)
+        assert validator.check_body_size(_doc("adr-0001", body="x" * 80), previous=before) is None
+
+    def test_enforce_false_returns_the_notice_instead_of_raising(self) -> None:
+        validator = Tier0Validator(_ceiling_schema(50, enforce=False))
+        notice = validator.check_body_size(_doc("adr-0001", body="x" * 80))
+        assert notice is not None
+        assert "80 chars" in notice and "50-char" in notice
+
+    def test_enforce_false_still_says_nothing_under_the_ceiling(self) -> None:
+        validator = Tier0Validator(_ceiling_schema(50, enforce=False))
+        assert validator.check_body_size(_doc("adr-0001", body="x" * 10)) is None
+
+    def test_both_tiers_read_the_one_number(self) -> None:
+        # One key, two tiers (adr-bc45b0bb1023). A second threshold could only
+        # disagree with the first: a type that refuses a write at 50 has already
+        # said what "too long" means for it.
+        schema = _ceiling_schema(50)
+        over = _doc("adr-0001", body="x" * 80)
+        with pytest.raises(BodyTooLargeError):
+            Tier0Validator(schema).check_body_size(over)
+        findings = SimilarityLinter(size_threshold_chars=5).find_scope_creep([over], schema)
+        assert [f.kind for f in findings] == ["scope-creep"]
+
+    def test_enforce_false_is_what_separates_the_tiers(self) -> None:
+        # `enforce: false` is the behaviour the key had before it gained a tier:
+        # the lint still names the document, and the write goes through.
+        schema = _ceiling_schema(50, enforce=False)
+        over = _doc("adr-0001", body="x" * 80)
+        assert Tier0Validator(schema).check_body_size(over) is not None
+        findings = SimilarityLinter(size_threshold_chars=5).find_scope_creep([over], schema)
+        assert [f.kind for f in findings] == ["scope-creep"]
+
+    def test_zero_turns_off_both_halves(self) -> None:
+        # The register opt-out issue-5d6a5e854d11 settled, unchanged: `0` means
+        # no ceiling *and* never "too long".
+        schema = _ceiling_schema(0)
+        register = _doc("adr-0001", body="x" * 100_000)
+        assert Tier0Validator(schema).check_body_size(register) is None
+        assert SimilarityLinter(size_threshold_chars=5).find_scope_creep([register], schema) == []

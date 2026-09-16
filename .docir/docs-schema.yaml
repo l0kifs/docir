@@ -29,6 +29,28 @@ profiles: [software, ops]
 # Inline types (merged last, win on name conflicts)
 # --------------------------------------------------------------------------
 types:
+  # Overlays, not declarations (adr-6aa2e2f5f403): these two types come from the
+  # core and the `software` profile, and everything not named here keeps coming
+  # from there. 8000 is the number `lint --deep` already measured them against,
+  # so nothing new is reported — it is now binding for growth (adr-bc45b0bb1023).
+  # An issue or a decision past it has stopped being one of either.
+  #
+  # READ THIS IF A COMMAND JUST FAILED WITH
+  #   error: type 'decision' must define a string 'prefix'
+  # The schema is NOT broken and these blocks are NOT missing a key. That
+  # message comes from a docir too old to know the overlay form, and it is the
+  # only thing such a build will say — every command fails, `docir doctor`
+  # included (it reports `schema-unreadable` beside the version it is running).
+  #
+  # DO NOT "fix" it by adding prefix/statuses/default_status here. That turns
+  # the overlay into a full declaration, which takes the type over: this file
+  # then owns `decision` forever, stops inheriting anything the package changes,
+  # and nothing reports the divergence. Upgrade docir instead —
+  # `uv run docir` inside this repo always runs the right build.
+  decision:
+    max_body_chars: 8000
+  issue:
+    max_body_chars: 8000
   # Descriptive registers rather than decisions: the glossary, the actor
   # catalog, the business-rule register, the discovery frame and its probe log.
   # They record what IS, so nothing about them is proposed/accepted — they are

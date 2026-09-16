@@ -19,6 +19,21 @@ Three tiers, and mixing them is the documented overengineering trap. The recurri
   scope creep, oversized sections, ambiguous headings, unqualified section references,
   unresolved mentions, broken `--expr` examples).
   Never promote a heuristic to a hard error.
+  **`max_body_chars` is one number read by both tiers, and `max_body_chars_enforce` — not a
+  second threshold — is what picks the tier (adr-bc45b0bb1023).** `scope-creep` still reads it
+  and still only suggests; Tier 0 refuses a write over it unless the type sets `enforce:
+  false`, which restores exactly the behaviour the key had before. That is not a promoted
+  heuristic: the number is the type's own and so is the tier it acts at, and absent it does
+  nothing at Tier 0 at all. A **second** key was built and dropped — it buys only "suggest at
+  8000, refuse at 12000", and costs every store that already set this one a rename plus a
+  silent change to what `scope-creep` reports. Do not reintroduce it. The rest is load-bearing:
+  absent (and `0`) means no ceiling, no type ships with one, and the loader refuses a negative
+  value and an `enforce: false` with nothing to relax. It gates on **growth**, not size — a
+  body already over the limit still takes every edit that does not lengthen it, because the
+  alternative blocks the `--replace-body` that would fix it and leaves hand-editing markdown as
+  the only repair. Do **not** give it a default, and do not extend it to the mechanical
+  rewrites (`tag rename`, a forced delete's edge-strip, `check --fix`): those are the writes
+  nobody asked for, and one refusing halfway through leaves a corpus-wide rename half-applied.
   **`oversized-section` has no threshold of its own**: it runs `split_body` and reports what came
   out — which section was cut and how many pieces nothing can name — so the number behind it stays
   `MAX_CHUNK_CHARS`, derived from the measured model window. It fires ~100 times on docir's own

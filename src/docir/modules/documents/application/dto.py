@@ -71,6 +71,12 @@ class DocumentView:
     #: file: docir has no actors (adr-90e994d931cc), so "who overrode this" has no
     #: answer worth storing, and git already records the status change itself.
     forced_transition: str | None = None
+    #: Set only when the write left the body over its type's `max_body_chars`
+    #: and the type sets `max_body_chars_enforce: false`. The write succeeded;
+    #: the string says by how much, so the CLI and MCP can both say so. Not
+    #: persisted, for the same reason `forced_transition` is not: it describes
+    #: this call, and the file already records the body it produced.
+    body_limit_notice: str | None = None
     #: Ids this document's *body* names, and the documents whose bodies name it —
     #: the derived graph, resolved against the index. Untyped and unauthored, so
     #: they sit beside ``related`` rather than in it: a reader must be able to
@@ -91,6 +97,7 @@ class DocumentView:
         score: float | None = None,
         via_graph: bool = False,
         forced_transition: str | None = None,
+        body_limit_notice: str | None = None,
         mentions: tuple[str, ...] = (),
         mentioned_by: tuple[str, ...] = (),
     ) -> DocumentView:
@@ -116,6 +123,7 @@ class DocumentView:
             score=score,
             via_graph=via_graph,
             forced_transition=forced_transition,
+            body_limit_notice=body_limit_notice,
             mentions=mentions,
             mentioned_by=mentioned_by,
         )

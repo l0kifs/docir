@@ -125,7 +125,11 @@ def _merge_profiled(raw: object) -> Schema:
         if isinstance(fragment, dict) and fragment.get("id_style") is not None:
             default_id_style = _parse_id_style(fragment.get("id_style"))
 
-    merged_types: dict[str, TypeSchema] = {}
+    # Accumulated as *raw* specs and parsed once at the end, so an overlay and a
+    # whole declaration reach the same validation: `default_status` must still
+    # name a declared status whether the block declared the statuses or
+    # inherited them.
+    merged_raw: dict[str, object] = {}
     merged_kinds: set[str] = set()
     merged_props: dict[str, RelationKindSchema] = {}
     for fragment in fragments:
@@ -137,8 +141,9 @@ def _merge_profiled(raw: object) -> Schema:
         merged_props.update(_parse_relation_kinds(fragment.get("relation_types")))
         types_raw = fragment.get("types")
         if isinstance(types_raw, dict):
-            merged_types.update(_parse_types_mapping(types_raw, default_id_style))
+            _merge_type_specs(merged_raw, types_raw)
 
+    merged_types = _parse_types_mapping(merged_raw, default_id_style)
     if not merged_types:
         raise SchemaError("resolved schema has no types after merging profiles")
     return Schema(
@@ -332,6 +337,52 @@ def _parse_id_style(value: object, *, where: str = "schema") -> str:
     return style
 
 
+#: The keys a type block must carry to stand on its own. A block missing any of
+#: them cannot be a declaration, which is what makes it readable as an overlay.
+_REQUIRED_TYPE_KEYS: tuple[str, ...] = ("prefix", "statuses", "default_status")
+
+
+def _merge_type_specs(merged: dict[str, object], types_raw: dict) -> None:
+    """Fold one fragment's ``types:`` into the accumulated raw specs.
+
+    Two shapes, told apart by whether the block could stand alone:
+
+    A **complete** block (``prefix`` + ``statuses`` + ``default_status``)
+    replaces the type wholesale, exactly as every fragment always has. Omitting
+    an optional key there still means "this type does not have it" — a store
+    that restates ``issue`` without ``inactive_statuses`` is saying ``resolved``
+    should be visible, and inheriting the profile's value back would overrule it.
+
+    A **partial** block overlays instead, key by key, one level deep. Before
+    this, setting one key on a type the package ships meant restating the whole
+    type — which pins its statuses, transitions, level and cadence against
+    whatever the package declared that day, silently, since the resolved schema
+    does not move and `schema-drift` has nothing to report. Overlaying is
+    strictly additive: a partial block is a load error today, so no schema that
+    currently loads changes meaning (adr-6aa2e2f5f403).
+
+    One level deep is deliberate. ``statuses:`` in an overlay replaces the whole
+    status mapping rather than adding to it, because a *per-status* merge could
+    not express removing one, and a status the base declares that the overlay
+    does not is exactly what a store re-grammaring a type means to drop.
+    """
+    for name, spec in types_raw.items():
+        key = str(name)
+        base = merged.get(key)
+        if not isinstance(spec, dict) or all(k in spec for k in _REQUIRED_TYPE_KEYS):
+            merged[key] = spec
+            continue
+        if base is None:
+            missing = ", ".join(repr(k) for k in _REQUIRED_TYPE_KEYS if k not in spec)
+            known = ", ".join(sorted(str(k) for k in merged)) or "none yet"
+            raise SchemaError(
+                f"type {key!r} omits {missing}, so it reads as an override of a type the core "
+                f"or a profile declares — but none does. Declared at this point: {known}. "
+                f"Give the full definition, or check the name and the `profiles:` list."
+            )
+        merged[key] = {**base, **spec} if isinstance(base, dict) else spec
+
+
 def _parse_types_mapping(types_raw: object, default_id_style: str) -> dict[str, TypeSchema]:
     if not isinstance(types_raw, dict):
         return {}
@@ -457,11 +508,11 @@ def _parse_type(name: str, spec: object, default_id_style: str) -> TypeSchema:
     inactive = _parse_inactive_statuses(name, spec, declared)
     level = _require_integer(name, "level", spec.get("level", 0))
     review_days = _require_integer(name, "review_days", spec.get("review_days", 0))
-    # Absent inherits the linter's default; 0 means "never too long".
-    raw_max_body = spec.get("max_body_chars")
-    max_body_chars = (
-        None if raw_max_body is None else _require_integer(name, "max_body_chars", raw_max_body)
-    )
+    # One number for both tiers. Absent inherits the linter's default and sets
+    # no ceiling; 0 means neither. A negative would be a ceiling every body is
+    # over, so it is refused here rather than refusing every write afterwards.
+    max_body_chars = _parse_body_chars(name, "max_body_chars", spec)
+    max_body_chars_enforce = _parse_enforce(name, spec, max_body_chars)
 
     # A type without its own ``id_style`` inherits the schema-wide default.
     id_style = (
@@ -483,7 +534,40 @@ def _parse_type(name: str, spec: object, default_id_style: str) -> TypeSchema:
         allowed_relations=_parse_allowed_relations(name, spec.get("allowed_relations")),
         review_days=review_days,
         max_body_chars=max_body_chars,
+        max_body_chars_enforce=max_body_chars_enforce,
     )
+
+
+def _parse_body_chars(name: str, key: str, spec: dict) -> int | None:
+    """Parse the body-size limit; ``None`` means the key is absent."""
+    raw = spec.get(key)
+    if raw is None:
+        return None
+    value = _require_integer(name, key, raw)
+    if value < 0:
+        raise SchemaError(f"type {name!r} {key!r} must not be negative (0 disables it)")
+    return value
+
+
+def _parse_enforce(name: str, spec: dict, max_body_chars: int | None) -> bool:
+    """Parse ``max_body_chars_enforce``, refusing one with nothing to demote.
+
+    ``false`` without a positive ``max_body_chars`` reads as "the ceiling is
+    advisory here" and means nothing at all — there is no ceiling. The loader
+    names what it can name at load time rather than letting the store believe a
+    limit is configured.
+    """
+    raw = spec.get("max_body_chars_enforce")
+    if raw is None:
+        return True
+    if not isinstance(raw, bool):
+        raise SchemaError(f"type {name!r} 'max_body_chars_enforce' must be true or false")
+    if not raw and not max_body_chars:
+        raise SchemaError(
+            f"type {name!r} sets 'max_body_chars_enforce: false' with no 'max_body_chars' to "
+            f"relax; set a limit, or drop the key"
+        )
+    return raw
 
 
 def _parse_allowed_relations(name: str, value: object) -> dict[str, tuple[str, ...]]:

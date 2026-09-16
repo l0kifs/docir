@@ -7,6 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`max_body_chars` now refuses the write, not just the lint (adr-bc45b0bb1023).** It used to
+  be a `lint --deep` suggestion and nothing more, so a store had no way to say "documents of
+  this type do not get longer than this" and have it hold. The same number is now read by both
+  tiers: `docir add`, and any `docir update` whose result is over it **and longer than the body
+  already was**, is refused with exit **9**, while `lint --deep` still reports a document
+  already over it as `scope-creep`. Growth is the trigger rather than size — a document already
+  over the limit still takes `--set-title`, `--status`, `--set-tags`, `--type` and a *shorter*
+  `--replace-body`, because refusing every write to an oversized document blocks the one edit
+  that fixes it. The mechanical rewrites (`tag rename`, a forced delete's edge-strip, `check
+  --fix`) never reach the check: one refusing halfway through a corpus-wide rewrite leaves it
+  half-applied.
+- **A partial `types:` block now overlays the type the package ships
+  (adr-6aa2e2f5f403).** Leave out `prefix` / `statuses` / `default_status` and docir folds the
+  block into the resolved type key by key, so `decision: {max_body_chars: 8000}` is two lines
+  instead of a copy of the whole type. Before this, changing one property of a core or profile
+  type meant restating it inline — and the copy then wins permanently, so a later docir that
+  adds a status or moves a cadence never reaches the store, with nothing to report it. A
+  *complete* block still replaces the type wholesale, which is what keeps this strictly
+  additive: a partial block is a load error today, so no schema that currently loads changes
+  meaning.
+- **`max_body_chars_enforce: false`** keeps the number and restores exactly what it did before:
+  nothing is refused, `lint --deep` still names the document, and the write carries the message
+  back — on stderr, and as `body_limit_notice` in the JSON, so an agent on MCP sees it too.
+  Setting it without a positive `max_body_chars` to relax is a `SchemaError`.
+
+### Upgrade notes
+
+- **A store that adopts the overlay syntax stops being readable by older docir, and the error it
+  prints names the wrong cause.** The check lives in the *reading* build, so a
+  `docs-schema.yaml` leaving out `prefix` / `statuses` / `default_status` fails every command on
+  any docir predating this release: empty output, exit 3, and `error: type 'decision' must
+  define a string 'prefix'`. **Do not answer that by adding the missing keys** — it reads like
+  the fix and is not: writing all three converts the overlay into a full declaration, which
+  takes the type over, stops it inheriting anything later releases change, and reports nothing
+  afterwards. `docir doctor` is the one command that still runs; it shows `schema-unreadable`
+  beside the version doing the reading. The upgrade is the fix, and inside a repository that
+  pins docir the answer is to run the project's own build. A federated peer on an older build
+  degrades more quietly — it skips the store and contributes nothing. Restate the type in full
+  while teammates or peers are still on an older build; the overlay is worth adopting once they
+  are not. The packaged skill's troubleshooting reference carries all of this, and the generated
+  `docs-schema.yaml` says it at the point the choice is made.
+- **No type ships with a limit, so nothing is refused until you set one,** and no store has to
+  rename a key. Absent means no ceiling (and `lint --deep` falls back to its 8000 default); `0`
+  still means both halves off, which is what it already meant.
+- **A store that set `max_body_chars` as advice now has a ceiling at that number.** Add
+  `max_body_chars_enforce: false` beside it to keep the old behaviour. It is not silent for
+  long: only growth is refused, so the first write that crosses names the type and the number.
+- **`max_body_chars_enforce` joins `docir schema show`,** so the first `docir check` after
+  upgrading reports one `schema-drift` warning per type — `max_body_chars_enforce None -> True`,
+  measured on a store built by 0.26.0. It is a warning, `--strict` still passes, and `docir
+  reindex` (or `docir self upgrade`) clears it.
+
 ## [0.26.0] - 2026-09-12
 
 A body cites another document two ways, and docir read only one. `related:` frontmatter was

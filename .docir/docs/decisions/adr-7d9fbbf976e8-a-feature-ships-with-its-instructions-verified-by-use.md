@@ -3,6 +3,10 @@ code:
 - README.md
 - src/docir/entry_points/cli/app.py
 - src/docir/modules/agents/infra/templates/**
+code_baseline:
+  README.md: 4b8cf4375661
+  src/docir/entry_points/cli/app.py: 632b4c81a902
+  src/docir/modules/agents/infra/templates/**: 589d2f0899a0
 created: '2026-08-24'
 description: A business feature is done when an agent holding only the installed package
   can tell what it is, when to reach for it and how to invoke it — and somebody has
@@ -10,8 +14,8 @@ description: A business feature is done when an agent holding only the installed
 id: adr-7d9fbbf976e8
 owner: maintainer
 related:
-- adr-bea42e359960
 - adr-3a2d5ee7bc84
+- adr-bea42e359960
 status: accepted
 tags:
 - agents

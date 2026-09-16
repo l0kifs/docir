@@ -3,6 +3,10 @@ code:
 - src/docir/modules/agents/domain/targets.py
 - src/docir/modules/agents/infra/template_provider.py
 - src/docir/modules/agents/infra/templates/writing/**
+code_baseline:
+  src/docir/modules/agents/domain/targets.py: 5a26e980792b
+  src/docir/modules/agents/infra/template_provider.py: bb886a00047b
+  src/docir/modules/agents/infra/templates/writing/**: 8d6a41a51c1e
 created: '2026-08-15'
 description: Why documentation-writing rules ship as their own opt-in skill rather
   than a section of the CLI guide, and why the length rule is a section limit rather

@@ -1,9 +1,14 @@
 ---
 code:
-- src/docir/platform/naming/__init__.py
 - src/docir/modules/documents/domain/entities/document.py
-- src/docir/platform/persistence/repositories.py
 - src/docir/modules/documents/domain/services/graph_checks.py
+- src/docir/platform/naming/__init__.py
+- src/docir/platform/persistence/repositories.py
+code_baseline:
+  src/docir/modules/documents/domain/entities/document.py: deb78c9e104d
+  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
+  src/docir/platform/naming/__init__.py: 758f8f09f7fb
+  src/docir/platform/persistence/repositories.py: 7bcf7e81a5a0
 created: '2026-08-17'
 description: Why ids named in a body become mention edges, why only the orphan check
   reads them, why they stay out of frontmatter, and what following them cost in the

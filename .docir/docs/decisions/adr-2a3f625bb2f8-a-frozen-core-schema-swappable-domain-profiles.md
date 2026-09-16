@@ -2,6 +2,9 @@
 code:
 - src/docir/modules/documents/infra/profiles.py
 - src/docir/modules/documents/infra/schema_loader.py
+code_baseline:
+  src/docir/modules/documents/infra/profiles.py: 9ed5ebc9dc12
+  src/docir/modules/documents/infra/schema_loader.py: 95c1dd812abc
 created: '2026-07-23'
 description: Why the schema is a frozen domain-agnostic core plus swappable domain
   profiles.

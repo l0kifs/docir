@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/platform/naming/**
+code_baseline:
+  src/docir/platform/naming/**: bad6c5a29f4a
 created: '2026-07-30'
 description: Why the tag-key grammar lives in platform rather than being written twice
   or crossing a module boundary.

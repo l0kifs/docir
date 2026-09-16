@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/modules/documents/domain/services/graph_checks.py
+code_baseline:
+  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
 created: '2026-07-23'
 description: Why staleness is owner + verified + review cadence data rather than a
   heuristic.
@@ -11,8 +13,8 @@ related:
   to: arch-1cfb1b212237
 status: accepted
 tags:
-- staleness
 - schema
+- staleness
 title: Staleness as data (owner + verified + review cadence)
 type: decision
 updated: '2026-08-06'

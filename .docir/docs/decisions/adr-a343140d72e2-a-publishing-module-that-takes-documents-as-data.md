@@ -1,16 +1,18 @@
 ---
 code:
 - src/docir/modules/publishing/**
+code_baseline:
+  src/docir/modules/publishing/**: 63f00e30d45f
 created: '2026-08-03'
 description: Why docir build renders a static site, and why the module takes JSON
   rather than a DocumentService.
 id: adr-a343140d72e2
 owner: maintainer
 related:
+- adr-3a2d5ee7bc84
 - kind: refines
   to: arch-322e5f992ad2
 - ref-a6db21f52427
-- adr-3a2d5ee7bc84
 status: accepted
 tags:
 - architecture

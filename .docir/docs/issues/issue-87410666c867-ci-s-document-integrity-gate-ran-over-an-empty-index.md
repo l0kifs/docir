@@ -2,6 +2,9 @@
 code:
 - .github/workflows/ci.yml
 - src/docir/entry_points/doctor.py
+code_baseline:
+  .github/workflows/ci.yml: 41280301f869
+  src/docir/entry_points/doctor.py: 230f5796ddb3
 created: '2026-08-25'
 description: check --strict ran on a gitignored index, so dangling edges — half the
   merge guard — never fired; CI now reindexes and runs doctor --strict first.

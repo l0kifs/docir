@@ -1,19 +1,21 @@
 ---
 code:
 - src/docir/modules/documents/infra/profiles.py
+code_baseline:
+  src/docir/modules/documents/infra/profiles.py: 9ed5ebc9dc12
 created: '2026-07-26'
 description: Why a qa profile, a release_note type and schema introspection were added.
 id: adr-c0ce6f347f3e
 owner: maintainer
 related:
+- adr-20eec6e2e2ca
 - kind: refines
   to: adr-2a3f625bb2f8
 - adr-3a2d5ee7bc84
-- adr-20eec6e2e2ca
 status: accepted
 tags:
-- schema
 - cli
+- schema
 title: A qa profile, a release_note type, and schema introspection
 type: decision
 updated: '2026-08-06'

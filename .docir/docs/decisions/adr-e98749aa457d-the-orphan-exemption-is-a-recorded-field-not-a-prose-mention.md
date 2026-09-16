@@ -1,17 +1,21 @@
 ---
 code:
-- src/docir/modules/documents/domain/services/graph_checks.py
 - src/docir/modules/documents/domain/entities/document.py
+- src/docir/modules/documents/domain/services/graph_checks.py
 - src/docir/platform/persistence/ports.py
+code_baseline:
+  src/docir/modules/documents/domain/entities/document.py: deb78c9e104d
+  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
+  src/docir/platform/persistence/ports.py: 59b18ac11106
 created: '2026-09-04'
 description: 'Why check stopped reading the mention graph and gained an isolated:
   reason instead — a judgement about a queue must not empty the queue.'
 id: adr-e98749aa457d
 owner: maintainer
 related:
-- issue-77a09761e1d4
 - kind: refines
   to: adr-e86c5040d626
+- issue-77a09761e1d4
 status: accepted
 tags:
 - architecture

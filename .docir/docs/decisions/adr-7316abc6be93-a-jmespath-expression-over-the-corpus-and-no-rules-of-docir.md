@@ -1,7 +1,10 @@
 ---
 code:
-- src/docir/modules/documents/domain/services/expressions.py
 - src/docir/modules/documents/application/services/document_service.py
+- src/docir/modules/documents/domain/services/expressions.py
+code_baseline:
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
+  src/docir/modules/documents/domain/services/expressions.py: f19ca3d868d7
 created: '2026-08-25'
 description: query --expr filters on an expression over each document and its resolved
   edges, which is the ability to state a rule without docir shipping any.

@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/modules/publishing/infra/rendering.py
+code_baseline:
+  src/docir/modules/publishing/infra/rendering.py: 16d9f4392c5b
 created: '2026-08-16'
 description: docir build parses bodies with the CommonMark preset, which passes raw
   HTML through, so a script tag in a contributed document runs on the published site.

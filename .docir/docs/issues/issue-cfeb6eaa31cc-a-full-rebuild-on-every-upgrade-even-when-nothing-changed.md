@@ -1,8 +1,12 @@
 ---
 code:
-- src/docir/modules/documents/application/services/maintenance_service.py
 - src/docir/entry_points/composition.py
 - src/docir/entry_points/dispatch.py
+- src/docir/modules/documents/application/services/maintenance_service.py
+code_baseline:
+  src/docir/entry_points/composition.py: f1e7c5f79526
+  src/docir/entry_points/dispatch.py: 204d358a9285
+  src/docir/modules/documents/application/services/maintenance_service.py: dbedd2e64320
 created: '2026-08-16'
 description: 'docir self upgrade ran an unconditional full reindex, and 96% of that
   is re-embedding: 58.4s of 60s on a 315-document store whose files had not moved.'
@@ -10,17 +14,17 @@ id: issue-cfeb6eaa31cc
 owner: maintainer
 related:
 - kind: refines
-  to: adr-6a4718fa7a7d
-- kind: refines
   to: adr-31aa7aa60d11
+- kind: refines
+  to: adr-6a4718fa7a7d
 - issue-9509f9fa3631
 - ref-e7534f1c812d
 status: resolved
 tags:
 - cli
 - embeddings
-- release
 - material
+- release
 title: A full rebuild on every upgrade, even when nothing changed
 type: issue
 updated: '2026-08-16'

@@ -2,6 +2,9 @@
 code:
 - src/docir/modules/documents/domain/schema.py
 - src/docir/modules/documents/domain/services/graph_checks.py
+code_baseline:
+  src/docir/modules/documents/domain/schema.py: c0ea053f1c39
+  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
 created: '2026-08-25'
 description: One flag was answering two questions — where two types sit, and whether
   one waits for the other — so a decision refining a superseded one read as ready
@@ -14,8 +17,8 @@ related:
 - issue-9b2d2ab09060
 status: accepted
 tags:
-- schema
 - integrity
+- schema
 title: Blocking is its own relation property, split from dependency
 type: decision
 updated: '2026-08-25'

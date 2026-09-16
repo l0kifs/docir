@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/entry_points/federation.py
+code_baseline:
+  src/docir/entry_points/federation.py: d4450115acce
 created: '2026-08-28'
 description: Why a store describes itself in its own stores.yaml, and why that sentence
   rides on every federated row beside the store path.

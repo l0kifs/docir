@@ -1,7 +1,10 @@
 ---
 code:
-- src/docir/modules/agents/infra/templates/feedback/**
 - src/docir/modules/agents/domain/targets.py
+- src/docir/modules/agents/infra/templates/feedback/**
+code_baseline:
+  src/docir/modules/agents/domain/targets.py: 5a26e980792b
+  src/docir/modules/agents/infra/templates/feedback/**: 0317aefaad1b
 created: '2026-09-14'
 description: Why upstream feedback ships as its own opt-in skill that only drafts
   a report, why it is suggested at every adoption moment but never installed by default,
@@ -10,8 +13,8 @@ id: adr-7144cf291b1a
 related:
 - kind: refines
   to: adr-3a2d5ee7bc84
-- adr-735ba7f6209b
 - adr-6ed847e02fe5
+- adr-735ba7f6209b
 status: accepted
 tags:
 - agents

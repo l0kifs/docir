@@ -1,24 +1,28 @@
 ---
 code:
-- src/docir/modules/documents/infra/schema_loader.py
 - src/docir/modules/documents/application/services/document_service.py
+- src/docir/modules/documents/infra/schema_loader.py
 - src/docir/platform/filesystem/markdown_store.py
+code_baseline:
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
+  src/docir/modules/documents/infra/schema_loader.py: 95c1dd812abc
+  src/docir/platform/filesystem/markdown_store.py: 5aa8ee165728
 created: '2026-08-15'
 description: Why docir update can retype a document while its id and prefix stay put,
   and why a schema can subtract a type the core or a profile contributed.
 id: adr-f8cce745d0d5
 owner: maintainer
 related:
-- issue-4952ce77d19d
-- issue-ab138501abfd
 - kind: refines
   to: adr-2a3f625bb2f8
 - kind: refines
   to: arch-1cfb1b212237
+- issue-4952ce77d19d
+- issue-ab138501abfd
 status: accepted
 tags:
-- schema
 - cli
+- schema
 title: A document's type is mutable; its id is not
 type: decision
 updated: '2026-08-15'

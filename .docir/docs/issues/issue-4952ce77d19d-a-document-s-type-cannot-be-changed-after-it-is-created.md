@@ -1,7 +1,10 @@
 ---
 code:
-- src/docir/modules/documents/application/services/document_service.py
 - src/docir/entry_points/cli/app.py
+- src/docir/modules/documents/application/services/document_service.py
+code_baseline:
+  src/docir/entry_points/cli/app.py: 632b4c81a902
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
 created: '2026-08-15'
 description: docir update patches every other frontmatter field but not type, so retyping
   a corpus means hand-editing the markdown the CLI exists to own.
@@ -10,8 +13,8 @@ owner: maintainer
 related: []
 status: resolved
 tags:
-- cli
 - blocking
+- cli
 - schema
 title: A document's type cannot be changed after it is created
 type: issue

@@ -1,6 +1,8 @@
 ---
 code:
 - tests/entry_points/test_agent_guide_matches_cli.py
+code_baseline:
+  tests/entry_points/test_agent_guide_matches_cli.py: a46a6f29224b
 created: '2026-08-15'
 description: Why the command-resolution guard covers CLAUDE.md and the project store
   as well as the shipped guide, why a retired binary name needs a separate check,
@@ -9,15 +11,15 @@ description: Why the command-resolution guard covers CLAUDE.md and the project s
 id: adr-bea42e359960
 owner: maintainer
 related:
-- issue-87a27629f6a6
 - adr-3a2d5ee7bc84
-- arch-0a3c2d6d54a6
 - adr-b2cfed9d5888
+- arch-0a3c2d6d54a6
+- issue-87a27629f6a6
 status: accepted
 tags:
+- agents
 - docs
 - testing
-- agents
 title: docir's own prose is validated against the CLI, all four sources
 type: decision
 updated: '2026-08-15'

@@ -1,15 +1,17 @@
 ---
 code:
 - src/docir/modules/documents/application/services/document_service.py
+code_baseline:
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
 created: '2026-08-29'
 description: update and get answer 'no document with id' in any checkout whose derived
   index was never built, so the message denies a document that is on disk.
 id: issue-e5a0cb196607
 owner: maintainer
 related:
-- issue-87410666c867
 - adr-909734bced92
 - arch-0368cc754c15
+- issue-87410666c867
 status: resolved
 tags:
 - cli

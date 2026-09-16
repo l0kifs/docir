@@ -75,6 +75,23 @@ class Document:
     #: it was added after the last verification, or matched nothing then, and
     #: `check` reports nothing for it.
     verified_code: Mapping[str, str] = field(default_factory=dict)
+    #: Per-pattern digest of what each ``code`` glob matched when the document
+    #: last *declared* it — the authorship half, as :attr:`verified_code` is the
+    #: review half (adr-49bb8cc48938).
+    #:
+    #: The two answer different questions and neither substitutes for the other.
+    #: ``verified_code`` says *the code moved since somebody read this*, and it
+    #: can only exist once somebody has; this says *the code moved since this
+    #: document claimed to describe it*, and it exists from the moment the glob
+    #: is written. Without it a glob nobody has verified watches nothing at all,
+    #: which is what all 99 of this project's own governed documents did.
+    #:
+    #: Minted once per pattern and never refreshed mechanically: re-declaring a
+    #: glob is not a re-reading of the code under it, so a ``--set-code`` that
+    #: leaves a pattern in place must not clear a drift it never looked at. Only
+    #: ``--verified`` moves an existing entry, and it moves ``verified_code``
+    #: with it.
+    code_baseline: Mapping[str, str] = field(default_factory=dict)
     #: Why this document is *meant* to carry no relations — the reviewed
     #: exemption from the ``orphan`` warning (issue-77a09761e1d4).
     #:
@@ -175,6 +192,12 @@ class Document:
         # Appended under the same rule as the three fields above it.
         if self.verified_content:
             parts.append(self.verified_content)
+        # And the fifth, on the same argument one more time: a store written by
+        # a build that predates the baseline must hash exactly as it did, or
+        # every document in it reads as edited out-of-band until the next
+        # reindex.
+        if self.code_baseline:
+            parts.append(",".join(f"{p}={d}" for p, d in sorted(self.code_baseline.items())))
         digest = hashlib.sha256("\x1f".join(parts).encode("utf-8"))
         return digest.hexdigest()
 

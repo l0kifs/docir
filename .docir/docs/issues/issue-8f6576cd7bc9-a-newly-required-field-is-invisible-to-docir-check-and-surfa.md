@@ -4,6 +4,11 @@ code:
 - src/docir/modules/documents/domain/services/validation.py
 - tests/modules/documents/test_domain_services.py
 - tests/modules/documents/test_integration_maintenance.py
+code_baseline:
+  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
+  src/docir/modules/documents/domain/services/validation.py: 18b842a51fe9
+  tests/modules/documents/test_domain_services.py: 2b717c606516
+  tests/modules/documents/test_integration_maintenance.py: 7478e7c0d19b
 created: '2026-08-07'
 description: Adding 'required:' to a live type leaves every existing document in violation
   with no finding of any kind; the first report is an unrelated update failing, one
@@ -12,10 +17,10 @@ id: issue-8f6576cd7bc9
 owner: maintainer
 related:
 - adr-2a3f625bb2f8
+- adr-bd3a820cc57a
 - issue-0e3d1d9c81d3
 - issue-d891ab5501e6
 - issue-e3c4dfad4f7b
-- adr-bd3a820cc57a
 status: resolved
 tags:
 - material

@@ -2,6 +2,9 @@
 code:
 - src/docir/entry_points/cli/app.py
 - src/docir/entry_points/dispatch.py
+code_baseline:
+  src/docir/entry_points/cli/app.py: 632b4c81a902
+  src/docir/entry_points/dispatch.py: 204d358a9285
 created: '2026-08-15'
 description: The command vocabulary agents drive docir with, the static site build,
   and a worked flow through them end to end.

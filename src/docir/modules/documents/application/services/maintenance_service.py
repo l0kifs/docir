@@ -141,7 +141,9 @@ class MaintenanceService:
         self._rebuilder = IndexRebuilder(
             uow_factory, file_store, tag_file_store, scheduler, schema, version
         )
-        self._repairer = StoreRepairer(uow_factory, file_store, schema, self._rebuilder)
+        self._repairer = StoreRepairer(
+            uow_factory, file_store, schema, self._rebuilder, code_matcher
+        )
 
     def reindex(self, *, changed_only: bool = False) -> ReindexResult:
         """Rebuild the index from the canonical files (``docir reindex``)."""
@@ -354,28 +356,35 @@ class MaintenanceService:
         return {pattern: self._code_matcher.matches(pattern) for pattern in sorted(patterns)}
 
     def _resolve_code_digests(self, documents: list[Document]) -> dict[str, str] | None:
-        """Fingerprint only the globs some document has actually been verified against.
+        """Fingerprint every glob some document holds evidence for.
 
-        Restricted to those on purpose. A fingerprint reads every file the
-        pattern matches, where :meth:`_resolve_code` stops at the first hit, so
-        digesting every declared glob would make `check` pay to hash whole
-        subtrees in order to compare them against nothing. A pattern nobody has
-        verified has no recorded value to differ from.
+        Evidence is either digest: ``verified_code`` (somebody read this) or
+        ``code_baseline`` (the document declared this). A pattern carrying
+        neither is still skipped — a fingerprint reads every file the pattern
+        matches, where :meth:`_resolve_code` stops at the first hit, so hashing
+        a whole subtree to compare it against nothing is the one cost worth
+        refusing.
+
+        Reading the baseline as well widens this from the verified globs to
+        effectively all of them, and that is the cost the drift finding is
+        bought with: before it, a glob nobody had verified was hashed by
+        nothing and reported by nothing. Deduplicated across documents, so a
+        pattern five decisions share is still one walk.
 
         Unresolvable patterns are dropped rather than stored as a sentinel:
         absent is already the unknown answer the check skips.
         """
         if self._code_matcher is None:
             return None
-        verified = {
+        evidenced = {
             pattern
             for document in documents
             if not document.archived
             for pattern in document.code
-            if pattern in document.verified_code
+            if pattern in document.verified_code or pattern in document.code_baseline
         }
         digests = {}
-        for pattern in sorted(verified):
+        for pattern in sorted(evidenced):
             digest = self._code_matcher.fingerprint(pattern)
             if digest is not None:
                 digests[pattern] = digest

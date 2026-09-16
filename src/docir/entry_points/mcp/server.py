@@ -662,6 +662,14 @@ def _register_maintenance_tools(mcp: FastMCP, run: _Gateway) -> None:
         conclusion, with `docir_update(set_isolated="<why>")`;
         `docir_query(expr="isolated")` lists every exemption and
         `set_isolated=""` withdraws one.
+
+        `code-drifted` says a `code:` glob no longer matches the files it
+        matched when the document declared it. Read the document against that
+        code and either fix it or stamp `docir_update(verified=True)` — which
+        also upgrades the finding to `code-changed`, the same comparison
+        against what a reader actually saw. Neither is repairable: a repair has
+        nothing to read with. A store whose globs predate this evidence reports
+        neither until `docir_check_fix` files a baseline for them.
         """
         return run.many("check", {})
 
@@ -702,7 +710,7 @@ def _register_maintenance_tools(mcp: FastMCP, run: _Gateway) -> None:
 
     @mcp.tool
     def docir_check_fix() -> dict[str, Any]:
-        """Repair what needs no guess: duplicate ids and dangling edges.
+        """Repair what needs no guess, and start watching what nothing watched.
 
         Re-issues the newer of two files sharing an id (the older keeps it —
         existing edges were written against it) and drops edges pointing at
@@ -710,6 +718,13 @@ def _register_maintenance_tools(mcp: FastMCP, run: _Gateway) -> None:
         under `remaining` — each needs somebody to read it and decide. Does not
         advance any `updated` date: a mechanical repair is not a human
         re-verification.
+
+        It also files a `code_baseline` for every `code:` glob that carries
+        none — the documents a store written by an older docir left watching
+        nothing — and returns one action per document naming the globs it put
+        under watch. That records what the tree holds now, never that anybody
+        read it, so no review state moves; drift is reported from this run
+        onward, and what moved before it is not recoverable.
         """
         return run.one("repair", {})
 

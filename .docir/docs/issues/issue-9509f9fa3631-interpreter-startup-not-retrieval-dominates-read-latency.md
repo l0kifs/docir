@@ -1,7 +1,10 @@
 ---
 code:
-- src/docir/entry_points/cli/**
 - benchmarks/latency.py
+- src/docir/entry_points/cli/**
+code_baseline:
+  benchmarks/latency.py: 492ab63bc432
+  src/docir/entry_points/cli/**: c98b5d247ed7
 created: '2026-08-14'
 description: 'Startup still dominates after the SQLAlchemy fix: ~0.49s of a 0.53s
   warm-daemon read is process start and imports. What remains is pydantic-settings
@@ -10,8 +13,8 @@ id: issue-9509f9fa3631
 owner: maintainer
 related:
 - adr-ab9c454b760c
-- arch-1cfb1b212237
 - adr-fe7c91f61f32
+- arch-1cfb1b212237
 status: open
 tags:
 - cli

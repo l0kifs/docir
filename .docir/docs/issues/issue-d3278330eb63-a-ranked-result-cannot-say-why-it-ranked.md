@@ -1,7 +1,10 @@
 ---
 code:
-- src/docir/modules/indexing/domain/scoring.py
 - src/docir/modules/documents/application/services/document_service.py
+- src/docir/modules/indexing/domain/scoring.py
+code_baseline:
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
+  src/docir/modules/indexing/domain/scoring.py: 98ccb3377db2
 created: '2026-08-24'
 description: context and search return score and similarity with none of the terms
   behind them, so an agent cannot tell a bad ranking from an empty corpus and ranking
@@ -9,12 +12,12 @@ description: context and search return score and similarity with none of the ter
 id: issue-d3278330eb63
 owner: maintainer
 related:
-- ref-a3f4d3140e4e
 - ref-0e14d7c32dbf
+- ref-a3f4d3140e4e
 status: resolved
 tags:
-- retrieval
 - cli
+- retrieval
 title: A ranked result cannot say why it ranked
 type: issue
 updated: '2026-08-24'

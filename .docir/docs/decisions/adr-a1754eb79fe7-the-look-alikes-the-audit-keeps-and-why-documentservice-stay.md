@@ -1,15 +1,26 @@
 ---
 code:
-- src/docir/modules/documents/application/services/document_service.py
+- src/docir/entry_points/cli/emit.py
 - src/docir/entry_points/cli/read_cmds.py
 - src/docir/entry_points/cli/write_cmds.py
-- src/docir/entry_points/cli/emit.py
-- src/docir/entry_points/doctor.py
 - src/docir/entry_points/composition.py
 - src/docir/entry_points/dispatch.py
+- src/docir/entry_points/doctor.py
 - src/docir/modules/documents/application/dto.py
+- src/docir/modules/documents/application/services/document_service.py
 - src/docir/modules/documents/domain/services/checks
 - src/docir/platform/persistence/repositories.py
+code_baseline:
+  src/docir/entry_points/cli/emit.py: 1e591d08eca5
+  src/docir/entry_points/cli/read_cmds.py: 9cf0437a2e8e
+  src/docir/entry_points/cli/write_cmds.py: da7ca1502484
+  src/docir/entry_points/composition.py: f1e7c5f79526
+  src/docir/entry_points/dispatch.py: 204d358a9285
+  src/docir/entry_points/doctor.py: 230f5796ddb3
+  src/docir/modules/documents/application/dto.py: f265277c576a
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
+  src/docir/modules/documents/domain/services/checks: dbc81f0a3141
+  src/docir/platform/persistence/repositories.py: 7bcf7e81a5a0
 created: '2026-09-11'
 description: The eleven shapes that look like catalogue smells and are deliberately
   kept, and the shared read/write predicate that makes splitting DocumentService a

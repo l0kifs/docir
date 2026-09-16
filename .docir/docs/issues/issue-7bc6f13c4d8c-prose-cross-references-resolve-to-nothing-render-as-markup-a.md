@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/platform/naming/links.py
+code_baseline:
+  src/docir/platform/naming/links.py: 5c7ca5dd25fb
 created: '2026-09-11'
 description: '162 prose links in a maintained store were parsed by nothing: build
   published brackets, a retitle broke inbound links in silence, and finding the one

@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/modules/documents/domain/services/chunking.py
+code_baseline:
+  src/docir/modules/documents/domain/services/chunking.py: 8cd7f3e66eac
 created: '2026-08-15'
 description: merge-forward keeps the first heading, then the merged block hard-splits,
   so the second section's heading names no chunk and matched_section can never point
@@ -10,8 +12,8 @@ related:
 - adr-927aa43d9635
 status: resolved
 tags:
-- retrieval
 - material
+- retrieval
 title: A short section before an over-long one erases the long one's heading from
   the index
 type: issue

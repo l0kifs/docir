@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/modules/documents/domain/schema.py
+code_baseline:
+  src/docir/modules/documents/domain/schema.py: c0ea053f1c39
 created: '2026-08-25'
 description: Giving implements a machine meaning would warn on ordinary modelling,
   so it stays a word for the reader — and a kind gains a property on evidence, not
@@ -8,13 +10,13 @@ description: Giving implements a machine meaning would warn on ordinary modellin
 id: adr-bbfac38a82b6
 owner: maintainer
 related:
+- adr-234b956a48d8
 - kind: refines
   to: adr-716c2eeb4e51
-- adr-234b956a48d8
 status: accepted
 tags:
-- schema
 - integrity
+- schema
 title: implements carries no property, and that is the decision
 type: decision
 updated: '2026-08-25'

@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/modules/indexing/domain/scoring.py
+code_baseline:
+  src/docir/modules/indexing/domain/scoring.py: 98ccb3377db2
 created: '2026-08-06'
 description: Chunk vectors decide the ranking and the winning ordinal is discarded
   before the result is built, so an agent must fetch the whole body or discover headings
@@ -8,14 +10,14 @@ description: Chunk vectors decide the ranking and the winning ordinal is discard
 id: issue-afd25273ff1f
 owner: maintainer
 related:
-- ref-a6db21f52427
 - adr-927aa43d9635
 - arch-f220a644d654
+- ref-a6db21f52427
 status: resolved
 tags:
+- embeddings
 - material
 - retrieval
-- embeddings
 title: A ranked hit names the document but not the section that matched, so the paired
   section read is a guess
 type: issue

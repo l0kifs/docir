@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/modules/documents/infra/schema_loader.py
+code_baseline:
+  src/docir/modules/documents/infra/schema_loader.py: 95c1dd812abc
 created: '2026-08-06'
 description: '''required:'' accepts any name but is checked with getattr on the entity,
   so an unsatisfiable name loads fine and then rejects every add of that type, naming
@@ -8,8 +10,8 @@ description: '''required:'' accepts any name but is checked with getattr on the 
 id: issue-e3c4dfad4f7b
 owner: maintainer
 related:
-- issue-90aea6d1b891
 - adr-2a3f625bb2f8
+- issue-90aea6d1b891
 - ref-a6db21f52427
 status: resolved
 tags:

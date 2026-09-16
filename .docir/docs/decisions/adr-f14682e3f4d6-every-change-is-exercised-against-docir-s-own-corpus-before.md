@@ -1,21 +1,23 @@
 ---
 code:
 - CLAUDE.md
+code_baseline:
+  CLAUDE.md: 1c09a5e65461
 created: '2026-08-25'
 description: The gates pass on defects that only a real store with history and a warm
   daemon exposes — 0.18.0 shipped three of them past a fully green suite.
 id: adr-f14682e3f4d6
 owner: maintainer
 related:
+- adr-354a4270ecd8
 - kind: refines
   to: adr-7d9fbbf976e8
-- adr-354a4270ecd8
 - rel-0c8d261640f6
 status: accepted
 tags:
-- testing
-- integrity
 - agents
+- integrity
+- testing
 title: Every change is exercised against docir's own corpus before it is done
 type: decision
 updated: '2026-08-25'

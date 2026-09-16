@@ -1,14 +1,16 @@
 ---
 code:
 - .github/workflows/ci.yml
+code_baseline:
+  .github/workflows/ci.yml: 41280301f869
 created: '2026-08-25'
 description: 'The model cache never hit: the workflow cached ~/.cache/fastembed while
   fastembed 0.8 writes to $TMPDIR/fastembed_cache, so every run re-downloaded 64MB.'
 id: issue-82b01d7f80d0
 owner: maintainer
 related:
-- issue-87410666c867
 - adr-ab9c454b760c
+- issue-87410666c867
 status: resolved
 tags:
 - cli

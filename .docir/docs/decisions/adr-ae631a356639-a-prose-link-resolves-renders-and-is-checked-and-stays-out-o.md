@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/modules/publishing/infra/rendering.py
+code_baseline:
+  src/docir/modules/publishing/infra/rendering.py: 16d9f4392c5b
 created: '2026-09-11'
 description: Why [[...]] cross-references now resolve against ids, filename stems
   and title slugs, why the unresolved ones are a Tier 1 warning where unresolved mentions
@@ -8,10 +10,10 @@ description: Why [[...]] cross-references now resolve against ids, filename stem
 id: adr-ae631a356639
 owner: maintainer
 related:
-- adr-e86c5040d626
-- adr-e98749aa457d
 - kind: refines
   to: adr-289e788719a7
+- adr-e86c5040d626
+- adr-e98749aa457d
 - arch-ad342aae8293
 status: accepted
 tags:

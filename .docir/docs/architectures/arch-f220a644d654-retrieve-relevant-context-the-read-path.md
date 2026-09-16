@@ -2,6 +2,9 @@
 code:
 - src/docir/modules/documents/application/services/document_service.py
 - src/docir/modules/indexing/**
+code_baseline:
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
+  src/docir/modules/indexing/**: cf41b20a074c
 created: '2026-07-30'
 description: 'How a task turns into a ranked document set: hybrid fusion plus graph
   expansion.'
@@ -17,8 +20,8 @@ related:
 - issue-f6a5d0b86806
 status: active
 tags:
-- retrieval
 - embeddings
+- retrieval
 title: Retrieve relevant context (the read path)
 type: architecture
 updated: '2026-08-25'

@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/entry_points/composition.py
+code_baseline:
+  src/docir/entry_points/composition.py: f1e7c5f79526
 created: '2026-08-29'
 description: Why a fresh clone or git worktree now rebuilds its index on open instead
   of failing until someone runs reindex, why only the empty case qualifies, and why
@@ -8,16 +10,16 @@ description: Why a fresh clone or git worktree now rebuilds its index on open in
 id: adr-e53c813d2f13
 owner: maintainer
 related:
-- issue-e5a0cb196607
-- adr-909734bced92
 - adr-6a4718fa7a7d
+- adr-909734bced92
 - arch-90c90751344f
+- issue-e5a0cb196607
 status: accepted
 tags:
-- cli
-- integrity
-- embeddings
 - architecture
+- cli
+- embeddings
+- integrity
 title: Opening a store with no index builds one, deferring the vectors
 type: decision
 updated: '2026-08-29'

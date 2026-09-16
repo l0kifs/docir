@@ -1,7 +1,10 @@
 ---
 code:
-- src/docir/modules/indexing/domain/scoring.py
 - src/docir/modules/documents/application/services/document_service.py
+- src/docir/modules/indexing/domain/scoring.py
+code_baseline:
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
+  src/docir/modules/indexing/domain/scoring.py: 98ccb3377db2
 created: '2026-08-16'
 description: What score and similarity each mean on a context or search hit, which
   one --min-score filters, and the two hits it never drops.
@@ -11,8 +14,8 @@ related:
 - adr-927aa43d9635
 status: active
 tags:
-- retrieval
 - cli
+- retrieval
 title: How to read a ranked result
 type: reference
 updated: '2026-08-25'

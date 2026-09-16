@@ -1,11 +1,18 @@
 ---
 code:
-- benchmarks/corpus.yaml
-- benchmarks/tasks.yaml
-- benchmarks/run.py
 - benchmarks/chunking.py
 - benchmarks/chunking_corpus.yaml
 - benchmarks/chunking_tasks.yaml
+- benchmarks/corpus.yaml
+- benchmarks/run.py
+- benchmarks/tasks.yaml
+code_baseline:
+  benchmarks/chunking.py: 4b591b6d26a5
+  benchmarks/chunking_corpus.yaml: b7d3a770db59
+  benchmarks/chunking_tasks.yaml: bb2ced6b32c4
+  benchmarks/corpus.yaml: 460371cc5152
+  benchmarks/run.py: a4252a5f27da
+  benchmarks/tasks.yaml: c4d3e05a4895
 created: '2026-08-15'
 description: 26 documents, 30 sections, none over the chunk ceiling and none quoting
   a fenced heading — so the splitter never runs and a chunking regression scores identically.
@@ -14,9 +21,9 @@ related:
 - adr-927aa43d9635
 status: resolved
 tags:
+- material
 - retrieval
 - testing
-- material
 title: The retrieval benchmark corpus cannot exercise any of the chunking rules
 type: issue
 updated: '2026-08-15'

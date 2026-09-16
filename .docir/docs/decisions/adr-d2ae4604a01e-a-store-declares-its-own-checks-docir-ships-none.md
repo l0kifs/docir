@@ -2,6 +2,9 @@
 code:
 - src/docir/modules/documents/domain/services/graph_checks.py
 - src/docir/modules/documents/infra/schema_loader.py
+code_baseline:
+  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
+  src/docir/modules/documents/infra/schema_loader.py: 95c1dd812abc
 created: '2026-08-25'
 description: 'checks: in docs-schema.yaml runs a store''s own JMESPath rules as Tier
   1 warnings, which is how docir gains a validator without gaining an opinion.'
@@ -14,9 +17,9 @@ related:
 - issue-9b2d2ab09060
 status: accepted
 tags:
-- schema
-- integrity
 - cli
+- integrity
+- schema
 title: A store declares its own checks; docir ships none
 type: decision
 updated: '2026-08-25'

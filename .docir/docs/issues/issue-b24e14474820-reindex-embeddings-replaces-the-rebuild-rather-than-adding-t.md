@@ -2,6 +2,9 @@
 code:
 - src/docir/entry_points/dispatch.py
 - src/docir/modules/documents/application/services/maintenance_service.py
+code_baseline:
+  src/docir/entry_points/dispatch.py: 204d358a9285
+  src/docir/modules/documents/application/services/maintenance_service.py: dbedd2e64320
 created: '2026-08-16'
 description: The --embeddings flag re-embeds exactly what a plain reindex already
   re-embeds, for the same time, while skipping the two stamps the rebuild writes —
@@ -11,14 +14,14 @@ owner: maintainer
 related:
 - adr-31aa7aa60d11
 - adr-bd3a820cc57a
-- run-f4a756206fe0
 - arch-ad342aae8293
+- run-f4a756206fe0
 status: resolved
 tags:
 - cli
 - embeddings
-- release
 - material
+- release
 title: reindex --embeddings replaces the rebuild rather than adding to it
 type: issue
 updated: '2026-08-16'

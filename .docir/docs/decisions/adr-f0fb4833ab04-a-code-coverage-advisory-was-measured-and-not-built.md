@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/modules/documents/domain/services/similarity_lint.py
+code_baseline:
+  src/docir/modules/documents/domain/services/similarity_lint.py: 497f909c8dc4
 created: '2026-08-25'
 description: Prose naming a source path is not evidence a document governs it — the
   examples, the historical records and the inventories are indistinguishable from
@@ -13,8 +15,8 @@ related:
   to: adr-f14682e3f4d6
 status: accepted
 tags:
-- integrity
 - cli
+- integrity
 title: A code-coverage advisory was measured and not built
 type: decision
 updated: '2026-08-25'

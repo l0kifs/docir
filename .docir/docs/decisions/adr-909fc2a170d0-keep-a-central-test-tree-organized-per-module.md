@@ -1,6 +1,8 @@
 ---
 code:
 - tests/**
+code_baseline:
+  tests/**: de9c8095d41c
 created: '2026-07-22'
 description: Why tests live in a central tree mirroring the modules instead of beside
   them.
@@ -11,8 +13,8 @@ related:
   to: arch-322e5f992ad2
 status: accepted
 tags:
-- testing
 - architecture
+- testing
 title: Keep a central test tree, organized per module
 type: decision
 updated: '2026-08-06'

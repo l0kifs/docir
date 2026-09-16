@@ -1,7 +1,10 @@
 ---
 code:
-- src/docir/modules/documents/domain/services/schema_shape.py
 - src/docir/entry_points/cli/app.py
+- src/docir/modules/documents/domain/services/schema_shape.py
+code_baseline:
+  src/docir/entry_points/cli/app.py: 632b4c81a902
+  src/docir/modules/documents/domain/services/schema_shape.py: f8e1f5b5ad84
 created: '2026-08-08'
 description: schema-drift reports a schema change after the fact; nothing renders
   the effect of an edit beforehand, and the file's meaning is not its text because
@@ -11,8 +14,8 @@ owner: maintainer
 related:
 - adr-2a3f625bb2f8
 - adr-bd3a820cc57a
-- issue-d891ab5501e6
 - adr-dbe6633405ca
+- issue-d891ab5501e6
 status: resolved
 tags:
 - cosmetic

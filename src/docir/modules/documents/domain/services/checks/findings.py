@@ -37,6 +37,7 @@ RESERVED_FINDING_KINDS: frozenset[str] = frozenset(
         "unblocked",
         "unmatched-code",
         "code-changed",
+        "code-drifted",
         "verification-outdated",
         "tag-key-format",
         "unknown-type",
@@ -53,7 +54,7 @@ RESERVED_FINDING_KINDS: frozenset[str] = frozenset(
 
 #: Everything else (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`,
 #: `unknown-status`, `unknown-tag`, `tag-key-format`, `unmatched-code`,
-#: `code-changed`, `verification-outdated`, `missing-required`,
+#: `code-changed`, `code-drifted`, `verification-outdated`, `missing-required`,
 #: `unknown-relation-kind`, `schema-drift`, `stale-index-build`, `unblocked`)
 #: describes shape or classification, not
 #: damage. `orphan` in particular fires for any document with no relations — the
@@ -71,6 +72,12 @@ RESERVED_FINDING_KINDS: frozenset[str] = frozenset(
 #: would also fail CI for any repo that already carries a hand-edited tag —
 #: the exact way the `--strict` gate became unusable before. `--strict-all`
 #: covers anyone who does want hand-edits to block a merge.
+#:
+#: `code-drifted` is a warning on the argument that made `code-changed` one,
+#: and it needs it more: it fires from the same comparison against the working
+#: tree, on every governed document rather than only the reviewed ones, so an
+#: error kind would fail the CI of every branch that edits code before its
+#: documentation — which is every branch.
 #:
 #: `missing-required` is a warning on the same argument, sharpened: the schema
 #: change that creates it arrives *from the package*, so a corpus that passed

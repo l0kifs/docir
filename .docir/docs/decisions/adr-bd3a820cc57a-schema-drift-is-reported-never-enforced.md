@@ -1,8 +1,12 @@
 ---
 code:
-- src/docir/modules/documents/domain/services/schema_shape.py
 - src/docir/modules/documents/application/services/maintenance_service.py
+- src/docir/modules/documents/domain/services/schema_shape.py
 - src/docir/platform/persistence/alembic/versions/0005_schema_baseline.py
+code_baseline:
+  src/docir/modules/documents/application/services/maintenance_service.py: dbedd2e64320
+  src/docir/modules/documents/domain/services/schema_shape.py: f8e1f5b5ad84
+  src/docir/platform/persistence/alembic/versions/0005_schema_baseline.py: e9094dc76fda
 created: '2026-08-08'
 description: Why a store records the resolved schema it was built against, why reindex
   is the only thing that advances it, and why the finding is a warning that must never
@@ -13,15 +17,15 @@ related:
 - kind: refines
   to: adr-2a3f625bb2f8
 - adr-bd7c4f3c5764
-- issue-d891ab5501e6
-- issue-8f6576cd7bc9
 - issue-0e3d1d9c81d3
 - issue-3678c897295f
+- issue-8f6576cd7bc9
+- issue-d891ab5501e6
 status: accepted
 tags:
-- schema
-- integrity
 - cli
+- integrity
+- schema
 title: Schema drift is reported, never enforced
 type: decision
 updated: '2026-08-08'

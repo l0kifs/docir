@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/modules/documents/application/services/document_service.py
+code_baseline:
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
 created: '2026-08-24'
 description: Rewriting a query with its top hits' own words costs 0.13 recall@5 on
   docir's corpus, because the first pass is already good enough that feedback only
@@ -9,12 +11,12 @@ id: adr-46b69a581c65
 owner: maintainer
 related:
 - adr-d657a09b8c4a
-- issue-fd086c0c6ab0
 - issue-c6d184704682
+- issue-fd086c0c6ab0
 status: accepted
 tags:
-- retrieval
 - embeddings
+- retrieval
 title: Pseudo-relevance feedback, built and rejected on measurement
 type: decision
 updated: '2026-08-24'

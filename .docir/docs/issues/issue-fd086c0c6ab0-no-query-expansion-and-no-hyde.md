@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/modules/indexing/**
+code_baseline:
+  src/docir/modules/indexing/**: cf41b20a074c
 created: '2026-08-24'
 description: 'Both halves are answered: the model-free rewrite measured worse, and
   generation is closed by adr-27c63ad02695 — what remains is accepting caller-supplied
@@ -8,15 +10,15 @@ description: 'Both halves are answered: the model-free rewrite measured worse, a
 id: issue-fd086c0c6ab0
 owner: maintainer
 related:
-- ref-a6db21f52427
-- adr-d657a09b8c4a
-- adr-46b69a581c65
 - adr-27c63ad02695
+- adr-46b69a581c65
 - adr-b23dae55666f
+- adr-d657a09b8c4a
+- ref-a6db21f52427
 status: resolved
 tags:
-- retrieval
 - embeddings
+- retrieval
 title: context takes one query, and the caller has better ones
 type: issue
 updated: '2026-08-24'

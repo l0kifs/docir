@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/modules/publishing/infra/graph.py
+code_baseline:
+  src/docir/modules/publishing/infra/graph.py: 48c3cad0074a
 created: '2026-08-04'
 description: Why docir build emits graph.html — a deterministic per-type constellation
   map of the corpus — plus a landing-page index, and why the graph is a domain projection

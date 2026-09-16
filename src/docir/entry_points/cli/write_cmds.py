@@ -79,6 +79,21 @@ def add(
     pattern that matches nothing today is allowed, because a decision is often
     written before the code it decides, or after that code moved.
 
+    A glob is watched from the moment you write it: docir records what each one
+    matches now, and `docir check` reports `code-drifted` once that code moves.
+    Nothing further is needed to turn this on —
+
+        docir add --type decision --title "Ids come from a counter" \\
+          --description "Why ids are allocated, never scanned for." \\
+          --code "src/docir/modules/documents/application/services/id_*.py" \\
+          --body "..."
+        # edit that file, then:
+        docir check | jq '.[] | select(.kind == "code-drifted") | .message'
+
+    — and `docir update <id> --verified` upgrades the watch: from then on the
+    finding is `code-changed`, which says the code moved since somebody *read*
+    the document rather than since it declared the glob.
+
     A type may declare a body ceiling, and a create over it is refused with exit
     9 before anything is written:
 
@@ -149,7 +164,9 @@ def update(
         typer.Option(
             "--set-code",
             help="Comma-separated repo-relative globs this document governs "
-            '(pass "" to clear them).',
+            '(pass "" to clear them). A glob this adds is watched from now; one '
+            "it keeps holds the baseline it already had, so re-declaring a "
+            "pattern never clears a drift nobody has read.",
         ),
     ] = None,
     verified: Annotated[
@@ -158,7 +175,9 @@ def update(
             "--verified",
             help=(
                 "Stamp today as the last-verified date, and record what the "
-                "document's `code` globs match right now."
+                "document's `code` globs match right now — upgrading them from "
+                "`code-drifted` (moved since declared) to `code-changed` (moved "
+                "since somebody read this). Stamp it only if you did read it."
             ),
         ),
     ] = False,

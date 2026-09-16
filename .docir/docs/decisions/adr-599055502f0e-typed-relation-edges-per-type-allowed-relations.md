@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/modules/documents/domain/value_objects/relations.py
+code_baseline:
+  src/docir/modules/documents/domain/value_objects/relations.py: 424533ff6837
 created: '2026-07-23'
 description: Why relation edges carry a kind, and how the on-disk form stays backward
   compatible.
@@ -11,8 +13,8 @@ related:
   to: arch-1cfb1b212237
 status: accepted
 tags:
-- schema
 - persistence
+- schema
 title: Typed relation edges + per-type allowed relations
 type: decision
 updated: '2026-08-06'

@@ -19,6 +19,10 @@ does.
 from __future__ import annotations
 
 from docir.modules.documents.application.dto import UpdateDocumentRequest
+from docir.modules.documents.application.services.code_evidence import (
+    fingerprint_patterns,
+    mint_baseline,
+)
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.schema import Schema
 from docir.modules.documents.domain.services.markdown_sections import (
@@ -255,8 +259,10 @@ class DocumentPatch:
         patterns = (
             self._base.code if self._request.set_code is None else tuple(self._request.set_code)
         )
+        verified_now: dict[str, str] = {}
         if self._request.mark_verified:
-            self.changes["verified_code"] = self._fingerprint_all(patterns)
+            verified_now = self._fingerprint_all(patterns)
+            self.changes["verified_code"] = verified_now
         elif self._request.set_code is not None:
             kept = set(patterns)
             self.changes["verified_code"] = {
@@ -264,17 +270,35 @@ class DocumentPatch:
                 for pattern, digest in self._base.verified_code.items()
                 if pattern in kept
             }
+        self._apply_code_baseline(patterns, verified_now)
+
+    def _apply_code_baseline(self, patterns: tuple[str, ...], verified_now: dict[str, str]) -> None:
+        """Stage the authorship half — what the globs looked like when declared.
+
+        Runs on **every** update, not only on the ones that touch ``code:`` or
+        ``--verified``, and that is deliberate: a document written before the
+        baseline existed starts being watched the next time anybody writes to
+        it, rather than waiting for a review that none of this project's own 99
+        governed documents had ever had. The walk is paid once per pattern — see
+        :func:`mint_baseline` — so an ordinary status flip on a document whose
+        globs are already based costs nothing.
+
+        Staged only when it differs, so a write that changes nothing here does
+        not rewrite the key and move the file's bytes.
+
+        Like the digests above it this is mechanical, so nothing here touches
+        ``updated``: the baseline records what the tree held, and a document
+        whose evidence is filed in is not a document anybody re-read.
+        """
+        baseline = mint_baseline(
+            self._code_matcher, patterns, self._base.code_baseline, verified_now=verified_now
+        )
+        if baseline != dict(self._base.code_baseline):
+            self.changes["code_baseline"] = baseline
 
     def _fingerprint_all(self, patterns: tuple[str, ...]) -> dict[str, str]:
         """Digest each pattern, dropping the ones that cannot be resolved."""
-        if self._code_matcher is None:
-            return {}
-        digests = {}
-        for pattern in patterns:
-            digest = self._code_matcher.fingerprint(pattern)
-            if digest is not None:
-                digests[pattern] = digest
-        return digests
+        return fingerprint_patterns(self._code_matcher, patterns)
 
     def _apply_type(self) -> str:
         """Stage a retype and return the type the rest of the write is checked against.

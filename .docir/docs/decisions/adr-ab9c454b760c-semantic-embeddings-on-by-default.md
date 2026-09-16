@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/platform/embedding/**
+code_baseline:
+  src/docir/platform/embedding/**: 130c8e5da098
 created: '2026-07-27'
 description: Why a real embedding model is the default and the hashing embedder only
   the fallback.

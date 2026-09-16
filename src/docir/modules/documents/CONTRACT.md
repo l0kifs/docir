@@ -146,6 +146,13 @@ files and the derived index never disagree.
   and would otherwise fail its own CI. Cleared only by re-reading the document against the code
   and stamping `--verified` — a judgement, which is why `repair()` leaves it; and not by the
   writer that moved the code in the same task, which would be certifying its own change.
+  And `code-drifted` — the same comparison against `code_baseline`, the digest minted by the
+  write that *declared* the glob rather than by a verification. It exists because the check
+  above it is unreachable without a review that almost never happens: all 99 governed documents
+  in docir's own store were unverified, so `code-changed` could fire on none of them. The
+  two partition the patterns — a pattern carrying a verified digest is `code-changed`'s alone —
+  so one moved file is named once. A warning on the same argument, needing it more, since this
+  one fires on every governed document.
 - `MaintenanceService.schema_drift() -> [str]` — the same difference as plain lines, for the
   opt-in `DOCIR_SCHEMA_NOTICE` stderr notice and the `docir_schema_drift` MCP tool. Empty when
   nothing moved *or* when the store has no baseline: absent means unknown, not unchanged.
@@ -255,6 +262,16 @@ document with no `verified` has nothing to withdraw and is left alone, which is 
 edit from ever moving an unverified document's clock. The digests in `verified_code` are **kept**
 across a revocation, so `code-changed` still reports on a document whose calendar has just been
 reset.
+
+`code_baseline` is the same evidence with the review taken out of it: one digest per `code`
+glob, minted by the write that first declares the pattern and by `repair()` for a pattern
+declared before the field existed, refreshed by `mark_verified` alongside `verified_code`, and
+pruned with the pattern it belongs to. Every other write leaves an existing entry alone —
+re-declaring a glob through `set_code` is mechanical and reads nothing, so refreshing it there
+would let any write clear a drift nobody looked at. Like `verified_code` it is a mechanical
+field: it never moves `updated`, it is written to the file and not only to the index, and absent
+means *unknown*. It claims only what the tree held when the document said it governed it, which
+is what lets a write mint it without asserting a review.
 
 `clear_verified` is the other half, and it is **not** the same write: it erases the stamp and
 leaves *no* `revoked`, so the document ages from `created` as one nobody ever verified does. An

@@ -1,18 +1,20 @@
 ---
 code:
 - src/docir/entry_points/doctor.py
+code_baseline:
+  src/docir/entry_points/doctor.py: 230f5796ddb3
 created: '2026-08-25'
 description: Why the environment checks scattered across five commands became one
   command, and why the corpus is deliberately not part of it.
 id: adr-909734bced92
 owner: maintainer
 related:
+- adr-31aa7aa60d11
+- adr-354a4270ecd8
+- adr-ab9c454b760c
+- adr-fb938175f72a
 - kind: refines
   to: arch-1cfb1b212237
-- adr-354a4270ecd8
-- adr-31aa7aa60d11
-- adr-fb938175f72a
-- adr-ab9c454b760c
 - ref-a3f4d3140e4e
 status: accepted
 tags:

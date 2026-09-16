@@ -1,9 +1,14 @@
 ---
 code:
-- src/docir/modules/documents/domain/services/schema_shape.py
 - src/docir/modules/documents/application/services/maintenance_service.py
+- src/docir/modules/documents/domain/services/schema_shape.py
 - src/docir/platform/persistence/alembic/versions/0005_schema_baseline.py
 - tests/modules/documents/test_schema_shape.py
+code_baseline:
+  src/docir/modules/documents/application/services/maintenance_service.py: dbedd2e64320
+  src/docir/modules/documents/domain/services/schema_shape.py: f8e1f5b5ad84
+  src/docir/platform/persistence/alembic/versions/0005_schema_baseline.py: e9094dc76fda
+  tests/modules/documents/test_schema_shape.py: c2c63b7721e1
 created: '2026-08-07'
 description: docs-schema.yaml has no version and the index records nothing about the
   schema it was built against, so a release editing the core or a profile changes
@@ -12,10 +17,10 @@ id: issue-d891ab5501e6
 owner: maintainer
 related:
 - adr-2a3f625bb2f8
+- adr-bd3a820cc57a
 - issue-0e3d1d9c81d3
 - issue-3678c897295f
 - issue-8f6576cd7bc9
-- adr-bd3a820cc57a
 status: resolved
 tags:
 - material

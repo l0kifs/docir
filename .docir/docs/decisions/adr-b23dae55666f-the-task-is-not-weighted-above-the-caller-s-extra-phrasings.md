@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/modules/indexing/domain/scoring.py
+code_baseline:
+  src/docir/modules/indexing/domain/scoring.py: 98ccb3377db2
 created: '2026-08-24'
 description: Weighting the literal task removes --also's gain along with its risk,
   because an extra query is powerful exactly to the degree it can outvote the task.
@@ -8,12 +10,12 @@ id: adr-b23dae55666f
 owner: maintainer
 related:
 - adr-27c63ad02695
-- issue-fd086c0c6ab0
 - adr-46b69a581c65
+- issue-fd086c0c6ab0
 status: accepted
 tags:
-- retrieval
 - cli
+- retrieval
 title: The task is not weighted above the caller's extra phrasings
 type: decision
 updated: '2026-08-24'

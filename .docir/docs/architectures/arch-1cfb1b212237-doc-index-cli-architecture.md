@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/**
+code_baseline:
+  src/docir/**: 0c32642abed8
 created: '2026-07-30'
 description: 'The shape of the system: git as the source of truth, the SQLite index
   as a derived projection, the layer map and the daemon — with each part of the pipeline
@@ -9,11 +11,11 @@ id: arch-1cfb1b212237
 owner: maintainer
 related:
 - adr-599055502f0e
-- arch-39314a23ba7f
 - arch-0368cc754c15
 - arch-03eeae8bf37d
-- arch-ad342aae8293
+- arch-39314a23ba7f
 - arch-7fd54a82f7d6
+- arch-ad342aae8293
 status: active
 tags:
 - architecture

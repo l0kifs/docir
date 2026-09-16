@@ -77,6 +77,12 @@ def render(document: Document) -> str:
     # this" a fact only the machine that stamped it could know.
     if document.verified_code:
         metadata["verified_code"] = dict(sorted(document.verified_code.items()))
+    # The authorship half of the same evidence, in the file for the same
+    # reason and written under the same rule: absent rather than empty, so a
+    # document governing no code carries no key, and a store written by a
+    # build without the baseline round-trips byte-for-byte.
+    if document.code_baseline:
+        metadata["code_baseline"] = dict(sorted(document.code_baseline.items()))
     # Same rule again, and here it is what makes the exemption reviewable:
     # `isolated:` is a judgement about the corpus, so it belongs in the file
     # a teammate reads in a diff, not in the gitignored index.
@@ -124,6 +130,7 @@ def _to_document(metadata: dict[str, object], body: str, path: str) -> Document:
             verified_content=str(metadata.get("verified_content", "")),
             code=_as_str_tuple(metadata.get("code")),
             verified_code=_as_str_map(metadata.get("verified_code")),
+            code_baseline=_as_str_map(metadata.get("code_baseline")),
             isolated=str(metadata.get("isolated", "")),
         )
     except (KeyError, ValueError) as exc:

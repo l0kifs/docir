@@ -2,15 +2,18 @@
 code:
 - src/docir/modules/documents/application/services/maintenance_service.py
 - src/docir/modules/documents/domain/services/graph_checks.py
+code_baseline:
+  src/docir/modules/documents/application/services/maintenance_service.py: dbedd2e64320
+  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
 created: '2026-08-25'
 description: 'Why an index holding nothing beside files on disk is an error rather
   than a warning: --strict was a merge gate that passed by reading nothing.'
 id: adr-1cccd77cb023
 owner: maintainer
 related:
-- issue-87410666c867
 - adr-909734bced92
 - adr-bd7c4f3c5764
+- issue-87410666c867
 status: accepted
 tags:
 - cli

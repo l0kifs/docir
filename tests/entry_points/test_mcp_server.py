@@ -15,6 +15,7 @@ dispatcher command has a tool.
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -25,6 +26,7 @@ from docir.config.settings import Settings
 from docir.entry_points.composition import Container, InProcessExecutor
 from docir.entry_points.dispatch import Dispatcher
 from docir.entry_points.federation import FEDERATED_COMMANDS
+from docir.entry_points.mcp.cmds import build_server
 from docir.entry_points.mcp.server import build_mcp_server
 from docir.modules.documents.api import describe_schema, load_schema
 from docir.platform.errors import DaemonError
@@ -651,3 +653,102 @@ def test_every_cli_only_flag_is_still_cli_only(server, command: str, flag: str) 
     assert flag.replace("-", "_") not in properties, (
         f"{tool} now takes {flag!r} — drop it from _CLI_ONLY, it is no longer CLI-only"
     )
+
+
+class TestAStoreThatWillNotOpen:
+    """The server comes up and says why (issue-2f07f83e6b84).
+
+    Every refusal docir writes for an unreadable schema is worded for a reader —
+    which version to install, which key to fix. Letting the exception escape
+    `build_server` threw all of it away: the process died and the client saw
+    `Connection closed`, on the one transport whose caller is definitely an
+    agent. Each test here starts from a store that genuinely will not open.
+    """
+
+    def _broken_store(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Settings:
+        """A store whose schema will not load, served in-process.
+
+        ``DOCIR_NO_DAEMON`` because that is where the defect lives: with the
+        daemon, ``build_server`` hands back a socket executor without ever
+        reading the schema, and the failure happens in the daemon on the first
+        call. In-process it happens while the server is being built, which is
+        the path that used to take the process down with it.
+        """
+        monkeypatch.setenv("DOCIR_NO_DAEMON", "1")
+        home = tmp_path / ".docir"
+        (home / "docs").mkdir(parents=True)
+        # Valid YAML, invalid schema: a partial block with no profile to overlay.
+        (home / "docs-schema.yaml").write_text(
+            "types:\n  decision:\n    level: 4\n", encoding="utf-8"
+        )
+        return Settings.resolve(home=home)
+
+    def test_the_server_starts_and_every_tool_returns_the_reason(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        server = build_server(self._broken_store(tmp_path, monkeypatch))
+
+        async def scenario() -> tuple[list[str], str, str]:
+            async with Client(server) as client:
+                tools = sorted(tool.name for tool in await client.list_tools())
+                with pytest.raises(ToolError) as query_error:
+                    await client.call_tool("docir_query", {"limit": 1})
+                with pytest.raises(ToolError) as write_error:
+                    await client.call_tool(
+                        "docir_add", {"type": "decision", "title": "T", "description": "d"}
+                    )
+                return tools, str(query_error.value), str(write_error.value)
+
+        listed, reading, writing = asyncio.run(scenario())
+        # The surface is unchanged — every tool, by name, not a count. The
+        # reader has to be able to tell "this store cannot be opened" from
+        # "docir does not do that here", and a missing tool says the second.
+        assert listed == sorted({*COMMAND_TOOLS.values(), "docir_schema"})
+        for message in (reading, writing):
+            assert "must define a string 'prefix'" in message
+
+    def test_the_schema_tool_fails_the_same_way(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # It is the one tool that does not go through the executor, so it is the
+        # one that would have kept raising a raw exception — and a closure over
+        # the handler's variable raised NameError instead of the store error.
+        server = build_server(self._broken_store(tmp_path, monkeypatch))
+
+        async def scenario() -> str:
+            async with Client(server) as client:
+                with pytest.raises(ToolError) as error:
+                    await client.call_tool("docir_schema", {})
+                return str(error.value)
+
+        message = asyncio.run(scenario())
+        assert "must define a string 'prefix'" in message
+        assert "NameError" not in message
+
+    def test_the_handshake_already_carries_it(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Instructions are read at connect. An agent that has to call a tool to
+        # find out has already written its plan around tools that cannot work.
+        server = build_server(self._broken_store(tmp_path, monkeypatch))
+
+        async def scenario() -> str:
+            async with Client(server) as client:
+                return client.initialize_result.instructions or ""
+
+        instructions = asyncio.run(scenario())
+        assert instructions.startswith("THIS STORE CANNOT BE OPENED:")
+        assert "must define a string 'prefix'" in instructions
+        # In front of the usual instructions, not instead of them.
+        assert "docir stores this project" in instructions
+
+    def test_a_store_that_opens_is_untouched(self, settings: Settings) -> None:
+        settings.ensure_directories()
+        server = build_server(settings)
+
+        async def scenario() -> str:
+            async with Client(server) as client:
+                return client.initialize_result.instructions or ""
+
+        instructions = asyncio.run(scenario())
+        assert not instructions.startswith("THIS STORE CANNOT BE OPENED")

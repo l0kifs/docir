@@ -18,7 +18,8 @@ from docir import __version__
 from docir.config.settings import Settings
 from docir.entry_points.cli.runner import get_state
 from docir.modules.documents.api import describe_schema, load_schema
-from docir.platform.transport.messages import RequestExecutor
+from docir.platform.errors import DocirError
+from docir.platform.transport.messages import Request, RequestExecutor, Response
 
 if TYPE_CHECKING:  # the annotation only — the real import stays inside the command
     from fastmcp import FastMCP
@@ -57,6 +58,11 @@ def serve(
 
     stdio is the transport an MCP client spawns and speaks over the child's
     stdin/stdout. --transport http serves it over HTTP instead.
+
+    A store that will not open does not stop the server. Run in-process
+    (`--no-daemon`), the tools all list and every call returns the reason — the
+    schema error naming the key or the docir version — and the same sentence
+    leads the server's instructions, so a client has it at the handshake.
     """
     if transport not in TRANSPORTS:
         raise typer.BadParameter(
@@ -75,14 +81,75 @@ def build_server(settings: Settings) -> FastMCP:
     Separate from :func:`serve` so a test can build the server and drive it with
     an in-memory client, which is the whole of what ``serve`` does before it
     blocks on a transport.
+
+    A store that will not open **does not stop the server** (issue-2f07f83e6b84).
+    Every refusal docir writes for an unreadable schema is worded for a reader —
+    which version to install, which key to fix — and letting the exception escape
+    here throws all of it away: the process dies and the client sees
+    ``Connection closed``. The CLI has never done that, because `runner.py` maps
+    a ``DocirError`` onto an exit code and prints it; this is the same mapping,
+    one transport later.
+
+    So the surface comes up either way and carries the reason instead of the
+    answers. There is nothing else it could carry: every tool here reads or
+    writes the store.
     """
     from docir.entry_points.mcp.server import build_mcp_server
 
+    store_error: DocirError | None = None
+    try:
+        executor = _executor_for(settings)
+    except DocirError as exc:
+        # Bound outside the ``except`` block on purpose: Python unbinds the name
+        # at the end of it, so a closure built here would raise NameError at the
+        # first call instead of the store error it was made to carry.
+        store_error = exc
+    if store_error is not None:
+        return build_mcp_server(
+            _UnavailableExecutor(store_error),
+            describe_schema=lambda: _raise(store_error),
+            version=__version__,
+            unavailable=str(store_error),
+        )
     return build_mcp_server(
-        _executor_for(settings),
+        executor,
         describe_schema=lambda: describe_schema(load_schema(settings.schema_path)),
         version=__version__,
     )
+
+
+def _raise(error: DocirError) -> dict[str, object]:
+    """Report the store error from the one tool that does not use the executor.
+
+    A ``ToolError``, not the ``DocirError`` itself, so ``docir_schema`` fails the
+    way every other tool here fails: ``_Gateway`` performs exactly this
+    conversion for the ones that go through the executor, and a raw exception
+    would reach the client wrapped in FastMCP's own "Error calling tool" prose.
+
+    Imported inside the function, like every other fastmcp name here: importing
+    the CLI must not drag fastmcp in, because interpreter startup is what a read
+    costs (issue-9509f9fa3631), and a test holds that line.
+    """
+    from fastmcp.exceptions import ToolError
+
+    raise ToolError(str(error))
+
+
+class _UnavailableExecutor(RequestExecutor):
+    """Answers every command with the reason the store would not open.
+
+    A :class:`RequestExecutor` rather than a special case inside each tool, so
+    the tools are registered exactly as they always are and the error travels
+    the path a dispatcher error already travels — ``_Gateway`` turns a
+    ``DocirError`` into a ``ToolError``, which is what an MCP client renders.
+    One implementation, the rule adr-354a4270ecd8 exists to keep.
+    """
+
+    def __init__(self, error: DocirError) -> None:
+        self._error = error
+
+    def execute(self, request: Request) -> Response:
+        raise self._error
 
 
 def _executor_for(settings: Settings) -> RequestExecutor:

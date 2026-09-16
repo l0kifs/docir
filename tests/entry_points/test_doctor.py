@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from dataclasses import replace
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -32,8 +34,8 @@ from docir.config.settings import Settings
 from docir.entry_points import doctor
 from docir.entry_points.cli.app import app
 from docir.entry_points.daemon.lifecycle import DaemonStatus
-from docir.modules.documents.api import describe_schema, load_schema
-from docir.modules.release.api import ReleaseStatus
+from docir.modules.documents.api import STORE_FORMAT, describe_schema, load_schema
+from docir.modules.release.api import Deprecation, ReleaseStatus
 
 runner = CliRunner()
 
@@ -586,6 +588,10 @@ def _environment(**overrides) -> doctor.Environment:
         "schema_error": "",
         "index_present": True,
         "index_revision_ahead": "",
+        "store_format_ahead": 0,
+        "store_format_declared": 1,
+        "store_format_required": 1,
+        "deprecations": (),
         "embed_model": None,
         "embedder_env": "",
         "embedder_id": "fastembed:BAAI/bge-small-en-v1.5",
@@ -710,3 +716,77 @@ def _find(report: doctor.DoctorReport, kind: str) -> doctor.DoctorFinding:
         if finding.kind == kind:
             return finding
     raise AssertionError(f"no {kind} finding in {[f.kind for f in report.findings]}")
+
+
+def test_a_store_from_a_newer_docir_is_named_rather_than_parsed(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The committed half of `index-from-newer-build` (adr-36d6156ffab9).
+
+    Injected the way it happens: a schema declaring a floor this build does not
+    reach, carrying a construct it cannot validate either. Without the floor
+    check the reader gets the parse error — a true sentence about a key, and the
+    wrong sentence about the situation (issue-c30895cc62a3).
+    """
+    settings.ensure_directories()
+    settings.schema_path.write_text(
+        f"store_format: {STORE_FORMAT + 1}\ntypes:\n  decision:\n    level: 4\n",
+        encoding="utf-8",
+    )
+    environment = doctor.snapshot(settings, "9.9.9")
+    findings = {f.kind: f for f in doctor._store_findings(environment, None, "")}
+
+    assert "store-from-newer-build" in findings
+    reported = findings["store-from-newer-build"]
+    assert f"store format {STORE_FORMAT + 1}" in reported.message
+    assert f"reads up to {STORE_FORMAT}" in reported.message
+    # An error, like its index counterpart: the schema resolves before anything
+    # opens, so no read answers at all meanwhile.
+    assert reported.severity == "error"
+    # And the fix is to upgrade, never to edit the file: deleting the line only
+    # gets the reader to the parse error this finding exists to replace.
+    assert "upgrade docir" in reported.fix
+    assert "reindex" not in reported.fix
+
+
+def test_a_store_this_build_understands_reports_no_format_finding(settings: Settings) -> None:
+    settings.ensure_directories()
+    settings.schema_path.write_text("profiles: [software]\n", encoding="utf-8")
+    environment = doctor.snapshot(settings, "9.9.9")
+    reported = doctor._store_findings(environment, None, "")
+    assert not [f for f in reported if f.kind == "store-from-newer-build"]
+
+
+def test_a_future_dated_deprecation_is_data_not_a_finding(settings: Settings) -> None:
+    """The announcement rides in `compat`; only a broken promise is a finding.
+
+    A warning that fires for a change which has not happened yet survives every
+    run, and a list that is always the same length is one the reader stops
+    reading (adr-6d4d43d44075).
+    """
+    settings.ensure_directories()
+    environment = doctor.snapshot(settings, "9.9.9")
+    future = (Deprecation(subject="--old", replacement="--new", sunset=date(2099, 1, 1)), False)
+    environment = replace(environment, deprecations=(future,))
+
+    assert not [
+        f for f in doctor._deprecation_findings(environment) if f.kind == "deprecation-overdue"
+    ]
+
+
+def test_a_deprecation_past_its_date_is_an_error_naming_the_promise(
+    settings: Settings,
+) -> None:
+    settings.ensure_directories()
+    environment = doctor.snapshot(settings, "9.9.9")
+    overdue = (Deprecation(subject="--old", replacement="--new", sunset=date(2020, 1, 1)), True)
+    environment = replace(environment, deprecations=(overdue,))
+
+    findings = doctor._deprecation_findings(environment)
+    assert [f.kind for f in findings] == ["deprecation-overdue"]
+    assert "--old" in findings[0].message
+    assert "2020-01-01" in findings[0].message
+    # An error: past the date the surface was supposed to be gone, so this is a
+    # removal docir promised and did not make — and `--strict` has to say so.
+    assert findings[0].severity == "error"
+    assert "remove --old" in findings[0].fix

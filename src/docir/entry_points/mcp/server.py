@@ -701,6 +701,16 @@ def _register_maintenance_tools(mcp: FastMCP, run: _Gateway) -> None:
         result says so. `docir_reindex` fixes the first, `docir_embed_flush`
         the second.
 
+        It also carries the three store-format numbers: what this store's schema
+        declares, what its contents need, and the highest this build reads.
+        Compare `store_format_required` against another machine's
+        `store_format_supported` to know whether that docir can open this store
+        — the alternative is running the experiment and reading a parse error.
+
+        What is *not* here is the deprecation register: `docir doctor | jq
+        '.compat'` on the CLI carries every surface this build will stop
+        accepting, with the date it stops (issue-8b227c299e63).
+
         It says nothing about the corpus; `docir_check` owns that. The rest of
         `docir doctor` — the daemon, this shell's environment variables, which
         store the working directory resolved to — is not askable here: those
@@ -719,7 +729,13 @@ def _register_maintenance_tools(mcp: FastMCP, run: _Gateway) -> None:
         advance any `updated` date: a mechanical repair is not a human
         re-verification.
 
-        It also files a `code_baseline` for every `code:` glob that carries
+        It also records `store_format:` in `docs-schema.yaml` when that file
+        uses a construct needing a higher floor than it declares — the line that
+        makes an older docir refuse this store by naming a version instead of
+        failing on a key it does not recognise. Written textually, so the file's
+        comments survive, and only ever raised.
+
+        And it files a `code_baseline` for every `code:` glob that carries
         none — the documents a store written by an older docir left watching
         nothing — and returns one action per document naming the globs it put
         under watch. That records what the tree holds now, never that anybody

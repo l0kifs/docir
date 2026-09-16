@@ -43,7 +43,12 @@ from docir.modules.documents.infra.default_schema import (
     render_schema_yaml,
 )
 from docir.modules.documents.infra.profiles import PROFILE_NAMES
-from docir.modules.documents.infra.schema_loader import describe_schema, load_schema
+from docir.modules.documents.infra.schema_loader import (
+    STORE_FORMAT,
+    describe_schema,
+    load_schema,
+    store_format_status,
+)
 
 __all__ = [
     "DEFAULT_CONTEXT_EXPAND",
@@ -51,6 +56,7 @@ __all__ = [
     "DEFAULT_SCHEMA_YAML",
     "ID_STYLES",
     "PROFILE_NAMES",
+    "STORE_FORMAT",
     "AddDocumentRequest",
     "BenchRequest",
     "BenchResult",
@@ -75,4 +81,5 @@ __all__ = [
     "index_is_empty",
     "load_schema",
     "render_schema_yaml",
+    "store_format_status",
 ]

@@ -42,6 +42,7 @@ from docir.platform.embedding.deterministic import DeterministicEmbedder
 from docir.platform.errors import DocirError, SchemaError
 from docir.platform.filesystem.code_matcher import RepositoryCodeMatcher
 from docir.platform.filesystem.markdown_store import MarkdownDocumentFileStore
+from docir.platform.filesystem.schema_store import YamlSchemaFileStore
 from docir.platform.filesystem.tag_store import YamlTagFileStore
 from docir.platform.persistence.unit_of_work import UnitOfWork
 from docir.platform.transport.messages import Request, RequestExecutor, Response
@@ -273,6 +274,7 @@ def build_container(
         clock,
         __version__,
         code_matcher,
+        YamlSchemaFileStore(settings.schema_path),
     )
     dispatcher = Dispatcher(document_service, tag_service, maintenance_service)
     bootstrapped = _bootstrap_index(

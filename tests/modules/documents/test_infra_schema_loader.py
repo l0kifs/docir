@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 import yaml
 
 from docir.modules.documents.domain.services import schema_shape
+from docir.modules.documents.domain.services.store_format import (
+    STORE_FORMAT,
+    declared_store_format,
+    required_store_format,
+)
 from docir.modules.documents.infra.default_schema import (
     DEFAULT_SCHEMA_YAML,
     render_schema_yaml,
@@ -16,6 +23,7 @@ from docir.modules.documents.infra.schema_loader import (
     ensure_schema_file,
     load_schema,
     parse_schema,
+    store_format_status,
 )
 from docir.platform.errors import SchemaError
 
@@ -883,3 +891,106 @@ class TestEmbedModel:
         # so reporting it would make every deliberate switch look like drift.
         described = describe_schema(parse_schema(self._spec("BAAI/bge-small-en-v1.5")))
         assert "embed_model" not in described
+
+
+class TestStoreFormatFloor:
+    """The floor a schema records, and the refusal a build below it gives.
+
+    The second rule of adr-36d6156ffab9. Every test here works from the shape
+    that actually broke — a partial `types:` block, which no published docir can
+    parse — rather than from a synthetic key, because the question is whether the
+    floor is derived from the constructs a real store uses.
+    """
+
+    OVERLAY = """
+profiles: [software]
+types:
+  decision:
+    max_body_chars: 8000
+"""
+    PLAIN = """
+profiles: [software]
+"""
+
+    def test_a_store_using_an_overlay_needs_the_second_format(self) -> None:
+        assert required_store_format(yaml.safe_load(self.OVERLAY)) == 2
+        # And a store that uses none stays at the format every published build
+        # reads: the floor is a claim about contents, not about recency.
+        assert required_store_format(yaml.safe_load(self.PLAIN)) == 1
+
+    def test_a_complete_inline_type_is_not_an_overlay(self) -> None:
+        # The distinction the loader already draws: a block carrying all three
+        # required keys replaces the type, which every build has always done.
+        whole = yaml.safe_load(
+            """
+profiles: [software]
+types:
+  decision:
+    prefix: adr
+    statuses: [proposed, accepted]
+    default_status: proposed
+"""
+        )
+        assert required_store_format(whole) == 1
+
+    def test_an_absent_declaration_reads_as_the_oldest_format(self) -> None:
+        # Not unknown, unlike every other absence in docir: a file written
+        # before the key existed is one every build could already read.
+        assert declared_store_format(yaml.safe_load(self.PLAIN)) == 1
+        assert declared_store_format(None) == 1
+        # A hand-typed value that means nothing is bookkeeping, not content, so
+        # it reads as absent rather than taking the store down.
+        assert declared_store_format({"store_format": "two"}) == 1
+        assert declared_store_format({"store_format": True}) == 1
+        assert declared_store_format({"store_format": 7}) == 7
+
+    def test_a_build_below_the_floor_refuses_naming_the_format(self, tmp_path: Path) -> None:
+        path = tmp_path / "docs-schema.yaml"
+        path.write_text(f"store_format: {STORE_FORMAT + 1}\n{self.PLAIN}", encoding="utf-8")
+        with pytest.raises(SchemaError) as excinfo:
+            load_schema(path)
+        message = str(excinfo.value)
+        # The whole point of the finding: a sentence about builds, not about a
+        # key the reader would otherwise go and "fix".
+        assert f"store format {STORE_FORMAT + 1}" in message
+        assert f"up to {STORE_FORMAT}" in message
+        assert "Upgrade docir" in message
+        assert "prefix" not in message
+
+    def test_the_refusal_comes_before_the_schema_is_parsed(self, tmp_path: Path) -> None:
+        # Injected: a file that is *also* invalid for this build. If the floor
+        # were checked after parsing, the reader would get the parse error —
+        # exactly the failure issue-c30895cc62a3 records.
+        path = tmp_path / "docs-schema.yaml"
+        path.write_text(
+            f"store_format: {STORE_FORMAT + 1}\ntypes:\n  nonsense: 3\n", encoding="utf-8"
+        )
+        with pytest.raises(SchemaError) as excinfo:
+            load_schema(path)
+        assert "store format" in str(excinfo.value)
+
+    def test_a_floor_this_build_meets_loads_normally(self, tmp_path: Path) -> None:
+        path = tmp_path / "docs-schema.yaml"
+        path.write_text(f"store_format: {STORE_FORMAT}\n{self.OVERLAY}", encoding="utf-8")
+        schema = load_schema(path)
+        assert schema.types["decision"].max_body_chars == 8000
+
+    def test_the_status_answers_without_loading(self, tmp_path: Path) -> None:
+        ahead = tmp_path / "ahead.yaml"
+        # Valid YAML this build cannot validate — a partial block with no
+        # profiles to overlay — which is the real shape of a file a newer docir
+        # wrote. `doctor` runs when the store is already broken, so it must
+        # answer without the load that is the thing failing.
+        ahead.write_text(
+            f"store_format: {STORE_FORMAT + 2}\ntypes:\n  decision:\n    level: 4\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(SchemaError):
+            parse_schema(yaml.safe_load(ahead.read_text(encoding="utf-8")))
+        assert store_format_status(ahead) == (STORE_FORMAT + 2, 1)
+        here = tmp_path / "here.yaml"
+        here.write_text(self.OVERLAY, encoding="utf-8")
+        assert store_format_status(here) == (1, 2)
+        # No file at all reads as the oldest format on both halves, never as
+        # unknown: there is nothing in it that any build could fail to read.
+        assert store_format_status(tmp_path / "absent.yaml") == (1, 1)

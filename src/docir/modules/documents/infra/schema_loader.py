@@ -30,6 +30,12 @@ from docir.modules.documents.domain.schema import (
 from docir.modules.documents.domain.services import schema_shape
 from docir.modules.documents.domain.services.expressions import compile_expression
 from docir.modules.documents.domain.services.graph_checks import RESERVED_FINDING_KINDS
+from docir.modules.documents.domain.services.store_format import (
+    REQUIRED_TYPE_KEYS,
+    STORE_FORMAT,
+    declared_store_format,
+    required_store_format,
+)
 from docir.modules.documents.infra.default_schema import DEFAULT_SCHEMA_YAML
 from docir.modules.documents.infra.profiles import (
     CORE_SCHEMA_YAML,
@@ -59,7 +65,69 @@ def load_schema(path: Path) -> Schema:
         raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except yaml.YAMLError as exc:
         raise SchemaError(f"{path} is not valid YAML: {exc}") from exc
+    _refuse_newer_store(path, raw)
     return parse_schema(raw)
+
+
+def _refuse_newer_store(path: Path, raw: object) -> None:
+    """Stop, naming the floor, before the schema is resolved.
+
+    Before the parse on purpose. A file a newer docir wrote fails somewhere in
+    the middle of validation, and what it says there is true of a key
+    (`type 'decision' must define a string 'prefix'`) rather than of the
+    situation — which sends the reader to fix a file nobody broke. One
+    comparison first turns that into a sentence about builds.
+
+    It can only name the number. A build has no entry in
+    :data:`FORMAT_FEATURES` for a format that postdates it, and inventing a
+    description of a feature it has never seen is worse than admitting the gap.
+    """
+    declared = declared_store_format(raw)
+    if declared <= STORE_FORMAT:
+        return
+    raise SchemaError(
+        f"{path} declares store format {declared}; this docir understands up to "
+        f"{STORE_FORMAT} — a newer docir wrote this store. Upgrade docir "
+        f"(`uv tool upgrade docir`, or `uv sync` in the project that pins it)"
+    )
+
+
+def read_raw_schema(path: Path) -> object:
+    """The schema file as parsed YAML, or ``{}`` when it is unreadable.
+
+    The two questions about a store's format are asked of the *raw* mapping —
+    what it declares, and what its contents need — and both are asked by callers
+    that must not be taken down by a file they are reporting on. `doctor` runs
+    when something is already wrong, and `check` is the command for files edited
+    outside the CLI.
+
+    What it does not survive is YAML that will not parse at all: there is no
+    mapping then, so there is no floor to read and `schema-unreadable` is the
+    finding. That limit costs nothing in the case this exists for — a docir
+    newer than this one writes valid YAML whose *meaning* is unknown here, not
+    invalid YAML.
+    """
+    try:
+        return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return {}
+
+
+def store_format_status(path: Path) -> tuple[int, int]:
+    """``(declared, required)`` for the schema at ``path``.
+
+    One call rather than two or three exported predicates. The numbers are only
+    read together — the questions are whether the floor a file records matches
+    the floor its contents need, and whether this build meets it — and each
+    extra entry point would parse the same file again to answer half of it.
+    It is also the reachable shape: a caller outside this module comes through
+    ``api``, which may not see ``domain`` where the two rules live.
+
+    Read without loading, because a store above this build's format is one whose
+    *load* is the thing that fails.
+    """
+    raw = read_raw_schema(path)
+    return declared_store_format(raw), required_store_format(raw)
 
 
 def describe_schema(schema: Schema) -> dict[str, object]:
@@ -337,11 +405,6 @@ def _parse_id_style(value: object, *, where: str = "schema") -> str:
     return style
 
 
-#: The keys a type block must carry to stand on its own. A block missing any of
-#: them cannot be a declaration, which is what makes it readable as an overlay.
-_REQUIRED_TYPE_KEYS: tuple[str, ...] = ("prefix", "statuses", "default_status")
-
-
 def _merge_type_specs(merged: dict[str, object], types_raw: dict) -> None:
     """Fold one fragment's ``types:`` into the accumulated raw specs.
 
@@ -369,11 +432,11 @@ def _merge_type_specs(merged: dict[str, object], types_raw: dict) -> None:
     for name, spec in types_raw.items():
         key = str(name)
         base = merged.get(key)
-        if not isinstance(spec, dict) or all(k in spec for k in _REQUIRED_TYPE_KEYS):
+        if not isinstance(spec, dict) or all(k in spec for k in REQUIRED_TYPE_KEYS):
             merged[key] = spec
             continue
         if base is None:
-            missing = ", ".join(repr(k) for k in _REQUIRED_TYPE_KEYS if k not in spec)
+            missing = ", ".join(repr(k) for k in REQUIRED_TYPE_KEYS if k not in spec)
             known = ", ".join(sorted(str(k) for k in merged)) or "none yet"
             raise SchemaError(
                 f"type {key!r} omits {missing}, so it reads as an override of a type the core "

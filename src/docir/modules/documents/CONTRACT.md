@@ -135,6 +135,11 @@ files and the derived index never disagree.
   link syntax with no second reading. It feeds no graph — `orphan` does not see it — and
   `repair()` leaves it, since a target that resolves to nothing needs somebody to say what was
   meant (adr-ae631a356639).
+  `store-format-undeclared` is the one finding about no document at all: the schema file uses a
+  construct that needs a store format above what it declares, so a docir predating that
+  construct refuses the whole store. A warning, because the damage lands on a *different*
+  machine — a teammate's older build, or a repository reading this one as a peer — which is
+  exactly the reader an error here could not reach (issue-c30895cc62a3).
   All warnings: the document stays readable and its edges resolve. Also `unmatched-code` — a
   governed glob that matches nothing — when the service was given a `CodeMatcher`; without one
   (no repository above the store) the finding is skipped rather than reported against a tree
@@ -201,7 +206,21 @@ files and the derived index never disagree.
   after the core/profile/inline merge, which is the only way to give up a merged type's **name
   and its prefix** (adr-f8cce745d0d5); it is refused when it names a type the schema does not
   define, one the same file declares inline, or all of them.
+  It also **refuses a store above this build's format before parsing anything**: a
+  `store_format:` above `STORE_FORMAT` raises naming both numbers and the upgrade, rather than
+  failing somewhere inside validation on a key nobody removed (adr-36d6156ffab9).
 - `describe_schema(Schema) -> dict` — the merged schema as plain data (`docir schema show`)
+- `declared_store_format(raw) -> int` / `required_store_format(raw) -> int` — what a parsed
+  schema mapping records as its floor, and what its contents actually need. Pure, over the raw
+  mapping rather than the merged `Schema`, because a floor is a property of the *file* a
+  teammate's docir has to read. Absent, unparseable or nonsensical declarations all read as
+  `1` — the oldest format, never unknown: a file written before the key existed is by
+  construction one every build could read. `required_` derives from the constructs in use, so
+  the two can be compared without anybody remembering to update a line.
+- `store_format_ahead(path) -> int` — the floor a file declares when this build cannot meet
+  it, else `0`. Reads the file without loading it, for `docir doctor`: the load is the thing
+  that fails in this state. Returns `0` for YAML that will not parse at all — there is no
+  mapping to read a floor from, and `schema-unreadable` covers that.
 - `check_schema_conformance(Schema, DocumentFileStore) -> ConformanceReport` — what a schema
   costs the corpus, for `docir schema validate` (issue-3678c897295f). Runs
   `GraphChecker.check_schema_conformance` — the four Tier 1 findings a *schema* edit can cause
@@ -212,12 +231,24 @@ files and the derived index never disagree.
   `ConformanceReport.affected` counts distinct documents, not findings; `documents` and
   `unreadable` are reported always, since "0 findings" over a corpus that would not parse is
   otherwise indistinguishable from a clean one. Advisory: it never changes an exit code.
+  `StoreStatus` also carries `store_format_declared` / `store_format_required` /
+  `store_format_supported` — the floor this store's schema records, the floor its contents
+  need, and the highest this build reads. Here as well as in `docir doctor` because the
+  reader over MCP is an agent and `doctor` has no tool; `(1, 1)` with no schema file, on the
+  same rule the declaration follows (absent means every build can read it, never unknown).
 - `MaintenanceService.repair() -> RepairResult` — fix the mechanically-fixable Tier 1 damage:
   re-issue duplicate ids (oldest file keeps the id) and drop dead `related` edges. `malformed`,
   `unknown-type` and `unmatched-code` each need somebody to read something and decide — what the
   file was meant to say, what the schema should declare, whether the glob is stale or the
   document is — and come back in `RepairResult.remaining`. Does not advance
   `updated` — a repair is not a re-verification.
+  Two of its actions repair nothing here and file evidence instead: `code-baseline` starts
+  watching globs declared before baselines existed, and `store-format-undeclared` records
+  `store_format:` in `docs-schema.yaml` when the file's contents need a higher floor than it
+  declares. Both qualify on the same two tests — the value is derived, so there is one answer,
+  and neither claims anything a human must judge. The format line is written **textually**, so
+  the comments that file exists to carry survive, and is only ever raised: a declaration above
+  what the contents need was written deliberately and is left alone.
 - `render_schema_yaml(profiles, id_style) -> str` — a `docs-schema.yaml` body selecting
   `profiles` and a schema-wide `id_style` (`ID_STYLES`: `sequential` | `random`). A type
   without its own `id_style` inherits the schema-wide one; absent both, `DEFAULT_ID_STYLE`

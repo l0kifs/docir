@@ -295,6 +295,12 @@ docir schema show                   # the merged result — what validation enfo
 docir schema validate               # check an edit before it reaches a write
 ```
 
+**A store says which docir it needs.** `.docir/` is committed, and every teammate reads it
+with the docir they happen to have. When a schema edit uses something older builds cannot parse,
+`docir check` warns and `docir check --fix` writes a `store_format:` line — after which those
+builds stop with the version they need instead of a parse error about a key nobody touched.
+`docir doctor` reports the same thing from the other side, for the build that is behind.
+
 A type can also carry a hard body ceiling (`max_body_chars: 8000`), and a write that
 would push a document past it fails with exit 9 instead of landing. No type ships with
 one, so nothing is capped until you choose to cap it. Shrinking is always allowed, which
@@ -347,6 +353,11 @@ docir self status         # what is installed, and whether anything newer exists
 ```
 
 When they do not — or when a read simply contradicts what you can see in the files —
+`docir doctor` also carries a `compat` section: the store format numbers to compare against
+another machine's docir, and each surface scheduled for removal with the day it goes — so "is
+this urgent" has an answer without asking. A date still ahead raises no
+finding; one that has passed is an error against docir itself.
+
 `docir doctor` is the one command that reports every way docir can be *subtly* wrong: a
 daemon still serving code you replaced, a `DOCIR_EMBEDDER` left over from a test run, an
 index built by another version or behind the files it projects, a schema that moved under the

@@ -1,3 +1,4 @@
+store_format: 2
 # docir document schema.
 #
 # The frozen, domain-agnostic *core* (the `decision` type, the relation-kind

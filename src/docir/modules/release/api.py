@@ -1,8 +1,9 @@
 """Public surface of the release module.
 
-Answers two questions about the docir *installation* rather than about any
-store: how it was installed (and therefore whether it may upgrade itself), and
-whether a newer version has been published. Like ``agents``, it owns no index or
+Answers three questions about the docir *installation* rather than about any
+store: how it was installed (and therefore whether it may upgrade itself),
+whether a newer version has been published, and what this build has announced it
+will stop doing, with the date. Like ``agents``, it owns no index or
 database state and runs in-process — it is the tool looking at itself.
 
 The network call is opt-in and daily; see :class:`ReleaseService`.
@@ -13,6 +14,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from docir.modules.release.application.service import ReleaseService
+from docir.modules.release.domain.deprecations import (
+    DEPRECATIONS,
+    Deprecation,
+    announcements,
+)
 from docir.modules.release.domain.installation import PACKAGE, Installation, detect
 from docir.modules.release.domain.results import ReleaseStatus, UpgradeOutcome, is_newer
 from docir.modules.release.infra.adapters import (
@@ -44,11 +50,14 @@ def build_release_service(
 
 
 __all__ = [
+    "DEPRECATIONS",
     "PACKAGE",
+    "Deprecation",
     "Installation",
     "ReleaseService",
     "ReleaseStatus",
     "UpgradeOutcome",
+    "announcements",
     "build_release_service",
     "current_installation",
     "is_newer",

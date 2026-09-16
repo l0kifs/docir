@@ -1,12 +1,22 @@
 # release
 
 ## Purpose
-Answers two questions about the docir *installation* rather than about a store:
-how docir was installed — and therefore whether it may upgrade itself — and
-whether a newer version has been published. Backs `docir self status` and the
-package step of `docir self upgrade`.
+Answers three questions about the docir *installation* rather than about a store:
+how docir was installed — and therefore whether it may upgrade itself —
+whether a newer version has been published, and what this build has announced it
+will stop doing, with the date. Backs `docir self status`, the package step of
+`docir self upgrade`, and the `compat` section of `docir doctor`.
 
 ## Public operations
+- `announcements(today) -> ((Deprecation, overdue), ...)` — every entry in
+  `DEPRECATIONS` with whether its date has passed, soonest sunset first. The
+  register is **declared, never discovered**: a deprecation is a promise about a
+  replacement and a date, and neither is inferable from the code. `Deprecation`
+  carries `subject` (as a caller writes it, so it is greppable), `replacement`,
+  `sunset` and an optional `note`; `overdue(today)` is `today > sunset`, so the
+  sunset day itself still works. `True` is a defect in *docir* — the removal it
+  announced was not made — which is why `doctor` reports it as an error and a
+  future date raises no finding at all (adr-6d4d43d44075).
 - `current_installation() -> Installation` — classify the running install
   (`uv-tool` | `pipx` | `pip` | `project` | `uvx` | `unknown`), carrying the
   `upgrade_command` to run and an `explanation` of why there is none

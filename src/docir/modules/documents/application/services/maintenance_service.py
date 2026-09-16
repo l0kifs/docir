@@ -24,10 +24,17 @@ from docir.modules.documents.domain.schema import Schema
 from docir.modules.documents.domain.services import schema_shape
 from docir.modules.documents.domain.services.graph_checks import CheckIssue, GraphChecker
 from docir.modules.documents.domain.services.similarity_lint import LintFinding, SimilarityLinter
+from docir.modules.documents.domain.services.store_format import (
+    FORMAT_FEATURES,
+    STORE_FORMAT,
+    declared_store_format,
+    required_store_format,
+)
 from docir.modules.indexing.api import DrainResult, EmbeddingScheduler
 from docir.platform.clock import Clock
 from docir.platform.embedding import Embedder
 from docir.platform.filesystem.ports import CodeMatcher, DocumentFileStore, TagFileStore
+from docir.platform.filesystem.schema_store import YamlSchemaFileStore
 from docir.platform.persistence.unit_of_work import UnitOfWork
 
 UnitOfWorkFactory = Callable[[], UnitOfWork]
@@ -91,6 +98,15 @@ class StoreStatus:
     #: ``DOCIR_EMBEDDER`` shows up here as the whole corpus, because a vector
     #: made by another model reads as dirty rather than as a rival answer.
     embeddings_pending: int
+    #: The floor this store's schema records, the floor its contents need, and
+    #: the highest this build reads. The three numbers that answer "can another
+    #: docir read this store" without running the experiment — here rather than
+    #: only in `docir doctor`, because the reader over MCP is an agent and
+    #: `doctor` has no tool (adr-6d4d43d44075). Defaults keep every existing
+    #: construction of this DTO valid.
+    store_format_declared: int = 1
+    store_format_required: int = 1
+    store_format_supported: int = STORE_FORMAT
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +135,7 @@ class MaintenanceService:
         clock: Clock,
         version: str,
         code_matcher: CodeMatcher | None = None,
+        schema_file_store: YamlSchemaFileStore | None = None,
     ) -> None:
         self._uow_factory = uow_factory
         self._file_store = file_store
@@ -135,6 +152,11 @@ class MaintenanceService:
         #: nothing to resolve a ``code`` glob against, and the finding is
         #: skipped rather than reported against a tree that does not exist.
         self._code_matcher = code_matcher
+        #: The schema *file*, where :attr:`_schema` is the resolved result of
+        #: merging it with the package's. Only the file records a format floor,
+        #: and only the file can be told to record one. ``None`` leaves both the
+        #: finding and the repair silent.
+        self._schema_file_store = schema_file_store
         self._prefixes = schema.prefixes()
         self._graph_checker = GraphChecker(schema)
         self._linter = SimilarityLinter()
@@ -142,7 +164,7 @@ class MaintenanceService:
             uow_factory, file_store, tag_file_store, scheduler, schema, version
         )
         self._repairer = StoreRepairer(
-            uow_factory, file_store, schema, self._rebuilder, code_matcher
+            uow_factory, file_store, schema, self._rebuilder, code_matcher, schema_file_store
         )
 
     def reindex(self, *, changed_only: bool = False) -> ReindexResult:
@@ -197,6 +219,7 @@ class MaintenanceService:
         issues.extend(self._find_duplicate_ids())
         issues.extend(self._find_malformed())
         issues.extend(self._drift_issues())
+        issues.extend(self._format_issues())
         issues.extend(self._build_issues())
         return issues
 
@@ -252,15 +275,31 @@ class MaintenanceService:
         with self._uow_factory() as uow:
             documents = uow.documents.count()
             pending = len(uow.embeddings.dirty_ids(self._embedder.model_id))
+        declared, required = self._store_format()
         return StoreStatus(
             documents=documents,
             documents_on_disk=self._file_store.count(),
             version=self._version,
+            store_format_declared=declared,
+            store_format_required=required,
+            store_format_supported=STORE_FORMAT,
             stale_index_build=self.stale_index_build(),
             schema_drift=tuple(self.schema_drift()),
             embedding_model=self._embedder.model_id,
             embeddings_pending=pending,
         )
+
+    def _store_format(self) -> tuple[int, int]:
+        """``(declared, required)`` for the schema file, or ``(1, 1)`` with none.
+
+        A store with no schema file to read is at the oldest format by the same
+        rule the declaration follows: absent means every build can read it, not
+        that the answer is unknown.
+        """
+        if self._schema_file_store is None:
+            return 1, 1
+        raw = self._schema_file_store.read_raw()
+        return declared_store_format(raw), required_store_format(raw)
 
     def stale_index_build(self) -> str | None:
         """The version that built this index, when it is not the running one.
@@ -341,6 +380,45 @@ class MaintenanceService:
                 doc_ids=(),
             )
             for line in self.schema_drift()
+        ]
+
+    def _format_issues(self) -> list[CheckIssue]:
+        """Report a schema that needs a newer docir than it admits to.
+
+        The declaration is the half that goes missing. A store gains a construct
+        an older build cannot parse and the line saying so is written by whoever
+        remembers — which is why this derives the answer from the file's own
+        contents and compares, rather than trusting what is written there.
+
+        The damage it predicts never lands here. This build reads the file
+        perfectly; the reader who cannot is a teammate on an older docir, or a
+        repository declaring this one a peer, and neither is present to complain.
+        That is the whole argument for reporting it at all — nothing else in this
+        corpus can notice, and adr-ab4598c6f707's cross-version run is a manual
+        act somebody has to remember to perform (issue-c30895cc62a3).
+
+        Silent when the store has no schema file, or one that will not parse:
+        both are somebody else's finding, and neither is evidence about formats.
+        """
+        if self._schema_file_store is None:
+            return []
+        raw = self._schema_file_store.read_raw()
+        declared = declared_store_format(raw)
+        required = required_store_format(raw)
+        if declared >= required:
+            return []
+        feature = FORMAT_FEATURES.get(required, f"a construct needing store format {required}")
+        return [
+            CheckIssue(
+                kind="store-format-undeclared",
+                message=(
+                    f"{self._schema_file_store.path.name} uses {feature}, so it needs store "
+                    f"format {required} and declares {declared} — a docir that predates it "
+                    f"refuses this entire store with a parse error about a key nobody "
+                    f"removed. Record it with `docir check --fix`"
+                ),
+                doc_ids=(),
+            )
         ]
 
     def _resolve_code(self, documents: list[Document]) -> dict[str, bool] | None:

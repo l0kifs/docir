@@ -21,7 +21,12 @@ from docir.modules.documents.application.services.id_generator import IdGenerato
 from docir.modules.documents.application.services.index_rebuilder import IndexRebuilder
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.schema import Schema
+from docir.modules.documents.domain.services.store_format import (
+    declared_store_format,
+    required_store_format,
+)
 from docir.platform.filesystem.ports import CodeMatcher, DocumentFileStore
+from docir.platform.filesystem.schema_store import YamlSchemaFileStore
 from docir.platform.persistence.unit_of_work import UnitOfWork
 
 UnitOfWorkFactory = Callable[[], UnitOfWork]
@@ -31,10 +36,11 @@ UnitOfWorkFactory = Callable[[], UnitOfWork]
 class RepairAction:
     """One repair that was applied, in the caller's terms."""
 
-    # The finding kind repaired — `duplicate-id`, `dangling` — or, for the one
-    # action that repairs nothing, what it filed: `code-baseline`. Deliberately
-    # not `code-drifted`: this enables that finding rather than clearing it, and
-    # an action naming a finding it did not repair reads as the opposite.
+    # The finding kind repaired — `duplicate-id`, `dangling`,
+    # `store-format-undeclared` — or, for the one action that repairs nothing,
+    # what it filed: `code-baseline`. Deliberately not `code-drifted` there:
+    # that action enables the finding rather than clearing it, and an action
+    # naming a finding it did not repair reads as the opposite.
     kind: str
     message: str
     doc_ids: tuple[str, ...]
@@ -50,6 +56,7 @@ class StoreRepairer:
         schema: Schema,
         rebuilder: IndexRebuilder,
         code_matcher: CodeMatcher | None = None,
+        schema_file_store: YamlSchemaFileStore | None = None,
     ) -> None:
         self._uow_factory = uow_factory
         self._file_store = file_store
@@ -59,6 +66,7 @@ class StoreRepairer:
         # global store has no repository above it, so there is no tree to
         # fingerprint and nothing to start watching.
         self._code_matcher = code_matcher
+        self._schema_file_store = schema_file_store
         self._prefixes = schema.prefixes()
 
     def repair(self) -> list[RepairAction]:
@@ -81,7 +89,48 @@ class StoreRepairer:
             self._rebuilder.reindex(changed_only=True)
         actions.extend(self._repair_dangling())
         actions.extend(self._mint_code_baselines())
+        actions.extend(self._record_store_format())
         return actions
+
+    def _record_store_format(self) -> list[RepairAction]:
+        """Write the format floor the schema file's contents already need.
+
+        The fourth repair, and the second that mends nothing here: this store
+        reads perfectly on this build, and the line exists for a docir that
+        predates its schema — a teammate's, or one reading this repository as a
+        peer (issue-c30895cc62a3).
+
+        It qualifies on the two tests `--fix` applies. The value needs no guess:
+        it is derived from the constructs the file uses, by the same function the
+        finding compares against, so there is exactly one answer. And it claims
+        nothing anybody has to judge — a floor is a fact about what the file
+        contains, not a preference about what it should.
+
+        Only ever raised. A declaration *above* what the contents need is left
+        alone: somebody may have written it deliberately, ahead of a change they
+        are about to make, and a repair that lowers a floor takes away a
+        protection to tidy a number.
+        """
+        if self._schema_file_store is None:
+            return []
+        raw = self._schema_file_store.read_raw()
+        declared = declared_store_format(raw)
+        required = required_store_format(raw)
+        if declared >= required:
+            return []
+        if not self._schema_file_store.record_store_format(required):
+            return []
+        return [
+            RepairAction(
+                kind="store-format-undeclared",
+                message=(
+                    f"recorded `store_format: {required}` in "
+                    f"{self._schema_file_store.path.name} — a docir that predates it now "
+                    f"refuses this store by name instead of failing on a key"
+                ),
+                doc_ids=(),
+            )
+        ]
 
     def _mint_code_baselines(self) -> list[RepairAction]:
         """Start watching the globs a document declared before baselines existed.

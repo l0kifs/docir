@@ -1245,7 +1245,12 @@ class TestStoreStatusIsTheIndexAccountOfItself:
     def test_it_says_nothing_about_the_corpus(self, dispatcher: Dispatcher) -> None:
         """`check` owns that question. A diagnosis that costs what `check` costs
         is one nobody runs while something is actually wrong, so the absence of
-        graph findings here is the contract, not an oversight."""
+        graph findings here is the contract, not an oversight.
+
+        The three `store_format_*` fields are not an exception to it. They are
+        read from the schema *file*, cost one small YAML parse, and describe how
+        this store and another build relate — never what is in the corpus.
+        """
         dispatcher.dispatch("add", {"type": "decision", "title": "Lonely", "description": "d"})
         status = dispatcher.dispatch("store_status", {})
         assert set(status) == {
@@ -1256,6 +1261,9 @@ class TestStoreStatusIsTheIndexAccountOfItself:
             "schema_drift",
             "embedding_model",
             "embeddings_pending",
+            "store_format_declared",
+            "store_format_required",
+            "store_format_supported",
         }
 
 
@@ -1461,3 +1469,100 @@ class TestCheckRefusesToReportAVerdictItCouldNotReach:
         self._write_a_dangling_pair(settings)
         status = dispatcher.dispatch("store_status", {})
         assert (status["documents"], status["documents_on_disk"]) == (0, 1)
+
+
+class TestTheStoreDeclaresTheDocirItNeeds:
+    """`check` reports a schema that needs a newer docir than it admits to.
+
+    The damage never lands here — this build reads the file perfectly. It lands
+    on a teammate's older docir, which refuses the whole store on a parse error
+    about a key nobody removed (issue-c30895cc62a3). Every test injects the
+    construct that actually caused that: a partial `types:` block.
+    """
+
+    OVERLAY = "profiles: [software]\ntypes:\n  decision:\n    max_body_chars: 8000\n"
+
+    def _store(self, settings: Settings, schema: str) -> Container:
+        settings.ensure_directories()
+        settings.schema_path.write_text(schema, encoding="utf-8")
+        return build_container(settings, background_embeddings=False)
+
+    def _findings(self, docs: Dispatcher) -> list[dict]:
+        return [i for i in docs.dispatch("check", {}) if i["kind"] == "store-format-undeclared"]
+
+    def test_an_undeclared_floor_is_reported_with_the_construct_that_needs_it(
+        self, settings: Settings
+    ) -> None:
+        container = self._store(settings, self.OVERLAY)
+        try:
+            findings = self._findings(container.dispatcher)
+            assert len(findings) == 1
+            assert "store format 2" in findings[0]["message"]
+            assert "declares 1" in findings[0]["message"]
+            assert "`types:` block" in findings[0]["message"]
+            # A warning: this store is intact, and an error here would red-build
+            # a corpus for damage that lands on a different machine.
+            assert findings[0]["severity"] == "warning"
+        finally:
+            container.close()
+
+    def test_a_store_using_no_such_construct_is_silent(self, settings: Settings) -> None:
+        container = self._store(settings, "profiles: [software]\n")
+        try:
+            assert not self._findings(container.dispatcher)
+        finally:
+            container.close()
+
+    def test_a_declared_floor_silences_it(self, settings: Settings) -> None:
+        container = self._store(settings, f"store_format: 2\n{self.OVERLAY}")
+        try:
+            assert not self._findings(container.dispatcher)
+        finally:
+            container.close()
+
+    def test_fix_records_the_floor_and_keeps_the_comments(self, settings: Settings) -> None:
+        # The file docir tells a human to edit ships eighty lines of comments;
+        # a repair that re-dumped the YAML would delete every one of them.
+        commented = f"# why this store exists\n# and what the keys do\n{self.OVERLAY}"
+        container = self._store(settings, commented)
+        try:
+            docs = container.dispatcher
+            result = docs.dispatch("repair", {})
+            actions = [a for a in result["actions"] if a["kind"] == "store-format-undeclared"]
+            assert len(actions) == 1
+            assert "store_format: 2" in actions[0]["message"]
+
+            written = settings.schema_path.read_text(encoding="utf-8")
+            assert written.startswith("store_format: 2\n")
+            assert "# why this store exists" in written
+            assert "# and what the keys do" in written
+            assert not self._findings(docs)
+        finally:
+            container.close()
+
+    def test_a_second_fix_changes_nothing(self, settings: Settings) -> None:
+        container = self._store(settings, self.OVERLAY)
+        try:
+            docs = container.dispatcher
+            assert [
+                a
+                for a in docs.dispatch("repair", {})["actions"]
+                if a["kind"] == "store-format-undeclared"
+            ]
+            assert not [
+                a
+                for a in docs.dispatch("repair", {})["actions"]
+                if a["kind"] == "store-format-undeclared"
+            ]
+        finally:
+            container.close()
+
+    def test_fix_never_lowers_a_floor_somebody_declared(self, settings: Settings) -> None:
+        # Written ahead of a change they are about to make. A repair that
+        # lowered it would remove a protection in order to tidy a number.
+        container = self._store(settings, "store_format: 2\nprofiles: [software]\n")
+        try:
+            container.dispatcher.dispatch("repair", {})
+            assert "store_format: 2" in settings.schema_path.read_text(encoding="utf-8")
+        finally:
+            container.close()

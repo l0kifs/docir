@@ -163,6 +163,18 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
 - **`docir update <id> --verified` raises that finding to `code-changed`.** It
   re-takes the fingerprints as *you* read them, which is the stronger of the two
   claims — stamp it only when you did that reading.
+- **`docir doctor | jq '.compat'` says what is about to change.** It carries the
+  store format numbers — compare `required` against another machine's
+  `supported` to know whether that docir can read this store — and every surface
+  this build will stop accepting, each with the date it stops. Read it before
+  scripting around a flag, and when a date has passed docir reports it as an
+  error against itself.
+- **After editing `docs-schema.yaml`, run `docir check`.** A
+  `store-format-undeclared` warning means the file now uses something a docir
+  older than it cannot parse — and since the schema resolves before anything
+  opens, that build refuses the whole store rather than the one key. `docir
+  check --fix` records the `store_format:` line that turns the refusal into a
+  sentence naming the version, and leaves the file's comments alone.
 - **Adopting a store an older docir wrote? Run `docir check --fix` once.** Its
   patterns carry no fingerprint, so nothing watches them; the run files one per
   pattern, names every document it put under watch, and changes no review state.

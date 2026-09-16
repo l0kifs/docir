@@ -18,7 +18,7 @@ from docir import __version__
 from docir.entry_points import doctor as doctor_report
 from docir.entry_points.cli import emit, rendering
 from docir.entry_points.cli.runner import execute, get_state, run_local, try_execute, use_json
-from docir.modules.documents.api import DEFAULT_CONTEXT_EXPAND
+from docir.modules.documents.api import DEFAULT_CONTEXT_EXPAND, STORE_FORMAT
 from docir.platform.errors import ValidationError
 
 
@@ -65,7 +65,12 @@ def check(
     ] = False,
     fix: Annotated[
         bool,
-        typer.Option("--fix", help="Repair what can be repaired (duplicate ids, dead edges)."),
+        typer.Option(
+            "--fix",
+            help="Repair what can be repaired (duplicate ids, dead edges) and file the "
+            "evidence nothing else can: code baselines, and the store format the schema "
+            "needs.",
+        ),
     ] = False,
 ) -> None:
     """Tier 1 structural checks (cycles, orphans, layering, dangling, dup ids).
@@ -76,6 +81,20 @@ def check(
     unknown types, and a `code` glob that no longer matches anything (checked
     only when the store sits in a repository — there is nothing to resolve a
     pattern against otherwise).
+
+    One warning is about no document at all. `store-format-undeclared` means
+    `docs-schema.yaml` uses something a docir older than it cannot parse — and a
+    schema resolves before anything opens, so that build refuses the *whole*
+    store, with a message about a key rather than about versions. `docir check
+    --fix` records `store_format:` so the refusal names the version instead:
+
+        docir check | jq -r '.[] | select(.kind == "store-format-undeclared") | .message'
+        docir check --fix   # writes the line, keeps the file's comments
+
+    Run it once after adopting a store an older docir wrote, and whenever you
+    edit `docs-schema.yaml`. The damage it predicts never lands on you — it
+    lands on a teammate's build, or on a repository reading this store as a
+    peer, neither of which is here to complain.
 
     One warning reports good news: `unblocked` names a live document whose every
     `depends_on` target has closed, so the work is ready to start. Nothing else
@@ -166,6 +185,24 @@ def doctor(
     index, a schema that will not load, no embedding model); `warning` means it
     works less well than you think. --strict exits 1 on errors only, which is
     what makes it usable in a setup script or CI.
+
+    The `compat` section is facts rather than findings — how this store and this
+    build relate, and what this build is going to stop doing:
+
+        docir doctor | jq '.compat'
+        {
+          "store_format": {"declared": 2, "required": 2, "supported": 2},
+          "deprecations": [{"subject": "--include-resolved",
+                            "replacement": "--include-inactive",
+                            "sunset": "2027-03-01", "overdue": false}]
+        }
+
+    `store_format` answers "can my teammate read this store" without running the
+    experiment: compare `required` against their docir's `supported`. Each
+    deprecation carries the date it stops working, so "is this urgent" is
+    answerable here rather than by asking. A future date is data and raises no
+    finding; a date that has passed is an error, because the removal it named
+    was not made.
 
     It never touches the network and, without --probe, never loads a model:
 
@@ -341,6 +378,28 @@ def _emit_doctor(report: doctor_report.DoctorReport) -> None:
             "stale_code": environment.daemon.stale_code,
             "disabled_by_env": environment.daemon_env_disabled,
             "watching": environment.watch,
+        },
+        # How this store and this build relate, as facts rather than findings:
+        # the two numbers a teammate compares against their own docir, and every
+        # surface this build has announced it will stop accepting. Dated, so
+        # "is this urgent" is answerable without asking anybody
+        # (adr-6d4d43d44075).
+        "compat": {
+            "store_format": {
+                "declared": environment.store_format_declared,
+                "required": environment.store_format_required,
+                "supported": STORE_FORMAT,
+            },
+            "deprecations": [
+                {
+                    "subject": entry.subject,
+                    "replacement": entry.replacement,
+                    "sunset": entry.sunset.isoformat(),
+                    "overdue": overdue,
+                    "note": entry.note,
+                }
+                for entry, overdue in environment.deprecations
+            ],
         },
         "peers": [
             {

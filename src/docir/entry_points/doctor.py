@@ -58,8 +58,19 @@ from docir.entry_points.federation import (
     store_description,
     unrecognised_keys,
 )
-from docir.modules.documents.api import index_is_empty, load_schema
-from docir.modules.release.api import ReleaseStatus, build_release_service
+from docir.modules.documents.api import (
+    STORE_FORMAT,
+    index_is_empty,
+    load_schema,
+    store_format_status,
+)
+from docir.modules.release.api import (
+    Deprecation,
+    ReleaseStatus,
+    announcements,
+    build_release_service,
+)
+from docir.platform.clock import SystemClock
 from docir.platform.errors import DocirError
 
 ERROR = "error"
@@ -92,6 +103,15 @@ ERROR_KINDS = frozenset(
         # `error` — and unlike `stale-index-build`, its mirror image, no read
         # succeeds meanwhile.
         "index-from-newer-build",
+        # A surface this build still accepts past the date it announced for its
+        # removal. An error in *docir's* own CI first — the register promised a
+        # removal and it was not made — which is the point of naming a date
+        # rather than saying "soon".
+        "deprecation-overdue",
+        # The committed half of the same situation, and an error on the same
+        # grounds: the schema resolves before anything opens, so a store above
+        # this build's format answers nothing at all.
+        "store-from-newer-build",
         "model-probe-failed",
     }
 )
@@ -186,6 +206,22 @@ class Environment:
     #: (issue-38a4f13b1e61), and a cause that only exists as a message cannot be
     #: given its own fix line.
     index_revision_ahead: str
+    #: The store format ``docs-schema.yaml`` declares, when this build does not
+    #: understand it — a store a *newer* docir wrote. 0 otherwise. Read here
+    #: rather than inferred from ``schema_error`` for the reason
+    #: ``index_revision_ahead`` is: the load is the thing that fails, so the
+    #: cause exists only as a message, and a message cannot carry its own fix.
+    store_format_ahead: int
+    #: The floor this store's schema records, and the floor its contents need —
+    #: the two numbers a teammate compares against their own build to answer
+    #: "can I read this store" without running the experiment (adr-6d4d43d44075).
+    store_format_declared: int
+    store_format_required: int
+    #: Every surface this build has announced it will stop accepting, with
+    #: whether its date has passed. Read from the register rather than detected:
+    #: `doctor` cannot know which flags a caller types, and an announcement does
+    #: not depend on it — the date is the content.
+    deprecations: tuple[tuple[Deprecation, bool], ...]
 
     # -- embedding
     embed_model: str | None
@@ -240,6 +276,7 @@ def snapshot(settings: Settings, version: str) -> Environment:
     would be the one moment that costs the most.
     """
     schema_present = settings.schema_path.is_file()
+    format_declared, format_required = store_format_status(settings.schema_path)
     schema_error = ""
     embed_model: str | None = None
     if schema_present:
@@ -260,6 +297,10 @@ def snapshot(settings: Settings, version: str) -> Environment:
         schema_error=schema_error,
         index_present=settings.db_path.is_file(),
         index_revision_ahead=_revision_ahead(settings.db_path),
+        store_format_ahead=format_declared if format_declared > STORE_FORMAT else 0,
+        store_format_declared=format_declared,
+        store_format_required=format_required,
+        deprecations=announcements(SystemClock().today()),
         store_description=store_description(settings.home),
         unknown_peer_keys=unrecognised_keys(settings.home),
         embed_model=embed_model,
@@ -367,6 +408,7 @@ def diagnose(
     """
     findings = [
         *_installation_findings(environment),
+        *_deprecation_findings(environment),
         *_store_findings(environment, store, store_error),
         *_embedding_findings(environment, store, probe),
         *_daemon_findings(environment),
@@ -379,6 +421,38 @@ def diagnose(
         probe=probe,
         findings=tuple(findings),
     )
+
+
+def _deprecation_findings(environment: Environment) -> list[DoctorFinding]:
+    """Findings for announcements whose date has passed — and only those.
+
+    The announcement itself is data, not a finding: it lives in the report's
+    ``compat`` section, present on every run, the way RFC 9745 carries a
+    deprecation on every response rather than as an error. A warning that fires
+    for a change which has not happened yet is the noise adr-1cccd77cb023 guards
+    against, one notch quieter — it survives every run, teaching the reader to
+    skim a list that is supposed to be short.
+
+    Past the date it is different in kind. The surface was supposed to be gone,
+    so an entry still answering means a removal was promised and not made, and
+    the first reader of that is whoever runs `doctor --strict` in docir's own CI.
+    """
+    findings: list[DoctorFinding] = []
+    for entry, overdue in environment.deprecations:
+        if not overdue:
+            continue
+        findings.append(
+            DoctorFinding(
+                kind="deprecation-overdue",
+                message=(
+                    f"{entry.subject} was announced to stop working on "
+                    f"{entry.sunset.isoformat()} and still does — the removal it named "
+                    f"was not made"
+                ),
+                fix=f"remove {entry.subject}, or move its sunset and say why",
+            )
+        )
+    return findings
 
 
 def _installation_findings(environment: Environment) -> list[DoctorFinding]:
@@ -462,6 +536,24 @@ def _store_findings(
                     "beneath it; documents written here are absent from that corpus"
                 ),
                 fix=f"declare it as a peer in {environment.home / 'stores.yaml'} to read both",
+            )
+        )
+    if environment.store_format_ahead:
+        findings.append(
+            DoctorFinding(
+                kind="store-from-newer-build",
+                message=(
+                    f"{environment.schema_path.name} declares store format "
+                    f"{environment.store_format_ahead}, which this docir does not understand "
+                    f"(it reads up to {STORE_FORMAT}) — a newer docir wrote this store. "
+                    "Every command that resolves the schema refuses, which is all of them"
+                ),
+                # Not `docir reindex` and not a repair: the file is correct and
+                # this build is the one behind it. Deleting the line would make
+                # the schema parse a little further and then fail on the
+                # construct the floor exists to announce — the parse error this
+                # finding was written to replace.
+                fix="upgrade docir (`uv tool upgrade docir`, or `uv sync` where it is pinned)",
             )
         )
     if environment.index_revision_ahead:

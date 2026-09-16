@@ -46,6 +46,7 @@ RESERVED_FINDING_KINDS: frozenset[str] = frozenset(
         "unknown-relation-kind",
         "missing-required",
         "schema-drift",
+        "store-format-undeclared",
         "stale-index-build",
         "empty-index",
         "unresolved-link",
@@ -55,7 +56,8 @@ RESERVED_FINDING_KINDS: frozenset[str] = frozenset(
 #: Everything else (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`,
 #: `unknown-status`, `unknown-tag`, `tag-key-format`, `unmatched-code`,
 #: `code-changed`, `code-drifted`, `verification-outdated`, `missing-required`,
-#: `unknown-relation-kind`, `schema-drift`, `stale-index-build`, `unblocked`)
+#: `unknown-relation-kind`, `schema-drift`, `store-format-undeclared`,
+#: `stale-index-build`, `unblocked`)
 #: describes shape or classification, not
 #: damage. `orphan` in particular fires for any document with no relations — the
 #: default state of a new one — so treating these as build failures made the gate
@@ -78,6 +80,12 @@ RESERVED_FINDING_KINDS: frozenset[str] = frozenset(
 #: tree, on every governed document rather than only the reviewed ones, so an
 #: error kind would fail the CI of every branch that edits code before its
 #: documentation — which is every branch.
+#:
+#: `store-format-undeclared` is a warning because the store it describes is
+#: intact: every read answers, every edge resolves, and the only thing missing is
+#: a line saying which docir the file needs. The damage it predicts lands on a
+#: *different* machine — a teammate on an older build — which is exactly the
+#: reader an error here could not reach.
 #:
 #: `missing-required` is a warning on the same argument, sharpened: the schema
 #: change that creates it arrives *from the package*, so a corpus that passed

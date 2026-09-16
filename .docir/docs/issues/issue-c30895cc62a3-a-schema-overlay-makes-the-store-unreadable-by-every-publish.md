@@ -13,7 +13,9 @@ related:
 - adr-6aa2e2f5f403
 - adr-ab4598c6f707
 - adr-49bb8cc48938
-status: open
+- adr-36d6156ffab9
+- adr-6d4d43d44075
+status: resolved
 tags:
 - cli
 - integrity
@@ -78,3 +80,17 @@ Not a rollback; the overlay is the right feature. Candidates, none chosen here:
   committed rather than after a teammate cannot read the store.
 - A way to run [[adr-ab4598c6f707]]'s check against a store the published build can open,
   so the gate survives a schema that has moved ahead of the release.
+
+## What shipped, and what it cannot reach
+
+[[adr-36d6156ffab9]] shipped the two rules and this store now declares `store_format: 2`.
+`docir check` reports a schema whose contents need a higher floor than it records, `check
+--fix` writes the line without touching the file's comments, and a build below a declared
+floor stops naming both numbers — verified against a copy of this store set to format 3,
+where `doctor` reports `store-from-newer-build` as an error and every read refuses by name.
+
+What no code can undo: 0.26.0 predates the check, so it ignores the line and still fails on
+`type 'decision' must define a string 'prefix'`. Until a build that reads `store_format:` is
+published *and* installed, [[adr-ab4598c6f707]]'s cross-version run against this store has to
+be done on a copy with the overlay blocks deleted. That is the cost the ADR records as the
+reason the first rule — new meaning in a new key — comes before the floor at all.

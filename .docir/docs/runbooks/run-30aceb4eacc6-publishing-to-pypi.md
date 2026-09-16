@@ -1,16 +1,19 @@
 ---
 code:
-- pyproject.toml
 - .github/workflows/**
+- pyproject.toml
+code_baseline:
+  .github/workflows/**: f7a17f7b3983
+  pyproject.toml: 1339717eb3e2
 created: '2026-07-30'
 description: How to publish docir to PyPI with uv and GitHub Actions trusted publishing.
 id: run-30aceb4eacc6
 owner: maintainer
 related:
-- run-f4a756206fe0
+- adr-f14682e3f4d6
 - rel-0c8d261640f6
 - rel-2e81372cdd05
-- adr-f14682e3f4d6
+- run-f4a756206fe0
 status: active
 tags:
 - release

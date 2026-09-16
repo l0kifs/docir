@@ -1,7 +1,10 @@
 ---
 code:
-- src/docir/modules/documents/domain/value_objects/doc_ref.py
 - src/docir/entry_points/dispatch.py
+- src/docir/modules/documents/domain/value_objects/doc_ref.py
+code_baseline:
+  src/docir/entry_points/dispatch.py: 204d358a9285
+  src/docir/modules/documents/domain/value_objects/doc_ref.py: 331122bf62e9
 created: '2026-08-25'
 description: Why get takes several ids and id#heading addresses in one request, why
   the plural payload key rather than the result count decides the reply shape, and
@@ -9,10 +12,10 @@ description: Why get takes several ids and id#heading addresses in one request, 
 id: adr-fe7c91f61f32
 owner: maintainer
 related:
+- adr-927aa43d9635
 - kind: refines
   to: arch-1cfb1b212237
 - issue-9509f9fa3631
-- adr-927aa43d9635
 status: accepted
 tags:
 - cli

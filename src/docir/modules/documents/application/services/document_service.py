@@ -24,6 +24,7 @@ from docir.modules.documents.application.dto import (
     SearchRequest,
     UpdateDocumentRequest,
 )
+from docir.modules.documents.application.services.code_evidence import fingerprint_patterns
 from docir.modules.documents.application.services.document_patch import (
     DocumentPatch,
     parse_related_refs,
@@ -224,6 +225,11 @@ class DocumentService:
                 body=request.body,
                 owner=request.owner or "",
                 code=tuple(request.code),
+                # Born watched. The glob is evidence of authorship from the
+                # moment it is written, so drift is measured from here rather
+                # than from a verification that may never come — the defect
+                # issue-6e4ccac453ed records.
+                code_baseline=fingerprint_patterns(self._code_matcher, request.code),
                 isolated=request.isolated or "",
             )
             self._validator.validate_required_fields(document)

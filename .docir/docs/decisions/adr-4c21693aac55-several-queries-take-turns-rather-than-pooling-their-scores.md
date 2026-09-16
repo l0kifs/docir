@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/modules/indexing/domain/scoring.py
+code_baseline:
+  src/docir/modules/indexing/domain/scoring.py: 98ccb3377db2
 created: '2026-08-24'
 description: Interleaving per-query rankings keeps what a correct extra phrasing finds
   while bounding what a wrong one costs — the only one of three fusion shapes that
@@ -8,14 +10,14 @@ description: Interleaving per-query rankings keeps what a correct extra phrasing
 id: adr-4c21693aac55
 owner: maintainer
 related:
+- adr-27c63ad02695
 - kind: refines
   to: adr-b23dae55666f
-- adr-27c63ad02695
 - issue-fd086c0c6ab0
 status: accepted
 tags:
-- retrieval
 - embeddings
+- retrieval
 title: Several queries take turns rather than pooling their scores
 type: decision
 updated: '2026-08-24'

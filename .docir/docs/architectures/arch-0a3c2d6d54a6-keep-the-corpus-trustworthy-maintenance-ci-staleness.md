@@ -1,14 +1,19 @@
 ---
 code:
+- .github/workflows/ci.yml
 - src/docir/modules/documents/application/services/maintenance_service.py
 - src/docir/modules/documents/domain/services/graph_checks.py
-- .github/workflows/ci.yml
+code_baseline:
+  .github/workflows/ci.yml: 41280301f869
+  src/docir/modules/documents/application/services/maintenance_service.py: dbedd2e64320
+  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
 created: '2026-07-30'
 description: 'How the corpus stays consistent: reindex, check, repair, and the merge
   guard.'
 id: arch-0a3c2d6d54a6
 owner: maintainer
 related:
+- adr-b2cfed9d5888
 - adr-bd7c4f3c5764
 - arch-1cfb1b212237
 - issue-40d1792bc9f9
@@ -19,7 +24,6 @@ related:
 - issue-b4f441c7210f
 - issue-b7ddde3ce860
 - issue-c33edcf431fa
-- adr-b2cfed9d5888
 status: active
 tags:
 - integrity

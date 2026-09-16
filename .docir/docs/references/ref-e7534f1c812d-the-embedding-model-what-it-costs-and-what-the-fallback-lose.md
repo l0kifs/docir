@@ -1,15 +1,18 @@
 ---
 code:
-- src/docir/platform/embedding/**
 - src/docir/modules/documents/domain/schema.py
+- src/docir/platform/embedding/**
+code_baseline:
+  src/docir/modules/documents/domain/schema.py: c0ea053f1c39
+  src/docir/platform/embedding/**: 130c8e5da098
 created: '2026-08-15'
 description: What the default embedder costs to install, what the model-free fallback
   loses, and how a store names a different model.
 id: ref-e7534f1c812d
 owner: maintainer
 related:
-- adr-ab9c454b760c
 - adr-927aa43d9635
+- adr-ab9c454b760c
 status: active
 tags:
 - embeddings

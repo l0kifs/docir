@@ -1,15 +1,18 @@
 ---
 code:
-- src/docir/modules/agents/**
 - src/docir/entry_points/cli/rendering.py
+- src/docir/modules/agents/**
+code_baseline:
+  src/docir/entry_points/cli/rendering.py: cef64d6c165f
+  src/docir/modules/agents/**: fba99326556f
 created: '2026-08-17'
 description: Why docir agent update reports 'unchanged' when a release moved only
   the version stamp, and why the file is rewritten anyway.
 id: adr-9d2b4865689a
 owner: maintainer
 related:
-- adr-3a2d5ee7bc84
 - adr-31aa7aa60d11
+- adr-3a2d5ee7bc84
 - adr-6ed847e02fe5
 status: accepted
 tags:

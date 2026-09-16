@@ -1,7 +1,10 @@
 ---
 code:
-- src/docir/platform/embedding/**
 - src/docir/modules/documents/application/services/document_service.py
+- src/docir/platform/embedding/**
+code_baseline:
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
+  src/docir/platform/embedding/**: 130c8e5da098
 created: '2026-08-24'
 description: Query rewriting belongs at the caller, which is a frontier model that
   has read the code, so docir ships no generative model and accepts several queries
@@ -9,15 +12,15 @@ description: Query rewriting belongs at the caller, which is a frontier model th
 id: adr-27c63ad02695
 owner: maintainer
 related:
-- adr-d657a09b8c4a
 - adr-46b69a581c65
 - adr-ab9c454b760c
+- adr-d657a09b8c4a
 - issue-fd086c0c6ab0
 status: accepted
 tags:
-- retrieval
-- embeddings
 - architecture
+- embeddings
+- retrieval
 title: 'docir does not generate: the caller is already a model'
 type: decision
 updated: '2026-08-24'

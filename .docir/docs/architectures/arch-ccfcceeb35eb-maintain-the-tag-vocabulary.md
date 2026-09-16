@@ -1,14 +1,16 @@
 ---
 code:
 - src/docir/modules/tags/**
+code_baseline:
+  src/docir/modules/tags/**: 4ad2b8095e76
 created: '2026-07-30'
 description: How the controlled vocabulary is registered, renamed and retired.
 id: arch-ccfcceeb35eb
 owner: maintainer
 related:
-- arch-1cfb1b212237
 - adr-d3e3616400bf
 - arch-0a3c2d6d54a6
+- arch-1cfb1b212237
 - issue-498cbbaeac2f
 - issue-9ed4905e0db8
 - issue-a776b08ceaea
@@ -17,8 +19,8 @@ related:
 - issue-e71e1ad9b0ef
 status: active
 tags:
-- tags
 - schema
+- tags
 title: Maintain the tag vocabulary
 type: architecture
 updated: '2026-08-15'

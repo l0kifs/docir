@@ -15,12 +15,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from docir.modules.documents.application.services.code_evidence import mint_baseline
 from docir.modules.documents.application.services.document_saving import save_with_mentions
 from docir.modules.documents.application.services.id_generator import IdGenerator
 from docir.modules.documents.application.services.index_rebuilder import IndexRebuilder
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.schema import Schema
-from docir.platform.filesystem.ports import DocumentFileStore
+from docir.platform.filesystem.ports import CodeMatcher, DocumentFileStore
 from docir.platform.persistence.unit_of_work import UnitOfWork
 
 UnitOfWorkFactory = Callable[[], UnitOfWork]
@@ -30,7 +31,11 @@ UnitOfWorkFactory = Callable[[], UnitOfWork]
 class RepairAction:
     """One repair that was applied, in the caller's terms."""
 
-    kind: str  # the finding kind repaired: duplicate-id | dangling
+    # The finding kind repaired — `duplicate-id`, `dangling` — or, for the one
+    # action that repairs nothing, what it filed: `code-baseline`. Deliberately
+    # not `code-drifted`: this enables that finding rather than clearing it, and
+    # an action naming a finding it did not repair reads as the opposite.
+    kind: str
     message: str
     doc_ids: tuple[str, ...]
 
@@ -44,11 +49,16 @@ class StoreRepairer:
         file_store: DocumentFileStore,
         schema: Schema,
         rebuilder: IndexRebuilder,
+        code_matcher: CodeMatcher | None = None,
     ) -> None:
         self._uow_factory = uow_factory
         self._file_store = file_store
         self._schema = schema
         self._rebuilder = rebuilder
+        # Optional at the seam for the reason it is optional everywhere else: a
+        # global store has no repository above it, so there is no tree to
+        # fingerprint and nothing to start watching.
+        self._code_matcher = code_matcher
         self._prefixes = schema.prefixes()
 
     def repair(self) -> list[RepairAction]:
@@ -70,6 +80,63 @@ class StoreRepairer:
         if actions:
             self._rebuilder.reindex(changed_only=True)
         actions.extend(self._repair_dangling())
+        actions.extend(self._mint_code_baselines())
+        return actions
+
+    def _mint_code_baselines(self) -> list[RepairAction]:
+        """Start watching the globs a document declared before baselines existed.
+
+        The third repair, and the one that is not repairing damage: a document
+        with a ``code:`` glob and no baseline is intact, resolves, and reports
+        nothing — which is exactly the problem. It was written by a build that
+        minted no baseline, so its globs watch nothing until somebody verifies
+        it, and in this project's own store not one of the 99 ever had.
+
+        It belongs here on the two tests `--fix` applies. It needs no guess —
+        the tree in front of it is the only answer a baseline can have — and it
+        claims nothing anybody has to judge: a baseline says *this is what the
+        tree held when we started watching*, never *somebody read this*. That is
+        the line `check --fix` may not cross, and the reason it still cannot
+        touch ``verified_code``.
+
+        What it cannot do is recover the drift that already happened. A document
+        whose code moved last month is based on the tree as it stands now and
+        reports nothing about the month it missed; the finding starts at the
+        next change. Saying so is the point of returning an action per document
+        rather than doing this silently — the frontmatter of every governed
+        document moves, and the reader has to see that in the diff.
+
+        Only documents that gain an entry are rewritten, so a second run is a
+        no-op, and ``updated`` is left alone for the reason `_repair_dangling`
+        leaves it alone: filing evidence is not a review.
+        """
+        if self._code_matcher is None:
+            return []
+        actions: list[RepairAction] = []
+        with self._uow_factory() as uow:
+            for document in uow.documents.all():
+                if not document.code:
+                    continue
+                baseline = mint_baseline(self._code_matcher, document.code, document.code_baseline)
+                if baseline == dict(document.code_baseline):
+                    continue
+                minted = sorted(set(baseline) - set(document.code_baseline))
+                based = document.with_updates(code_baseline=baseline)
+                self._file_store.write(based)
+                save_with_mentions(uow, based, self._prefixes)
+                uow.search.index(based)
+                actions.append(
+                    RepairAction(
+                        kind="code-baseline",
+                        message=(
+                            f"started watching {len(minted)} glob(s) on {document.id!r}: "
+                            f"{', '.join(minted)} — drift is reported from now, not "
+                            f"from when they were declared"
+                        ),
+                        doc_ids=(document.id,),
+                    )
+                )
+            uow.commit()
         return actions
 
     def _repair_duplicate_ids(self) -> list[RepairAction]:

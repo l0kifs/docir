@@ -2,25 +2,28 @@
 code:
 - src/docir/entry_points/composition.py
 - src/docir/modules/agents/**
+code_baseline:
+  src/docir/entry_points/composition.py: f1e7c5f79526
+  src/docir/modules/agents/**: fba99326556f
 created: '2026-07-30'
 description: How a repository gets a store and an agent learns to drive it.
 id: arch-90c90751344f
 owner: maintainer
 related:
-- arch-1cfb1b212237
 - arch-0a3c2d6d54a6
-- issue-b7ddde3ce860
-- issue-f09fab3f5c36
+- arch-1cfb1b212237
 - issue-20933967697b
 - issue-34b4f0ca1e13
 - issue-b47a1203baa2
+- issue-b7ddde3ce860
 - issue-b8220546282c
 - issue-ed49c1d03894
+- issue-f09fab3f5c36
 - issue-fde9a7151bd1
 status: active
 tags:
-- cli
 - agents
+- cli
 title: Adopt docir in a repository (bootstrap, schema, agent onboarding)
 type: architecture
 updated: '2026-08-15'

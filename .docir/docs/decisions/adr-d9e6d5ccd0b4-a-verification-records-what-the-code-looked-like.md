@@ -1,9 +1,14 @@
 ---
 code:
-- src/docir/platform/filesystem/code_matcher.py
-- src/docir/modules/documents/domain/services/graph_checks.py
 - src/docir/modules/documents/application/services/document_service.py
 - src/docir/modules/documents/domain/entities/document.py
+- src/docir/modules/documents/domain/services/graph_checks.py
+- src/docir/platform/filesystem/code_matcher.py
+code_baseline:
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
+  src/docir/modules/documents/domain/entities/document.py: deb78c9e104d
+  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
+  src/docir/platform/filesystem/code_matcher.py: a3314a26eb06
 created: '2026-08-16'
 description: Why --verified fingerprints the globs a document governs, why the digests
   live in the file, and why the resulting check-changed finding stays a warning.
@@ -12,8 +17,8 @@ owner: maintainer
 related:
 - kind: refines
   to: adr-bd7c4f3c5764
-- arch-ad342aae8293
 - arch-0a3c2d6d54a6
+- arch-ad342aae8293
 status: accepted
 tags:
 - cli

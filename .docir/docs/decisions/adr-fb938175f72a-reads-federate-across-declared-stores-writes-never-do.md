@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/entry_points/federation.py
+code_baseline:
+  src/docir/entry_points/federation.py: d4450115acce
 created: '2026-08-12'
 description: Why docir reads fan out across a committed list of peer stores, why peers
   are opened read-only, and why the merge sorts on similarity rather than score.

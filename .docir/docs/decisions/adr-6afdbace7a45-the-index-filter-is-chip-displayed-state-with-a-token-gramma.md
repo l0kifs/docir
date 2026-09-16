@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/modules/publishing/infra/rendering.py
+code_baseline:
+  src/docir/modules/publishing/infra/rendering.py: 16d9f4392c5b
 created: '2026-08-05'
 description: Why the published index shows applied filters as removable chips, accepts
   tracker-style tokens (type:x, is:stale, -status:y), records each facet step in history,
@@ -8,9 +10,9 @@ description: Why the published index shows applied filters as removable chips, a
 id: adr-6afdbace7a45
 owner: maintainer
 related:
+- adr-307ba1f1a820
 - kind: refines
   to: adr-a343140d72e2
-- adr-307ba1f1a820
 status: accepted
 tags:
 - cli

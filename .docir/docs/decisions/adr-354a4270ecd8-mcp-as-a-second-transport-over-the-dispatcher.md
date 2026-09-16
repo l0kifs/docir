@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/entry_points/mcp/**
+code_baseline:
+  src/docir/entry_points/mcp/**: 340ab6499fd2
 created: '2026-08-03'
 description: Why docir mcp serve is a third client of the dispatcher rather than a
   second implementation.
@@ -13,8 +15,8 @@ related:
 - ref-a6db21f52427
 status: accepted
 tags:
-- architecture
 - agents
+- architecture
 title: MCP as a second transport over the dispatcher
 type: decision
 updated: '2026-08-06'

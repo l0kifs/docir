@@ -1,17 +1,21 @@
 ---
 code:
-- src/docir/entry_points/dispatch.py
 - src/docir/entry_points/cli/app.py
+- src/docir/entry_points/dispatch.py
 - src/docir/modules/documents/application/services/maintenance_service.py
+code_baseline:
+  src/docir/entry_points/cli/app.py: 632b4c81a902
+  src/docir/entry_points/dispatch.py: 204d358a9285
+  src/docir/modules/documents/application/services/maintenance_service.py: dbedd2e64320
 created: '2026-08-16'
 description: 'Retire reindex --embeddings instead of repairing it: it recomputed exactly
   the vectors a rebuild recomputes anyway, for the same time, and skipped both stamps.'
 id: adr-6a4718fa7a7d
 owner: maintainer
 related:
-- issue-b24e14474820
 - adr-31aa7aa60d11
 - adr-ab9c454b760c
+- issue-b24e14474820
 status: accepted
 tags:
 - cli

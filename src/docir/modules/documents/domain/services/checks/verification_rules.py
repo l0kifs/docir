@@ -42,6 +42,7 @@ class VerificationChecks:
             issues.extend(self._find_unmatched_code(documents, code_matches))
         if code_digests is not None:
             issues.extend(self._find_changed_code(documents, code_digests))
+            issues.extend(self._find_drifted_code(documents, code_digests))
         issues.extend(self._find_outdated_verification(documents))
         return issues
 
@@ -199,6 +200,74 @@ class VerificationChecks:
                         f"{doc.id!r} governs {joined}, which changed since it was "
                         f"verified{verified_on}; re-read it and run `docir update "
                         f"{doc.id} --verified`"
+                    ),
+                    doc_ids=(doc.id,),
+                )
+            )
+        return issues
+
+    def _find_drifted_code(
+        self, documents: list[Document], code_digests: Mapping[str, str]
+    ) -> list[CheckIssue]:
+        """Flag code that moved since the document declared it, verified or not.
+
+        The same comparison as :meth:`_find_changed_code` against a different
+        baseline, and the difference is the whole reason this exists.
+        ``verified_code`` is minted by ``--verified`` and by nothing else, so a
+        document nobody has reviewed carries none and that check skips it in
+        silence: the glob names the code, the code moves, and the document ages
+        without a word. In docir's own corpus every one of the 99 documents
+        carrying a ``code:`` glob was unverified, so the check above could fire
+        on none of them — a feature reachable only through a step nobody takes
+        is a feature that does not run.
+
+        ``code_baseline`` is minted by the write that declares the pattern, so
+        it exists from the first moment there is anything to watch. What it
+        claims is deliberately weaker: *this is what the tree held when the
+        document said it governed this*, which is a fact about the tree and not
+        a certificate that anybody read either one. That is what lets the write
+        path mint it without laundering a review — the objection that keeps
+        ``verified_code`` out of every mechanical write (adr-d9e6d5ccd0b4).
+
+        Reported per pattern, and **only** for patterns this document has never
+        been verified against. A pattern carrying both digests is already
+        `code-changed`'s to report, with the stronger sentence to say about it;
+        naming the same moved file twice is the noise that teaches a reader to
+        skim the whole report. The two therefore partition the patterns rather
+        than overlapping on them.
+
+        A warning for the reason `code-changed` is one, needing it more: this
+        fires on every governed document rather than only the reviewed ones, so
+        as an error it would fail the CI of every branch that touches code
+        before its docs.
+
+        Absences read as unknown here too. A pattern missing from
+        ``code_digests`` did not resolve — `unmatched-code` covers that — and a
+        pattern with no recorded baseline predates the field or was written
+        where there was no tree to read; neither is reported as unchanged.
+        """
+        issues: list[CheckIssue] = []
+        for doc in documents:
+            if doc.archived or not doc.code_baseline:
+                continue
+            moved = [
+                pattern
+                for pattern in doc.code
+                if pattern not in doc.verified_code
+                and (current := code_digests.get(pattern)) is not None
+                and (recorded := doc.code_baseline.get(pattern)) is not None
+                and current != recorded
+            ]
+            if not moved:
+                continue
+            joined = ", ".join(repr(pattern) for pattern in moved)
+            issues.append(
+                CheckIssue(
+                    kind="code-drifted",
+                    message=(
+                        f"{doc.id!r} governs {joined}, which changed since the document "
+                        f"declared it and nobody has verified it since; read it against "
+                        f"the code and run `docir update {doc.id} --verified`"
                     ),
                     doc_ids=(doc.id,),
                 )

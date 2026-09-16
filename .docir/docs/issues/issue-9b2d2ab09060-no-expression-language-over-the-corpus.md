@@ -2,19 +2,22 @@
 code:
 - src/docir/modules/documents/application/dto.py
 - src/docir/modules/documents/domain/services/graph_checks.py
+code_baseline:
+  src/docir/modules/documents/application/dto.py: f265277c576a
+  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
 created: '2026-08-13'
 description: 'Both halves shipped: query --expr asks a question, and checks: in docs-schema.yaml
   states a rule the store runs.'
 id: issue-9b2d2ab09060
 owner: maintainer
 related:
-- adr-b2cfed9d5888
 - adr-7316abc6be93
+- adr-b2cfed9d5888
 - adr-d2ae4604a01e
 status: resolved
 tags:
-- retrieval
 - cli
+- retrieval
 - schema
 title: No expression language over the corpus
 type: issue

@@ -3,6 +3,10 @@ code:
 - src/docir/modules/documents/domain/services/graph_checks.py
 - tests/modules/documents/test_domain_services.py
 - tests/modules/documents/test_integration_maintenance.py
+code_baseline:
+  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
+  tests/modules/documents/test_domain_services.py: 2b717c606516
+  tests/modules/documents/test_integration_maintenance.py: 7478e7c0d19b
 created: '2026-08-07'
 description: unknown-tag and unknown-status are reported, but an edge carrying an
   unregistered kind is served by get, traversed by context and flagged by nothing;
@@ -11,8 +15,8 @@ id: issue-0e3d1d9c81d3
 owner: maintainer
 related:
 - adr-599055502f0e
-- issue-8f6576cd7bc9
 - adr-bd3a820cc57a
+- issue-8f6576cd7bc9
 status: resolved
 tags:
 - cosmetic

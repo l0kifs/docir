@@ -1,7 +1,10 @@
 ---
 code:
-- src/docir/modules/documents/domain/services/markdown_sections.py
 - src/docir/modules/documents/domain/services/chunking.py
+- src/docir/modules/documents/domain/services/markdown_sections.py
+code_baseline:
+  src/docir/modules/documents/domain/services/chunking.py: 8cd7f3e66eac
+  src/docir/modules/documents/domain/services/markdown_sections.py: 60d806f63b70
 created: '2026-08-15'
 description: markdown_sections.py has no fence tracking, so --section returns a fragment
   ending in an unclosed fence and --replace-section silently orphans the rest of the
@@ -11,9 +14,9 @@ related:
 - adr-927aa43d9635
 status: resolved
 tags:
-- retrieval
 - blocking
 - integrity
+- retrieval
 title: 'Section reads and edits treat a fenced ## as a heading; the chunker does not'
 type: issue
 updated: '2026-08-15'

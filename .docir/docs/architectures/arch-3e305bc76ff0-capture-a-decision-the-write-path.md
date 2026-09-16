@@ -1,24 +1,26 @@
 ---
 code:
 - src/docir/modules/documents/application/services/document_service.py
+code_baseline:
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
 created: '2026-07-30'
 description: 'How a decision is captured: validate, allocate an id, write the file,
   project the index.'
 id: arch-3e305bc76ff0
 owner: maintainer
 related:
-- arch-1cfb1b212237
 - adr-d3e3616400bf
-- issue-7a271eb0f21a
-- issue-b7ddde3ce860
-- issue-f09fab3f5c36
+- arch-1cfb1b212237
 - issue-0783d236d565
 - issue-389dc5dac58a
 - issue-61b66ed696de
 - issue-6817ed1851e2
+- issue-7a271eb0f21a
 - issue-7d4fdccf8343
 - issue-7e16dfe2521c
+- issue-b7ddde3ce860
 - issue-be95d3e242a3
+- issue-f09fab3f5c36
 - issue-fd547a293d01
 status: active
 tags:

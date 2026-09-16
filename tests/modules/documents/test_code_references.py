@@ -454,6 +454,342 @@ class TestVerificationDigests:
             container.close()
 
 
+class TestCodeBaseline:
+    """The authorship half: a glob is watched from the moment it is declared.
+
+    `code-changed` needs a verification to exist, and in docir's own store not one
+    of the 99 governed documents had ever been verified, so every glob named its
+    code and nothing watched it. Every test here injects the real
+    defect (an edit to the governed file) on a document nobody has verified,
+    which is the case the older check reports nothing for.
+    """
+
+    def _governing(self, docs: Dispatcher, *patterns: str, title: str = "Auth") -> str:
+        view = docs.dispatch(
+            "add",
+            {"type": "decision", "title": title, "description": "d", "code": list(patterns)},
+        )
+        return str(view["id"])
+
+    def _drifted(self, docs: Dispatcher) -> list[dict]:
+        return [i for i in docs.dispatch("check", {}) if i["kind"] == "code-drifted"]
+
+    def test_an_edit_is_reported_on_a_document_nobody_ever_verified(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        source = tmp_path / "src" / "auth.py"
+        source.parent.mkdir()
+        source.write_text("def login():\n    return True\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            doc_id = self._governing(docs, "src/*.py")
+            # Born watched, and the tree has not moved: silence.
+            assert not self._drifted(docs)
+
+            source.write_text("def login(mfa: bool):\n    return 'token'\n", encoding="utf-8")
+            findings = self._drifted(docs)
+            assert [i["doc_ids"] for i in findings] == [(doc_id,)]
+            assert "src/*.py" in findings[0]["message"]
+            # A warning, for the reason `code-changed` is one: editing code
+            # before its documentation is the ordinary shape of a change.
+            assert findings[0]["severity"] == "warning"
+        finally:
+            container.close()
+
+    def test_a_pattern_that_was_verified_is_reported_once_and_as_code_changed(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        source = tmp_path / "src" / "auth.py"
+        source.parent.mkdir()
+        source.write_text("original\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            doc_id = self._governing(docs, "src/*.py")
+            docs.dispatch("update", {"doc_id": doc_id, "mark_verified": True})
+            source.write_text("rewritten\n", encoding="utf-8")
+
+            kinds = [
+                i["kind"]
+                for i in docs.dispatch("check", {})
+                if i["kind"] in {"code-changed", "code-drifted"}
+            ]
+            # One moved file, one sentence about it: the two checks partition
+            # the patterns rather than both claiming this one.
+            assert kinds == ["code-changed"]
+            assert doc_id
+        finally:
+            container.close()
+
+    def test_a_document_carrying_both_reports_each_pattern_under_its_own_kind(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "auth.py").write_text("a\n", encoding="utf-8")
+        (src / "billing.py").write_text("b\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            doc_id = self._governing(docs, "src/auth.py")
+            docs.dispatch("update", {"doc_id": doc_id, "mark_verified": True})
+            # Added after the verification, so it carries a baseline and no
+            # verified digest — the split this test is about.
+            docs.dispatch(
+                "update",
+                {"doc_id": doc_id, "set_code": ["src/auth.py", "src/billing.py"]},
+            )
+            (src / "auth.py").write_text("a2\n", encoding="utf-8")
+            (src / "billing.py").write_text("b2\n", encoding="utf-8")
+
+            by_kind = {
+                i["kind"]: i["message"]
+                for i in docs.dispatch("check", {})
+                if i["kind"] in {"code-changed", "code-drifted"}
+            }
+            assert set(by_kind) == {"code-changed", "code-drifted"}
+            assert "src/auth.py" in by_kind["code-changed"]
+            assert "src/billing.py" not in by_kind["code-changed"]
+            assert "src/billing.py" in by_kind["code-drifted"]
+            assert "src/auth.py" not in by_kind["code-drifted"]
+        finally:
+            container.close()
+
+    def test_re_declaring_the_same_glob_does_not_clear_a_drift_nobody_read(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        # The laundering guard. `--set-code` is mechanical and needs no reading,
+        # so re-basing a surviving pattern would let any write silence the
+        # finding — the cheapest possible door onto what adr-bd7c4f3c5764
+        # forbids.
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "auth.py").write_text("original\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            doc_id = self._governing(docs, "src/auth.py")
+            (src / "auth.py").write_text("rewritten\n", encoding="utf-8")
+            assert self._drifted(docs)
+
+            (src / "billing.py").write_text("b\n", encoding="utf-8")
+            docs.dispatch(
+                "update", {"doc_id": doc_id, "set_code": ["src/auth.py", "src/billing.py"]}
+            )
+            findings = self._drifted(docs)
+            assert [i["doc_ids"] for i in findings] == [(doc_id,)]
+            assert "src/auth.py" in findings[0]["message"]
+            # The glob that arrived with this write is based by it, so it is
+            # not swept into the same finding.
+            assert "src/billing.py" not in findings[0]["message"]
+        finally:
+            container.close()
+
+    def test_verifying_rebases_and_the_next_edit_is_reported_as_code_changed(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        source = tmp_path / "src" / "auth.py"
+        source.parent.mkdir()
+        source.write_text("original\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            doc_id = self._governing(docs, "src/*.py")
+            source.write_text("rewritten\n", encoding="utf-8")
+            assert self._drifted(docs)
+
+            # Somebody read it against the code as it now stands.
+            docs.dispatch("update", {"doc_id": doc_id, "mark_verified": True})
+            assert not self._drifted(docs)
+            assert not [i for i in docs.dispatch("check", {}) if i["kind"] == "code-changed"]
+
+            source.write_text("rewritten again\n", encoding="utf-8")
+            assert [i["kind"] for i in docs.dispatch("check", {}) if "code-" in i["kind"]] == [
+                "code-changed"
+            ]
+        finally:
+            container.close()
+
+    def test_a_dropped_glob_takes_its_baseline_out_of_the_file(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "auth.py").write_text("a\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            doc_id = self._governing(docs, "src/auth.py")
+            view = docs.dispatch("update", {"doc_id": doc_id, "set_code": []})
+            raw = (settings.docs_root / view["path"]).read_text(encoding="utf-8")
+            assert "code_baseline" not in raw
+        finally:
+            container.close()
+
+    def test_the_baseline_round_trips_through_a_rebuild(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        # The index is derived and gitignored, so the baseline has to survive
+        # being thrown away and rebuilt from the file alone.
+        source = tmp_path / "src" / "auth.py"
+        source.parent.mkdir()
+        source.write_text("original\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            doc_id = self._governing(docs, "src/*.py")
+            source.write_text("rewritten\n", encoding="utf-8")
+            docs.dispatch("reindex", {})
+            assert [i["doc_ids"] for i in self._drifted(docs)] == [(doc_id,)]
+        finally:
+            container.close()
+
+    def test_filing_a_baseline_does_not_move_the_review_clock(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "auth.py").write_text("a\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            doc_id = self._governing(docs, "src/auth.py")
+            before = docs.dispatch("get", {"doc_id": doc_id})["updated"]
+            docs.dispatch("update", {"doc_id": doc_id, "set_code": ["src/auth.py"]})
+            assert docs.dispatch("get", {"doc_id": doc_id})["updated"] == before
+        finally:
+            container.close()
+
+    def test_a_store_with_no_repository_records_nothing_to_watch(self, settings: Settings) -> None:
+        # The global-store case: no tree above the store, so there is nothing to
+        # fingerprint and the key must not appear at all.
+        settings.ensure_directories()
+        container = build_container(settings, background_embeddings=False)
+        try:
+            docs = container.dispatcher
+            view = docs.dispatch(
+                "add",
+                {"type": "decision", "title": "T", "description": "d", "code": ["src/**"]},
+            )
+            raw = (settings.docs_root / view["path"]).read_text(encoding="utf-8")
+            assert "code_baseline" not in raw
+            assert not [i for i in docs.dispatch("check", {}) if i["kind"] == "code-drifted"]
+        finally:
+            container.close()
+
+
+class TestBackfillingTheBaseline:
+    """`check --fix` starts watching globs declared before baselines existed.
+
+    Not a repair of damage: the document is intact and reports nothing, which is
+    the problem. Every test here works from a file with the key stripped, which
+    is what a document looks like in both ways it can lose one: written by a
+    build that predates the field, or rewritten by one — an older `render`
+    writes the fields it knows and drops the rest. Measured, not assumed: 0.26.0
+    reads a store carrying the key with nothing skipped, and removes it on the
+    next write it makes. So this is the recovery path, not a one-time migration.
+    """
+
+    def _unwatched(self, settings: Settings, docs: Dispatcher, pattern: str) -> tuple[str, Path]:
+        """A document governing ``pattern`` whose file carries no baseline."""
+        view = docs.dispatch(
+            "add", {"type": "decision", "title": "Auth", "description": "d", "code": [pattern]}
+        )
+        path = settings.docs_root / view["path"]
+        stripped = [
+            line
+            for line in path.read_text(encoding="utf-8").splitlines(keepends=True)
+            if "code_baseline" not in line and not line.startswith("  src/")
+        ]
+        path.write_text("".join(stripped), encoding="utf-8")
+        docs.dispatch("reindex", {})
+        return str(view["id"]), path
+
+    def test_a_document_written_without_one_is_invisible_until_fix_runs(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        source = tmp_path / "src" / "auth.py"
+        source.parent.mkdir()
+        source.write_text("original\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            doc_id, path = self._unwatched(settings, docs, "src/*.py")
+            source.write_text("rewritten\n", encoding="utf-8")
+            # The defect this whole change is about: the glob names the code,
+            # the code moved, and nothing says so.
+            assert not [i for i in docs.dispatch("check", {}) if i["kind"] == "code-drifted"]
+
+            result = docs.dispatch("repair", {})
+            minted = [a for a in result["actions"] if a["kind"] == "code-baseline"]
+            assert [a["doc_ids"] for a in minted] == [(doc_id,)]
+            assert "src/*.py" in minted[0]["message"]
+            assert "code_baseline" in path.read_text(encoding="utf-8")
+
+            # Watched from here, not from when the glob was declared: the edit
+            # that already happened stays unreported, the next one does not.
+            assert not [i for i in docs.dispatch("check", {}) if i["kind"] == "code-drifted"]
+            source.write_text("rewritten again\n", encoding="utf-8")
+            assert [
+                i["doc_ids"] for i in docs.dispatch("check", {}) if i["kind"] == "code-drifted"
+            ] == [(doc_id,)]
+        finally:
+            container.close()
+
+    def test_a_second_run_changes_nothing(self, settings: Settings, tmp_path: Path) -> None:
+        source = tmp_path / "src" / "auth.py"
+        source.parent.mkdir()
+        source.write_text("original\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            self._unwatched(settings, docs, "src/*.py")
+            assert [
+                a for a in docs.dispatch("repair", {})["actions"] if a["kind"] == "code-baseline"
+            ]
+            assert not [
+                a for a in docs.dispatch("repair", {})["actions"] if a["kind"] == "code-baseline"
+            ]
+        finally:
+            container.close()
+
+    def test_the_backfill_does_not_move_the_review_clock(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        source = tmp_path / "src" / "auth.py"
+        source.parent.mkdir()
+        source.write_text("original\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            doc_id, _ = self._unwatched(settings, docs, "src/*.py")
+            before = docs.dispatch("get", {"doc_id": doc_id})["updated"]
+            docs.dispatch("repair", {})
+            assert docs.dispatch("get", {"doc_id": doc_id})["updated"] == before
+        finally:
+            container.close()
+
+    def test_it_never_mints_a_verification(self, settings: Settings, tmp_path: Path) -> None:
+        # The line `--fix` may not cross: a baseline says what the tree held,
+        # never that somebody read it. A repair that filed `verified_code`
+        # would make the review clock a side effect of running a command.
+        source = tmp_path / "src" / "auth.py"
+        source.parent.mkdir()
+        source.write_text("original\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            doc_id, path = self._unwatched(settings, docs, "src/*.py")
+            docs.dispatch("repair", {})
+            raw = path.read_text(encoding="utf-8")
+            assert "verified_code" not in raw
+            assert "verified:" not in raw
+            assert docs.dispatch("get", {"doc_id": doc_id})["verified"] is None
+        finally:
+            container.close()
+
+
 class TestQueryByPath:
     """`query --code <path>` — which documents govern this file (step 3)."""
 

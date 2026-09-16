@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/modules/documents/domain/services/similarity_lint.py
+code_baseline:
+  src/docir/modules/documents/domain/services/similarity_lint.py: 497f909c8dc4
 created: '2026-08-15'
 description: A repeated heading makes --section resolve to the first occurrence and
   leaves the second unreachable by name, silently.
@@ -9,8 +11,8 @@ related:
 - adr-927aa43d9635
 status: resolved
 tags:
-- retrieval
 - cosmetic
+- retrieval
 title: Nothing reports a heading that appears twice in one document
 type: issue
 updated: '2026-08-15'

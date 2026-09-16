@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/modules/agents/**
+code_baseline:
+  src/docir/modules/agents/**: fba99326556f
 created: '2026-08-25'
 description: Why the packaged CLI guide became SKILL.md plus one-level-deep reference
   files, and why installing a skill sweeps the files a build no longer ships.

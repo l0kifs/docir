@@ -119,6 +119,7 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
                     doc_id=document.id,
                     pattern=pattern,
                     digest=document.verified_code.get(pattern),
+                    baseline=document.code_baseline.get(pattern),
                 )
             )
         # At most one edge per ordered pair (kind is not in the primary key);
@@ -205,20 +206,23 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
         )
         return tuple(self._session.scalars(stmt).all())
 
-    def _code_for(self, doc_id: str) -> list[tuple[str, str | None]]:
-        """The document's globs with the digest each was last verified against.
+    def _code_for(self, doc_id: str) -> list[tuple[str, str | None, str | None]]:
+        """The document's globs with both digests each carries.
 
-        Read together because they are stored together: the digest belongs to
+        Read together because they are stored together: each digest belongs to
         the pattern, and a query that returned one without the other would let
-        the caller pair them up itself — the mistake keying the map by pattern
+        the caller pair them up itself — the mistake keying the maps by pattern
         exists to prevent.
         """
         stmt = (
-            select(DocumentCodeRow.pattern, DocumentCodeRow.digest)
+            select(DocumentCodeRow.pattern, DocumentCodeRow.digest, DocumentCodeRow.baseline)
             .where(DocumentCodeRow.doc_id == doc_id)
             .order_by(DocumentCodeRow.pattern)
         )
-        return [(pattern, digest) for pattern, digest in self._session.execute(stmt).all()]
+        return [
+            (pattern, digest, baseline)
+            for pattern, digest, baseline in self._session.execute(stmt).all()
+        ]
 
     def _outgoing_for(self, doc_id: str) -> list[str]:
         stmt = (
@@ -244,7 +248,7 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
         ids = [row.id for row in rows]
         tag_map: dict[str, list[str]] = {row.id: [] for row in rows}
         rel_map: dict[str, list[RelatedRef]] = {row.id: [] for row in rows}
-        code_map: dict[str, list[tuple[str, str | None]]] = {row.id: [] for row in rows}
+        code_map: dict[str, list[tuple[str, str | None, str | None]]] = {row.id: [] for row in rows}
         for doc_id, key in self._session.execute(
             select(DocumentTagRow.doc_id, DocumentTagRow.tag_key)
             .where(DocumentTagRow.doc_id.in_(ids))
@@ -257,12 +261,17 @@ class SqlAlchemyDocumentRepository(DocumentRepository):
             .order_by(RelationRow.target)
         ).all():
             rel_map[source].append(RelatedRef(target=target, kind=kind))
-        for doc_id, pattern, digest in self._session.execute(
-            select(DocumentCodeRow.doc_id, DocumentCodeRow.pattern, DocumentCodeRow.digest)
+        for doc_id, pattern, digest, baseline in self._session.execute(
+            select(
+                DocumentCodeRow.doc_id,
+                DocumentCodeRow.pattern,
+                DocumentCodeRow.digest,
+                DocumentCodeRow.baseline,
+            )
             .where(DocumentCodeRow.doc_id.in_(ids))
             .order_by(DocumentCodeRow.pattern)
         ).all():
-            code_map[doc_id].append((pattern, digest))
+            code_map[doc_id].append((pattern, digest, baseline))
         return [
             _to_document(row, tuple(tag_map[row.id]), rel_map[row.id], code_map[row.id])
             for row in rows
@@ -557,7 +566,7 @@ def _to_document(
     row: DocumentRow,
     tags: tuple[str, ...],
     related: list[RelatedRef],
-    code: list[tuple[str, str | None]] | None = None,
+    code: list[tuple[str, str | None, str | None]] | None = None,
 ) -> Document:
     code = code or []
     return Document(
@@ -577,8 +586,13 @@ def _to_document(
         verified=None if row.verified is None else date.fromisoformat(row.verified),
         revoked=None if row.revoked is None else date.fromisoformat(row.revoked),
         verified_content=row.verified_content,
-        code=tuple(pattern for pattern, _ in code),
-        verified_code={pattern: digest for pattern, digest in code if digest is not None},
+        code=tuple(pattern for pattern, _digest, _baseline in code),
+        verified_code={
+            pattern: digest for pattern, digest, _baseline in code if digest is not None
+        },
+        code_baseline={
+            pattern: baseline for pattern, _digest, baseline in code if baseline is not None
+        },
         isolated=row.isolated,
     )
 

@@ -2,6 +2,9 @@
 code:
 - .github/workflows/**
 - pyproject.toml
+code_baseline:
+  .github/workflows/**: f7a17f7b3983
+  pyproject.toml: 1339717eb3e2
 created: '2026-08-25'
 description: A job-level env used the runner context, so GitHub rejected ci.yml and
   zero jobs ran; actionlint now gates workflows locally and in CI.

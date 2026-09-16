@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/modules/indexing/**
+code_baseline:
+  src/docir/modules/indexing/**: cf41b20a074c
 created: '2026-08-15'
 description: 'How a query becomes results: full-text and vector rankings fused, section-level
   embeddings, default status visibility, and reads spanning peer stores.'

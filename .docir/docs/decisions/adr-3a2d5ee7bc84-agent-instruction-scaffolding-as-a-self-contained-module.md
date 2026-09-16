@@ -1,15 +1,17 @@
 ---
 code:
 - src/docir/modules/agents/**
+code_baseline:
+  src/docir/modules/agents/**: fba99326556f
 created: '2026-07-24'
 description: Why agent-instruction scaffolding is a self-contained module that bypasses
   the daemon.
 id: adr-3a2d5ee7bc84
 owner: maintainer
 related:
+- adr-d3e3616400bf
 - kind: refines
   to: arch-1cfb1b212237
-- adr-d3e3616400bf
 status: accepted
 tags:
 - agents

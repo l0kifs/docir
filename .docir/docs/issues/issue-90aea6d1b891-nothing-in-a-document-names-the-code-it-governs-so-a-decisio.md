@@ -2,6 +2,9 @@
 code:
 - src/docir/modules/documents/domain/services/code_globs.py
 - src/docir/platform/filesystem/code_matcher.py
+code_baseline:
+  src/docir/modules/documents/domain/services/code_globs.py: 27940b520ad4
+  src/docir/platform/filesystem/code_matcher.py: a3314a26eb06
 created: '2026-08-06'
 description: No frontmatter field points at code, and the schema's 'required' hook
   that appears to allow one is unsatisfiable — which blocks enforcement against code
@@ -9,9 +12,9 @@ description: No frontmatter field points at code, and the schema's 'required' ho
 id: issue-90aea6d1b891
 owner: maintainer
 related:
-- ref-a6db21f52427
 - adr-bd7c4f3c5764
 - arch-0a3c2d6d54a6
+- ref-a6db21f52427
 status: resolved
 tags:
 - material

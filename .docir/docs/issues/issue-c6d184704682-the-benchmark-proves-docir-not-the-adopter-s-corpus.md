@@ -1,14 +1,16 @@
 ---
 code:
 - benchmarks/**
+code_baseline:
+  benchmarks/**: 122744ecd7ce
 created: '2026-08-24'
 description: benchmarks/ lives in the repository, so an adopter inherits docir's retrieval
   numbers as a claim with no way to reproduce them on their own documents.
 id: issue-c6d184704682
 owner: maintainer
 related:
-- ref-a6db21f52427
 - adr-ab9c454b760c
+- ref-a6db21f52427
 status: resolved
 tags:
 - retrieval

@@ -2,6 +2,9 @@
 code:
 - src/docir/modules/documents/domain/services/chunking.py
 - src/docir/modules/indexing/domain/scoring.py
+code_baseline:
+  src/docir/modules/documents/domain/services/chunking.py: 8cd7f3e66eac
+  src/docir/modules/indexing/domain/scoring.py: 98ccb3377db2
 created: '2026-08-03'
 description: 'Why per-section vectors exist: 56% of the corpus was outside the model''s
   token window and absent from the semantic index.'

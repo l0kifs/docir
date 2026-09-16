@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/platform/persistence/**
+code_baseline:
+  src/docir/platform/persistence/**: 0d06a3fc68a2
 created: '2026-07-22'
 description: Why one shared SQLite schema and unit-of-work spans all contexts, and
   what that costs.

@@ -1,7 +1,10 @@
 ---
 code:
-- src/docir/platform/embedding/**
 - src/docir/config/settings.py
+- src/docir/platform/embedding/**
+code_baseline:
+  src/docir/config/settings.py: 49d614f03082
+  src/docir/platform/embedding/**: 130c8e5da098
 created: '2026-08-24'
 description: bge-small-en-v1.5 is compiled in as the only real embedder, so a corpus
   not written in English retrieves worse than plain full-text search, with nothing
@@ -10,10 +13,10 @@ id: issue-a24f404dd106
 owner: maintainer
 related:
 - adr-ab9c454b760c
-- ref-a6db21f52427
-- ref-e7534f1c812d
 - issue-c6d184704682
 - issue-fd086c0c6ab0
+- ref-a6db21f52427
+- ref-e7534f1c812d
 status: resolved
 tags:
 - embeddings

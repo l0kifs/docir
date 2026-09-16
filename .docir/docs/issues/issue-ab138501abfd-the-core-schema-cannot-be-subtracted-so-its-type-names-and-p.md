@@ -1,7 +1,10 @@
 ---
 code:
-- src/docir/modules/documents/infra/schema_loader.py
 - src/docir/modules/documents/infra/profiles.py
+- src/docir/modules/documents/infra/schema_loader.py
+code_baseline:
+  src/docir/modules/documents/infra/profiles.py: 9ed5ebc9dc12
+  src/docir/modules/documents/infra/schema_loader.py: 95c1dd812abc
 created: '2026-08-15'
 description: 'Every profiles: key merges the core unconditionally, so decision and
   its adr prefix exist in every store — an unused name stays addable and its prefix
@@ -11,8 +14,8 @@ owner: maintainer
 related: []
 status: resolved
 tags:
-- schema
 - blocking
+- schema
 title: The core schema cannot be subtracted, so its type names and prefixes are claimed
   forever
 type: issue

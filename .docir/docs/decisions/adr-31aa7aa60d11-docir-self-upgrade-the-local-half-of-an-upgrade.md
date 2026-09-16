@@ -3,19 +3,23 @@ code:
 - src/docir/entry_points/cli/app.py
 - src/docir/entry_points/composition.py
 - src/docir/platform/persistence/alembic/versions/**
+code_baseline:
+  src/docir/entry_points/cli/app.py: 632b4c81a902
+  src/docir/entry_points/composition.py: f1e7c5f79526
+  src/docir/platform/persistence/alembic/versions/**: 63a122ce10fe
 created: '2026-08-09'
 description: One command for the steps that follow a new docir release, and why installing
   the new docir is not one of them.
 id: adr-31aa7aa60d11
 owner: maintainer
 related:
-- adr-bd3a820cc57a
 - adr-3a2d5ee7bc84
 - adr-927aa43d9635
+- adr-bd3a820cc57a
 status: accepted
 tags:
-- cli
 - agents
+- cli
 - schema
 title: 'docir self upgrade: the local half of an upgrade'
 type: decision

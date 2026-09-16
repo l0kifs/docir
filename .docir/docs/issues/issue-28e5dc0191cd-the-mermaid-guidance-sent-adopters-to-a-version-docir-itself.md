@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/modules/agents/infra/templates/**
+code_baseline:
+  src/docir/modules/agents/infra/templates/**: 589d2f0899a0
 created: '2026-08-25'
 description: skill and README named mermaid 10.9.3 on the false grounds that 11 is
   ESM-only, while docir's own pages.yml published with 11.16.1.
@@ -10,8 +12,8 @@ related:
 - adr-9c7c1ab8acef
 status: resolved
 tags:
-- docs
 - cli
+- docs
 title: The mermaid guidance sent adopters to a version docir itself stopped using
 type: issue
 updated: '2026-08-25'

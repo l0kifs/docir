@@ -1,15 +1,17 @@
 ---
 code:
 - src/docir/modules/publishing/infra/rendering.py
+code_baseline:
+  src/docir/modules/publishing/infra/rendering.py: 16d9f4392c5b
 created: '2026-09-11'
 description: 'The one audited smell still untreated: 2,072 lines over CSS, the index
   page, the document page, the chips and the markdown pipeline.'
 id: issue-55cc9295302a
 owner: maintainer
 related:
-- adr-a343140d72e2
 - kind: refines
   to: adr-a1754eb79fe7
+- adr-a343140d72e2
 status: resolved
 tags:
 - architecture

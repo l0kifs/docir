@@ -146,6 +146,13 @@ opts out, at a measured cost to recall:
   when the code contradicts the decision and CI already enforces it, in your language
   with your fixtures: docir ships no rule engine, it records the link and warns when
   that test disappears.
+- **And the glob watches that code from the write that sets it.** The files behind each
+  pattern are fingerprinted then and there, so `docir check` reports `code-drifted` as soon
+  as they stop being the ones the document was pointed at — no review step to reach first.
+  `docir update <id> --verified` raises the watch to `code-changed`: the same comparison,
+  the stronger claim, because a person has now held the two against each other. Both stay
+  warnings — code landing ahead of its prose is ordinary, not damage. An existing store
+  starts watching after one `docir check --fix`.
 - **Only embeddings are deferred.** A content change flags the vector dirty and returns;
   the file, metadata, full-text index and relations are all current when the command
   returns. Force a flush with `--wait-embeddings`, `docir embed --flush`, or a full

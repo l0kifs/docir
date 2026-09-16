@@ -106,6 +106,11 @@ class DocumentCodeRow(Base):
     # verified. Nullable and non-key: a pattern is declared long before anyone
     # verifies against it, and NULL is the unknown answer `check` skips.
     digest: Mapped[str | None] = mapped_column(String, nullable=True)
+    # The digest of what this pattern matched when the document last declared
+    # it. Nullable for the same reason and with the opposite meaning: a pattern
+    # written by a build that predates the baseline has none, and NULL is again
+    # the unknown answer `check` skips.
+    baseline: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class MentionRow(Base):

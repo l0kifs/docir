@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/config/settings.py
+code_baseline:
+  src/docir/config/settings.py: 49d614f03082
 created: '2026-07-24'
 description: Why a project-local .docir store is discovered the way git finds .git.
 id: adr-20eec6e2e2ca

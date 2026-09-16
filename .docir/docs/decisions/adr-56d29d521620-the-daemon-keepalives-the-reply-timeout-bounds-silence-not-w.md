@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/platform/transport/**
+code_baseline:
+  src/docir/platform/transport/**: a441f6837105
 created: '2026-09-06'
 description: A flat reply budget made `docir self upgrade` impossible on a large corpus,
   because the command that always makes docir's most expensive request was bounded

@@ -1,7 +1,10 @@
 ---
 code:
-- tach.toml
 - scripts/check_contract_sync.py
+- tach.toml
+code_baseline:
+  scripts/check_contract_sync.py: 7d8eacc4e4c0
+  tach.toml: 044f93186ad5
 created: '2026-07-30'
 description: The MUST/SHOULD module rules this codebase is held to, and how CI proves
   them.

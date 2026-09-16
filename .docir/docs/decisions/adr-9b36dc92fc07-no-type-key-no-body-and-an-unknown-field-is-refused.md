@@ -1,21 +1,23 @@
 ---
 code:
 - src/docir/modules/documents/domain/services/expressions.py
+code_baseline:
+  src/docir/modules/documents/domain/services/expressions.py: f19ca3d868d7
 created: '2026-08-25'
 description: The two questions store checks left open answer to 'nothing to add',
   and answering them found that a mistyped field matched nothing silently.
 id: adr-9b36dc92fc07
 owner: maintainer
 related:
+- adr-7316abc6be93
 - kind: refines
   to: adr-d2ae4604a01e
-- adr-7316abc6be93
 - adr-f0fb4833ab04
 status: accepted
 tags:
-- schema
 - cli
 - integrity
+- schema
 title: No type key, no body, and an unknown field is refused
 type: decision
 updated: '2026-08-25'

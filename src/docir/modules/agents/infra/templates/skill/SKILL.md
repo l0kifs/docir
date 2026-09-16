@@ -154,9 +154,22 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
   read view, so a later session can see which decisions concern the files it is
   editing, and `docir check` warns (`unmatched-code`) once a pattern stops
   matching — repoint it with `--set-code` when you move the code it names.
-- **`docir update <id> --verified` records what that code looked like.** From
-  then on `docir check` warns (`code-changed`) as soon as the governed files
-  differ from what they were — the question a review cadence cannot answer.
+- **A `--code` glob is live from the write that sets it.** Its files are
+  fingerprinted then, and `docir check` reports `code-drifted` on any pattern
+  whose files have moved since — no extra step, which is why `--code` earns its
+  place even on a document nobody will review. Re-pointing one with `--set-code`
+  carries the old fingerprint over, so a drift outlives every mechanical edit
+  until somebody reads it.
+- **`docir update <id> --verified` raises that finding to `code-changed`.** It
+  re-takes the fingerprints as *you* read them, which is the stronger of the two
+  claims — stamp it only when you did that reading.
+- **Adopting a store an older docir wrote? Run `docir check --fix` once.** Its
+  patterns carry no fingerprint, so nothing watches them; the run files one per
+  pattern, names every document it put under watch, and changes no review state.
+  Watching begins at that run — what moved earlier cannot be recovered. Run it
+  again after a teammate on an older docir writes to the store: that build does
+  not know the field and drops it, quietly putting those documents back to
+  watching nothing.
 - **Verifying is a judgement, and you may make it.** Read the document against
   the code as it now stands, decide whether it is still true, and stamp
   `--verified` only if it is. If it is not, fix the document first. Nothing

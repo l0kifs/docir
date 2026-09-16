@@ -1,6 +1,8 @@
 ---
 code:
 - src/docir/modules/documents/application/services/maintenance_service.py
+code_baseline:
+  src/docir/modules/documents/application/services/maintenance_service.py: dbedd2e64320
 created: '2026-09-06'
 description: '`resync` keys the full rebuild on docir''s version, so a release that
   changed neither the model nor the chunking still recomputes every vector — 58.4s
@@ -8,12 +10,12 @@ description: '`resync` keys the full rebuild on docir''s version, so a release t
 id: issue-77dd42e3a03a
 owner: maintainer
 related:
-- adr-56d29d521620
 - adr-31aa7aa60d11
+- adr-56d29d521620
 status: resolved
 tags:
-- embeddings
 - daemon
+- embeddings
 - material
 title: Every release re-embeds the whole corpus, because the resync stamp is the version
 type: issue

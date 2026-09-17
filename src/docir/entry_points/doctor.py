@@ -38,6 +38,7 @@ import os
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 from docir.config.settings import (
@@ -222,6 +223,10 @@ class Environment:
     #: `doctor` cannot know which flags a caller types, and an announcement does
     #: not depend on it — the date is the content.
     deprecations: tuple[tuple[Deprecation, bool], ...]
+    #: The day this snapshot was taken, which is what "overdue" is relative to.
+    #: A field rather than a second call to the clock, so the findings and the
+    #: report cannot straddle midnight and disagree about the same register.
+    today: date
 
     # -- embedding
     embed_model: str | None
@@ -275,6 +280,7 @@ def snapshot(settings: Settings, version: str) -> Environment:
     command people run when something is wrong, and blocking it on the network
     would be the one moment that costs the most.
     """
+    today = SystemClock().today()
     schema_present = settings.schema_path.is_file()
     format_declared, format_required = store_format_status(settings.schema_path)
     schema_error = ""
@@ -300,7 +306,8 @@ def snapshot(settings: Settings, version: str) -> Environment:
         store_format_ahead=format_declared if format_declared > STORE_FORMAT else 0,
         store_format_declared=format_declared,
         store_format_required=format_required,
-        deprecations=announcements(SystemClock().today()),
+        deprecations=announcements(today),
+        today=today,
         store_description=store_description(settings.home),
         unknown_peer_keys=unrecognised_keys(settings.home),
         embed_model=embed_model,

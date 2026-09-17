@@ -13,13 +13,13 @@ owner: maintainer
 related:
 - adr-6d4d43d44075
 - adr-354a4270ecd8
-status: open
+status: resolved
 tags:
 - cli
 - integrity
 title: The deprecation register is not askable over MCP
 type: issue
-updated: '2026-09-16'
+updated: '2026-09-17'
 ---
 
 `docir doctor | jq '.compat'` carries every surface this build will stop accepting and the
@@ -51,3 +51,24 @@ Whether a dispatcher command may answer a question about the build rather than a
 Adding `compat` there gives both transports one implementation and settles it; putting the
 register in `docir_store_status` instead would answer it faster and quietly make that tool
 about two things.
+
+## What shipped
+
+`deprecations` is a dispatcher command, so `docir_deprecations` is one `Request` like every
+other tool — the shape [[adr-354a4270ecd8]] requires, rather than a second implementation
+beside `doctor`'s. Verified over real stdio against this store: 23 tools listed, the register
+returned with its replacement and sunset.
+
+The rule that let a command answer about the *build* rather than a store is
+[[adr-237b117a7916]]: it may, when running somewhere else cannot change the answer. The
+register is a constant in the package plus today's date, which reads the same in the daemon as
+in the shell — unlike the rest of `docir doctor`, which is about the client process and stays
+out.
+
+Not folded into `docir_store_status`, which would have been quicker and would have made one
+tool about a store and about the build reading it.
+
+`describe_deprecations` shapes the payload once, so `doctor`'s `compat` section and the
+command cannot disagree about a field name. `doctor` still reads the register directly rather
+than dispatching, because it has to answer while the store is unopenable — a split between
+transports, not between answers.

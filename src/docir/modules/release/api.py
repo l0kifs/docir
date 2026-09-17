@@ -18,6 +18,7 @@ from docir.modules.release.domain.deprecations import (
     DEPRECATIONS,
     Deprecation,
     announcements,
+    describe_deprecations,
 )
 from docir.modules.release.domain.installation import PACKAGE, Installation, detect
 from docir.modules.release.domain.results import ReleaseStatus, UpgradeOutcome, is_newer
@@ -60,5 +61,6 @@ __all__ = [
     "announcements",
     "build_release_service",
     "current_installation",
+    "describe_deprecations",
     "is_newer",
 ]

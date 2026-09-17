@@ -19,6 +19,7 @@ from docir.entry_points import doctor as doctor_report
 from docir.entry_points.cli import emit, rendering
 from docir.entry_points.cli.runner import execute, get_state, run_local, try_execute, use_json
 from docir.modules.documents.api import DEFAULT_CONTEXT_EXPAND, STORE_FORMAT
+from docir.modules.release.api import describe_deprecations
 from docir.platform.errors import ValidationError
 
 
@@ -390,16 +391,7 @@ def _emit_doctor(report: doctor_report.DoctorReport) -> None:
                 "required": environment.store_format_required,
                 "supported": STORE_FORMAT,
             },
-            "deprecations": [
-                {
-                    "subject": entry.subject,
-                    "replacement": entry.replacement,
-                    "sunset": entry.sunset.isoformat(),
-                    "overdue": overdue,
-                    "note": entry.note,
-                }
-                for entry, overdue in environment.deprecations
-            ],
+            "deprecations": describe_deprecations(environment.today),
         },
         "peers": [
             {

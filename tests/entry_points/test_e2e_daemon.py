@@ -762,3 +762,155 @@ class TestRealDaemon:
             assert lifecycle.serves_current_code(daemon_settings)
         finally:
             lifecycle.stop(daemon_settings)
+
+
+class TestADaemonThatNeverComesUp:
+    """The timeout carries what the daemon said while failing.
+
+    The client cannot see why a daemon died: it spawns one, waits, and all it
+    knows is that nothing started answering, so it reported the wait as if it
+    were the diagnosis (issue-1e310cf366b8). `spawn` already points the child's
+    stdout and stderr at the store's log, so the sentence exists — it was simply
+    never carried across.
+
+    Not marked slow: nothing here spawns anything. The failure is injected where
+    it happens, by making the readiness poll say no.
+    """
+
+    def _never_ready(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(lifecycle, "is_running", lambda settings: False)
+        monkeypatch.setattr(lifecycle, "clear_pid", lambda settings: None)
+        monkeypatch.setattr(lifecycle, "spawn", lambda settings: 4321)
+        monkeypatch.setattr(lifecycle, "wait_until_ready", lambda settings: False)
+
+    def test_the_message_quotes_what_the_daemon_wrote(
+        self, settings: Settings, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        settings.ensure_directories()
+        self._never_ready(monkeypatch)
+        # A daemon dying the way the real one does: a traceback ending in the
+        # sentence somebody has to read.
+        monkeypatch.setattr(
+            lifecycle,
+            "spawn",
+            lambda s: (
+                settings.log_path.write_text(
+                    "Traceback (most recent call last):\n"
+                    '  File "schema_loader.py", line 563, in _parse_type\n'
+                    "    raise SchemaError(...)\n"
+                    "docir.platform.errors.SchemaError: type 'decision' must define a string "
+                    "'prefix'\n",
+                    encoding="utf-8",
+                )
+                or 4321
+            ),
+        )
+        with pytest.raises(DaemonError) as error:
+            lifecycle.ensure_running(settings)
+
+        message = str(error.value)
+        assert "daemon failed to become ready in time" in message
+        assert "type 'decision' must define a string 'prefix'" in message
+
+    def test_an_older_failure_is_not_blamed_for_this_one(
+        self, settings: Settings, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The log is appended to across every spawn this store has ever done.
+        # Quoting its tail unconditionally attributes last week's traceback to
+        # this morning's timeout — a wrong cause stated with confidence, which
+        # is worse than the bare timeout it replaces.
+        settings.ensure_directories()
+        settings.log_path.write_text(
+            "ValueError: something that went wrong last week\n", encoding="utf-8"
+        )
+        self._never_ready(monkeypatch)
+
+        with pytest.raises(DaemonError) as error:
+            lifecycle.ensure_running(settings)
+
+        message = str(error.value)
+        assert "last week" not in message
+        # Silence is its own answer, and gets its own sentence.
+        assert "wrote nothing" in message
+        assert str(settings.log_path) in message
+
+    def test_traceback_pointer_rows_do_not_take_the_window(
+        self, settings: Settings, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # `^^^^` points at a column of a line the reader cannot see here, and
+        # each one costs a slot in a window sized for the sentence that names
+        # the cause.
+        settings.ensure_directories()
+        self._never_ready(monkeypatch)
+        monkeypatch.setattr(
+            lifecycle,
+            "spawn",
+            lambda s: (
+                settings.log_path.write_text(
+                    "\n".join(
+                        [
+                            "  File 'a.py', line 1, in a",
+                            "    first()",
+                            "    ^^^^^^^",
+                            "  File 'b.py', line 2, in b",
+                            "    second()",
+                            "    ~~~~~~~~",
+                            "  File 'c.py', line 3, in c",
+                            "    third()",
+                            "    ^^^^^^^",
+                            "RuntimeError: the actual cause",
+                        ]
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                or 4321
+            ),
+        )
+        with pytest.raises(DaemonError) as error:
+            lifecycle.ensure_running(settings)
+
+        message = str(error.value)
+        assert "RuntimeError: the actual cause" in message
+        assert "^^^" not in message
+        assert "~~~" not in message
+        # Ten lines written, three of them pointers, six quoted — so the one
+        # dropped is the frame furthest from the cause, and the cause itself is
+        # never what falls off the top.
+        assert "File 'a.py'" not in message
+        assert "File 'c.py'" in message
+
+    def test_a_flood_is_trimmed_rather_than_printed(
+        self, settings: Settings, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        settings.ensure_directories()
+        self._never_ready(monkeypatch)
+        monkeypatch.setattr(
+            lifecycle,
+            "spawn",
+            lambda s: (
+                settings.log_path.write_text(
+                    "\n".join(f"line {index} " + "x" * 400 for index in range(50)) + "\n",
+                    encoding="utf-8",
+                )
+                or 4321
+            ),
+        )
+        with pytest.raises(DaemonError) as error:
+            lifecycle.ensure_running(settings)
+
+        assert len(str(error.value)) < 2000
+
+    def test_an_unreadable_log_still_reports_the_timeout(
+        self, settings: Settings, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # This runs while an error message is being built. An error about
+        # reading the log would replace the error the reader came for.
+        settings.ensure_directories()
+        self._never_ready(monkeypatch)
+        monkeypatch.setattr(
+            lifecycle.Path, "open", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("no"))
+        )
+        with pytest.raises(DaemonError) as error:
+            lifecycle.ensure_running(settings)
+        assert "daemon failed to become ready in time" in str(error.value)

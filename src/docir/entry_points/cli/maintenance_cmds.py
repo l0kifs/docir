@@ -38,10 +38,13 @@ def reindex(
     `documents_skipped`: a rebuild that quietly dropped a document used to look
     exactly like one that did not. `docir check` names each such file.
 
-    Every document this run re-saves is re-embedded before it returns, and
-    `embeddings_recomputed` says how many. So a full rebuild is also the way to
-    recompute every vector — there is no flag for that, because there was
-    nothing for one to add (adr-6a4718fa7a7d).
+    Every document this run re-saves is queued for embedding and the drain runs
+    before it returns, recomputing only the vectors whose inputs — model, text,
+    chunking — no longer match what is stored, so an unchanged corpus reports
+    `embeddings_recomputed: 0` (issue-77dd42e3a03a). After a model or chunking
+    change that is every vector, so a full rebuild is still the way to recompute
+    them all — there is no flag for that, because there was nothing for one to
+    add (adr-6a4718fa7a7d).
     """
     with rendering.progress("rebuilding the index"):
         data = execute("reindex", {"changed_only": changed})

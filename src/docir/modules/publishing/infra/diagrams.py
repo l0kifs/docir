@@ -25,19 +25,22 @@ Two properties are preserved on purpose:
   framed and copyable exactly like a code block. Nothing is hidden behind a
   script that did not load, and no page is worse than it is today.
 
-mermaid 11 dropped its classic bundle: the npm package now ships only ES
-modules, and a ``type="module"`` script would break the ``file://`` guarantee
-above. So the runtime to supply is a **UMD** build — mermaid 10.x is the last
-line that publishes one::
+mermaid 11's package ``exports`` name only ES modules, and a ``type="module"``
+script would break the ``file://`` guarantee above. But the classic-script
+bundle — ``dist/mermaid.min.js``, a plain IIFE that sets ``window.mermaid`` —
+is still published on the 11 line; it is only absent from ``exports``. That is
+the runtime to supply. (This module used to send adopters to 10.9.3 on the
+grounds that 11 is ESM-only, which issue-28e5dc0191cd measured to be false:
+docir's own site publishes with 11.16.1.)::
 
     curl -o mermaid.min.js \
-      https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js
+      https://cdn.jsdelivr.net/npm/mermaid@11.16.1/dist/mermaid.min.js
     docir build --out site/ --mermaid mermaid.min.js
 
 An ``.mjs`` runtime is refused rather than copied, because the fallback above
 would otherwise absorb it: the page would publish, the script would never run,
 and the result would be indistinguishable from passing no flag. The refusal
-names the version, since "mermaid's browser build" stopped being obtainable.
+names the URL, so the next step is one the reader can take.
 
 The fallback is also why the source lives in the element's text rather than in
 a ``data-`` attribute: the unrendered state *is* the source, so there is one
@@ -63,6 +66,11 @@ DIAGRAM_CLASS = "docir-mermaid"
 
 #: What the runtime is written as, and what the script tag references.
 RUNTIME_FILE = "mermaid.min.js"
+
+#: Where to fetch the runtime `--mermaid` expects. Named in the refusal below and in
+#: `docir build --help`, pinned by `pages.yml`, quoted by the packaged skill and the
+#: README; `test_the_mermaid_guidance_agrees.py` holds the five together.
+MERMAID_RUNTIME_URL = "https://cdn.jsdelivr.net/npm/mermaid@11.16.1/dist/mermaid.min.js"
 
 #: Cap on the supplied runtime. Mermaid's own minified bundle is ~3 MB; the
 #: limit exists to catch a path that points at something else entirely (a
@@ -184,9 +192,9 @@ def resolve_runtime(runtime: Path | None) -> str | None:
     path = Path(runtime)
     if path.suffix.lower() != ".js":
         raise ValidationError(
-            f"--mermaid expects a UMD bundle loaded as a classic script, got '{path.name}'; "
-            "mermaid 11 ships only ES modules, so fetch the last UMD build: "
-            "https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js"
+            f"--mermaid expects the classic-script bundle (dist/mermaid.min.js, which sets "
+            f"window.mermaid), got '{path.name}'; the package's `exports` name only the "
+            f"ESM entry, but the bundle is still published — fetch {MERMAID_RUNTIME_URL}"
         )
     if not path.is_file():
         raise ValidationError(f"mermaid runtime not found: {path}")

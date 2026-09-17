@@ -6,10 +6,12 @@ import the other, so the grammar lives here rather than being written twice:
 two copies of a regex are two definitions waiting to disagree, and the whole
 point of a controlled vocabulary is that there is one rule.
 
-The document-id grammar is here for the same reason and one more: ``documents``
-mints and validates ids, while ``platform.persistence`` has to *recognise* them
-inside a body to derive the mention graph. One pattern, two readers — a second
-copy would let a document be addressable by one and invisible to the other.
+The document-id grammar is here for the same reason: ``DocId`` validates ids
+with it and ``Document.mentioned_ids`` scans bodies with it to derive the
+mention graph, and one pattern keeps those two readers agreeing — a second copy
+would let a document be addressable by one and invisible to the other.
+``platform.persistence`` stores what the scan found and does not import this
+package (adr-e86c5040d626).
 
 Pure: no I/O, no dependencies, safe for a ``domain`` layer to import (see
 adr-289e788719a7).

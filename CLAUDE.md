@@ -105,8 +105,8 @@ src/docir/
 Dependencies flow **`entry_points → modules → platform → config`**, and between modules only
 **`tags → documents → indexing`**. There are no cycles, and tach fails the build if you introduce one.
 `agents`, `publishing` and `release` are self-contained leaves (depending only on
-`platform.errors`, and `release` on `platform.clock`); they own no index/DB state, so they have no
-shared-index baseline edges. **`publishing` takes documents as
+`platform.errors`, plus `platform.naming` for `publishing` and `platform.clock` for `release`); they
+own no index/DB state, so they have no shared-index baseline edges. **`publishing` takes documents as
 data — the `docir get` JSON shape — rather than importing `documents.api`**, which is what keeps it
 a leaf: the site is a projection of the public contract, not a second reader of the aggregate. Do
 not "simplify" it by handing it a `DocumentService`.

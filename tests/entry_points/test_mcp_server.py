@@ -30,7 +30,7 @@ from docir.entry_points.dispatch import Dispatcher
 from docir.entry_points.federation import FEDERATED_COMMANDS
 from docir.entry_points.mcp.cmds import build_server
 from docir.entry_points.mcp.server import build_mcp_server
-from docir.modules.documents.api import describe_schema, load_schema
+from docir.modules.documents.api import DEFAULT_CONTEXT_EXPAND, describe_schema, load_schema
 from docir.modules.release.api import describe_deprecations
 from docir.platform.errors import DaemonError
 from docir.platform.transport.messages import Request, RequestExecutor, Response
@@ -797,3 +797,16 @@ class TestTheRegisterIsAskableOverTheWire:
         # down from the commands themselves.
         over_the_wire = container.dispatcher.dispatch("deprecations", {})["deprecations"]
         assert over_the_wire == describe_deprecations(date.today())
+
+
+def test_expand_defaults_mirror_the_cli(server) -> None:
+    """`docir_context` shipped `expand=1` beside a CLI default of 2 for a year,
+    under a comment saying it mirrored the CLI (found by the 0.27.0 document
+    audit, not by a user). The two transports exist so the same query cannot
+    answer differently, and a default is part of the answer — so it is the
+    CLI's constant, read from the tool schema a client actually sees.
+    """
+    tools = list_tools(server)
+    for name in ("docir_context", "docir_bench"):
+        default = tools[name].inputSchema["properties"]["expand"]["default"]
+        assert default == DEFAULT_CONTEXT_EXPAND, f"{name} expand default {default}"

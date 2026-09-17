@@ -6,8 +6,9 @@ and which edges point at each page. The HTML lives in ``infra`` so those rules
 can be checked without parsing a rendered page to find out what they were.
 
 The input is deliberately the CLI's own JSON shape rather than a ``Document``
-entity. ``publishing`` is a leaf module: it depends on nothing but the error
-taxonomy, exactly like ``agents``, and it consumes the documented output of
+entity. ``publishing`` is a leaf module: it depends on nothing but two ``platform``
+leaves — the error taxonomy, like ``agents``, and the ``[[...]]`` link grammar in
+``platform.naming`` (adr-289e788719a7) — and it consumes the documented output of
 ``docir query`` / ``docir get``. That keeps the site a projection of the public
 contract instead of a second reader of the aggregate.
 """

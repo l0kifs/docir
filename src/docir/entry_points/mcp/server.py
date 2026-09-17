@@ -30,6 +30,7 @@ from fastmcp.exceptions import ToolError
 
 from docir.entry_points.federation import STORES_KEY, resolve_extra
 from docir.entry_points.payload import trim
+from docir.modules.documents.api import DEFAULT_CONTEXT_EXPAND
 from docir.platform.errors import DocirError
 from docir.platform.transport.messages import Request, RequestExecutor
 
@@ -60,9 +61,11 @@ relation kinds — an invalid one is refused, not corrected.
 _READ_ONLY = {"readOnlyHint": True}
 _DESTRUCTIVE = {"destructiveHint": True}
 
-#: The default `--expand` for `docir_context`, mirrored from the CLI so the two
-#: transports return the same neighbourhood for the same query.
-_DEFAULT_EXPAND = 1
+#: The default `--expand` for `docir_context` and `docir_bench`: the CLI's own
+#: constant, so the two transports return the same neighbourhood for the same
+#: query. It was a literal `1` beside a CLI default of 2 from the day MCP
+#: shipped, under this same comment; `test_mcp_server.py` now pins the parity.
+_DEFAULT_EXPAND = DEFAULT_CONTEXT_EXPAND
 
 
 class _Gateway:
@@ -190,7 +193,8 @@ def _register_read_tools(
         Args:
             task: What you are about to do, in your own words.
             limit: Maximum documents to return — a token budget, not a page.
-            expand: How many graph hops to follow from each ranked document.
+            expand: How many of `limit`'s slots may go to graph neighbours of
+                what ranked (0 disables expansion) — a slot count, not hops.
             min_score: Drop hits whose raw cosine `similarity` is below this.
                 Filters on `similarity`, never on `score` (which is rank-derived
                 and has no absolute meaning). Omit for no floor.
@@ -795,7 +799,7 @@ def _register_maintenance_tools(mcp: FastMCP, run: _Gateway) -> None:
     def docir_bench(
         tasks: list[dict[str, Any]],
         limit: int = 5,
-        expand: int = 2,
+        expand: int = _DEFAULT_EXPAND,
     ) -> dict[str, Any]:
         """Score this store's retrieval against tasks whose answers you know.
 
@@ -826,9 +830,11 @@ def _register_maintenance_tools(mcp: FastMCP, run: _Gateway) -> None:
         merge, a hand edit, a fresh clone — the index is gitignored). The files
         are canonical; this makes the index agree with them again.
 
-        Every document it re-saves is re-embedded before it returns, and
-        `embeddings_recomputed` says how many — so this is also how you
-        recompute every vector.
+        Every document it re-saves is queued, and the drain runs before it
+        returns, recomputing only the vectors whose inputs (model, text,
+        chunking) moved; `embeddings_recomputed` says how many. After a model
+        or chunking change that is every vector, so this is also how you
+        recompute them all.
 
         Args:
             changed_only: Only reindex files whose content hash moved.

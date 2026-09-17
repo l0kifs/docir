@@ -223,8 +223,9 @@ def is_absent(value: object) -> bool:
     normal state of a document rather than the absence of one.
 
     Public because Tier 1 asks the same question of the same fields
-    (``graph_checks._find_missing_required``). Two copies of "empty" would be
-    two rules waiting to disagree, and the disagreement is the worst possible
+    (``SchemaConformanceChecks._find_missing_required`` in ``checks/schema_rules``).
+    Two copies of "empty" would be two rules waiting to disagree, and the
+    disagreement is the worst possible
     one: ``check`` reporting a document as conforming that the next write
     refuses, or the reverse.
     """

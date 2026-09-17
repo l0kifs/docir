@@ -286,9 +286,13 @@ class DocumentPatch:
         Staged only when it differs, so a write that changes nothing here does
         not rewrite the key and move the file's bytes.
 
-        Like the digests above it this is mechanical, so nothing here touches
+        Like the digests above it this is mechanical, so it stages nothing on
         ``updated``: the baseline records what the tree held, and a document
-        whose evidence is filed in is not a document anybody re-read.
+        whose evidence is filed in is not a document anybody re-read. The flag
+        that carried the write is what moves ``updated`` — ``DocumentService``
+        stamps it for any non-empty change set — which is why the backfill with
+        no such flag, ``check --fix``, runs through the repairer instead and is
+        pinned to leave ``updated`` alone.
         """
         baseline = mint_baseline(
             self._code_matcher, patterns, self._base.code_baseline, verified_now=verified_now

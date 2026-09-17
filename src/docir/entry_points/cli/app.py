@@ -237,11 +237,13 @@ def build(
     file://. The runtime is megabytes, so it is yours to supply and is only
     written when some document actually draws a diagram.
 
-    It must be a UMD build, loaded as a classic script. mermaid 11 ships only ES
-    modules, so 10.x is the last line that has one — fetch it once with:
+    It must be the classic-script bundle: the file that sets window.mermaid
+    when loaded with a plain <script src>, not the ESM entry. That is
+    dist/mermaid.min.js, which mermaid still ships on the 11 line even though
+    the package's `exports` name only the .mjs module — fetch it once with:
 
         curl -o mermaid.min.js \\
-          https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js
+          https://cdn.jsdelivr.net/npm/mermaid@11.16.1/dist/mermaid.min.js
 
     An .mjs runtime is refused with that URL in the message, rather than copied
     into a page whose script never runs.

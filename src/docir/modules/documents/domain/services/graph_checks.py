@@ -82,7 +82,9 @@ class GraphChecker:
         and is ``None`` when there is no repository to ask — a global store
         would otherwise report every pattern in it as missing. ``code_digests``
         is the same shape for the *content* of what they match, and is compared
-        against what each document recorded when it was last verified.
+        against what each document recorded — at its last verification
+        (`code-changed`), or failing that when the glob was declared
+        (`code-drifted`, adr-49bb8cc48938).
 
         No check here reads the derived mention graph. ``orphan`` was the one
         that did, and issue-77a09761e1d4 took it away: a Tier 1 finding must

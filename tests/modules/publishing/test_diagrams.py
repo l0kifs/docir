@@ -114,20 +114,25 @@ class TestRuntimeWiring:
 
 class TestRuntimeValidation:
     def test_a_non_javascript_path_is_refused_by_name(self) -> None:
-        with pytest.raises(ValidationError, match="UMD bundle"):
+        with pytest.raises(ValidationError, match="classic-script bundle"):
             diagrams.resolve_runtime(Path("mermaid.tar.gz"))
 
     def test_the_refusal_names_a_build_that_still_exists(self) -> None:
         """The obvious next step must be one the reader can take.
 
         The message used to say "point it at mermaid's browser build
-        (mermaid.min.js)" — a file mermaid stopped publishing at 11, so the
-        error sent an adopter to a package that does not contain it.
+        (mermaid.min.js)" with no version, then named 10.9.3 on the grounds
+        that mermaid 11 is ESM-only — false: `dist/mermaid.min.js` is still
+        published on the 11 line, only absent from the package's `exports`, and
+        docir's own site draws with it (issue-28e5dc0191cd). The URL is the one
+        constant every guidance surface is held to.
         """
         with pytest.raises(ValidationError) as exc:
             diagrams.resolve_runtime(Path("mermaid.core.mjs"))
         message = str(exc.value)
-        assert "mermaid@10" in message
+        assert diagrams.MERMAID_RUNTIME_URL in message
+        assert "mermaid@11" in diagrams.MERMAID_RUNTIME_URL
+        assert "UMD" not in message
         assert "https://" in message
 
     def test_a_missing_file_is_refused(self, tmp_path: Path) -> None:

@@ -111,9 +111,10 @@ jobs:
 
       - name: Store health (docir doctor --strict)
         # Proves the rebuild above actually populated the index, before the gate
-        # below trusts it. --strict exits 1 on `error` findings only: no index,
-        # an index holding nothing beside files on disk, a schema that will not
-        # load, an absent embedder. The warnings it also reports (a stale build
+        # below trusts it. --strict exits 1 on `error` findings only: an index
+        # holding nothing beside files on disk (a *missing* one is rebuilt on
+        # open and is only a warning, adr-e53c813d2f13), a schema that will not
+        # load, an absent embedder, an overdue deprecation. The warnings it also reports (a stale build
         # stamp, schema drift, a pending embedding queue) never fail the build —
         # every store is in one of those states between an upgrade and its next
         # rebuild.

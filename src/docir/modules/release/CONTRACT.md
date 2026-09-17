@@ -66,6 +66,10 @@ will stop doing, with the date. Backs `docir self status`, the package step of
 
 ## Policy
 - permissions: none (single-user local CLI; see adr-90e994d931cc)
-- transport: runs in-process only; not routed through the daemon/dispatcher
-  (same argument as adr-3a2d5ee7bc84, and see adr-31aa7aa60d11 for why the
-  package step re-execs rather than continuing in the replaced process)
+- transport: the release check and the installer run in-process, not through
+  the daemon/dispatcher (same argument as adr-3a2d5ee7bc84, and see
+  adr-31aa7aa60d11 for why the package step re-execs rather than continuing in
+  the replaced process). The one exception is `describe_deprecations`, which
+  the dispatcher exposes as the `deprecations` command and MCP as
+  `docir_deprecations` (adr-237b117a7916): a constant plus today's date reads
+  the same in either process.

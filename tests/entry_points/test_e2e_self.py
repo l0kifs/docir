@@ -19,6 +19,7 @@ from typer.testing import CliRunner
 
 from docir import __version__
 from docir.config.settings import Settings
+from docir.entry_points.cli import rendering
 from docir.entry_points.cli.app import app
 from docir.platform.persistence.unit_of_work import UnitOfWork
 
@@ -271,3 +272,65 @@ def test_it_refreshes_an_installed_skill_and_leaves_an_absent_one_alone(
     agents = _upgrade(str(project))["agents"]
     assert [file["previous_version"] for file in agents] == ["0.0.1"]
     assert f"docir:v{__version__}" in skill.read_text(encoding="utf-8")
+
+
+class TestTheUpgradeReportDoesNotDrownInWarnings:
+    """`self upgrade` counts the corpus; `docir check` is what enumerates it.
+
+    Upgrading docir inside docir's own repository moved enough source to drift
+    56 governed documents at once, and the three lines that were the actual
+    answer — the package notice, the reindex result, the agent files — scrolled
+    away above 56 near-identical yellow lines. The findings were right; the
+    altitude of the report was not.
+    """
+
+    def _flood(self, warnings: int = 56) -> list[dict[str, object]]:
+        return [
+            {
+                "kind": "code-drifted",
+                "message": f"'adr-{index:04d}' governs 'src/x.py', which changed",
+                "doc_ids": [f"adr-{index:04d}"],
+                "severity": "warning",
+            }
+            for index in range(warnings)
+        ]
+
+    def _render(self, findings: list[dict[str, object]], capsys) -> str:
+        rendering.render_upgrade({"documents_indexed": 0, "tags_indexed": 17}, [], findings)
+        return capsys.readouterr().out
+
+    def test_a_flood_of_warnings_is_counted_not_listed(self, capsys) -> None:
+        out = self._render(self._flood(), capsys)
+        assert "56 warnings" in out
+        assert "code-drifted x56" in out
+        # The individual messages belong to `docir check`, which is named.
+        assert "governs 'src/x.py'" not in out
+        assert "docir check" in out
+        # And the answer the command was run for survives above them.
+        assert "reindex" in out
+
+    def test_an_error_still_prints_in_full_beneath_them(self, capsys) -> None:
+        """An error is what `--strict` fails on and carries its own fix.
+
+        Counting it would summarise the one thing somebody has to act on now,
+        and burying it under a flood is exactly the failure this guards.
+        """
+        findings: list[dict[str, object]] = [
+            *self._flood(),
+            {
+                "kind": "empty-index",
+                "message": "the index holds nothing while docs/ holds files — run docir reindex",
+                "doc_ids": [],
+                "severity": "error",
+            },
+        ]
+        out = self._render(findings, capsys)
+        assert "1 error, 56 warnings" in out
+        assert "the index holds nothing while docs/ holds files" in out
+        assert "run docir reindex" in out
+        # A finding about the store names no document, and an empty `()` reads
+        # like a list that failed to render.
+        assert "()" not in out
+
+    def test_a_clean_corpus_says_so(self, capsys) -> None:
+        assert "no structural issues" in self._render([], capsys)

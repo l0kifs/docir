@@ -77,6 +77,12 @@ def self_upgrade(
     version, and reports what `check` still finds — `check` last, so the findings
     describe the state you are left in.
 
+    That report is **counted, not listed**: errors print in full, warnings are
+    tallied by kind, and `docir check` reads them. An upgrade is exactly the
+    event that moves a lot of code at once, so enumerating every finding here
+    buries the three lines above it — which are the answer the command was run
+    for. `--json` is unaffected and still carries every finding.
+
     The package step re-executes docir before doing the rest, because this
     process is the code being replaced: every step after the install would
     otherwise be the old build's work, starting with the stamp saying which

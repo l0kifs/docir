@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections import Counter
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 
@@ -281,13 +282,22 @@ def render_findings(findings: Sequence[Mapping[str, object]], *, empty: str) -> 
         console.print(f"[green]{empty}[/]")
         return
     for finding in findings:
-        ids = _join(finding.get("doc_ids"))
-        # Colour by severity so the findings that fail a build are visually
-        # separable from the ones that never will (`docir check --strict`).
-        colour = "red" if finding.get("severity") == "error" else "yellow"
-        console.print(
-            f"[{colour}]{finding.get('kind')}[/]: {finding.get('message')} [dim]({ids})[/]"
-        )
+        console.print(_finding_line(finding))
+
+
+def _finding_line(finding: Mapping[str, object]) -> str:
+    """One finding, coloured by severity, with its ids when it names any.
+
+    Colour so the findings that fail a build are visually separable from the
+    ones that never will (`docir check --strict`). The trailing ids are dropped
+    when there are none rather than printed as an empty `()`: `empty-index` and
+    `malformed` are about the store and the filesystem, not about a document,
+    and a bare pair of brackets reads like a list that failed to render.
+    """
+    colour = "red" if finding.get("severity") == "error" else "yellow"
+    ids = _join(finding.get("doc_ids"))
+    suffix = f" [dim]({ids})[/]" if ids else ""
+    return f"[{colour}]{finding.get('kind')}[/]: {finding.get('message')}{suffix}"
 
 
 def render_repair(
@@ -629,7 +639,51 @@ def render_upgrade(
         + (f"  [yellow]{skipped} skipped[/]" if skipped else "")
     )
     render_setup(agents)
-    render_findings(findings, empty="no structural issues")
+    _render_upgrade_findings(findings)
+
+
+def _render_upgrade_findings(findings: Sequence[Mapping[str, object]]) -> None:
+    """The corpus, counted — not enumerated, the way `docir check` enumerates it.
+
+    `self upgrade` answers "what did the upgrade leave", and that answer is the
+    three lines above this one. Printing every finding underneath buries them:
+    upgrading docir inside docir's own repository moved enough source to drift
+    56 governed documents at once, and the package notice, the reindex result
+    and the agent files scrolled away above 56 near-identical yellow lines.
+
+    Errors still print in full. They are what a `--strict` gate fails on and
+    each carries the command that clears it, so a count would be the wrong
+    summary of a thing somebody has to act on now. Warnings are counted by kind,
+    which is the shape of the question an upgrade raises — *did this release
+    move a lot?* — and `docir check` is named for reading them.
+
+    The same rule `render_doctor` states one function down: facts before
+    findings, and never findings alone.
+    """
+    if not findings:
+        console.print("[cyan]check[/]     [green]no structural issues[/]")
+        return
+    errors = [f for f in findings if f.get("severity") == "error"]
+    warnings = [f for f in findings if f.get("severity") != "error"]
+    counted = Counter(str(f.get("kind")) for f in warnings)
+    tally = ", ".join(
+        part
+        for part in (
+            f"{len(errors)} error{'' if len(errors) == 1 else 's'}" if errors else "",
+            f"{len(warnings)} warning{'' if len(warnings) == 1 else 's'}" if warnings else "",
+        )
+        if part
+    )
+    console.print(f"[cyan]check[/]     {tally} [dim]— `docir check` reads them in full[/]")
+    for finding in errors:
+        console.print(_finding_line(finding))
+    if counted:
+        console.print(
+            "          "
+            + "[dim], [/]".join(
+                f"[yellow]{kind}[/][dim] x{count}[/]" for kind, count in sorted(counted.items())
+            )
+        )
 
 
 def render_doctor(report: Mapping[str, object]) -> None:

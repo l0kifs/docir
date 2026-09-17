@@ -1,10 +1,12 @@
 ---
 code:
 - .github/workflows/**
-- pyproject.toml
+- scripts/check_expressions.py
+- scripts/cli_oracle.py
 code_baseline:
   .github/workflows/**: f7a17f7b3983
-  pyproject.toml: 1339717eb3e2
+  scripts/check_expressions.py: 0f72799b33ef
+  scripts/cli_oracle.py: bb1191376268
 created: '2026-07-30'
 description: How to publish docir to PyPI with uv and GitHub Actions trusted publishing.
 id: run-30aceb4eacc6
@@ -19,7 +21,7 @@ tags:
 - release
 title: Publishing to PyPI
 type: runbook
-updated: '2026-08-27'
+updated: '2026-09-17'
 ---
 
 This project uses [UV](https://docs.astral.sh/uv/) as the package manager and GitHub Actions for automated publishing to PyPI.

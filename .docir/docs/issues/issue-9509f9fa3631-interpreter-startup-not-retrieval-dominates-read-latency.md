@@ -4,7 +4,7 @@ code:
 - src/docir/entry_points/cli/**
 code_baseline:
   benchmarks/latency.py: 492ab63bc432
-  src/docir/entry_points/cli/**: c98b5d247ed7
+  src/docir/entry_points/cli/**: 91fe38046593
 created: '2026-08-14'
 description: 'Startup still dominates after the SQLAlchemy fix: ~0.49s of a 0.53s
   warm-daemon read is process start and imports. What remains is pydantic-settings
@@ -22,7 +22,12 @@ tags:
 - material
 title: Interpreter startup, not retrieval, dominates read latency
 type: issue
-updated: '2026-08-25'
+updated: '2026-09-17'
+verified: '2026-09-17'
+verified_code:
+  benchmarks/latency.py: 492ab63bc432
+  src/docir/entry_points/cli/**: 91fe38046593
+verified_content: d1abb5ae0cd8
 ---
 
 ## What was measured

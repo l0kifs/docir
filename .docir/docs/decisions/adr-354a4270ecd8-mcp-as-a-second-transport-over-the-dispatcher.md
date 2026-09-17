@@ -1,8 +1,10 @@
 ---
 code:
 - src/docir/entry_points/mcp/**
+- src/docir/entry_points/payload.py
 code_baseline:
   src/docir/entry_points/mcp/**: 340ab6499fd2
+  src/docir/entry_points/payload.py: dc0ebcca2589
 created: '2026-08-03'
 description: Why docir mcp serve is a third client of the dispatcher rather than a
   second implementation.
@@ -90,8 +92,12 @@ a `cmds.py` (the Typer command); no business logic, per the entry_points rule.
   servers in a client's tool list. Renaming one breaks saved prompts, so the
   mapping is spelled out in the test rather than derived.
 - **This is not the read-path improvement.** MCP changes who can reach docir,
-  not what they get: retrieval is still document-level, with no chunking and no
-  reranking. Those remain open — gaps 2 and 3 of `ref-a6db21f52427`.
+  not what they get. At the time, retrieval was document-level with no chunking
+  and no reranking — gaps 2 and 3 of `ref-a6db21f52427`. Both have since been
+  decided: every `##` section is embedded and a hit names its `matched_section`
+  (adr-927aa43d9635), and reranking was built, measured worse than fusion and
+  rejected (adr-d657a09b8c4a). Whatever the read path returns, the tools return,
+  because they are the same dispatcher.
 - **The lazy import in `cmds.py` is now load-bearing.** With fastmcp a default
   dependency, nothing but that deferred import keeps its ~0.3s off the read path
   every other command runs. Hoisting it to the top of the module would be

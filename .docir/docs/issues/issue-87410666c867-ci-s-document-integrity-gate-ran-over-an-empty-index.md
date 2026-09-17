@@ -19,7 +19,7 @@ tags:
 - testing
 title: CI's document-integrity gate ran over an empty index
 type: issue
-updated: '2026-08-25'
+updated: '2026-09-17'
 ---
 
 ## What was wrong
@@ -59,8 +59,11 @@ clone the second run finds an empty index where the first found none — and a
 the same corpus. A gate that goes green on the second attempt is worse than one that
 never fired.
 
-`empty-index` is now its own error kind, beside `no-index` and for the same reason:
-every read answers nothing. A *partial* mismatch stays `index-behind-files`, a
+`empty-index` is now its own error kind. `no-index` sat beside it until
+adr-e53c813d2f13 made opening a store rebuild a missing index — that finding now describes
+a condition the command has already repaired and is a warning, while `empty-index` keeps
+the severity because it is the store the bootstrap did not reach: every read still answers
+nothing. A *partial* mismatch stays `index-behind-files`, a
 warning — one file that will not parse counts on disk and not in the index for as
 long as it exists, and an error there would red-build a repository for a condition
 `check` already reports as `malformed`.

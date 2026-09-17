@@ -1,11 +1,13 @@
 ---
 code:
 - src/docir/modules/documents/application/services/document_service.py
+- src/docir/modules/documents/application/services/document_patch.py
 - src/docir/modules/documents/infra/schema_loader.py
 - src/docir/platform/filesystem/markdown_store.py
 code_baseline:
+  src/docir/modules/documents/application/services/document_patch.py: 7b2a442b890c
   src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
-  src/docir/modules/documents/infra/schema_loader.py: 95c1dd812abc
+  src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
   src/docir/platform/filesystem/markdown_store.py: 5aa8ee165728
 created: '2026-08-15'
 description: Why docir update can retype a document while its id and prefix stay put,
@@ -25,7 +27,14 @@ tags:
 - schema
 title: A document's type is mutable; its id is not
 type: decision
-updated: '2026-08-15'
+updated: '2026-09-17'
+verified: '2026-09-17'
+verified_code:
+  src/docir/modules/documents/application/services/document_patch.py: 7b2a442b890c
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
+  src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
+  src/docir/platform/filesystem/markdown_store.py: 5aa8ee165728
+verified_content: 5099e3076d40
 ---
 
 ## Context

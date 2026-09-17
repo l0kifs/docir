@@ -31,8 +31,9 @@ vocabulary and cannot answer differently.
 For an agent that has a shell, install the instructions once per repository:
 
 ```bash
-docir agent install                          # a Claude skill, plus an AGENTS.md block linking it
+docir agent install                          # the Claude skill; nothing else is chosen for you
 docir agent install --agent claude-writing   # add the document-writing rules
+docir agent install --agent claude-feedback  # opt-in: report docir's own defects upstream
 docir agent install --agent agents           # link the skills from AGENTS.md
 docir agent update                           # refresh after upgrading docir
 ```

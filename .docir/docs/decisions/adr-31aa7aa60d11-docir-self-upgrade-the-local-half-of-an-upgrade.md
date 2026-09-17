@@ -1,12 +1,14 @@
 ---
 code:
-- src/docir/entry_points/cli/app.py
+- src/docir/entry_points/cli/self_cmds.py
 - src/docir/entry_points/composition.py
-- src/docir/platform/persistence/alembic/versions/**
+- src/docir/modules/documents/application/services/index_rebuilder.py
+- src/docir/platform/persistence/alembic/versions/0006_index_build.py
 code_baseline:
-  src/docir/entry_points/cli/app.py: 632b4c81a902
+  src/docir/entry_points/cli/self_cmds.py: 211c54b8b993
   src/docir/entry_points/composition.py: f1e7c5f79526
-  src/docir/platform/persistence/alembic/versions/**: 63a122ce10fe
+  src/docir/modules/documents/application/services/index_rebuilder.py: fbb0bff13bc4
+  src/docir/platform/persistence/alembic/versions/0006_index_build.py: 5d30151abe53
 created: '2026-08-09'
 description: One command for the steps that follow a new docir release, and why installing
   the new docir is not one of them.
@@ -23,7 +25,7 @@ tags:
 - schema
 title: 'docir self upgrade: the local half of an upgrade'
 type: decision
-updated: '2026-08-09'
+updated: '2026-09-17'
 ---
 
 ## Context
@@ -51,14 +53,15 @@ installation and what it generated. The name is chosen to survive the package
 half landing under it — renaming a command breaks every saved agent prompt that
 names it.
 
-**It does not install a new docir.** The process is running the code that would
-be replaced, so everything after that call is still the old build's work —
-including the rebuild that stamps which version built the index, which would
-then record the version that is on its way out. Doing it properly means
-detecting how docir was installed (uv tool, pipx, pip, a `uv sync` workspace,
-uvx — a wrong guess "upgrades" a checkout) and re-execing the new binary to
-finish. That is a separate decision; until it is made, the command says what to
-run and refuses to guess.
+**Installing the new docir is not this decision.** The process is running the
+code that would be replaced, so everything after that call is still the old
+build's work — including the rebuild that stamps which version built the index,
+which would then record the version that is on its way out. Doing it properly
+means detecting how docir was installed (uv tool, pipx, pip, a `uv sync`
+workspace, uvx — a wrong guess "upgrades" a checkout) and re-execing the new
+binary to finish. That is adr-a555ee6bc484, which put the package step first,
+behind `--no-package`, and only where docir owns its environment; elsewhere the
+command says what to run and refuses to guess.
 
 **The index records which docir built it, in its own one-row table.** Not in the
 schema baseline: that payload is diffed line by line and printed to the user, so
@@ -98,4 +101,6 @@ the command replaces the binary of the very server the client is talking to.
 - The orchestration lives in the composition root beside `initialize_store`,
   not in a module: it spans `documents` (through the executor) and `agents` (in
   process), and that spanning is exactly what wiring is for.
-- The package upgrade remains manual and is named in the output.
+- The package upgrade is adr-a555ee6bc484's: it runs first where docir owns its
+  environment, and where it does not, the output names why and the three local
+  steps run anyway.

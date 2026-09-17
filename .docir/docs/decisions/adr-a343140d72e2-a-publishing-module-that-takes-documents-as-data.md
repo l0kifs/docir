@@ -20,7 +20,7 @@ tags:
 - docs
 title: A publishing module that takes documents as data
 type: decision
-updated: '2026-08-06'
+updated: '2026-09-17'
 ---
 
 ## Context
@@ -45,8 +45,9 @@ only permitted ones are `tags -> documents -> indexing`.
 ## Decision
 A new **leaf module `publishing`** that takes documents as **data**, not as a
 service. Its input is a sequence of mappings in the shape `docir get` returns;
-it imports nothing but `platform.errors` (and `markdown-it-py` for body
-rendering, in `infra`). The entry point fetches and hands over.
+it imports nothing but two `platform` leaves — `platform.errors`, and
+`platform.naming` for the `[[...]]` prose-link rule it shares with `docir check` —
+plus `markdown-it-py` for body rendering, in `infra`. The entry point fetches and hands over.
 
 That resolves the boundary question by making it moot, and it is better design
 independently: rendering has no business knowing what a repository is. The site
@@ -85,28 +86,30 @@ promises.
   documents is right for `context`, which is a working set, and wrong for a
   browsable corpus, where a superseded decision is exactly what someone arrives
   at from an old link and where the successor banner is the answer.
-- **The build does one `query` then one `get` per document.** Bodies are absent
-  from every list path by contract, so this is N+1 requests — the right trade
-  for an occasional offline operation against widening a read path that exists
-  to stay narrow.
+- **The build does one `query` then one batched `get` carrying every id.** Bodies
+  are absent from every list path by contract, so a second pass is required — and
+  `get` takes several ids in one request (adr-fe7c91f61f32), which is the shape a
+  whole-corpus read is for, so the site costs two requests rather than a body on
+  `query`.
 
 ## Consequences
 - **docir has a second audience.** Everything up to here — MCP, chunking,
   `get --section` — made the corpus cheaper for an agent. This makes it legible
   to a human who will never install docir.
-- **The N+1 is real and bounded.** 104 documents build in about a second
-  in-process; over the daemon it is 105 socket round trips. If a corpus ever
-  makes that hurt, the fix is a dispatcher `export` command, not a body on
-  `query`.
+- **The second pass is two round trips, not N+1.** A corpus of any size costs one
+  `query` and one batched `get` over the daemon; if a payload ever makes that
+  hurt, the fix is a dispatcher `export` command, not a body on `query`.
 - **A build that stopped at `query` would look exactly like success** — right
   document count, right page count, empty bodies. That failure mode is pinned
   by a test rather than left to review.
 - **Two more declared dependencies, both already present.** `markdown-it-py`
   arrived with Rich and `watchfiles` with fastmcp; depending on someone else's
   transitive dependency is depending on their next release notes.
-- **No templating engine.** The HTML is f-strings in `infra/rendering.py`. That
-  is a deliberate ceiling: this renders one document type in one layout, and
-  Jinja2 would buy flexibility nobody has asked for at the cost of a dependency
-  and a template directory. Revisit when a second layout exists, not before.
+- **No templating engine.** The HTML is f-strings, one `infra` module per page
+  kind — `document_page.py`, `index_page.py`, `graph.py` — poured into a shared
+  shell in `page_shell.py` and assembled in `rendering.py`. That is a deliberate
+  ceiling: three fixed layouts and no template directory, because Jinja2 would
+  buy flexibility nobody has asked for at the cost of a dependency. Revisit when
+  a layout has to vary per document, not before.
 - **CSS is now a maintenance surface docir has never had.** It is one inline
   block with a light and a dark palette, and it should stay that size.

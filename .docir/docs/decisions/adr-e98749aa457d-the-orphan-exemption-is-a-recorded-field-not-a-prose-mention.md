@@ -2,9 +2,11 @@
 code:
 - src/docir/modules/documents/domain/entities/document.py
 - src/docir/modules/documents/domain/services/graph_checks.py
+- src/docir/modules/documents/domain/services/checks/graph_rules.py
 - src/docir/platform/persistence/ports.py
 code_baseline:
-  src/docir/modules/documents/domain/entities/document.py: deb78c9e104d
+  src/docir/modules/documents/domain/entities/document.py: 69cfc0a97a7b
+  src/docir/modules/documents/domain/services/checks/graph_rules.py: 91431026f476
   src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
   src/docir/platform/persistence/ports.py: 59b18ac11106
 created: '2026-09-04'
@@ -23,7 +25,14 @@ tags:
 - integrity
 title: The orphan exemption is a recorded field, not a prose mention
 type: decision
-updated: '2026-09-04'
+updated: '2026-09-17'
+verified: '2026-09-17'
+verified_code:
+  src/docir/modules/documents/domain/entities/document.py: 69cfc0a97a7b
+  src/docir/modules/documents/domain/services/checks/graph_rules.py: 91431026f476
+  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
+  src/docir/platform/persistence/ports.py: 59b18ac11106
+verified_content: f1d2a769aeb3
 ---
 
 `orphan` read two graphs: the authored `related:` edges and the mention edges derived from

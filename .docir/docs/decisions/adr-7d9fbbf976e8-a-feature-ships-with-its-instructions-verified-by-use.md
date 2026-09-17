@@ -1,11 +1,13 @@
 ---
 code:
 - README.md
-- src/docir/entry_points/cli/app.py
+- src/docir/entry_points/cli/**
+- src/docir/entry_points/mcp/cmds.py
 - src/docir/modules/agents/infra/templates/**
 code_baseline:
   README.md: 4b8cf4375661
-  src/docir/entry_points/cli/app.py: 632b4c81a902
+  src/docir/entry_points/cli/**: 91fe38046593
+  src/docir/entry_points/mcp/cmds.py: e0c5ec7e32e4
   src/docir/modules/agents/infra/templates/**: 589d2f0899a0
 created: '2026-08-24'
 description: A business feature is done when an agent holding only the installed package
@@ -23,7 +25,7 @@ tags:
 - testing
 title: A feature ships with its instructions, verified by use
 type: decision
-updated: '2026-08-25'
+updated: '2026-09-17'
 ---
 
 ## Context
@@ -46,7 +48,9 @@ it is, when to reach for it, and how to invoke it — including how to obtain an
 
 Three surfaces carry that, and all three ship with the change:
 
-- the **packaged skill** (`modules/agents/infra/templates/skill.md`) — what and *when*;
+- the **packaged skill** (`modules/agents/infra/templates/skill/` — `SKILL.md` plus the
+  `reference/` files it links, adr-e18250eb3081; the opt-in skills sit beside it as `writing/`
+  and `feedback/`) — what and *when*;
 - the **CLI docstring** — *how*, with a worked example, since `--help` is JSON when piped and
   is the one surface an agent parses rather than guesses at;
 - **`README.md`** — for the human deciding whether to adopt docir.

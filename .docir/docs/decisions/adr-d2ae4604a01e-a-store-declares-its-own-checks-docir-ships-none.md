@@ -1,10 +1,14 @@
 ---
 code:
 - src/docir/modules/documents/domain/services/graph_checks.py
+- src/docir/modules/documents/domain/services/checks/graph_rules.py
+- src/docir/modules/documents/domain/services/checks/findings.py
 - src/docir/modules/documents/infra/schema_loader.py
 code_baseline:
+  src/docir/modules/documents/domain/services/checks/findings.py: ae30e1b58956
+  src/docir/modules/documents/domain/services/checks/graph_rules.py: 91431026f476
   src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
-  src/docir/modules/documents/infra/schema_loader.py: 95c1dd812abc
+  src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
 created: '2026-08-25'
 description: 'checks: in docs-schema.yaml runs a store''s own JMESPath rules as Tier
   1 warnings, which is how docir gains a validator without gaining an opinion.'
@@ -22,7 +26,14 @@ tags:
 - schema
 title: A store declares its own checks; docir ships none
 type: decision
-updated: '2026-08-25'
+updated: '2026-09-17'
+verified: '2026-09-17'
+verified_code:
+  src/docir/modules/documents/domain/services/checks/findings.py: ae30e1b58956
+  src/docir/modules/documents/domain/services/checks/graph_rules.py: 91431026f476
+  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
+  src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
+verified_content: 8eac83b2c62d
 ---
 
 ## Context

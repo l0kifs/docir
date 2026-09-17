@@ -1,9 +1,15 @@
 ---
 code:
 - src/docir/entry_points/dispatch.py
+- src/docir/entry_points/cli/maintenance_cmds.py
+- src/docir/entry_points/cli/rendering.py
 - src/docir/modules/documents/application/services/maintenance_service.py
+- src/docir/modules/documents/application/services/index_rebuilder.py
 code_baseline:
+  src/docir/entry_points/cli/maintenance_cmds.py: c37ca8c40b29
+  src/docir/entry_points/cli/rendering.py: dd8caad049a7
   src/docir/entry_points/dispatch.py: 204d358a9285
+  src/docir/modules/documents/application/services/index_rebuilder.py: fbb0bff13bc4
   src/docir/modules/documents/application/services/maintenance_service.py: dbedd2e64320
 created: '2026-08-16'
 description: The --embeddings flag re-embeds exactly what a plain reindex already
@@ -24,7 +30,7 @@ tags:
 - release
 title: reindex --embeddings replaces the rebuild rather than adding to it
 type: issue
-updated: '2026-08-16'
+updated: '2026-09-17'
 ---
 
 ## The flag is dominated, not complementary
@@ -84,8 +90,11 @@ a second way to be wrong, so it was retired instead.
 `docir reindex --embeddings` now exits non-zero as an unknown option; the
 `embeddings` payload key and the MCP parameter are gone, and a leftover key is
 ignored rather than reviving the path. What was actually missing shipped in its
-place: `ReindexResult.embeddings_recomputed`, and `, N vectors` in the human
-output, so a rebuild says out loud that it re-embedded everything it re-saved.
+place: `ReindexResult.embeddings_recomputed` and `vectors_written`, and
+`N re-embedded (M vectors)` on `docir self upgrade`'s reindex line, so a rebuild
+says out loud how many of the documents it re-saved it also re-embedded — every
+one, until issue-77dd42e3a03a keyed vectors on their inputs; since then only the
+ones whose inputs moved.
 
 Four guards, each verified by injecting the bug it claims to catch: no reindex
 payload can skip the build stamp, a rebuild reports its recomputed vectors,

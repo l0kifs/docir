@@ -18,7 +18,7 @@ tags:
 - schema
 title: A frozen core schema + swappable domain profiles
 type: decision
-updated: '2026-08-06'
+updated: '2026-09-17'
 ---
 
 ## Context
@@ -32,14 +32,17 @@ Split the bundled schema into a **frozen core** and named **profiles**:
 - **core** (`infra/profiles.py::CORE_SCHEMA_YAML`) — domain-agnostic: the
   `decision` type (ADRs exist everywhere), the relation-kind registry, and
   staleness cadences. Always included.
-- **profiles** — `software` (issue, architecture), `research` (hypothesis,
-  experiment, finding), `ops` (runbook, incident, postmortem), `legal` (policy,
-  contract, obligation). Each layers types on top of the core.
+- **profiles** — `software` (issue, architecture, release_note), `qa` (test_plan,
+  test_case), `research` (hypothesis, experiment, finding), `ops` (runbook, incident,
+  postmortem), `legal` (policy, contract, obligation). Each layers types on top of
+  the core.
 
 A `docs-schema.yaml` selects them with `profiles: [..]`; the loader merges
 `core -> each named profile -> the file's own inline overrides` (later wins on
-name conflicts). The default file is `profiles: [software]`, so the resolved
-default type set is exactly the previous three — a zero-behaviour-change default.
+name conflicts). The default file is `profiles: [software]`. When this was decided
+that profile held exactly the previous three types, which made the switch a
+zero-behaviour-change default; it has since gained `release_note`, so a fresh store
+resolves to `decision`, `issue`, `architecture` and `release_note`.
 
 Backward compatibility: a schema file with no `profiles:` key is parsed the old
 inline-only way (no core injected, relations unconstrained), so hand-authored

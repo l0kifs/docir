@@ -2,7 +2,7 @@
 code:
 - tests/**
 code_baseline:
-  tests/**: de9c8095d41c
+  tests/**: b5ca82055d3c
 created: '2026-07-22'
 description: Why tests live in a central tree mirroring the modules instead of beside
   them.
@@ -17,7 +17,11 @@ tags:
 - testing
 title: Keep a central test tree, organized per module
 type: decision
-updated: '2026-08-06'
+updated: '2026-09-17'
+verified: '2026-09-17'
+verified_code:
+  tests/**: b5ca82055d3c
+verified_content: 8761c17356df
 ---
 
 ## Context

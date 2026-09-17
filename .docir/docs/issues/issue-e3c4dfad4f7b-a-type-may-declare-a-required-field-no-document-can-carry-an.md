@@ -2,7 +2,7 @@
 code:
 - src/docir/modules/documents/infra/schema_loader.py
 code_baseline:
-  src/docir/modules/documents/infra/schema_loader.py: 95c1dd812abc
+  src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
 created: '2026-08-06'
 description: '''required:'' accepts any name but is checked with getattr on the entity,
   so an unsatisfiable name loads fine and then rejects every add of that type, naming
@@ -20,7 +20,11 @@ tags:
 title: A type may declare a required field no document can carry, and the schema loads
   anyway
 type: issue
-updated: '2026-08-06'
+updated: '2026-09-17'
+verified: '2026-09-17'
+verified_code:
+  src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
+verified_content: 135f1e258ffd
 ---
 
 **Class:** incorrect · **Severity:** material

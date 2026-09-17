@@ -21,12 +21,12 @@ tags:
 - integrity
 title: A schema overlay makes the store unreadable by every published docir
 type: issue
-updated: '2026-09-16'
+updated: '2026-09-17'
 ---
 
-A partial `types:` block loads only on a docir that ships [[adr-6aa2e2f5f403]], which no
-release does yet. This store adopted one in the same commit that added the feature, so the
-newest published docir cannot open it at all.
+A partial `types:` block loads only on a docir that ships [[adr-6aa2e2f5f403]], which at the
+time no release did. This store adopted one in the same commit that added the feature, so the
+then-newest published docir, 0.26.0, could not open it at all.
 
 ## What refuses, measured
 
@@ -90,7 +90,9 @@ floor stops naming both numbers — verified against a copy of this store set to
 where `doctor` reports `store-from-newer-build` as an error and every read refuses by name.
 
 What no code can undo: 0.26.0 predates the check, so it ignores the line and still fails on
-`type 'decision' must define a string 'prefix'`. Until a build that reads `store_format:` is
-published *and* installed, [[adr-ab4598c6f707]]'s cross-version run against this store has to
-be done on a copy with the overlay blocks deleted. That is the cost the ADR records as the
+`type 'decision' must define a string 'prefix'`. 0.27.0 is the first published build that reads
+both the overlay and `store_format:`, so [[adr-ab4598c6f707]]'s cross-version run against this
+store runs unmodified from that release on; against 0.26.0 or older it still has to be done on
+a copy with the overlay blocks deleted — which is what any teammate or peer on those builds
+sees. That is the cost the ADR records as the
 reason the first rule — new meaning in a new key — comes before the floor at all.

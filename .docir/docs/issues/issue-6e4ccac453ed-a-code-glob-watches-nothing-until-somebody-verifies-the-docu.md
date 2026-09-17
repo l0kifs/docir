@@ -4,7 +4,7 @@ code:
 - src/docir/modules/documents/application/services/code_evidence.py
 code_baseline:
   src/docir/modules/documents/application/services/code_evidence.py: 793cdf7277e9
-  src/docir/modules/documents/domain/services/checks/verification_rules.py: df4d15de1c87
+  src/docir/modules/documents/domain/services/checks/verification_rules.py: cd968669505d
 created: '2026-09-16'
 description: Drift digests are written only by --verified, and in docir's own store
   none of the 99 documents naming the code they govern ever was — so nothing reported
@@ -20,7 +20,12 @@ tags:
 - integrity
 title: A code glob watches nothing until somebody verifies the document
 type: issue
-updated: '2026-09-16'
+updated: '2026-09-17'
+verified: '2026-09-17'
+verified_code:
+  src/docir/modules/documents/application/services/code_evidence.py: 793cdf7277e9
+  src/docir/modules/documents/domain/services/checks/verification_rules.py: cd968669505d
+verified_content: ed193d97811c
 ---
 
 A `code:` glob is a promise that `docir check` will say something when the code under it

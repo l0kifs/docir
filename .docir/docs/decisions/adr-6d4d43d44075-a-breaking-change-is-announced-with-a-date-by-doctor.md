@@ -21,7 +21,7 @@ tags:
 - docs
 title: A breaking change is announced with a date, by doctor
 type: decision
-updated: '2026-09-16'
+updated: '2026-09-17'
 ---
 
 A floor stops a break; it does not give anybody time. The reader who needs the warning is an
@@ -50,8 +50,12 @@ it, and when. "Deprecated" alone is a mood.
 
 A `compat` section, beside the findings it already has:
 
-- Per store feature in use, the docir release that introduced it — so the answer to "can my
-  teammate read this store" is a fact rather than an experiment.
+- The store format: the floor this file declares, the one its contents need, and the highest
+  this build reads — three integers, `declared`/`required`/`supported` — so "can my teammate
+  read this store" is `required` against their build's `supported`, a fact rather than an
+  experiment. A number rather than the release that introduced a feature, because the version
+  is bumped at release and a floor named by release would not exist while the change is being
+  written (adr-36d6156ffab9).
 - Per deprecated thing, what replaces it and the date it stops working.
 
 Same shape as `schema-drift` and `stale-index-build`: a report about how this store and this

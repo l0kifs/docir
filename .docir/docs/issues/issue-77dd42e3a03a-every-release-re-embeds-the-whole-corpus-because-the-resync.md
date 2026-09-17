@@ -1,8 +1,12 @@
 ---
 code:
-- src/docir/modules/documents/application/services/maintenance_service.py
+- src/docir/modules/indexing/infra/scheduler.py
+- src/docir/modules/documents/application/services/index_rebuilder.py
+- src/docir/platform/persistence/alembic/versions/0012_embedding_input_digest.py
 code_baseline:
-  src/docir/modules/documents/application/services/maintenance_service.py: dbedd2e64320
+  src/docir/modules/documents/application/services/index_rebuilder.py: fbb0bff13bc4
+  src/docir/modules/indexing/infra/scheduler.py: 3cc2831c6de3
+  src/docir/platform/persistence/alembic/versions/0012_embedding_input_digest.py: fd1cdd2ec6ba
 created: '2026-09-06'
 description: '`resync` keys the full rebuild on docir''s version, so a release that
   changed neither the model nor the chunking still recomputes every vector — 58.4s
@@ -19,7 +23,13 @@ tags:
 - material
 title: Every release re-embeds the whole corpus, because the resync stamp is the version
 type: issue
-updated: '2026-09-06'
+updated: '2026-09-17'
+verified: '2026-09-17'
+verified_code:
+  src/docir/modules/documents/application/services/index_rebuilder.py: fbb0bff13bc4
+  src/docir/modules/indexing/infra/scheduler.py: 3cc2831c6de3
+  src/docir/platform/persistence/alembic/versions/0012_embedding_input_digest.py: fd1cdd2ec6ba
+verified_content: 052e2947dd8a
 ---
 
 ## What happened

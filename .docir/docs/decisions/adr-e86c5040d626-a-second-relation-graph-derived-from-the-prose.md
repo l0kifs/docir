@@ -2,17 +2,21 @@
 code:
 - src/docir/modules/documents/domain/entities/document.py
 - src/docir/modules/documents/domain/services/graph_checks.py
+- src/docir/modules/documents/domain/services/checks/graph_rules.py
 - src/docir/platform/naming/__init__.py
 - src/docir/platform/persistence/repositories.py
+- src/docir/platform/persistence/models.py
 code_baseline:
   src/docir/modules/documents/domain/entities/document.py: deb78c9e104d
+  src/docir/modules/documents/domain/services/checks/graph_rules.py: 91431026f476
   src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
   src/docir/platform/naming/__init__.py: 758f8f09f7fb
+  src/docir/platform/persistence/models.py: f4e5bd6b7529
   src/docir/platform/persistence/repositories.py: 7bcf7e81a5a0
 created: '2026-08-17'
-description: Why ids named in a body become mention edges, why only the orphan check
-  reads them, why they stay out of frontmatter, and what following them cost in the
-  benchmark.
+description: Why ids named in a body become mention edges, why no Tier 1 check reads
+  them (orphan did, until adr-e98749aa457d), why they stay out of frontmatter, and
+  what following them cost in the benchmark.
 id: adr-e86c5040d626
 owner: maintainer
 related:
@@ -26,7 +30,7 @@ tags:
 - persistence
 title: A second relation graph, derived from the prose
 type: decision
-updated: '2026-08-17'
+updated: '2026-09-17'
 ---
 
 `docir check` reported `orphan` for every document whose author had linked it by writing its
@@ -43,11 +47,13 @@ A second, derived relation graph. `Document.mentioned_ids(prefixes)` scans a bod
 document ids; the result is stored in a `mentions` table, rebuilt by `docir reindex`, and
 never written back to frontmatter. `related:` stays the authored, typed layer.
 
-`orphan` reads both. Nothing else does.
+`orphan` read both until adr-e98749aa457d; no Tier 1 check reads them now. The derived graph
+feeds `context` expansion, the `mentions` / `mentioned_by` lists on `get`, and the Tier 2
+`unresolved-mention` advisory — none of which gates anything.
 
-## Why only orphan reads it
+## Why no check that gates anything reads it
 
-Every other check that touches the graph would be wrong to see inferred edges. `cycle` would
+Every check that touches the graph would be wrong to see inferred edges. `cycle` would
 report mutual citation, which is how prose works. `dangling` is an *error* that gates a merge,
 and a body naming an id that does not resolve is ordinary — an ADR routinely references the
 issue it will produce. `layering` reads edges the schema marks as dependencies, and a mention

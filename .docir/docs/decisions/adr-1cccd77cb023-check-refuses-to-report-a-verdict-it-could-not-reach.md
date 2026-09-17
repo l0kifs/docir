@@ -2,8 +2,12 @@
 code:
 - src/docir/modules/documents/application/services/maintenance_service.py
 - src/docir/modules/documents/domain/services/graph_checks.py
+- src/docir/modules/documents/domain/services/checks/findings.py
+- src/docir/entry_points/doctor.py
 code_baseline:
-  src/docir/modules/documents/application/services/maintenance_service.py: dbedd2e64320
+  src/docir/entry_points/doctor.py: a02599f46617
+  src/docir/modules/documents/application/services/maintenance_service.py: d63801115bf9
+  src/docir/modules/documents/domain/services/checks/findings.py: ae30e1b58956
   src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
 created: '2026-08-25'
 description: 'Why an index holding nothing beside files on disk is an error rather
@@ -21,7 +25,14 @@ tags:
 - testing
 title: check refuses to report a verdict it could not reach
 type: decision
-updated: '2026-08-25'
+updated: '2026-09-17'
+verified: '2026-09-17'
+verified_code:
+  src/docir/entry_points/doctor.py: a02599f46617
+  src/docir/modules/documents/application/services/maintenance_service.py: d63801115bf9
+  src/docir/modules/documents/domain/services/checks/findings.py: ae30e1b58956
+  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
+verified_content: bf106175331c
 ---
 
 ## Context

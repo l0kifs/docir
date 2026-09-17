@@ -1,12 +1,14 @@
 ---
 code:
 - src/docir/modules/documents/application/services/code_evidence.py
-- src/docir/modules/documents/domain/services/checks/verification_rules.py
+- src/docir/modules/documents/application/services/document_patch.py
 - src/docir/modules/documents/application/services/store_repairer.py
+- src/docir/modules/documents/domain/services/checks/verification_rules.py
 code_baseline:
   src/docir/modules/documents/application/services/code_evidence.py: 793cdf7277e9
-  src/docir/modules/documents/application/services/store_repairer.py: 81762c221b8f
-  src/docir/modules/documents/domain/services/checks/verification_rules.py: df4d15de1c87
+  src/docir/modules/documents/application/services/document_patch.py: 7b2a442b890c
+  src/docir/modules/documents/application/services/store_repairer.py: 84452625a9b0
+  src/docir/modules/documents/domain/services/checks/verification_rules.py: cd968669505d
 created: '2026-09-16'
 description: Why drift is measured from a baseline the write mints, why that is a
   second digest beside the verified one, and why re-declaring a glob never clears
@@ -26,7 +28,14 @@ tags:
 - integrity
 title: A code glob is watched from the write that declares it
 type: decision
-updated: '2026-09-16'
+updated: '2026-09-17'
+verified: '2026-09-17'
+verified_code:
+  src/docir/modules/documents/application/services/code_evidence.py: 793cdf7277e9
+  src/docir/modules/documents/application/services/document_patch.py: 7b2a442b890c
+  src/docir/modules/documents/application/services/store_repairer.py: 84452625a9b0
+  src/docir/modules/documents/domain/services/checks/verification_rules.py: cd968669505d
+verified_content: f0f0ee80d5ae
 ---
 
 A `code:` glob now records what it matched at the moment the document declared it, and

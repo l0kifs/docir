@@ -1,10 +1,14 @@
 ---
 code:
-- src/docir/entry_points/cli/app.py
+- src/docir/entry_points/cli/**
+- src/docir/entry_points/daemon/cmds.py
+- src/docir/entry_points/mcp/cmds.py
 - src/docir/entry_points/dispatch.py
 code_baseline:
-  src/docir/entry_points/cli/app.py: 632b4c81a902
-  src/docir/entry_points/dispatch.py: 204d358a9285
+  src/docir/entry_points/cli/**: 91fe38046593
+  src/docir/entry_points/daemon/cmds.py: f2ba24c1089c
+  src/docir/entry_points/dispatch.py: 267ddf5a24e9
+  src/docir/entry_points/mcp/cmds.py: e0c5ec7e32e4
 created: '2026-08-15'
 description: The command vocabulary agents drive docir with, the static site build,
   and a worked flow through them end to end.
@@ -17,7 +21,14 @@ tags:
 - architecture
 title: Doc-Index CLI — the CLI surface
 type: architecture
-updated: '2026-08-25'
+updated: '2026-09-17'
+verified: '2026-09-17'
+verified_code:
+  src/docir/entry_points/cli/**: 91fe38046593
+  src/docir/entry_points/daemon/cmds.py: f2ba24c1089c
+  src/docir/entry_points/dispatch.py: 267ddf5a24e9
+  src/docir/entry_points/mcp/cmds.py: e0c5ec7e32e4
+verified_content: 89901c34d34a
 ---
 
 ## CLI commands

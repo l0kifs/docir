@@ -1,12 +1,14 @@
 ---
 code:
 - src/docir/modules/documents/domain/services/graph_checks.py
+- src/docir/modules/documents/domain/services/checks/schema_rules.py
 - tests/modules/documents/test_domain_services.py
 - tests/modules/documents/test_integration_maintenance.py
 code_baseline:
+  src/docir/modules/documents/domain/services/checks/schema_rules.py: 3bd4377777cd
   src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
   tests/modules/documents/test_domain_services.py: 2b717c606516
-  tests/modules/documents/test_integration_maintenance.py: 7478e7c0d19b
+  tests/modules/documents/test_integration_maintenance.py: ecb42c0e3b81
 created: '2026-08-07'
 description: unknown-tag and unknown-status are reported, but an edge carrying an
   unregistered kind is served by get, traversed by context and flagged by nothing;
@@ -24,7 +26,14 @@ tags:
 title: docir check has no finding for an edge whose relation kind the registry no
   longer knows
 type: issue
-updated: '2026-08-08'
+updated: '2026-09-17'
+verified: '2026-09-17'
+verified_code:
+  src/docir/modules/documents/domain/services/checks/schema_rules.py: 3bd4377777cd
+  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
+  tests/modules/documents/test_domain_services.py: 2b717c606516
+  tests/modules/documents/test_integration_maintenance.py: ecb42c0e3b81
+verified_content: 52555417cdbf
 ---
 
 **Class:** missing · **Severity:** cosmetic

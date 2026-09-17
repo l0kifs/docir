@@ -1,8 +1,10 @@
 ---
 code:
 - src/docir/entry_points/composition.py
+- src/docir/modules/documents/application/services/index_rebuilder.py
 code_baseline:
   src/docir/entry_points/composition.py: f1e7c5f79526
+  src/docir/modules/documents/application/services/index_rebuilder.py: fbb0bff13bc4
 created: '2026-08-29'
 description: Why a fresh clone or git worktree now rebuilds its index on open instead
   of failing until someone runs reindex, why only the empty case qualifies, and why
@@ -22,7 +24,7 @@ tags:
 - integrity
 title: Opening a store with no index builds one, deferring the vectors
 type: decision
-updated: '2026-08-29'
+updated: '2026-09-17'
 ---
 
 ## Context
@@ -92,7 +94,10 @@ repository nobody asked us to touch — the rule adr-fb938175f72a already sets.
   `empty-index`. That strengthens the merge gate issue-87410666c867 created rather than
   removing it; the finding stays, unreachable in the ordinary case and correct in the rest.
 - Opening a store can now write. With `--no-daemon`, parallel processes queue on SQLite's
-  write lock and the losers find a populated index and skip — bounded by one rebuild, not N.
+  write lock; the emptiness check and the rebuild are separate transactions, so a process
+  that read the count before the winner committed rebuilds again — idempotently, the same
+  rows — rather than skipping. Nothing pins that path; a sequential second open is what
+  the test covers.
 - The in-process CLI says what it did, once, on a terminal. Over the daemon the rebuild
   happens at daemon start and is visible where every other environment fact is: `docir
   doctor`.

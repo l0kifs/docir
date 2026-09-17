@@ -3,8 +3,8 @@ code:
 - src/docir/entry_points/mcp/server.py
 - src/docir/modules/release/domain/deprecations.py
 code_baseline:
-  src/docir/entry_points/mcp/server.py: 2977f215d50c
-  src/docir/modules/release/domain/deprecations.py: d5ff6f0936b8
+  src/docir/entry_points/mcp/server.py: 310948427caa
+  src/docir/modules/release/domain/deprecations.py: 79544413bab0
 created: '2026-09-16'
 description: doctor carries every dated announcement and has no MCP tool, so the agent
   the dates were written for cannot read them.
@@ -20,6 +20,11 @@ tags:
 title: The deprecation register is not askable over MCP
 type: issue
 updated: '2026-09-17'
+verified: '2026-09-17'
+verified_code:
+  src/docir/entry_points/mcp/server.py: 310948427caa
+  src/docir/modules/release/domain/deprecations.py: 79544413bab0
+verified_content: c907aae28382
 ---
 
 `docir doctor | jq '.compat'` carries every surface this build will stop accepting and the

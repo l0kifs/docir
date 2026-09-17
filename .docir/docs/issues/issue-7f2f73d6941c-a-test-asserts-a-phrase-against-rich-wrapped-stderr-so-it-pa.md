@@ -3,7 +3,7 @@ code:
 - tests/conftest.py
 - tests/entry_points/test_e2e_build.py
 code_baseline:
-  tests/conftest.py: 907068d87d83
+  tests/conftest.py: 4ed15c75b4ec
   tests/entry_points/test_e2e_build.py: 134d9c6a1162
 created: '2026-08-09'
 description: test_an_empty_store_says_so holds or fails on where rich broke the line,
@@ -18,7 +18,12 @@ tags:
 - testing
 title: A test asserts a phrase against rich-wrapped stderr, so it passes on path length
 type: issue
-updated: '2026-08-09'
+updated: '2026-09-17'
+verified: '2026-09-17'
+verified_code:
+  tests/conftest.py: 4ed15c75b4ec
+  tests/entry_points/test_e2e_build.py: 134d9c6a1162
+verified_content: 78982001affe
 ---
 
 `tests/entry_points/test_e2e_build.py::test_an_empty_store_says_so` asserts a

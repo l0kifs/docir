@@ -23,7 +23,7 @@ tags:
 title: Nothing in a document names the code it governs, so a decision cannot be found
   from, or checked against, the codebase
 type: issue
-updated: '2026-08-06'
+updated: '2026-09-17'
 ---
 
 **Class:** missing · **Severity:** material
@@ -108,8 +108,9 @@ for. `check --fix` deliberately leaves it: only a human knows whether the glob i
 document is.
 
 **3 — the reverse query.** `docir query --code <path>` (repeatable; any match counts) lists the
-documents governing a file, so `docir query --code $(git diff --name-only main)` is the set of
-decisions a branch must be read against. Matching is **textual, not a filesystem walk** — the
+documents governing a file, so `docir query $(git diff --name-only main | sed 's/^/--code /')` — one `--code`
+per changed file, since the flag takes one value — is the set of decisions a branch must be read
+against. Matching is **textual, not a filesystem walk** — the
 branch that *deletes* a file is exactly when its decisions must be re-read, and a filesystem
 match answers "nothing" there. Like `--stale` it is a post-SQL predicate applied *before* the
 limit, sharing one scan loop with it. A document governing a directory governs the files in it: a

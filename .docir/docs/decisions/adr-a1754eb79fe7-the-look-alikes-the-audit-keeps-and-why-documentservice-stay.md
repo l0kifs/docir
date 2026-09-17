@@ -6,9 +6,12 @@ code:
 - src/docir/entry_points/composition.py
 - src/docir/entry_points/dispatch.py
 - src/docir/entry_points/doctor.py
+- src/docir/entry_points/mcp/server.py
 - src/docir/modules/documents/application/dto.py
 - src/docir/modules/documents/application/services/document_service.py
 - src/docir/modules/documents/domain/services/checks
+- src/docir/modules/documents/domain/services/graph_checks.py
+- src/docir/modules/publishing/infra/assets.py
 - src/docir/platform/persistence/repositories.py
 code_baseline:
   src/docir/entry_points/cli/emit.py: 1e591d08eca5
@@ -17,9 +20,12 @@ code_baseline:
   src/docir/entry_points/composition.py: f1e7c5f79526
   src/docir/entry_points/dispatch.py: 204d358a9285
   src/docir/entry_points/doctor.py: 230f5796ddb3
+  src/docir/entry_points/mcp/server.py: 310948427caa
   src/docir/modules/documents/application/dto.py: f265277c576a
   src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
   src/docir/modules/documents/domain/services/checks: dbc81f0a3141
+  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
+  src/docir/modules/publishing/infra/assets.py: 9adb73e77dc2
   src/docir/platform/persistence/repositories.py: 7bcf7e81a5a0
 created: '2026-09-11'
 description: The eleven shapes that look like catalogue smells and are deliberately
@@ -63,13 +69,13 @@ it.
 
 ## Exempt: sequences that only look long
 
-`doctor._store_findings` (105 lines) is eight uniform `if <flag>: append(...)`
-guards with no interleaving and no block comments. Extracting each yields eight
-one-branch functions — the needless-indirection direction, which is the smell
+`doctor._store_findings` (123 lines) is nine uniform `if <flag>: append(...)`
+guards with no interleaving; its only comments explain a `fix` line, not control
+flow. Extracting each yields nine one-branch functions — the needless-indirection direction, which is the smell
 its own inverse cures.
 
-`composition.build_container` (84 lines) is a composition root: linear wiring,
-zero branching, the canonical exemption. `GraphChecker.check` is the rule
+`composition.build_container` (85 lines) is a composition root: linear wiring,
+no branching beyond two defaulting expressions, the canonical exemption. `GraphChecker.check` is the rule
 registry, one line per check, and its permissive-when-absent guards are the
 documented convention rather than accidental complexity.
 
@@ -108,7 +114,7 @@ save six lines, which is the Lazy Class inverse.
 
 ## DocumentService stays whole
 
-`DocumentService` is 30 methods and 894 lines after the write-path staging and
+`DocumentService` is 30 methods and 909 lines after the write-path staging and
 the benchmark moved out. What remains still needs an "and": nine methods are the
 write path and twelve are the read path, and those change for unrelated reasons.
 

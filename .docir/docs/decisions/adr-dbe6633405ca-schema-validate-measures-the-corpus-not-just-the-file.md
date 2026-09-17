@@ -1,11 +1,15 @@
 ---
 code:
 - src/docir/entry_points/composition.py
+- src/docir/entry_points/cli/schema_cmds.py
 - src/docir/modules/documents/application/services/schema_conformance.py
 - src/docir/modules/documents/domain/services/graph_checks.py
+- src/docir/modules/documents/domain/services/checks/schema_rules.py
 code_baseline:
-  src/docir/entry_points/composition.py: f1e7c5f79526
+  src/docir/entry_points/cli/schema_cmds.py: c79080e9a234
+  src/docir/entry_points/composition.py: e59f157c6b81
   src/docir/modules/documents/application/services/schema_conformance.py: 204dc95f1a8d
+  src/docir/modules/documents/domain/services/checks/schema_rules.py: 3bd4377777cd
   src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
 created: '2026-08-16'
 description: Why the command run after a schema edit reports what that schema costs
@@ -24,7 +28,15 @@ tags:
 - schema
 title: schema validate measures the corpus, not just the file
 type: decision
-updated: '2026-08-16'
+updated: '2026-09-17'
+verified: '2026-09-17'
+verified_code:
+  src/docir/entry_points/cli/schema_cmds.py: c79080e9a234
+  src/docir/entry_points/composition.py: e59f157c6b81
+  src/docir/modules/documents/application/services/schema_conformance.py: 204dc95f1a8d
+  src/docir/modules/documents/domain/services/checks/schema_rules.py: 3bd4377777cd
+  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
+verified_content: 498ce61e9bac
 ---
 
 ## Context

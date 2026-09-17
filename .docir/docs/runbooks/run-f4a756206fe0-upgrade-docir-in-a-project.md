@@ -1,9 +1,11 @@
 ---
 code:
 - src/docir/entry_points/cli/self_cmds.py
+- src/docir/entry_points/composition.py
 - src/docir/modules/release/**
 code_baseline:
   src/docir/entry_points/cli/self_cmds.py: 7569fe2dacbd
+  src/docir/entry_points/composition.py: e59f157c6b81
   src/docir/modules/release/**: 82a5a4c9e8d8
 created: '2026-08-09'
 description: 'What to run after a new docir release: the package, the derived index,
@@ -50,7 +52,9 @@ announces itself:
   `model_id` reads as dirty rather than as a vector to compare against, so a
   changed model recomputes on the next write instead of raising a dimension
   mismatch. Force it with `docir embed --flush`, or let the full `docir reindex`
-  below do it — it re-embeds every document it re-saves (adr-6a4718fa7a7d).
+  below do it — it re-saves every document and queues every one, and the drain recomputes
+  each vector whose inputs moved, which under a changed model is all of them
+  (issue-77dd42e3a03a).
 
 ## What you have to run
 
@@ -70,8 +74,8 @@ you need, that one is still a command.
 
 ```bash
 docir reindex             # once per store
-docir check               # read the new warnings
 docir agent update        # then commit the refreshed instruction files
+docir check               # last, so it describes the state you are left in
 ```
 
 ### `docir reindex` — the only mandatory step
@@ -93,6 +97,14 @@ There is deliberately no `docir accept-schema` verb. `reindex` is already the
 "make the derived state agree with the sources" command, and a separate
 acknowledgement would be a ritual whose only effect is to silence a report.
 
+### `docir agent update` — the files nothing tracks for you
+
+`.claude/skills/docir/SKILL.md` and the docir block in `AGENTS.md` are generated
+from a template inside the package and stamped `<!-- docir:vX -->`. They are
+committed files, so refreshing them is a commit, and nothing detects that they
+are behind: `check` covers the corpus, not the generated instructions. docir
+0.11.0 shipped with its own skill file still claiming v0.10.0.
+
 ### `docir check` — new warnings are expected
 
 `missing-required`, `unknown-relation-kind`, `unknown-type` and `schema-drift`
@@ -104,14 +116,6 @@ then reindex to re-baseline.
 
 `DOCIR_SCHEMA_NOTICE=1` prints the drift on stderr after every command, for the
 change nobody will run `check` to discover.
-
-### `docir agent update` — the files nothing tracks for you
-
-`.claude/skills/docir/SKILL.md` and the docir block in `AGENTS.md` are generated
-from a template inside the package and stamped `<!-- docir:vX -->`. They are
-committed files, so refreshing them is a commit, and nothing detects that they
-are behind: `check` covers the corpus, not the generated instructions. docir
-0.11.0 shipped with its own skill file still claiming v0.10.0.
 
 ## If it applies to you
 

@@ -21,7 +21,7 @@ tags:
 - daemon
 title: 'Upgrading the package: re-exec, and only where docir owns its environment'
 type: decision
-updated: '2026-08-09'
+updated: '2026-09-17'
 ---
 
 ## Context
@@ -87,7 +87,10 @@ applied to `watchfiles` and `markdown-it-py`.
 
 - A new leaf module, `release` — it looks at the *installation*, owns no index or
   database state, and depends only on `platform.clock`. Same shape as `agents`
-  (adr-3a2d5ee7bc84), and like it, in-process rather than through the dispatcher.
+  (adr-3a2d5ee7bc84), and like it, the release check and the installer run in-process.
+  The one exception is the deprecation register, which adr-237b117a7916 later made a
+  dispatcher command (`deprecations`, `docir_deprecations` over MCP): a constant plus
+  today's date reads the same in the daemon as in the shell.
 - One more file in the store: `release-check.json`, the last answer and its date.
   Outside the index, because it is a fact about the installation and `reindex`
   must not be able to lose it.

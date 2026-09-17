@@ -1,7 +1,9 @@
 ---
 code:
 - src/docir/modules/agents/**
+- src/docir/entry_points/cli/agent_cmds.py
 code_baseline:
+  src/docir/entry_points/cli/agent_cmds.py: 03f1105e98db
   src/docir/modules/agents/**: fba99326556f
 created: '2026-07-24'
 description: Why agent-instruction scaffolding is a self-contained module that bypasses
@@ -18,7 +20,7 @@ tags:
 - architecture
 title: Agent-instruction scaffolding as a self-contained module
 type: decision
-updated: '2026-08-15'
+updated: '2026-09-17'
 ---
 
 ## Context
@@ -44,18 +46,20 @@ Add a **self-contained bounded-context module `modules/agents`** (`api.py` +
 `CONTRACT.md` + `domain`/`application`/`infra`), exposed as two CLI commands:
 
 ```
-docir agent install [DIR] [--agent claude|agents ...] [--global]
-docir agent update  [DIR] [--agent claude|agents ...] [--global]
+docir agent install [DIR] [--agent claude|claude-writing|claude-feedback|agents ...] [--global]
+docir agent update  [DIR] [--agent claude|claude-writing|claude-feedback|agents ...] [--global]
 ```
 
 - **Targets** (`domain/targets.py`): `claude` → `.claude/skills/docir/SKILL.md`
   (default; installable `--global` under `~/`) and `agents` → `AGENTS.md` at the
-  repo root (project-only; no global location). Unknown `--agent` names are
-  ignored; `--global` of a non-global target is an `AgentSetupError`.
-- **Single source of truth**: one packaged template
-  (`infra/templates/skill.md`) — the former `AGENT_GUIDE.md` plus skill
-  frontmatter — is what the skill installs verbatim and what `AGENTS.md` embeds
-  (frontmatter stripped) inside `<!-- docir:start/end -->` markers.
+  repo root (project-only; no global location). An unknown `--agent` name is
+  refused with an `AgentSetupError` that lists the valid targets
+  (issue-b8220546282c); `--global` of a non-global target is one too.
+- **Single source of truth**: each skill is one packaged template directory
+  (`infra/templates/<name>/SKILL.md` plus the reference files it links,
+  adr-e18250eb3081); the skill installs it verbatim, and `AGENTS.md` carries
+  only its `description` and a link inside `<!-- docir:start/end -->` markers
+  (adr-6ed847e02fe5).
 - **Idempotent + versioned**: generated files carry a parseable `<!-- docir:vX -->`
   stamp. A skill file is docir's entirely and is rewritten wholesale; an
   `AGENTS.md` block is replaced-not-duplicated and a *foreign* `AGENTS.md` is
@@ -90,5 +94,7 @@ baseline edge** and depends only on `platform.errors`.
 - **Amended by adr-6ed847e02fe5.** One clause above no longer holds: `AGENTS.md`
   does not embed the guide body. It carries the skill's `description` and a link
   to the skill file, and selecting that target installs the skill it names.
-  Everything else here — the module placement, the daemon bypass, the single
-  packaged template, the version stamp — stands.
+  Everything else here — the module placement, the daemon bypass, the packaged
+  templates as the single source of truth, the version stamp — stands. Two opt-in
+  skills joined the catalogue later (`claude-writing`, `claude-feedback`), and a
+  skill became a directory in adr-e18250eb3081.

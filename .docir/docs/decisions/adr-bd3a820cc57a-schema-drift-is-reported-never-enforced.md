@@ -1,9 +1,13 @@
 ---
 code:
 - src/docir/modules/documents/application/services/maintenance_service.py
+- src/docir/modules/documents/application/services/index_rebuilder.py
 - src/docir/modules/documents/domain/services/schema_shape.py
+- src/docir/entry_points/cli/runner.py
 - src/docir/platform/persistence/alembic/versions/0005_schema_baseline.py
 code_baseline:
+  src/docir/entry_points/cli/runner.py: 48c8f16222e8
+  src/docir/modules/documents/application/services/index_rebuilder.py: fbb0bff13bc4
   src/docir/modules/documents/application/services/maintenance_service.py: dbedd2e64320
   src/docir/modules/documents/domain/services/schema_shape.py: f8e1f5b5ad84
   src/docir/platform/persistence/alembic/versions/0005_schema_baseline.py: e9094dc76fda
@@ -28,7 +32,7 @@ tags:
 - schema
 title: Schema drift is reported, never enforced
 type: decision
-updated: '2026-08-08'
+updated: '2026-09-17'
 ---
 
 ## Context
@@ -103,5 +107,7 @@ follow, and the one that keeps an upgrade quiet on first contact.
   human decision — which status replaces the removed one, who owns a newly-required field — and
   guessing is exactly what `check --fix` already refuses to do for `unknown-type`. Drift tells you
   what moved; dealing with it is yours.
-- **Still open:** nothing renders the effect of a `docs-schema.yaml` edit *before* it lands
-  (issue-3678c897295f). That would mean reading git objects, which docir has never done.
+- **Since closed:** `docir schema validate` measures the documents on disk against the schema in
+  the file, so the effect of a `docs-schema.yaml` edit is visible before it lands
+  (issue-3678c897295f, adr-dbe6633405ca). It reads the working tree, not git objects, which docir
+  has never done.

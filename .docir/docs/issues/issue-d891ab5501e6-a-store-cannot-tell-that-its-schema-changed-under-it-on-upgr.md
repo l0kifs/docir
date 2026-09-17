@@ -1,11 +1,15 @@
 ---
 code:
 - src/docir/modules/documents/application/services/maintenance_service.py
+- src/docir/modules/documents/application/services/index_rebuilder.py
 - src/docir/modules/documents/domain/services/schema_shape.py
+- src/docir/entry_points/cli/runner.py
 - src/docir/platform/persistence/alembic/versions/0005_schema_baseline.py
 - tests/modules/documents/test_schema_shape.py
 code_baseline:
-  src/docir/modules/documents/application/services/maintenance_service.py: dbedd2e64320
+  src/docir/entry_points/cli/runner.py: 48c8f16222e8
+  src/docir/modules/documents/application/services/index_rebuilder.py: fbb0bff13bc4
+  src/docir/modules/documents/application/services/maintenance_service.py: d63801115bf9
   src/docir/modules/documents/domain/services/schema_shape.py: f8e1f5b5ad84
   src/docir/platform/persistence/alembic/versions/0005_schema_baseline.py: e9094dc76fda
   tests/modules/documents/test_schema_shape.py: c2c63b7721e1
@@ -27,7 +31,16 @@ tags:
 - schema
 title: A store cannot tell that its schema changed under it on upgrade
 type: issue
-updated: '2026-08-08'
+updated: '2026-09-17'
+verified: '2026-09-17'
+verified_code:
+  src/docir/entry_points/cli/runner.py: 48c8f16222e8
+  src/docir/modules/documents/application/services/index_rebuilder.py: fbb0bff13bc4
+  src/docir/modules/documents/application/services/maintenance_service.py: d63801115bf9
+  src/docir/modules/documents/domain/services/schema_shape.py: f8e1f5b5ad84
+  src/docir/platform/persistence/alembic/versions/0005_schema_baseline.py: e9094dc76fda
+  tests/modules/documents/test_schema_shape.py: c2c63b7721e1
+verified_content: 80045e3cad14
 ---
 
 **Class:** missing · **Severity:** material

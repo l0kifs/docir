@@ -4,7 +4,7 @@ code:
 - src/docir/modules/documents/infra/schema_loader.py
 code_baseline:
   src/docir/modules/documents/infra/profiles.py: 9ed5ebc9dc12
-  src/docir/modules/documents/infra/schema_loader.py: 95c1dd812abc
+  src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
 created: '2026-08-15'
 description: 'Every profiles: key merges the core unconditionally, so decision and
   its adr prefix exist in every store — an unused name stays addable and its prefix
@@ -19,7 +19,12 @@ tags:
 title: The core schema cannot be subtracted, so its type names and prefixes are claimed
   forever
 type: issue
-updated: '2026-08-15'
+updated: '2026-09-17'
+verified: '2026-09-17'
+verified_code:
+  src/docir/modules/documents/infra/profiles.py: 9ed5ebc9dc12
+  src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
+verified_content: a5854ac55e42
 ---
 
 Schema resolution is additive. `_merge_profiled` prepends `CORE_SCHEMA_YAML`

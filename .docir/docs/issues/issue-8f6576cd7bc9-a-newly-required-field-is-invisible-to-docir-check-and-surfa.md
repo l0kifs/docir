@@ -1,10 +1,12 @@
 ---
 code:
 - src/docir/modules/documents/domain/services/graph_checks.py
+- src/docir/modules/documents/domain/services/checks/schema_rules.py
 - src/docir/modules/documents/domain/services/validation.py
 - tests/modules/documents/test_domain_services.py
 - tests/modules/documents/test_integration_maintenance.py
 code_baseline:
+  src/docir/modules/documents/domain/services/checks/schema_rules.py: 3bd4377777cd
   src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
   src/docir/modules/documents/domain/services/validation.py: 18b842a51fe9
   tests/modules/documents/test_domain_services.py: 2b717c606516
@@ -28,7 +30,7 @@ tags:
 title: A newly-required field is invisible to docir check, and surfaces one write
   at a time
 type: issue
-updated: '2026-08-15'
+updated: '2026-09-17'
 ---
 
 **Class:** missing · **Severity:** material
@@ -157,5 +159,6 @@ Recovery is what the message names: `docir update <id> --set-owner ...` (or drop
 from the schema). `check --fix` still does not touch it — an owner or a tag is a decision, and
 there is no value to fill in.
 
-Not addressed here, and left to the two sibling issues: nothing still reports that the *schema*
-changed (issue-d891ab5501e6), so this finding is the symptom surfacing, not the cause.
+Not addressed here: reporting that the *schema* itself moved was left to issue-d891ab5501e6,
+which closed with `schema-drift` (adr-bd3a820cc57a) — so a `missing-required` finding now
+arrives beside the drift line that caused it, rather than as a symptom from nowhere.

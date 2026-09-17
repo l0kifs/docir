@@ -1,8 +1,16 @@
 ---
 code:
 - src/docir/modules/agents/infra/templates/**
+- README.md
+- src/docir/modules/publishing/infra/diagrams.py
+- src/docir/entry_points/cli/app.py
+- .github/workflows/pages.yml
 code_baseline:
+  .github/workflows/pages.yml: 268ada90f0a2
+  README.md: 61935297d547
+  src/docir/entry_points/cli/app.py: 632b4c81a902
   src/docir/modules/agents/infra/templates/**: 589d2f0899a0
+  src/docir/modules/publishing/infra/diagrams.py: 82acf633af1c
 created: '2026-08-25'
 description: skill and README named mermaid 10.9.3 on the false grounds that 11 is
   ESM-only, while docir's own pages.yml published with 11.16.1.
@@ -16,7 +24,7 @@ tags:
 - docs
 title: The mermaid guidance sent adopters to a version docir itself stopped using
 type: issue
-updated: '2026-08-25'
+updated: '2026-09-17'
 ---
 
 ## What was wrong
@@ -47,9 +55,14 @@ diagram drew".
 
 Both surfaces now name `dist/mermaid.min.js` at 11.16.1 and describe the property
 that actually matters — the file sets `window.mermaid`, and the `.mjs` entry is
-refused. "UMD" is dropped: mermaid 11's bundle is a plain IIFE assigning a
-global, not a Universal Module Definition, and the operative requirement was
-never UMD but *classic script*.
+refused. "UMD" is dropped from the skill and the README: mermaid 11's bundle is a plain
+IIFE assigning a global, not a Universal Module Definition, and the operative
+requirement was never UMD but *classic script*. It survives in two surfaces an
+agent also reads — `docir build --help` and the `.mjs` refusal message in
+`publishing/infra/diagrams.py` — which still send an adopter to 10.9.3 on the
+disproved "ESM-only" grounds, and the skill's `reference/publishing.md` says the
+refusal carries the 11.16.1 URL when it carries the 10.9.3 one. Neither is fixed
+here.
 
 adr-9c7c1ab8acef is left alone. Its decision — classic and not a module, because
 `type="module"` is fetched under CORS rules `file://` fails — is correct and is
@@ -57,7 +70,10 @@ the reason this works at all.
 
 ## What is still weak
 
-`pages.yml`'s "Assert the diagrams can draw" step checks that the runtime file
-exists in the output. It cannot tell a runtime that renders from one that loads
-and does nothing, which is precisely the failure the wrong version would have
-caused. Proving it needs a browser in CI.
+`pages.yml` now opens the built pages in a real browser
+(`scripts/assert_diagrams_render.py`, playwright and chromium) and asserts an `<svg>`
+with content inside every diagram node; a no-op global and an ESM-only module both
+fail it, where the earlier file-exists check passed both. What remains weak is the
+guidance the code itself emits: `docir build --help` and the `.mjs` refusal still name
+mermaid 10.9.3, and the skill's `reference/publishing.md` describes the refusal as
+carrying the 11.16.1 URL.

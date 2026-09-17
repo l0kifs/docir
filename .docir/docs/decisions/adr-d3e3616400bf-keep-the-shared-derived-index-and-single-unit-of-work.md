@@ -2,7 +2,7 @@
 code:
 - src/docir/platform/persistence/**
 code_baseline:
-  src/docir/platform/persistence/**: 0d06a3fc68a2
+  src/docir/platform/persistence/**: 33c7ac636b52
 created: '2026-07-22'
 description: Why one shared SQLite schema and unit-of-work spans all contexts, and
   what that costs.
@@ -17,7 +17,11 @@ tags:
 - persistence
 title: Keep the shared derived index and single unit-of-work
 type: decision
-updated: '2026-08-06'
+updated: '2026-09-17'
+verified: '2026-09-17'
+verified_code:
+  src/docir/platform/persistence/**: 33c7ac636b52
+verified_content: 28f58efa9c9d
 ---
 
 ## Context

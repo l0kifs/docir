@@ -3,8 +3,8 @@ code:
 - src/docir/entry_points/cli/rendering.py
 - src/docir/modules/agents/**
 code_baseline:
-  src/docir/entry_points/cli/rendering.py: cef64d6c165f
-  src/docir/modules/agents/**: fba99326556f
+  src/docir/entry_points/cli/rendering.py: dd8caad049a7
+  src/docir/modules/agents/**: 9a5731002e85
 created: '2026-08-17'
 description: Why docir agent update reports 'unchanged' when a release moved only
   the version stamp, and why the file is rewritten anyway.
@@ -20,7 +20,12 @@ tags:
 - cli
 title: A version stamp that moved is not a content change
 type: decision
-updated: '2026-08-17'
+updated: '2026-09-17'
+verified: '2026-09-17'
+verified_code:
+  src/docir/entry_points/cli/rendering.py: dd8caad049a7
+  src/docir/modules/agents/**: 9a5731002e85
+verified_content: 3506f97c2979
 ---
 
 ## Context

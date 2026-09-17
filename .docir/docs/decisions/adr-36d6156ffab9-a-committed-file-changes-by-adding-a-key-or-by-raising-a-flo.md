@@ -77,8 +77,9 @@ exists to carry survive.
 
 ## What a floor cannot do
 
-The same measurement cuts both ways. Every published build ignores `store_format:` exactly as
-it ignores any unknown key, so a floor earns nothing until it has shipped and been installed.
+The same measurement cuts both ways. Every build published before 0.27.0 ignores `store_format:` exactly
+as it ignores any unknown key, so a floor earns nothing on those builds — it starts protecting
+a reader only once a build that carries it, 0.27.0 or later, is installed.
 
 That is not an argument against it — it is why the first rule is first, and why
 [[issue-c30895cc62a3]] could not be repaired retroactively for anyone on 0.26.0. A floor is a

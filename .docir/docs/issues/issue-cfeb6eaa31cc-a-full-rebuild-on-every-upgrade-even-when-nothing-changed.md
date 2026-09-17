@@ -3,10 +3,14 @@ code:
 - src/docir/entry_points/composition.py
 - src/docir/entry_points/dispatch.py
 - src/docir/modules/documents/application/services/maintenance_service.py
+- src/docir/modules/documents/application/services/index_rebuilder.py
+- src/docir/modules/documents/application/services/store_repairer.py
 code_baseline:
   src/docir/entry_points/composition.py: f1e7c5f79526
   src/docir/entry_points/dispatch.py: 204d358a9285
+  src/docir/modules/documents/application/services/index_rebuilder.py: fbb0bff13bc4
   src/docir/modules/documents/application/services/maintenance_service.py: dbedd2e64320
+  src/docir/modules/documents/application/services/store_repairer.py: 84452625a9b0
 created: '2026-08-16'
 description: 'docir self upgrade ran an unconditional full reindex, and 96% of that
   is re-embedding: 58.4s of 60s on a 315-document store whose files had not moved.'
@@ -27,7 +31,7 @@ tags:
 - release
 title: A full rebuild on every upgrade, even when nothing changed
 type: issue
-updated: '2026-08-16'
+updated: '2026-09-17'
 ---
 
 ## What was measured
@@ -119,10 +123,12 @@ Do not retry either without a fresh measurement on different hardware.
 
 ## What not to conclude
 
-That embedding got cheaper. It did not: a real version move still costs ~62 s per 315
-documents, and that is the floor for a release that changes how documents are read. The
-only win available was not embedding what did not change.
+That embedding got cheaper. It did not: a release that changes the model or the chunking
+still costs ~62 s per 315 documents. What changed afterwards is the grain of "what did not
+change" — issue-77dd42e3a03a keys each vector on its own inputs, so a version move alone
+re-reads the metadata and re-embeds nothing; only the release that actually moves what the
+model reads pays the floor.
 
-Nor that the daemon helps here. It keeps the model warm, which is worth ~0.5 s against a
+Nor that the daemon helps on the release that does re-embed. It keeps the model warm, which is worth ~0.5 s against a
 58 s command — the observed 65 s through a warm daemon and 58.5 s in-process are the same
 number on a different day.

@@ -1,17 +1,21 @@
 ---
 code:
 - src/docir/modules/documents/application/services/document_service.py
+- src/docir/modules/documents/application/services/document_patch.py
 - src/docir/modules/documents/domain/entities/document.py
 - src/docir/modules/documents/domain/services/graph_checks.py
+- src/docir/modules/documents/domain/services/checks/verification_rules.py
 - src/docir/platform/filesystem/code_matcher.py
 code_baseline:
+  src/docir/modules/documents/application/services/document_patch.py: 7b2a442b890c
   src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
   src/docir/modules/documents/domain/entities/document.py: deb78c9e104d
+  src/docir/modules/documents/domain/services/checks/verification_rules.py: cd968669505d
   src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
   src/docir/platform/filesystem/code_matcher.py: a3314a26eb06
 created: '2026-08-16'
 description: Why --verified fingerprints the globs a document governs, why the digests
-  live in the file, and why the resulting check-changed finding stays a warning.
+  live in the file, and why the resulting code-changed finding stays a warning.
 id: adr-d9e6d5ccd0b4
 owner: maintainer
 related:
@@ -26,7 +30,7 @@ tags:
 - persistence
 title: A verification records what the code looked like
 type: decision
-updated: '2026-08-16'
+updated: '2026-09-17'
 ---
 
 A verification now records what the code looked like, and `docir check` reports when it
@@ -74,8 +78,10 @@ look if the noise turns out to be real.
 
 Three absences all read as unknown, never as unchanged: no digest recorded for the pattern,
 a pattern that resolves to nothing, and no matcher at all (a global store has no repository
-to fingerprint). So a never-verified document reports nothing, and a pattern added after the
-last verification reports nothing until someone verifies against it.
+to fingerprint). So a never-verified document raises no `code-changed`, and a pattern added
+after the last verification earns none until someone verifies against it. Both still report
+`code-drifted`: since adr-49bb8cc48938 the write that declares a glob mints a `code_baseline`
+for it, and `check` compares against that wherever no verified digest exists.
 
 With no matcher the digests are dropped rather than carried forward. A digest from an older
 review sitting under a fresh `verified` date is the one combination that misreports in the

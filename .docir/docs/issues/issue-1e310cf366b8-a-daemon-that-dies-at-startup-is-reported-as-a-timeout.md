@@ -2,9 +2,11 @@
 code:
 - src/docir/entry_points/daemon/lifecycle.py
 - src/docir/entry_points/daemon/socket_executor.py
+- src/docir/platform/transport/client.py
 code_baseline:
   src/docir/entry_points/daemon/lifecycle.py: 584a75aa7d42
   src/docir/entry_points/daemon/socket_executor.py: 5ad7704f083a
+  src/docir/platform/transport/client.py: 5fca48050e14
 created: '2026-09-16'
 description: The client spawns a daemon, waits, and reports the wait — so a store
   whose schema will not load reaches the caller as a timeout instead of the reason,
@@ -38,8 +40,11 @@ DOCIR_HOME=<store whose schema will not load> python -m docir mcp serve
 # docir_query -> ToolError: daemon failed to become ready in time
 ```
 
-The CLI answers the same store instantly and correctly, because it resolves the schema in
-process before it reaches the socket.
+Only `docir --no-daemon` answers the same store instantly and correctly, because that mode
+builds the container — and so resolves the schema — in process. In the default mode the CLI
+is a socket client that loads no schema: it spawns the daemon and waits out the same
+ten-second deadline the MCP server does, and since the fix it too quotes what the daemon
+wrote.
 
 ## Not the same defect as [[issue-2f07f83e6b84]]
 

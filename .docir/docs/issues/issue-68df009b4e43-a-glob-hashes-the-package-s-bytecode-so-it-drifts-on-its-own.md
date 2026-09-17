@@ -2,7 +2,7 @@
 code:
 - src/docir/platform/filesystem/code_matcher.py
 code_baseline:
-  src/docir/platform/filesystem/code_matcher.py: 9caf6a96842d
+  src/docir/platform/filesystem/code_matcher.py: 2ae7c3726fe7
 created: '2026-09-17'
 description: 'code: patterns ending in ** fingerprinted __pycache__ alongside the
   source, so a digest moved when no line was edited and differed across machines.'
@@ -18,6 +18,10 @@ tags:
 title: A ** glob hashes the package's bytecode, so it drifts on its own
 type: issue
 updated: '2026-09-17'
+verified: '2026-09-17'
+verified_code:
+  src/docir/platform/filesystem/code_matcher.py: 2ae7c3726fe7
+verified_content: b887b231d9ab
 ---
 
 A `code:` glob ending in `**` over a Python package hashes the package's `__pycache__` as well

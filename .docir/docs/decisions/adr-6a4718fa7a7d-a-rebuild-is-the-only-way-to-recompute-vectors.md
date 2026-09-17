@@ -1,12 +1,14 @@
 ---
 code:
-- src/docir/entry_points/cli/app.py
+- src/docir/entry_points/cli/maintenance_cmds.py
 - src/docir/entry_points/dispatch.py
-- src/docir/modules/documents/application/services/maintenance_service.py
+- src/docir/modules/documents/application/services/index_rebuilder.py
+- src/docir/modules/indexing/infra/scheduler.py
 code_baseline:
-  src/docir/entry_points/cli/app.py: 632b4c81a902
+  src/docir/entry_points/cli/maintenance_cmds.py: c37ca8c40b29
   src/docir/entry_points/dispatch.py: 204d358a9285
-  src/docir/modules/documents/application/services/maintenance_service.py: dbedd2e64320
+  src/docir/modules/documents/application/services/index_rebuilder.py: fbb0bff13bc4
+  src/docir/modules/indexing/infra/scheduler.py: 3cc2831c6de3
 created: '2026-08-16'
 description: 'Retire reindex --embeddings instead of repairing it: it recomputed exactly
   the vectors a rebuild recomputes anyway, for the same time, and skipped both stamps.'
@@ -23,7 +25,7 @@ tags:
 - persistence
 title: A rebuild is the only way to recompute vectors
 type: decision
-updated: '2026-08-16'
+updated: '2026-09-17'
 ---
 
 ## Context
@@ -40,9 +42,11 @@ happens and the stamps are still written, single-writer.
 
 ## Decision
 
-Retire the flag instead. A rebuild re-embeds every document it re-saves, so
-there was never work for a second mode to do, and `ReindexResult` now reports
-`embeddings_recomputed` — which is the part that was actually missing.
+Retire the flag instead. A rebuild queues every document it re-saves, and the
+drain recomputes each one whose inputs — model, text or chunking — no longer
+match its stored vector (issue-77dd42e3a03a), so there was never work for a
+second mode to do. `ReindexResult` now reports `embeddings_recomputed` — which
+is the part that was actually missing.
 
 ## Why widening it was not enough
 

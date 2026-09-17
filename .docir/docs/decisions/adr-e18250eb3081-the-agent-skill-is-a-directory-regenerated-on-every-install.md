@@ -2,7 +2,7 @@
 code:
 - src/docir/modules/agents/**
 code_baseline:
-  src/docir/modules/agents/**: fba99326556f
+  src/docir/modules/agents/**: 9a5731002e85
 created: '2026-08-25'
 description: Why the packaged CLI guide became SKILL.md plus one-level-deep reference
   files, and why installing a skill sweeps the files a build no longer ships.
@@ -18,7 +18,11 @@ tags:
 - docs
 title: The agent skill is a directory, regenerated on every install
 type: decision
-updated: '2026-08-26'
+updated: '2026-09-17'
+verified: '2026-09-17'
+verified_code:
+  src/docir/modules/agents/**: 9a5731002e85
+verified_content: e2f2241710d6
 ---
 
 ## Context

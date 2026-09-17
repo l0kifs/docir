@@ -23,7 +23,7 @@ tags:
 - retrieval
 title: Doc-Index CLI — Architecture
 type: architecture
-updated: '2026-08-15'
+updated: '2026-09-17'
 ---
 
 ## Principle
@@ -139,9 +139,13 @@ mismatch stops and respawns. The stamp a running daemon reports is the one it
 , and only
 one is retryable. The connect is bounded at 5s, because a local `AF_UNIX`
 connect succeeds at once or not at all; the reply is bounded by
-`DOCIR_REQUEST_TIMEOUT` (300s), because it only arrives after the work is done
-and one request can be a whole reindex. One shared timeout meant every command
-slower than 5s failed while the daemon completed it. The two failures are
+`DOCIR_REQUEST_TIMEOUT` (300s) of *silence*, not of work: the daemon sends a
+keepalive every five seconds while a request runs and each frame re-arms the
+budget, so a whole reindex finishes however long it takes and the timeout fires
+only when the daemon has stopped talking. One shared timeout meant every command
+slower than 5s failed while the daemon completed it; a fixed reply budget later
+meant the reindex inside `docir self upgrade` could not finish past roughly
+1,500 documents (adr-56d29d521620). The two failures are
 different exceptions on purpose: a refused connect means the request never
 landed, so it is respawned and resent; an unanswered reply is **never** resent,
 because the daemon still has it — a blanket retry killed it mid-transaction and

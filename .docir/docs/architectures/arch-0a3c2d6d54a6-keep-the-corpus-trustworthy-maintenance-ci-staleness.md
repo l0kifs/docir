@@ -2,10 +2,18 @@
 code:
 - .github/workflows/ci.yml
 - src/docir/modules/documents/application/services/maintenance_service.py
+- src/docir/modules/documents/application/services/store_repairer.py
+- src/docir/modules/documents/application/services/index_rebuilder.py
+- src/docir/modules/documents/application/services/document_patch.py
 - src/docir/modules/documents/domain/services/graph_checks.py
+- src/docir/modules/documents/domain/services/checks/**
 code_baseline:
   .github/workflows/ci.yml: 41280301f869
+  src/docir/modules/documents/application/services/document_patch.py: 7b2a442b890c
+  src/docir/modules/documents/application/services/index_rebuilder.py: fbb0bff13bc4
   src/docir/modules/documents/application/services/maintenance_service.py: dbedd2e64320
+  src/docir/modules/documents/application/services/store_repairer.py: 84452625a9b0
+  src/docir/modules/documents/domain/services/checks/**: b28b2d4f6708
   src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
 created: '2026-07-30'
 description: 'How the corpus stays consistent: reindex, check, repair, and the merge
@@ -42,16 +50,16 @@ review stale docs → re-verify → (repair?)
 
 | # | Event | Actor | Trigger | Evidence |
 |---|-------|-------|---------|----------|
-| 0 | GoverningDecisionsListed | ACT-003 | `docir query --code <changed files>` on a pull request | .github/workflows/ci.yml:83-97 |
+| 0 | GoverningDecisionsListed | ACT-003 | `docir query --code <changed files>` on a pull request | .github/workflows/ci.yml:146 |
 | 1 | BranchesMerged | ACT-006 | `git merge` | tests/modules/documents/test_merge_safety.py |
-| 2 | IndexRebuilt | ACT-002 | `docir reindex [--changed]` | maintenance_service.py:58-69 |
-| 3 | StructureChecked | ACT-003 | `docir check [--strict]` | maintenance_service.py:84-100 |
-| 4 | DuplicateIdDetected | system | file scan, not index | maintenance_service.py:109-124 |
-| 5 | StaleFlagged | system | past `review_days` since `verified`/`updated` | graph_checks.py:84-111 |
-| 6 | DocumentReVerified | ACT-007 | `docir update <id> --verified` | document_service.py:341-342 |
-| 7 | AdvisoryLinted | ACT-002 | `docir lint --deep` | maintenance_service.py:126-134 |
-| 8 | EmbeddingsRebuilt | ACT-002 | `docir embed --flush`, or any full `docir reindex` | maintenance_service.py:71-82 |
-| 9 | UnmatchedCodeFlagged | system | a governed `code:` glob matches nothing on disk | graph_checks.py:124-166, maintenance_service.py:159-169 |
+| 2 | IndexRebuilt | ACT-002 | `docir reindex [--changed]` | maintenance_service.py:170 → index_rebuilder.py |
+| 3 | StructureChecked | ACT-003 | `docir check [--strict]` | maintenance_service.py:191 |
+| 4 | DuplicateIdDetected | system | file scan, not index | maintenance_service.py:478 |
+| 5 | StaleFlagged | system | past `review_days` since `verified`, else `revoked`, else `created` — never `updated` | checks/verification_rules.py:49 |
+| 6 | DocumentReVerified | ACT-007 | `docir update <id> --verified` | document_patch.py:134 |
+| 7 | AdvisoryLinted | ACT-002 | `docir lint --deep` | maintenance_service.py:514 |
+| 8 | EmbeddingsRebuilt | ACT-002 | `docir embed --flush`, or any full `docir reindex` | maintenance_service.py:182 |
+| 9 | UnmatchedCodeFlagged | system | a governed `code:` glob matches nothing on disk | checks/verification_rules.py:86, maintenance_service.py:424 |
 
 ### Why event 0 is numbered from zero
 
@@ -100,8 +108,8 @@ either link every document or drop the gate — which also dropped the duplicate
 that is the gate's actual purpose.
 
 *Closed* — findings carry a `severity` derived from their kind. `ERROR_KINDS` is
-`duplicate-id`/`dangling`/`malformed` (the corpus is broken); everything else is a
-`warning` about shape or age. `--strict` gates on errors only; `--strict-all` restores
+`duplicate-id`/`dangling`/`malformed` (the corpus is broken) plus `empty-index` (the check
+could not look — adr-1cccd77cb023); everything else is a `warning` about shape or age. `--strict` gates on errors only; `--strict-all` restores
 fail-on-anything for anyone who wants it. → `issue-9cb85759076d`.
 
 ### H3 — the default profile made the canonical modelling a permanent warning
@@ -154,7 +162,9 @@ documents look freshly reviewed.
 *Closed* — `TagService` has **no `Clock`**: it was injected only to stamp the date it must
 not stamp (`tag_service.py`). The tag paths rewrite the classification and leave `updated`
 alone, alongside `check --fix` and `delete --force`. Only a content edit moves
-`updated`. → `issue-9ed4905e0db8`.
+`updated` — and the clock no longer reads `updated` at all: an unverified document ages from
+`created` (or from `revoked`, once a stamp is withdrawn), so no write can launder it
+(issue-6726eabcf871). → `issue-9ed4905e0db8`.
 
 ### H7 — reindex --changed never removed deleted documents
 
@@ -220,5 +230,6 @@ onward ([[adr-49bb8cc48938]]). And `store_format:` in `docs-schema.yaml` when th
 contents need a higher floor than it declares, so a docir that predates the construct refuses
 the store by name rather than on a key nobody removed ([[adr-36d6156ffab9]]).
 
-Both report one action per document, because the frontmatter of every governed document moves
-and the reader has to see that in the diff.
+The baseline mint reports one action per document, because the frontmatter of every governed
+document moves and the reader has to see that in the diff; the `store_format:` line is one
+action against the schema file.

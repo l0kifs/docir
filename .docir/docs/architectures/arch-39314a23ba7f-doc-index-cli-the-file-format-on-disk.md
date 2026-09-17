@@ -1,4 +1,12 @@
 ---
+code:
+- src/docir/platform/filesystem/markdown_format.py
+- src/docir/modules/documents/domain/entities/document.py
+- src/docir/platform/filesystem/tag_store.py
+code_baseline:
+  src/docir/modules/documents/domain/entities/document.py: 69cfc0a97a7b
+  src/docir/platform/filesystem/markdown_format.py: 7a4aeec0c12e
+  src/docir/platform/filesystem/tag_store.py: 3bb1c0ba5e69
 created: '2026-08-15'
 description: 'What a document is as markdown: every frontmatter field, what validates
   it, and the tag registry the tags resolve against.'
@@ -11,7 +19,7 @@ tags:
 - architecture
 title: Doc-Index CLI — the file format on disk
 type: architecture
-updated: '2026-08-17'
+updated: '2026-09-17'
 ---
 
 ## File format
@@ -74,8 +82,12 @@ field names the command that sets it; none is written by hand.
 | `created` | yes | `docir add` (auto) | Set once, never modified afterward; used for audit/sort queries |
 | `updated` | yes | `docir add` / `update` / `archive` / `unarchive` | Stamped whenever one of those calls actually changes something. Deliberately **not** advanced by the mechanical rewrites — `check --fix`, the unlinking half of `delete --force`, and `tag rename` / `tag rm --force` — because staleness falls back to `updated` when there is no `verified`, so a mechanical bump would launder the review clock. `TagService` has no `Clock` for exactly this reason |
 | `owner` | no | `docir add --owner`, `docir update --set-owner` | Optional steward, surfaced by the staleness check; written only when set |
-| `verified` | no | `docir update --verified` | Optional date somebody last re-confirmed the doc is still correct; resets the staleness clock (staleness measures from `verified`, else `updated`) |
+| `verified` | no | `docir update --verified` | Optional date somebody last re-confirmed the doc is still correct; resets the staleness clock. The clock runs from `verified`, else `revoked`, else `created` — never `updated`, or a mechanical edit would launder it |
 | `verified_code` | no | `docir update --verified` | Written alongside `verified` when the store sits in a repository: one digest per `code` glob, of the files that glob matched at that moment. `docir check` recomputes them and reports `code-changed` when they differ. Keyed by pattern, so reordering the globs cannot re-point a digest; a pattern with no entry is *unverified*, never *unchanged*. In the file rather than the index because it is the document's review state and a clone has to see it (adr-d9e6d5ccd0b4) |
+| `revoked` | no | a content edit to a verified doc, `docir update --clear-verified` | The date a *standing* verification was withdrawn. The cadence runs from here once `verified` is gone, so a revocation puts the document back in the queue one cadence later rather than immediately. A document carrying no verification has nothing to withdraw and is left alone |
+| `verified_content` | no | `docir update --verified` | Digest of the text a verification covered — title, description and body — so an edit made *outside* the CLI can still be reported (`verification-outdated`). Keyed on the reviewed text, never on `updated`, which moves without a review |
+| `code_baseline` | no | any write that declares a `code` glob; `docir check --fix` | One digest per glob, of what it matched when the document *declared* it — the authorship half, where `verified_code` is the review half. Minted once per pattern and never refreshed mechanically, so re-declaring a glob cannot clear a drift nobody read. `docir check` reports `code-drifted` against it |
+| `isolated` | no | `docir add --isolated`, `docir update --set-isolated` | Why this document is *meant* to carry no relations — the reviewed exemption from `orphan`. Free-form rather than a boolean, so it records what somebody concluded and not merely that they silenced the warning |
 | `archived` | no | `docir archive` / `docir unarchive` | Absent by default; `true` removes the document from active search (FTS, embeddings) while keeping the file and index rows |
 
 ### Field notes

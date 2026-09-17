@@ -2,7 +2,7 @@
 code:
 - src/docir/platform/naming/**
 code_baseline:
-  src/docir/platform/naming/**: bad6c5a29f4a
+  src/docir/platform/naming/**: dc20d8304971
 created: '2026-07-30'
 description: Why the tag-key grammar lives in platform rather than being written twice
   or crossing a module boundary.
@@ -19,7 +19,7 @@ tags:
 - tags
 title: A platform.naming leaf for shared name grammars
 type: decision
-updated: '2026-08-17'
+updated: '2026-09-17'
 ---
 
 ## Context

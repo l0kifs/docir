@@ -1,4 +1,10 @@
 ---
+code:
+- src/docir/modules/documents/domain/entities/document.py
+- src/docir/modules/documents/domain/services/checks/verification_rules.py
+code_baseline:
+  src/docir/modules/documents/domain/entities/document.py: 69cfc0a97a7b
+  src/docir/modules/documents/domain/services/checks/verification_rules.py: cd968669505d
 created: '2026-09-04'
 description: Why an absent `verified` falls back to `created` rather than `updated`,
   and why absent is not treated as infinitely stale.
@@ -14,7 +20,7 @@ tags:
 - schema
 title: Staleness ages from creation, never from the last edit
 type: decision
-updated: '2026-09-05'
+updated: '2026-09-17'
 ---
 
 ## Context

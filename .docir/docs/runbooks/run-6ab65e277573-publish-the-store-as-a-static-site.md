@@ -1,4 +1,8 @@
 ---
+code:
+- src/docir/modules/publishing/**
+code_baseline:
+  src/docir/modules/publishing/**: 63f00e30d45f
 created: '2026-08-15'
 description: 'How docir build renders the corpus for the people who approve decisions:
   the flags, publishing from CI, the --out guard, and mermaid diagrams.'
@@ -14,7 +18,7 @@ tags:
 - cli
 title: Publish the store as a static site
 type: runbook
-updated: '2026-08-15'
+updated: '2026-09-17'
 ---
 
 An agent reads docir through the CLI or MCP. The people who have to *approve* a

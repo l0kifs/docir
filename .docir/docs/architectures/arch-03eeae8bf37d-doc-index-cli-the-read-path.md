@@ -2,7 +2,7 @@
 code:
 - src/docir/modules/indexing/**
 code_baseline:
-  src/docir/modules/indexing/**: cf41b20a074c
+  src/docir/modules/indexing/**: d506e685ec3f
 created: '2026-08-15'
 description: 'How a query becomes results: full-text and vector rankings fused, section-level
   embeddings, default status visibility, and reads spanning peer stores.'
@@ -15,7 +15,7 @@ tags:
 - architecture
 title: Doc-Index CLI — the read path
 type: architecture
-updated: '2026-08-25'
+updated: '2026-09-17'
 ---
 
 ## Read path

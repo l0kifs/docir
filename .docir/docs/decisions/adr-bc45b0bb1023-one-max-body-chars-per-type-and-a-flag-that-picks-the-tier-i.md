@@ -1,4 +1,12 @@
 ---
+code:
+- src/docir/modules/documents/infra/schema_loader.py
+- src/docir/modules/documents/domain/services/validation.py
+- src/docir/modules/documents/domain/schema.py
+code_baseline:
+  src/docir/modules/documents/domain/schema.py: c0ea053f1c39
+  src/docir/modules/documents/domain/services/validation.py: 18b842a51fe9
+  src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
 created: '2026-09-15'
 description: One max_body_chars per type, read by both tiers; max_body_chars_enforce
   decides whether it refuses the write or only reports it, so the Tier 2 smell is
@@ -13,7 +21,7 @@ tags:
 - integrity
 title: One max_body_chars per type, and a flag that picks the tier it acts at
 type: decision
-updated: '2026-09-15'
+updated: '2026-09-17'
 ---
 
 ## Context

@@ -1,4 +1,12 @@
 ---
+code:
+- src/docir/modules/documents/domain/services/checks/**
+- src/docir/modules/documents/domain/services/similarity_lint.py
+- src/docir/modules/documents/domain/services/validation.py
+code_baseline:
+  src/docir/modules/documents/domain/services/checks/**: b28b2d4f6708
+  src/docir/modules/documents/domain/services/similarity_lint.py: 497f909c8dc4
+  src/docir/modules/documents/domain/services/validation.py: 18b842a51fe9
 created: '2026-08-15'
 description: The three tiers deciding what blocks a write, what a check reports and
   what stays advisory, plus how a schema change is detected against the index build.
@@ -11,7 +19,7 @@ tags:
 - architecture
 title: Doc-Index CLI — validation strictness tiers
 type: architecture
-updated: '2026-09-11'
+updated: '2026-09-17'
 ---
 
 ## Validation strictness tiers

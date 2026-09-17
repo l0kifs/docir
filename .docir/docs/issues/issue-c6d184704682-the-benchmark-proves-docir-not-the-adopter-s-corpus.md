@@ -2,7 +2,7 @@
 code:
 - benchmarks/**
 code_baseline:
-  benchmarks/**: 122744ecd7ce
+  benchmarks/**: b4e69df85a14
 created: '2026-08-24'
 description: benchmarks/ lives in the repository, so an adopter inherits docir's retrieval
   numbers as a claim with no way to reproduce them on their own documents.
@@ -17,7 +17,7 @@ tags:
 - testing
 title: The benchmark proves docir, not the adopter's corpus
 type: issue
-updated: '2026-08-24'
+updated: '2026-09-17'
 ---
 
 ## What happens

@@ -2,7 +2,7 @@
 code:
 - src/docir/platform/transport/**
 code_baseline:
-  src/docir/platform/transport/**: a441f6837105
+  src/docir/platform/transport/**: 9c79ebe03425
 created: '2026-09-06'
 description: A flat reply budget made `docir self upgrade` impossible on a large corpus,
   because the command that always makes docir's most expensive request was bounded
@@ -19,7 +19,7 @@ tags:
 - material
 title: The daemon keepalives; the reply timeout bounds silence, not work
 type: decision
-updated: '2026-09-06'
+updated: '2026-09-17'
 ---
 
 ## Context

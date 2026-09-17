@@ -280,6 +280,28 @@ class TestCodeFingerprint:
         (tmp_path / ".git" / "HEAD").write_text("ref: refs/heads/other\n", encoding="utf-8")
         assert matcher.fingerprint("**") == before
 
+    def test_bytecode_caches_are_never_part_of_the_answer(self, tmp_path: Path) -> None:
+        """The defect this was found by: a `**` glob over a Python package.
+
+        Of the 39 files `src/docir/modules/publishing/**` matched in this
+        repository, 19 were `.pyc` — so half the digest was bytecode that moves
+        on any interpreter run and differs on a teammate's machine, reporting
+        drift against a baseline nobody had diverged from.
+        """
+        matcher = self._tree(tmp_path)
+        cache = tmp_path / "src" / "auth" / "__pycache__"
+        cache.mkdir()
+        (cache / "mfa.cpython-312.pyc").write_bytes(b"\x00compiled\x00")
+        before = matcher.fingerprint("src/auth/**")
+        (cache / "mfa.cpython-312.pyc").write_bytes(b"\x00recompiled\x00")
+        (cache / "totp.cpython-313.pyc").write_bytes(b"\x00another interpreter\x00")
+        assert matcher.fingerprint("src/auth/**") == before
+
+        # And the source beside it is still watched — the skip is a directory
+        # rule, not a reason to stop reading the package.
+        (tmp_path / "src" / "auth" / "mfa.py").write_text("changed\n", encoding="utf-8")
+        assert matcher.fingerprint("src/auth/**") != before
+
     @pytest.mark.parametrize(
         ("pattern", "because"),
         [

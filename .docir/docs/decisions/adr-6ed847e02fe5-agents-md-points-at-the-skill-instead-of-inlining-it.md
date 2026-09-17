@@ -6,7 +6,7 @@ code:
 code_baseline:
   src/docir/modules/agents/**: fba99326556f
   tests/entry_points/test_e2e_agent.py: 3322a6e2f3e1
-  tests/modules/agents/**: 74be8ee10bc0
+  tests/modules/agents/**: 7f145bd3afd1
 created: '2026-08-15'
 description: Why the AGENTS.md block became a pointer (description + path) and now
   always installs the skill it names, instead of embedding a second copy of the guide.
@@ -21,7 +21,7 @@ tags:
 - docs
 title: AGENTS.md points at the skill instead of inlining it
 type: decision
-updated: '2026-08-15'
+updated: '2026-09-17'
 ---
 
 ## Context

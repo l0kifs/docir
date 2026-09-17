@@ -1,4 +1,12 @@
 ---
+code:
+- src/docir/modules/documents/application/services/document_service.py
+- src/docir/modules/documents/application/services/document_patch.py
+- src/docir/modules/documents/application/services/id_generator.py
+code_baseline:
+  src/docir/modules/documents/application/services/document_patch.py: 7b2a442b890c
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
+  src/docir/modules/documents/application/services/id_generator.py: 294508e5ace0
 created: '2026-08-15'
 description: 'What happens when a document is created, edited, archived or deleted:
   id allocation, schema validation, the index update, and how a diverged file is handled.'
@@ -11,7 +19,7 @@ tags:
 - architecture
 title: Doc-Index CLI — the write path
 type: architecture
-updated: '2026-08-31'
+updated: '2026-09-17'
 ---
 
 ## Write path

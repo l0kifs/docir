@@ -16,6 +16,8 @@ related:
 - kind: refines
   to: arch-1cfb1b212237
 - ref-a3f4d3140e4e
+- adr-6d4d43d44075
+- adr-237b117a7916
 status: accepted
 tags:
 - cli
@@ -24,7 +26,7 @@ tags:
 - integrity
 title: docir doctor — one report for every way docir is subtly wrong
 type: decision
-updated: '2026-08-25'
+updated: '2026-09-17'
 ---
 
 ## Context
@@ -45,8 +47,9 @@ the six to look at, because if you did you would already know what was wrong.
 ## Decision
 
 `docir doctor` reports the environment — the installation, this store's derived
-index, the embedding model in force, the daemon, and each declared peer — as facts
-plus findings, each finding carrying the command that closes it. It reuses the
+index, the embedding model in force, the daemon, each declared peer, and how this
+store and this build relate ([[adr-6d4d43d44075]]'s `compat`) — as facts plus
+findings, each finding carrying the command that closes it. It reuses the
 existing checks rather than adding new ones.
 
 Severity is derived from the finding's kind, the rule `CheckIssue` already follows.
@@ -82,13 +85,19 @@ reason: by the time it is printed, the stale daemon is gone.
 The index's account of itself is `store_status`, in the module that owns the index —
 which keeps the version comparison and the drift diff implemented once, and makes
 the half an agent can use reachable over MCP as `docir_store_status`
-(adr-354a4270ecd8).
+([[adr-354a4270ecd8]]).
 
-The split is not a convenience. The rest of doctor is unanswerable from the daemon:
+The split is not a convenience. Most of doctor is unanswerable from the daemon:
 which build *this* process loaded, what is in *this* shell's environment, which
 store *this* working directory resolved to. A whole-command dispatcher tool would
 have the daemon reporting on its own process, which makes "is the daemon stale?"
 inexpressible.
+
+"Most", not "all": [[adr-237b117a7916]] later found the one part that is answerable
+anywhere — the deprecation register, a constant in the package plus today's date —
+and gave it a command on that test. The rule it states is the sharp form of this
+paragraph: a command may answer about the build when running somewhere else cannot
+change the answer.
 
 ## A broken store still produces a report
 

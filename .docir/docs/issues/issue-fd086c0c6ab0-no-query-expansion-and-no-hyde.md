@@ -2,7 +2,7 @@
 code:
 - src/docir/modules/indexing/**
 code_baseline:
-  src/docir/modules/indexing/**: cf41b20a074c
+  src/docir/modules/indexing/**: d506e685ec3f
 created: '2026-08-24'
 description: 'Both halves are answered: the model-free rewrite measured worse, and
   generation is closed by adr-27c63ad02695 — what remains is accepting caller-supplied
@@ -21,7 +21,7 @@ tags:
 - retrieval
 title: context takes one query, and the caller has better ones
 type: issue
-updated: '2026-08-24'
+updated: '2026-09-17'
 ---
 
 ## What happens

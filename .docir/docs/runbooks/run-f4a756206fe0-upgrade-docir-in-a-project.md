@@ -1,4 +1,10 @@
 ---
+code:
+- src/docir/entry_points/cli/self_cmds.py
+- src/docir/modules/release/**
+code_baseline:
+  src/docir/entry_points/cli/self_cmds.py: 7569fe2dacbd
+  src/docir/modules/release/**: 82a5a4c9e8d8
 created: '2026-08-09'
 description: 'What to run after a new docir release: the package, the derived index,
   and the generated files nothing refreshes for you.'
@@ -17,7 +23,7 @@ tags:
 - agents
 title: Upgrade docir in a project
 type: runbook
-updated: '2026-08-16'
+updated: '2026-09-17'
 ---
 
 docir ships its schema, its agent instructions and its site templates inside the

@@ -30,7 +30,7 @@ tags:
 - persistence
 title: Keep the corpus trustworthy (maintenance, CI, staleness)
 type: architecture
-updated: '2026-08-25'
+updated: '2026-09-17'
 ---
 
 ## Backbone
@@ -124,7 +124,7 @@ unknown-type were all reported and none could be fixed by any command. Every con
 failure mode in this analysis terminated in a state the product could not exit.
 
 *Closed* — `docir check --fix` (`MaintenanceService.repair`) is the sanctioned recovery
-path. It repairs exactly what needs no guess: duplicate ids are re-issued (the *oldest*
+path. It repairs what needs no guess: duplicate ids are re-issued (the *oldest*
 file keeps the id, so existing edges stay valid) and dangling edges are dropped. It
 reindexes first and does not advance `updated`. `malformed` and `unknown-type` are still
 left unrepaired deliberately and come back in `RepairResult.remaining` — each needs
@@ -209,3 +209,16 @@ Which kinds count is the schema's `blocking` property, not the name `depends_on`
 is deliberately separate from `dependency`, which `layering` reads: one is temporal and the
 other structural, and reading one for both announced a decision refining a *superseded* one as
 ready to start (adr-716c2eeb4e51).
+
+## What check --fix files rather than repairs
+
+Two of `repair`'s actions repair nothing, and qualify on the same two tests: the value is
+derived, so there is exactly one answer, and neither claims anything a human must judge.
+
+A `code_baseline` for each `code:` glob that carries none, so drift is watched from that run
+onward ([[adr-49bb8cc48938]]). And `store_format:` in `docs-schema.yaml` when the file's
+contents need a higher floor than it declares, so a docir that predates the construct refuses
+the store by name rather than on a key nobody removed ([[adr-36d6156ffab9]]).
+
+Both report one action per document, because the frontmatter of every governed document moves
+and the reader has to see that in the diff.

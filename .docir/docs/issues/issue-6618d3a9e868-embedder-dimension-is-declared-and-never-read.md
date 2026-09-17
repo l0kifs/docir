@@ -2,7 +2,7 @@
 code:
 - src/docir/platform/embedding/**
 code_baseline:
-  src/docir/platform/embedding/**: 130c8e5da098
+  src/docir/platform/embedding/**: 1548aadeb100
 created: '2026-08-24'
 description: The port declares a vector-width property nothing outside the embedding
   package consumes, and the fastembed adapter keeps it correct with a self-correcting
@@ -16,7 +16,7 @@ tags:
 - embeddings
 title: Embedder.dimension is declared and never read
 type: issue
-updated: '2026-08-24'
+updated: '2026-09-17'
 ---
 
 ## What happens

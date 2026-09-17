@@ -19,7 +19,7 @@ tags:
 - architecture
 title: MCP as a second transport over the dispatcher
 type: decision
-updated: '2026-08-06'
+updated: '2026-09-17'
 ---
 
 ## Context
@@ -51,7 +51,7 @@ a `cmds.py` (the Typer command); no business logic, per the entry_points rule.
 
 - **Every tool is one `Request` through a `RequestExecutor`** — the same boundary
   the CLI crosses and the same one the daemon protocol crosses. There is exactly
-  one tool per dispatcher command (19 of them), plus a `docir_schema` tool for
+  one tool per dispatcher command, plus a `docir_schema` tool for
   the one thing an agent needs that is not a command: the merged types, statuses
   and relation kinds it must write against. `ping` is deliberately unexposed —
   it is the daemon's liveness probe, not a document operation.

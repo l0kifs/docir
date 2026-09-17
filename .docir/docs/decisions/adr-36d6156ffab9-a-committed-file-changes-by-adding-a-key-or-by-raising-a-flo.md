@@ -16,10 +16,12 @@ description: Why new meaning goes in a new key older builds ignore, why the fall
 id: adr-36d6156ffab9
 owner: maintainer
 related:
+- adr-49bb8cc48938
 - adr-6aa2e2f5f403
 - adr-ab4598c6f707
 - issue-c30895cc62a3
-- adr-49bb8cc48938
+- adr-bd3a820cc57a
+- issue-d891ab5501e6
 status: accepted
 tags:
 - cli
@@ -27,7 +29,7 @@ tags:
 - persistence
 title: A committed file changes by adding a key, or by raising a floor
 type: decision
-updated: '2026-09-16'
+updated: '2026-09-17'
 ---
 
 Two file changes shipped a release apart, against the same store, and only one of them
@@ -117,3 +119,34 @@ declares the highest it understands — the shape the index already uses, where
 The cost is that the refusal cannot name a release to install: an older build has no table
 mapping format 3 to a version it has never heard of. It says the two numbers and "upgrade
 docir", which is what its index counterpart has always said.
+
+## The version key adr-bd3a820cc57a rejected
+
+[[adr-bd3a820cc57a]] lists "a `schema_version:` key" among the moves that were "all available and
+all wrong for this project", and [[issue-d891ab5501e6]] rejects that and pinning a store to a
+docir version in the same breath. This is a version key in that file, and it does pin. The
+objections are worth answering rather than stepping around.
+
+## They answer a different question
+
+Those two are about **drift**: the file does not change and its meaning does, because the core and
+the profiles are compiled into the package and re-resolved on every command. Their objection to a
+key in the file is exact — it is hand-edited, so it drifts from what the file says, and it
+describes the file while the change arrives from the package. A key cannot track a change that
+never touches the file.
+
+`store_format:` describes the file's own **shape**, which moves only when somebody edits it. It is
+derived from the constructs in use, written by `check --fix` and never maintained by hand, so the
+drift the objection predicts has nowhere to come from — and `check` reports the moment the
+declaration and the contents disagree, which is the guarantee a hand-maintained key could not give.
+
+## And it pins the reader, not the store
+
+"Pinning a store to a docir version" was rejected for trading a silent change for a hard stop that
+leaves the corpus behind on an old release. This does the opposite of that: it constrains nothing
+about which docir a store may use going forward, and every current build is unaffected. It names
+the minimum a *reader* needs, so a build that cannot parse the file stops with a sentence about
+versions instead of a parse error about a key nobody removed.
+
+What would overturn it: a floor that ever has to be written or maintained by hand. Then
+[[adr-bd3a820cc57a]]'s objection lands squarely, and this becomes the thing it warned about.

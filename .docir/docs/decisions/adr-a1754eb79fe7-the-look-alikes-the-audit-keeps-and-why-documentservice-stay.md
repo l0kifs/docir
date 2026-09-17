@@ -34,7 +34,7 @@ tags:
 - architecture
 title: The look-alikes the audit keeps, and why DocumentService stays whole
 type: decision
-updated: '2026-09-11'
+updated: '2026-09-17'
 ---
 
 ## Context
@@ -80,11 +80,11 @@ aggregate's repository, and the shared-index baseline deliberately keeps it in
 `platform`; splitting it would widen a boundary edge that is only allowed to
 shrink.
 
-`Dispatcher._handlers` (22 entries) looks like Switch Statements. It is the
+`Dispatcher._handlers` (23 entries) looks like Switch Statements. It is the
 dispatch table that exists precisely so the two transports cannot answer
 differently, and its keys are a public guard surface.
 
-`DocumentView` (24 fields, no behaviour) looks like a Data Class. It is a
+`DocumentView` (25 fields, no behaviour) looks like a Data Class. It is a
 projection serialized over the daemon's JSON transport, which is the stated
 exemption for that smell.
 
@@ -95,7 +95,7 @@ four different human renderings — a document, a batch, a list, a bare message.
 Folding them into one function plus a render callback is the Middle Man
 direction, and costs four names to save nine lines.
 
-`UnitOfWorkFactory = Callable[[], UnitOfWork]` is declared in six modules. That
+`UnitOfWorkFactory = Callable[[], UnitOfWork]` is declared in nine modules. That
 is the local convention, and changing it is a sweep of its own.
 
 Constructor injection of eight or nine arguments is not a Long Parameter List:

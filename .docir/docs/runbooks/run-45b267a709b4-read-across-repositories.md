@@ -1,4 +1,8 @@
 ---
+code:
+- src/docir/entry_points/federation.py
+code_baseline:
+  src/docir/entry_points/federation.py: d4450115acce
 created: '2026-08-15'
 description: 'How a store federates reads over declared peers: stores.yaml, --store,
   why writes and build never federate, and why ranking merges on similarity.'
@@ -12,7 +16,7 @@ tags:
 - cli
 title: Read across repositories
 type: runbook
-updated: '2026-08-28'
+updated: '2026-09-17'
 ---
 
 The decision that governs the service you are editing often lives in another repo, and

@@ -1,4 +1,10 @@
 ---
+code:
+- src/docir/modules/documents/infra/schema_loader.py
+- src/docir/modules/documents/domain/services/store_format.py
+code_baseline:
+  src/docir/modules/documents/domain/services/store_format.py: eb89d11244ff
+  src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
 created: '2026-09-15'
 description: 'An inline types: entry missing prefix/statuses/default_status is folded
   into the resolved type key by key instead of replacing it, so a store can set one
@@ -11,7 +17,7 @@ tags:
 - schema
 title: A partial type block overlays the type the package ships
 type: decision
-updated: '2026-09-15'
+updated: '2026-09-17'
 ---
 
 ## Context

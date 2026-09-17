@@ -18,7 +18,7 @@ tags:
 - integrity
 title: An unloadable schema kills the MCP server with no message
 type: issue
-updated: '2026-09-16'
+updated: '2026-09-17'
 ---
 
 Every refusal docir writes for a schema it cannot load is worded for a reader. Over MCP, no
@@ -50,7 +50,7 @@ that, because it runs before any request exists.
 `build_server` catches the store error, builds the surface anyway behind an executor that
 answers every command with it, and puts the same sentence in front of the server's
 instructions — which a client reads at the handshake, before it has written a plan around
-tools that cannot work. All 22 tools still list, so the reader can tell "this store cannot be
+tools that cannot work. All 23 tools still list, so the reader can tell "this store cannot be
 opened" from "docir does not do that here".
 
 `_UnavailableExecutor` rather than a special case inside each tool, so the error travels the

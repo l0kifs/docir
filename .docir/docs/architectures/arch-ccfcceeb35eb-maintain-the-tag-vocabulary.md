@@ -2,7 +2,7 @@
 code:
 - src/docir/modules/tags/**
 code_baseline:
-  src/docir/modules/tags/**: 4ad2b8095e76
+  src/docir/modules/tags/**: 444c47d90798
 created: '2026-07-30'
 description: How the controlled vocabulary is registered, renamed and retired.
 id: arch-ccfcceeb35eb
@@ -23,7 +23,7 @@ tags:
 - tags
 title: Maintain the tag vocabulary
 type: architecture
-updated: '2026-08-15'
+updated: '2026-09-17'
 ---
 
 ## Backbone

@@ -12,7 +12,7 @@ owner: maintainer
 related:
 - adr-354a4270ecd8
 - adr-36d6156ffab9
-status: open
+status: resolved
 tags:
 - cli
 - integrity
@@ -45,14 +45,22 @@ done this, and [[adr-354a4270ecd8]] made every MCP tool one `Request` through th
 precisely so the two transports could not drift — but the *startup* path was never part of
 that, because it runs before any request exists.
 
-## What a fix has to decide
+## What shipped
 
-A server with no store cannot answer `docir_get`. So the question is whether it starts at all:
+`build_server` catches the store error, builds the surface anyway behind an executor that
+answers every command with it, and puts the same sentence in front of the server's
+instructions — which a client reads at the handshake, before it has written a plan around
+tools that cannot work. All 22 tools still list, so the reader can tell "this store cannot be
+opened" from "docir does not do that here".
 
-- Refuse to start, but on stderr with the message rather than a traceback — cheapest, and
-  the client still only sees a closed connection.
-- Start degraded: register the tools and have each return the store error, so an agent asking
-  anything is told why instead of losing the connection.
+`_UnavailableExecutor` rather than a special case inside each tool, so the error travels the
+path a dispatcher error already travels: `_Gateway` turns a `DocirError` into a `ToolError`.
+One implementation, the rule [[adr-354a4270ecd8]] exists to keep.
 
-The second is what makes the message reach the reader it was written for, and it is the one
-that needs a decision about what a tool list means when nothing behind it works.
+Driving the real server found two defects reading the code did not: a closure over the
+`except` variable, which Python unbinds, so `docir_schema` raised `NameError` instead of the
+store error; and a top-level `fastmcp` import, which broke the guard that importing the CLI
+must not pay fastmcp's startup ([[issue-9509f9fa3631]]).
+
+The daemon path fails differently — a timeout naming the wrong cause rather than a server that
+dies — and is [[issue-1e310cf366b8]].

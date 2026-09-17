@@ -106,6 +106,7 @@ def build_mcp_server(
     *,
     describe_schema: Callable[[], dict[str, object]],
     version: str,
+    unavailable: str = "",
 ) -> FastMCP:
     """Wire the docir command vocabulary onto a FastMCP server.
 
@@ -113,8 +114,14 @@ def build_mcp_server(
     thing an agent needs that is not a dispatcher command (it is a file the
     store owns, not an index query), and passing it in keeps this module a pure
     client of :class:`RequestExecutor`.
+
+    ``unavailable`` is the reason the store would not open, when it would not.
+    It goes into the server's *instructions* rather than being left for the
+    first failing call, because instructions are read at the handshake: an agent
+    that has to call a tool to discover the store is unreadable has already
+    written its plan around tools that cannot work.
     """
-    mcp: FastMCP = FastMCP(name="docir", instructions=INSTRUCTIONS, version=version)
+    mcp: FastMCP = FastMCP(name="docir", instructions=_instructions(unavailable), version=version)
     run = _Gateway(executor)
 
     _register_read_tools(mcp, run, describe_schema=describe_schema)
@@ -123,6 +130,23 @@ def build_mcp_server(
     _register_maintenance_tools(mcp, run)
 
     return mcp
+
+
+def _instructions(unavailable: str) -> str:
+    """The usual instructions, or the store error in front of them.
+
+    In front rather than instead: the surface is still described, because the
+    reader has to be able to tell that these tools exist and would work — the
+    difference between "docir is broken here" and "this store cannot be opened
+    by this build", which is the difference between upgrading and giving up.
+    """
+    if not unavailable:
+        return INSTRUCTIONS
+    return (
+        f"THIS STORE CANNOT BE OPENED: {unavailable}\n\n"
+        f"Every tool below will return that error until it is resolved. "
+        f"The tools and their contracts are unchanged.\n\n{INSTRUCTIONS}"
+    )
 
 
 def _register_read_tools(

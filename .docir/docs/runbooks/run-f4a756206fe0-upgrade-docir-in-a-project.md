@@ -85,9 +85,9 @@ documents are read rather than what they must contain (chunked embeddings
 rewrote every vector without touching a type or a cadence).
 It also raises the id counter to what is on disk, which is what a fresh clone
 needs — the index is gitignored, so a clone has no index and every read answers
-nothing until it is built. `check` does not warn about that state — an empty index
-reports `no structural issues`, exactly like a healthy one. `build` is the one
-command that says so.
+nothing until it is built. Opening a store whose index is empty rebuilds it
+before anything is dispatched ([[adr-e53c813d2f13]]), and where that state still
+arises `check` reports `empty-index` as an **error** ([[issue-87410666c867]]).
 
 There is deliberately no `docir accept-schema` verb. `reindex` is already the
 "make the derived state agree with the sources" command, and a separate

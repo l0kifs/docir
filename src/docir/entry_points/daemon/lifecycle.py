@@ -211,9 +211,98 @@ def ensure_running(settings: Settings) -> None:
     else:
         clear_pid(settings)
         settings.socket_path.unlink(missing_ok=True)
+    written_before = _log_size(settings)
     spawn(settings)
     if not wait_until_ready(settings):
-        raise DaemonError("daemon failed to become ready in time")
+        raise DaemonError(_not_ready_message(settings, written_before))
+
+
+#: Lines of the daemon's own output quoted when it does not come up.
+#:
+#: Few on purpose, and measured against the case this exists for: a traceback's
+#: *last* line is the exception, and everything above it is frames. Twelve lines
+#: put ten frames in front of the one sentence naming the cause, which buries it
+#: as effectively as the bare timeout did. Six keeps the exception, the line
+#: that raised it, and a frame of context. The whole file is still there.
+_LOG_TAIL_LINES = 6
+
+#: Characters kept from those lines. A daemon that fails in a loop can write a
+#: great deal before the deadline, and an error message is read in a terminal.
+_LOG_TAIL_CHARS = 1200
+
+
+def _log_size(settings: Settings) -> int:
+    """Bytes already in the daemon log, so a failure quotes only what follows.
+
+    The log is appended to across every spawn this store has ever done, so
+    quoting its tail unconditionally would attribute last week's traceback to
+    this morning's timeout — a wrong cause stated with confidence, which is
+    worse than the bare timeout this is replacing.
+    """
+    try:
+        return settings.log_path.stat().st_size
+    except OSError:
+        return 0
+
+
+def _not_ready_message(settings: Settings, written_before: int) -> str:
+    """The timeout, plus whatever the daemon itself said while failing.
+
+    The client cannot see why a daemon died: it spawns one, waits, and all it
+    knows is that nothing started answering (issue-1e310cf366b8). The reason is
+    in the log, because `spawn` points the child's stdout and stderr there — so
+    the honest thing is to carry it across rather than to report the wait as if
+    it were the diagnosis.
+
+    Quoted as *what it said*, never as the cause. A daemon can also miss this
+    deadline while perfectly healthy — a cold model load on a slow disk — and
+    then these lines are progress, not an error. The reader is the one who can
+    tell; this is here so there is something to tell it from.
+
+    Silence is its own answer, and the message says so: a daemon that wrote
+    nothing at all did not get as far as failing out loud, which points at the
+    spawn rather than at the store.
+    """
+    tail = _recent_log(settings, written_before)
+    if not tail:
+        return (
+            f"daemon failed to become ready in time, and wrote nothing to "
+            f"{settings.log_path} — it may not have started at all"
+        )
+    return f"daemon failed to become ready in time; it last wrote:\n{tail}"
+
+
+def _worth_quoting(line: str) -> bool:
+    """Whether a log line carries anything, once the pointers are dropped.
+
+    Blank lines, and the ``^^^^``/``~~~~`` rows a Python traceback draws under
+    the expression it blames. Those point at a column in a line the reader
+    cannot see here, and each one costs a slot in a window sized for the
+    sentence that names the cause.
+    """
+    stripped = line.strip()
+    return bool(stripped) and bool(stripped.strip("^~"))
+
+
+def _recent_log(settings: Settings, written_before: int) -> str:
+    """The daemon's output since ``written_before``, trimmed and indented.
+
+    Never raises: this runs inside the construction of an error message, and an
+    error about reading the log would replace the error the reader came for.
+    """
+    try:
+        with settings.log_path.open("rb") as handle:
+            handle.seek(written_before)
+            fresh = handle.read().decode("utf-8", errors="replace")
+    except OSError:
+        return ""
+    lines = [line.rstrip() for line in fresh.splitlines() if _worth_quoting(line)]
+    if not lines:
+        return ""
+    trimmed = "\n".join(f"    {line}" for line in lines[-_LOG_TAIL_LINES:])
+    if len(trimmed) > _LOG_TAIL_CHARS:
+        trimmed = f"    ...\n{trimmed[-_LOG_TAIL_CHARS:]}"
+    return trimmed
 
 
 def stop(settings: Settings) -> bool:

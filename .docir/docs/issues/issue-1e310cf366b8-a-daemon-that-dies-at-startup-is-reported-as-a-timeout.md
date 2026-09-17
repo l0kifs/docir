@@ -14,13 +14,13 @@ owner: maintainer
 related:
 - issue-2f07f83e6b84
 - adr-56d29d521620
-status: open
+status: resolved
 tags:
 - cli
 - integrity
 title: A daemon that dies at startup is reported as a timeout
 type: issue
-updated: '2026-09-16'
+updated: '2026-09-17'
 ---
 
 A store whose schema will not load takes the daemon down at startup. The client cannot see
@@ -63,3 +63,26 @@ than as the answer.
 The honest version distinguishes "not ready yet" from "will never be ready" at the point the
 client is waiting — a change to the pair of timeouts [[adr-56d29d521620]] keeps deliberately
 separate, so it costs a decision rather than a patch.
+
+## What shipped
+
+`ensure_running` records the log's size before it spawns, and on a timeout quotes what the
+daemon wrote after that point — six lines, pointer rows dropped, capped. A traceback's last
+line is the exception, so the sentence naming the cause is what survives the window.
+
+Reading from the recorded offset is the whole of the care: the log is appended to across every
+spawn a store has ever done, so quoting its tail unconditionally would attribute last week's
+traceback to this morning's timeout — a wrong cause stated with confidence, which is worse
+than the bare wait it replaces.
+
+Silence gets its own sentence. A daemon that wrote nothing did not get as far as failing out
+loud, which points at the spawn rather than at the store, and the message says so and names
+the log.
+
+Quoted as *what it said*, never as the cause: a healthy daemon can miss this deadline too, on
+a cold model load, and then those lines are progress. The reader is the one who can tell, and
+now has something to tell it from.
+
+The other half of [[adr-56d29d521620]] is untouched. This is the spawn-and-wait path only —
+the reply timeout still bounds silence rather than work, and the two still raise different
+exceptions.

@@ -188,6 +188,11 @@ class TestVocabulary:
             # from `peer_status`, and merging peers' answers into this one would
             # report a corpus size nobody can act on.
             "store_status",
+            # About the *build*, not about any store, so there is nothing for a
+            # peer to contribute: the register is a constant in the package this
+            # process is running, and a peer's copy answers for a repository
+            # nobody is asking about.
+            "deprecations",
             "repair",
             "lint",
             # A fixture judges ids in *this* store, and the score is a property

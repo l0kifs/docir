@@ -66,6 +66,26 @@ DEPRECATIONS: tuple[Deprecation, ...] = (
 )
 
 
+def describe_deprecations(today: date) -> list[dict[str, object]]:
+    """The register as plain data, for whoever is reporting it.
+
+    One shape, built once. `docir doctor` renders it in a `compat` section and
+    the `deprecations` command answers with it over the wire; each building its
+    own dict is how the two come to disagree about a field name, which is the
+    drift adr-354a4270ecd8 exists to prevent one layer down.
+    """
+    return [
+        {
+            "subject": entry.subject,
+            "replacement": entry.replacement,
+            "sunset": entry.sunset.isoformat(),
+            "overdue": overdue,
+            "note": entry.note,
+        }
+        for entry, overdue in announcements(today)
+    ]
+
+
 def announcements(today: date) -> tuple[tuple[Deprecation, bool], ...]:
     """Every deprecation with whether its date has passed, soonest first.
 

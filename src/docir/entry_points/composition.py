@@ -276,7 +276,7 @@ def build_container(
         code_matcher,
         YamlSchemaFileStore(settings.schema_path),
     )
-    dispatcher = Dispatcher(document_service, tag_service, maintenance_service)
+    dispatcher = Dispatcher(document_service, tag_service, maintenance_service, clock)
     bootstrapped = _bootstrap_index(
         maintenance_service, uow_factory, file_store, scheduler, background=background_embeddings
     )

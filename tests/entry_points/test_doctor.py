@@ -592,6 +592,7 @@ def _environment(**overrides) -> doctor.Environment:
         "store_format_declared": 1,
         "store_format_required": 1,
         "deprecations": (),
+        "today": date(2026, 9, 17),
         "embed_model": None,
         "embedder_env": "",
         "embedder_id": "fastembed:BAAI/bge-small-en-v1.5",

@@ -698,6 +698,25 @@ def _register_maintenance_tools(mcp: FastMCP, run: _Gateway) -> None:
         return run.many("check", {})
 
     @mcp.tool(annotations=_READ_ONLY)
+    def docir_deprecations() -> dict[str, Any]:
+        """What this docir will stop accepting, and the date each stops.
+
+        Read it before scripting around a flag or a field. Each entry names what
+        is going (`subject`), what to write instead (`replacement`), and the day
+        it stops working (`sunset`) — so "is this urgent" is answerable here
+        rather than by asking somebody.
+
+        `overdue: true` means the date has passed and the thing still answers:
+        a removal docir announced and did not make. That is a defect in docir,
+        not in this store, and worth reporting upstream.
+
+        An empty list is the ordinary state. This says nothing about whether
+        *you* use any of them — docir cannot see which flags a caller types, and
+        a date does not depend on it.
+        """
+        return run.one("deprecations", {})
+
+    @mcp.tool(annotations=_READ_ONLY)
     def docir_schema_drift() -> dict[str, Any]:
         """How the active schema differs from the one the index was built against.
 
@@ -730,10 +749,6 @@ def _register_maintenance_tools(mcp: FastMCP, run: _Gateway) -> None:
         Compare `store_format_required` against another machine's
         `store_format_supported` to know whether that docir can open this store
         — the alternative is running the experiment and reading a parse error.
-
-        What is *not* here is the deprecation register: `docir doctor | jq
-        '.compat'` on the CLI carries every surface this build will stop
-        accepting, with the date it stops (issue-8b227c299e63).
 
         It says nothing about the corpus; `docir_check` owns that. The rest of
         `docir doctor` — the daemon, this shell's environment variables, which

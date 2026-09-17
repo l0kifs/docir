@@ -15,6 +15,7 @@ dispatcher command has a tool.
 from __future__ import annotations
 
 import asyncio
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +23,7 @@ import pytest
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
 
+from conftest import FixedClock
 from docir.config.settings import Settings
 from docir.entry_points.composition import Container, InProcessExecutor
 from docir.entry_points.dispatch import Dispatcher
@@ -29,6 +31,7 @@ from docir.entry_points.federation import FEDERATED_COMMANDS
 from docir.entry_points.mcp.cmds import build_server
 from docir.entry_points.mcp.server import build_mcp_server
 from docir.modules.documents.api import describe_schema, load_schema
+from docir.modules.release.api import describe_deprecations
 from docir.platform.errors import DaemonError
 from docir.platform.transport.messages import Request, RequestExecutor, Response
 
@@ -56,6 +59,7 @@ COMMAND_TOOLS = {
     "check": "docir_check",
     "schema_drift": "docir_schema_drift",
     "store_status": "docir_store_status",
+    "deprecations": "docir_deprecations",
     "repair": "docir_check_fix",
     "lint": "docir_lint",
     "bench": "docir_bench",
@@ -158,6 +162,7 @@ def test_read_tools_are_annotated_read_only(server) -> None:
         "docir_check",
         "docir_schema_drift",
         "docir_store_status",
+        "docir_deprecations",
         "docir_lint",
     }
     assert hinted("destructiveHint") == {"docir_delete", "docir_tag_remove"}
@@ -752,3 +757,43 @@ class TestAStoreThatWillNotOpen:
 
         instructions = asyncio.run(scenario())
         assert not instructions.startswith("THIS STORE CANNOT BE OPENED")
+
+
+class TestTheRegisterIsAskableOverTheWire:
+    """`deprecations` — the one command about the build, not about a store.
+
+    The dates in it were written for an agent, and an agent driving docir over
+    MCP had no way to ask: `docir doctor` carries them and has no tool
+    (issue-8b227c299e63). Every test here drives the real tool surface, because
+    the defect was never in the register — it was in what could reach it.
+    """
+
+    def test_the_tool_returns_the_shipped_register(self, server) -> None:
+        payload = call(server, "docir_deprecations")
+        entries = {entry["subject"]: entry for entry in payload["deprecations"]}
+        # The entry the register was built around: it warns at the moment of use
+        # today, which reaches whoever ran it, once, with no date.
+        assert "--include-resolved" in entries
+        flag = entries["--include-resolved"]
+        assert flag["replacement"] == "--include-inactive"
+        assert flag["sunset"] == "2027-03-01"
+        assert flag["overdue"] is False
+
+    def test_the_verdict_is_read_from_the_clock_it_was_given(self) -> None:
+        # The clock is injected rather than reached for, so a test can stand on
+        # the far side of a sunset instead of waiting for it. Without that the
+        # `overdue` half of the register is untestable until 2027.
+        stub = Dispatcher.__new__(Dispatcher)
+        stub._clock = FixedClock(date(2099, 1, 1))
+        overdue = Dispatcher._deprecations(stub, {})["deprecations"]
+        assert overdue, "the register is empty — nothing exercises this"
+        assert all(entry["overdue"] for entry in overdue)
+        # And the same register, read today, is not.
+        assert not any(entry["overdue"] for entry in describe_deprecations(date.today()))
+
+    def test_the_cli_and_the_tool_report_the_same_shape(self, container: Container) -> None:
+        # One payload builder, so the two transports cannot disagree about a
+        # field name — the drift adr-354a4270ecd8 exists to prevent, one layer
+        # down from the commands themselves.
+        over_the_wire = container.dispatcher.dispatch("deprecations", {})["deprecations"]
+        assert over_the_wire == describe_deprecations(date.today())

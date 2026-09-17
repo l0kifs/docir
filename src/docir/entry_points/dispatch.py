@@ -23,7 +23,9 @@ from docir.modules.documents.api import (
     SearchRequest,
     UpdateDocumentRequest,
 )
+from docir.modules.release.api import describe_deprecations
 from docir.modules.tags.api import DEFAULT_TAG_PAGE, TagService
+from docir.platform.clock import Clock, SystemClock
 from docir.platform.errors import DocirError, ValidationError
 
 Payload = dict[str, object]
@@ -38,10 +40,15 @@ class Dispatcher:
         documents: DocumentService,
         tags: TagService,
         maintenance: MaintenanceService,
+        clock: Clock | None = None,
     ) -> None:
         self._documents = documents
         self._tags = tags
         self._maintenance = maintenance
+        #: Read by ``deprecations`` alone, which asks whether a date has passed.
+        #: Injected rather than reached for, like every other clock in docir, so
+        #: a test can stand on the far side of a sunset without waiting for it.
+        self._clock = clock or SystemClock()
         self._handlers: dict[str, Handler] = {
             "ping": self._ping,
             "add": self._add,
@@ -61,6 +68,7 @@ class Dispatcher:
             "check": self._check,
             "schema_drift": self._schema_drift,
             "store_status": self._store_status,
+            "deprecations": self._deprecations,
             "repair": self._repair,
             "lint": self._lint,
             "bench": self._bench,
@@ -273,6 +281,23 @@ class Dispatcher:
 
     def _store_status(self, _payload: Payload) -> object:
         return asdict(self._maintenance.store_status())
+
+    def _deprecations(self, _payload: Payload) -> object:
+        """What this build will stop accepting, with the date each stops.
+
+        The one command here that answers about the **build** rather than about
+        a store, which is the decision adr-237b117a7916 records. It earns
+        the place on the property that makes it safe: the register is a constant
+        in the package plus today's date, so it reads the same in the daemon as
+        in the shell — unlike the rest of `docir doctor`, which is about the
+        client process and is deliberately not askable here (adr-909734bced92).
+
+        It exists because the reader these dates were written for is an agent,
+        and an agent driving docir over MCP had no way to ask
+        (issue-8b227c299e63). A `docir doctor` an MCP client cannot run is a
+        deprecation nobody it applies to can see.
+        """
+        return {"deprecations": describe_deprecations(self._clock.today())}
 
     def _repair(self, _payload: Payload) -> object:
         return asdict(self._maintenance.repair())

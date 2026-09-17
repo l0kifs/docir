@@ -17,6 +17,11 @@ will stop doing, with the date. Backs `docir self status`, the package step of
   sunset day itself still works. `True` is a defect in *docir* — the removal it
   announced was not made — which is why `doctor` reports it as an error and a
   future date raises no finding at all (adr-6d4d43d44075).
+- `describe_deprecations(today) -> [dict]` — the same register as plain data, one entry per
+  announcement (`subject`, `replacement`, `sunset`, `overdue`, `note`), soonest first. The
+  single payload shape: `docir doctor`'s `compat` section renders it and the `deprecations`
+  dispatcher command answers with it, so the two transports cannot disagree about a field
+  name (adr-237b117a7916).
 - `current_installation() -> Installation` — classify the running install
   (`uv-tool` | `pipx` | `pip` | `project` | `uvx` | `unknown`), carrying the
   `upgrade_command` to run and an `explanation` of why there is none

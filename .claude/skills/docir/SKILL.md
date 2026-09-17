@@ -164,7 +164,8 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
 - **`docir update <id> --verified` raises that finding to `code-changed`.** It
   re-takes the fingerprints as *you* read them, which is the stronger of the two
   claims — stamp it only when you did that reading.
-- **`docir doctor | jq '.compat'` says what is about to change.** It carries the
+- **`docir doctor | jq '.compat'` says what is about to change** (over MCP, ask
+  `docir_deprecations` for the same register). It carries the
   store format numbers — compare `required` against another machine's
   `supported` to know whether that docir can read this store — and every surface
   this build will stop accepting, each with the date it stops. Read it before

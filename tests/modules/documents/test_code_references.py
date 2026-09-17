@@ -8,6 +8,7 @@ written before the code it decides and stays true after that code moves. The
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,7 @@ import pytest
 from docir.config.settings import Settings
 from docir.entry_points.composition import build_container
 from docir.entry_points.dispatch import Dispatcher
+from docir.platform.clock import Clock
 from docir.platform.errors import InvalidCodeReferenceError
 
 
@@ -148,7 +150,27 @@ class TestTier0Shape:
         assert view["code"] == ("src/not/written/yet/**",)
 
 
-def _repo_dispatcher(settings: Settings, tmp_path: Path):
+class _MovableClock(Clock):
+    """A clock a test can push forward.
+
+    The shared `FixedClock` cannot: a date that never moves makes "this write did
+    not stamp `updated`" indistinguishable from "nothing could have stamped it",
+    and `_repo_dispatcher` does not even take one, so its stores run on the wall
+    clock and every date in a test is today either way. Both readings of the two
+    clock tests below were unfalsifiable until this existed.
+    """
+
+    def __init__(self, day: date) -> None:
+        self._day = day
+
+    def today(self) -> date:
+        return self._day
+
+    def advance(self, days: int) -> None:
+        self._day += timedelta(days=days)
+
+
+def _repo_dispatcher(settings: Settings, tmp_path: Path, clock: Clock | None = None):
     """A container whose store sits inside a git repository.
 
     Built here rather than through the shared fixture because the code matcher
@@ -157,7 +179,7 @@ def _repo_dispatcher(settings: Settings, tmp_path: Path):
     """
     (tmp_path / ".git").mkdir()
     settings.ensure_directories()
-    return build_container(settings, background_embeddings=False)
+    return build_container(settings, background_embeddings=False, clock=clock)
 
 
 class TestTier1Check:
@@ -645,19 +667,45 @@ class TestCodeBaseline:
         finally:
             container.close()
 
-    def test_filing_a_baseline_does_not_move_the_review_clock(
+    def test_declaring_a_glob_stamps_updated_and_leaves_the_review_clock(
         self, settings: Settings, tmp_path: Path
     ) -> None:
+        """`--set-code` moves `updated` and moves nothing staleness reads.
+
+        The two are separate clocks and this is the write that shows it.
+        `updated` is stamped by every flag `update` carries, because the
+        mechanical-rewrite rule governs the writes nobody asked for — a tag
+        rename, `check --fix` — not an edit somebody typed. The review clock
+        runs from `verified`, else `revoked`, else `created`, and never reads
+        `updated` at all (adr-fad49eaa4648), so a fresh stamp cannot buy a
+        document another cadence.
+
+        Both halves need a clock that moves. An earlier version asserted
+        `updated` was unchanged and passed for the wrong reason: the store ran
+        on the wall clock, so both reads returned today whatever the write did —
+        and the assertion it made was false besides.
+        """
         src = tmp_path / "src"
         src.mkdir()
         (src / "auth.py").write_text("a\n", encoding="utf-8")
-        container = _repo_dispatcher(settings, tmp_path)
+        clock = _MovableClock(date(2026, 1, 1))
+        container = _repo_dispatcher(settings, tmp_path, clock)
         try:
             docs = container.dispatcher
             doc_id = self._governing(docs, "src/auth.py")
-            before = docs.dispatch("get", {"doc_id": doc_id})["updated"]
+            created = docs.dispatch("get", {"doc_id": doc_id})["created"]
+
+            # Past the `decision` cadence, so staleness has an answer to give.
+            clock.advance(400)
             docs.dispatch("update", {"doc_id": doc_id, "set_code": ["src/auth.py"]})
-            assert docs.dispatch("get", {"doc_id": doc_id})["updated"] == before
+
+            after = docs.dispatch("get", {"doc_id": doc_id})
+            assert after["updated"] == "2027-02-05"
+            assert after["created"] == created
+            # The document is overdue on the day it was declared overdue: the
+            # cadence still runs from `created`, not from the stamp just made.
+            assert after["stale"] is True
+            assert after["verified"] is None
         finally:
             container.close()
 
@@ -754,18 +802,31 @@ class TestBackfillingTheBaseline:
         finally:
             container.close()
 
-    def test_the_backfill_does_not_move_the_review_clock(
-        self, settings: Settings, tmp_path: Path
-    ) -> None:
+    def test_the_backfill_does_not_move_updated(self, settings: Settings, tmp_path: Path) -> None:
+        """`check --fix` is a write nobody asked for, so it stamps nothing.
+
+        This is the half of the rule `--set-code` is exempt from: an edit
+        somebody typed may move `updated`, a repair may not, or a run of the
+        maintenance command would relabel the whole corpus as freshly edited.
+
+        The clock is advanced between the write and the repair, because with a
+        frozen one — or the wall clock `_repo_dispatcher` used to hand out —
+        "did not move" and "could not have moved" read identically.
+        """
         source = tmp_path / "src" / "auth.py"
         source.parent.mkdir()
         source.write_text("original\n", encoding="utf-8")
-        container = _repo_dispatcher(settings, tmp_path)
+        clock = _MovableClock(date(2026, 1, 1))
+        container = _repo_dispatcher(settings, tmp_path, clock)
         try:
             docs = container.dispatcher
             doc_id, _ = self._unwatched(settings, docs, "src/*.py")
             before = docs.dispatch("get", {"doc_id": doc_id})["updated"]
-            docs.dispatch("repair", {})
+            assert before == "2026-01-01"
+
+            clock.advance(400)
+            actions = docs.dispatch("repair", {})["actions"]
+            assert [a for a in actions if a["kind"] == "code-baseline"], "nothing was filed"
             assert docs.dispatch("get", {"doc_id": doc_id})["updated"] == before
         finally:
             container.close()

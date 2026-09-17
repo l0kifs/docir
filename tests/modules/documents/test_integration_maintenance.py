@@ -8,6 +8,7 @@ from contextlib import closing
 
 import pytest
 
+from conftest import FixedClock
 from docir import __version__
 from docir.config.settings import Settings
 from docir.entry_points.composition import Container, build_container
@@ -943,7 +944,10 @@ def test_repair_drops_dead_edges(
 
 
 def test_repair_does_not_reset_the_staleness_clock(
-    dispatcher: Dispatcher, settings: Settings, drop_file_of: Callable[[str], None]
+    dispatcher: Dispatcher,
+    settings: Settings,
+    drop_file_of: Callable[[str], None],
+    clock: FixedClock,
 ) -> None:
     # Dropping a dead link is maintenance, not a human re-reading the document.
     # Bumping `updated` would make an overdue doc look freshly reviewed.
@@ -956,6 +960,9 @@ def test_repair_does_not_reset_the_staleness_clock(
     drop_file_of("adr-0001")
     dispatcher.dispatch("reindex", {})
 
+    # Advanced first: with a clock that cannot move, "did not stamp `updated`"
+    # and "could not have stamped it" are the same passing test.
+    clock.advance(400)
     dispatcher.dispatch("repair", {})
 
     assert dispatcher.dispatch("get", {"doc_id": "adr-0002"})["updated"] == before

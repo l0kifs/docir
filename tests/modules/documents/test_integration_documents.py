@@ -10,6 +10,7 @@ from datetime import date
 
 import pytest
 
+from conftest import FixedClock
 from docir.config.settings import Settings
 from docir.entry_points.dispatch import Dispatcher
 from docir.platform.errors import (
@@ -925,11 +926,14 @@ class TestForcedDeleteCompensates:
         result = seeded.dispatch("delete", {"doc_id": "adr-0001", "force": True})
         assert result == {"deleted": "adr-0001", "unlinked": ["issue-0001"]}
 
-    def test_staleness_clock_is_not_laundered(self, seeded: Dispatcher) -> None:
+    def test_staleness_clock_is_not_laundered(self, seeded: Dispatcher, clock: FixedClock) -> None:
         # Matches `check --fix`, not `tag rm --force`: staleness records when a
         # human last vouched for the content, and having a link removed from
         # underneath you is not that. (The tag path does bump it — issue-9ed4905e0db8.)
         before = seeded.dispatch("get", {"doc_id": "issue-0001"})["updated"]
+        # Advanced first, or the assertion holds whether or not the unlink
+        # stamps anything: a frozen clock returns the same date either way.
+        clock.advance(400)
         seeded.dispatch("delete", {"doc_id": "adr-0001", "force": True})
         assert seeded.dispatch("get", {"doc_id": "issue-0001"})["updated"] == before
 

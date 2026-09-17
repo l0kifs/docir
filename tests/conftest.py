@@ -9,7 +9,7 @@ synchronous ``flush`` interface.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
@@ -30,13 +30,24 @@ FIXED_DATE = date(2026, 7, 7)
 
 
 class FixedClock(Clock):
-    """A clock frozen to a fixed date for deterministic timestamps."""
+    """A clock frozen to a fixed date for deterministic timestamps.
+
+    Frozen, but not immovable. A date that can never change makes every "this
+    write did not stamp `updated`" assertion unfalsifiable: the second read
+    returns the first date whether or not the write touched it, so the test
+    passes identically against the code and against a version that laundered
+    the clock. :meth:`advance` is what lets those guards fail.
+    """
 
     def __init__(self, day: date = FIXED_DATE) -> None:
         self._day = day
 
     def today(self) -> date:
         return self._day
+
+    def advance(self, days: int) -> None:
+        """Move the clock forward, so a later read can differ from an earlier one."""
+        self._day += timedelta(days=days)
 
 
 @pytest.fixture
@@ -64,8 +75,14 @@ def settings(tmp_path, monkeypatch) -> Settings:
 
 
 @pytest.fixture
-def container(settings: Settings) -> Iterator[Container]:
-    built = build_container(settings, background_embeddings=False, clock=FixedClock())
+def clock() -> FixedClock:
+    """The clock the `container` runs on, so a test can push it forward."""
+    return FixedClock()
+
+
+@pytest.fixture
+def container(settings: Settings, clock: FixedClock) -> Iterator[Container]:
+    built = build_container(settings, background_embeddings=False, clock=clock)
     try:
         yield built
     finally:

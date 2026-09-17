@@ -7,8 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-09-17
+
 ### Added
 
+- **A `code:` glob is watched from the write that declares it (adr-49bb8cc48938).** `docir
+  check` now reports `code-drifted` when the files behind a pattern stop being the ones the
+  document was pointed at. Before this the drift digests were written by `docir update
+  --verified` and by nothing else, so a glob nobody had reviewed watched nothing: in docir's own
+  store that was all 99 documents naming the code they govern, and `code-changed` could fire on
+  none of them. The new `code_baseline:` records what a glob matched when the document
+  *declared* it — a fact about the tree that claims no review, which is what lets a write mint
+  it without laundering one. Minted once per pattern and never refreshed mechanically, so
+  re-pointing a glob with `--set-code` cannot clear a drift nobody read. `--verified` still
+  upgrades the watch to `code-changed`, the stronger claim; the two findings partition the
+  patterns, so one moved file is named once.
+- **A store records the docir it needs (adr-36d6156ffab9).** `store_format:` in
+  `docs-schema.yaml`, read *before* the schema resolves, so a build below it stops with both
+  numbers and the upgrade rather than failing somewhere inside validation on a key nobody
+  removed. `docir check` derives what a file's contents need and reports
+  `store-format-undeclared` when the declaration is behind; `docir check --fix` writes the line
+  **textually**, so the comments that file exists to carry survive. `docir doctor` reports
+  `store-from-newer-build` from the side that is behind. An integer rather than a version: this
+  repository bumps its version at release, so a floor naming the next release would lock the
+  build writing it out of its own store — the same reason the index compares a migration
+  revision.
+- **`docir doctor` gains a `compat` section (adr-6d4d43d44075).** The store-format numbers to
+  compare against another machine's docir, and every surface this build will stop accepting,
+  each with the date it stops. A date is what makes a warning actionable: an agent asked "is
+  this urgent" needs what is going, what replaces it, and when. A future date is data and raises
+  no finding — a warning that fires for a change which has not happened yet never clears, and a
+  findings list that never changes is one nobody reads. A date that has **passed** is an error,
+  because the removal docir announced was not made. The register ships with the one deprecation
+  docir already had: `--include-resolved`, replaced by `--include-inactive`, sunset 2027-03-01.
+- **`docir_deprecations`, and the store formats over MCP (adr-237b117a7916).** The register is
+  askable by an agent, which is the reader those dates were written for; `docir_store_status`
+  carries `store_format_declared` / `_required` / `_supported`. It needed a rule, since every
+  dispatcher command until now answered about a *store*: one may answer about the **build** when
+  running somewhere else cannot change the answer, which the register satisfies and the rest of
+  `doctor` does not.
 - **`max_body_chars` now refuses the write, not just the lint (adr-bc45b0bb1023).** It used to
   be a `lint --deep` suggestion and nothing more, so a store had no way to say "documents of
   this type do not get longer than this" and have it hold. The same number is now read by both
@@ -34,7 +71,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   back — on stderr, and as `body_limit_notice` in the JSON, so an agent on MCP sees it too.
   Setting it without a positive `max_body_chars` to relax is a `SchemaError`.
 
+### Fixed
+
+- **A `**` glob no longer fingerprints the package's bytecode (issue-68df009b4e43).**
+  `src/docir/modules/publishing/**` matched 39 files in this repository and 19 of them were
+  `.pyc`, so half the digest moved on any interpreter run and differed by interpreter version —
+  `code-drifted` fired against baselines nothing had diverged from, and would have fired on a
+  teammate's clean checkout for every broad glob in a store. `.git` was already skipped on
+  exactly this argument; the rule now names the class, adding `__pycache__`, `.mypy_cache`,
+  `.ruff_cache` and `.pytest_cache`. Sixteen baselines in this store were re-minted, provably
+  contaminated rather than drifted: each still equalled what the old rule computes today.
+- **A store that will not open no longer takes the MCP server down (issue-2f07f83e6b84).**
+  `docir mcp serve` let a schema error escape at startup, so the process died and the client saw
+  `Connection closed` — on the one transport whose caller is definitely an agent. The surface
+  now comes up either way: all tools list, every call returns the reason, and the same sentence
+  leads the server's instructions, which a client reads at the handshake.
+- **A spawn that never comes up says what the daemon wrote (issue-1e310cf366b8).** `daemon
+  failed to become ready in time` now quotes the daemon's own output since that spawn — usually
+  the last lines of its traceback, which name the cause. Read from a recorded offset, so last
+  week's traceback is never blamed for this morning's timeout, and a daemon that wrote *nothing*
+  gets its own sentence, because that points at the spawn rather than at the store.
+
 ### Upgrade notes
+
+- **Upgrading before your teammates costs them two things, both recoverable.** Their first
+  command refuses: the index this build migrates is at a revision theirs does not ship, and
+  `docir reindex` is not the way out — it opens the index too. They delete `index.db*` and
+  rebuild, once; nothing under `docs/` is touched. Then, until they upgrade, each of their
+  writes drops the frontmatter keys their build does not know — `code_baseline:` today — so a
+  document they edit quietly stops being watched. `docir check --fix` refiles what was dropped
+  and names every document. Measured on a three-document store: one `update --set-owner` from
+  0.26.0 took the baselines from three to two.
+- **Run `docir check --fix` once after upgrading.** It files a `code_baseline` for every `code:`
+  glob that has none, so drift is watched from that run onward — and records `store_format:` if
+  your schema uses a construct older builds cannot parse. Both report one action per document,
+  because the frontmatter of every governed document moves and that belongs in the diff. What it
+  cannot do is recover drift that already happened; there is no record of what those trees held.
+- **`docir check` will report `code-drifted` on documents that were silent before.** That is the
+  feature, not a regression: a glob nobody had verified was watching nothing. They clear by
+  reading the document against the code and stamping `--verified` — nothing mechanical can, by
+  design.
 
 - **A store that adopts the overlay syntax stops being readable by older docir, and the error it
   prints names the wrong cause.** The check lives in the *reading* build, so a
@@ -2474,7 +2550,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.26.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/l0kifs/docir/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/l0kifs/docir/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/l0kifs/docir/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/l0kifs/docir/compare/v0.23.0...v0.24.0

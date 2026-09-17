@@ -116,6 +116,15 @@ schema, and `docir doctor` names it directly; the entry above says what to do.
   project's to upgrade. Pass `--no-package` to skip the install and only resync the store.
   `stale-index-build` is the finding that asks for this. It is a warning, never a `--strict`
   failure — every store is in that state between an upgrade and the next rebuild.
+- **Upgrading before your teammates is normal, and costs them two things.** The store is
+  committed, so they keep reading it — but their *first* command fails, because the index this
+  build migrated is one theirs does not ship. The message names both revisions and the fix, and
+  a plain `docir reindex` is not it: that opens the index too, and refuses for the same reason.
+  They delete `index.db*` and reindex, once. Nothing in `docs/` is touched and nothing is lost.
+  Then, until they upgrade, each of their writes silently drops the frontmatter keys their
+  build does not know — a `code_baseline:` today — so a document they edit quietly stops being
+  watched. Run `docir check --fix` after; it refiles what was dropped and names every document
+  it touched. If you would rather not manage that, upgrade together.
 - `docir self status` — what is installed, how, and whether a newer release exists. A file
   read: it reports the answer the daemon last cached, and an absent `latest` means *nobody
   has checked*, not "up to date". `--refresh` asks PyPI now (docir's only network call, and

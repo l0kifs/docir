@@ -153,3 +153,35 @@ docir daemon status       # reports the build being served
 docir query --limit 1     # a non-empty answer means the index is populated
 docir check --strict      # exit 0
 ```
+
+## Teammates who have not upgraded
+
+The store is committed, so a teammate who has not upgraded keeps reading it — but their *first*
+command refuses. The index you migrated sits at a revision their build does not ship, and every
+command opens the index.
+
+The message names both revisions. A plain `docir reindex` is not the way out: it opens the index
+too, and refuses identically. They delete the file and rebuild, once.
+
+```bash
+rm .docir/index.db* && docir reindex     # on their machine
+```
+
+Nothing under `docs/` is touched. The index is derived and gitignored, so this costs a rebuild
+and no content.
+
+## And their writes erode the store quietly
+
+An older build writes back the frontmatter keys it knows and drops the rest, so a document it
+edits loses whatever the newer release added — `code_baseline:` today, and whatever comes next.
+Nothing errors; the document simply stops being watched.
+
+Measured on a three-document store: one `update --set-owner` from the older build took the
+baselines from three to two.
+
+`docir check --fix` refiles what was dropped and names each document it touched, so the repair
+is one command and reviewable in the diff.
+
+The cost falls on whoever upgraded, because they are the only one who can see it. Upgrading
+together avoids both halves; where that is not practical, run `--fix` after a teammate on an
+older build has written.

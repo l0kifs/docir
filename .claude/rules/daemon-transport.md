@@ -77,3 +77,14 @@ The daemon is a cache for a warm model and a lock for SQLite, nothing else. Ever
   freshly-spawned replacement would otherwise lose. A bare-integer pid file (written before
   the stamp existed) reads as an unknown build, which never matches — correctly, that daemon
   predates the check.
+
+- **The store's schema rides in the pid file too, for the same reason** (issue-c2e8ce341a00).
+  `build_container` resolves `docs-schema.yaml` once and the daemon holds one container, so an
+  edit was honoured in process and ignored over the socket until the daemon idled out — a
+  declared check went unreported, and Tier 0 refused a write the file had come to permit,
+  silently and in both directions. `write_pid` records a digest the caller takes **before** the
+  container loads the file: recording it afterwards would stamp a schema the daemon may not be
+  serving, which is this bug in miniature, while reading early can only cost one extra respawn.
+  A pid file with no digest never matches, like an unknown build. `daemon status` and `doctor`
+  report it apart from stale code, because "stale code" sends the reader to `src/` for a change
+  that is in their store.

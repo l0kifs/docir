@@ -45,7 +45,12 @@ def status() -> None:
         rendering.render_message("[dim]not running[/]")
         return
     served = snapshot.version or "an unknown build"
-    note = " [yellow](stale code — the next command replaces it)[/]" if snapshot.stale_code else ""
+    if snapshot.stale_code:
+        note = " [yellow](stale code — the next command replaces it)[/]"
+    elif snapshot.stale_schema:
+        note = " [yellow](loaded an older docs-schema.yaml — the next command replaces it)[/]"
+    else:
+        note = ""
     rendering.render_message(
         f"[green]running[/] (pid {snapshot.pid}) at {snapshot.socket_path} · serving {served}{note}"
     )
@@ -64,8 +69,12 @@ def stop() -> None:
 def _run_server(settings: Settings) -> None:
     from docir.entry_points.composition import InProcessExecutor, build_container
 
+    # Digest the schema *before* the container resolves it. Recording what the
+    # file says after the load would stamp a schema this daemon may not be
+    # serving, which is the very staleness this closes (issue-c2e8ce341a00).
+    schema_digest = lifecycle.schema_digest(settings)
     container = build_container(settings, background_embeddings=True)
-    lifecycle.write_pid(settings)
+    lifecycle.write_pid(settings, schema_digest)
     # Wrapped once, shared by both callers. The server serializes clients; the
     # watcher is a second writer on another thread, and SQLite has one.
     executor = SerializingExecutor(InProcessExecutor(container.dispatcher))

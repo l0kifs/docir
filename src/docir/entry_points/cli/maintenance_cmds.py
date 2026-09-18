@@ -380,6 +380,7 @@ def _emit_doctor(report: doctor_report.DoctorReport) -> None:
             "socket": environment.daemon.socket_path,
             "serving": environment.daemon.version,
             "stale_code": environment.daemon.stale_code,
+            "stale_schema": environment.daemon.stale_schema,
             "disabled_by_env": environment.daemon_env_disabled,
             "watching": environment.watch,
         },

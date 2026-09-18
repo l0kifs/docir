@@ -8,6 +8,7 @@ respawns it, so no command hard-fails just because the daemon was not up yet.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import os
 import subprocess
@@ -53,10 +54,16 @@ class CodeStamp:
 
 @dataclass(frozen=True, slots=True)
 class PidRecord:
-    """What the pid file says: the daemon's pid and the build it is serving."""
+    """What the pid file says: the pid, the build served, and the schema loaded.
+
+    Two inputs, because the container resolves both once and then answers every
+    request from them. The build is process-wide; the schema belongs to this
+    store, which is why it rides here rather than inside :class:`CodeStamp`.
+    """
 
     pid: int
     stamp: CodeStamp | None
+    schema_digest: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +75,7 @@ class DaemonStatus:
     socket_path: str
     version: str | None
     stale_code: bool
+    stale_schema: bool
 
 
 def _newest_source_mtime(root: Path) -> int:
@@ -85,6 +93,28 @@ def current_stamp() -> CodeStamp:
     return CodeStamp(version=__version__, source_mtime_ns=_newest_source_mtime(_PACKAGE_ROOT))
 
 
+def schema_digest(settings: Settings) -> str | None:
+    """A digest of the store's schema file, or ``None`` when it cannot be read.
+
+    The daemon resolves ``docs-schema.yaml`` once, when it builds its container,
+    and every request it answers afterwards reads that one object -- Tier 0
+    validation included. So an edit to the file was honoured in-process and
+    ignored over the socket until the daemon idled out: a declared check went
+    unreported, and worse, a write was validated against a rule the file no
+    longer stated, silently and in both directions (issue-c2e8ce341a00).
+
+    Deliberately **not** cached, unlike :func:`current_stamp`. That one is
+    cached so the daemon reports the build it started with; this one is the
+    client asking what the file says *now*, to compare against what the daemon
+    recorded when it started.
+    """
+    try:
+        data = settings.schema_path.read_bytes()
+    except OSError:
+        return None
+    return hashlib.sha256(data).hexdigest()
+
+
 def read_pid_record(settings: Settings) -> PidRecord | None:
     """Parse the pid file, tolerating a truncated or older-format one."""
     try:
@@ -100,7 +130,15 @@ def read_pid_record(settings: Settings) -> PidRecord | None:
         )
     except (KeyError, TypeError, ValueError):
         return _unstamped_record(raw)
-    return PidRecord(pid=pid, stamp=stamp)
+    recorded_schema = data.get("schema_digest")
+    return PidRecord(
+        pid=pid,
+        stamp=stamp,
+        # Absent on a pid file written before the schema rode along, which never
+        # matches a store that has one -- the same reading an unknown build gets
+        # below, and the same safe direction: replace it.
+        schema_digest=str(recorded_schema) if isinstance(recorded_schema, str) else None,
+    )
 
 
 def _unstamped_record(raw: str) -> PidRecord | None:
@@ -121,8 +159,15 @@ def read_pid(settings: Settings) -> int | None:
     return record.pid if record is not None else None
 
 
-def write_pid(settings: Settings) -> None:
-    """Record the current process id and the build it is serving."""
+def write_pid(settings: Settings, schema_digest_at_load: str | None) -> None:
+    """Record the process id, the build being served, and the schema loaded.
+
+    ``schema_digest_at_load`` is passed in rather than read here, and the caller
+    must take it *before* it builds the container. Reading it afterwards would
+    record a digest the container may not have loaded, which is the stale-daemon
+    bug in miniature; reading it early can only over-report a mismatch, and that
+    costs one respawn.
+    """
     stamp = current_stamp()
     settings.pid_path.parent.mkdir(parents=True, exist_ok=True)
     settings.pid_path.write_text(
@@ -131,6 +176,7 @@ def write_pid(settings: Settings) -> None:
                 "pid": os.getpid(),
                 "version": stamp.version,
                 "source_mtime_ns": stamp.source_mtime_ns,
+                "schema_digest": schema_digest_at_load,
             }
         ),
         encoding="utf-8",
@@ -165,6 +211,12 @@ def serves_current_code(settings: Settings) -> bool:
     """Whether the recorded daemon loaded the build this process is running."""
     record = read_pid_record(settings)
     return record is not None and record.stamp == current_stamp()
+
+
+def serves_current_schema(settings: Settings) -> bool:
+    """Whether the recorded daemon loaded the schema this store now declares."""
+    record = read_pid_record(settings)
+    return record is not None and record.schema_digest == schema_digest(settings)
 
 
 def wait_until_ready(settings: Settings, timeout: float = _READY_TIMEOUT) -> bool:
@@ -203,9 +255,15 @@ def ensure_running(settings: Settings) -> None:
     keeps answering from the old code — and a stale answer is indistinguishable
     from a correct one, which is what makes it worth a restart rather than a
     warning (issue-aaa512e9c58f).
+
+    A daemon that loaded a different ``docs-schema.yaml`` is replaced for the
+    same reason and by the same mechanism (issue-c2e8ce341a00). The schema is
+    resolved once per container, so an edit to it was invisible over the socket
+    while being honoured in process — and it decides Tier 0, so the stale answer
+    included *refusing a write* the file now permits.
     """
     if is_running(settings):
-        if serves_current_code(settings):
+        if serves_current_code(settings) and serves_current_schema(settings):
             return
         stop(settings)
     else:
@@ -353,4 +411,6 @@ def status(settings: Settings) -> DaemonStatus:
         socket_path=str(settings.socket_path),
         version=stamp.version if stamp is not None else None,
         stale_code=running and stamp != current_stamp(),
+        stale_schema=running
+        and (record is None or record.schema_digest != schema_digest(settings)),
     )

@@ -398,14 +398,14 @@ class TestLifecycleHelpers:
     def test_pid_read_write_clear(self, settings: Settings) -> None:
         settings.ensure_directories()
         assert lifecycle.read_pid(settings) is None
-        lifecycle.write_pid(settings)
+        lifecycle.write_pid(settings, lifecycle.schema_digest(settings))
         assert lifecycle.read_pid(settings) is not None
         lifecycle.clear_pid(settings)
         assert lifecycle.read_pid(settings) is None
 
     def test_pid_file_carries_the_build_being_served(self, settings: Settings) -> None:
         settings.ensure_directories()
-        lifecycle.write_pid(settings)
+        lifecycle.write_pid(settings, lifecycle.schema_digest(settings))
         record = lifecycle.read_pid_record(settings)
         assert record is not None
         assert record.pid == os.getpid()
@@ -416,7 +416,8 @@ class TestLifecycleHelpers:
         # build is unknown.
         settings.ensure_directories()
         settings.pid_path.write_text("4242", encoding="utf-8")
-        assert lifecycle.read_pid_record(settings) == lifecycle.PidRecord(pid=4242, stamp=None)
+        record = lifecycle.read_pid_record(settings)
+        assert record == lifecycle.PidRecord(pid=4242, stamp=None, schema_digest=None)
 
     @pytest.mark.parametrize("content", ["", "  ", '{"pid": "nope"}', "[1, 2]", "{}"])
     def test_unusable_pid_file_reads_as_absent(self, settings: Settings, content: str) -> None:
@@ -463,9 +464,75 @@ class TestCodeStamp:
 
 def _stamp_pid_file(settings: Settings, *, pid: int, version: str, mtime_ns: int) -> None:
     settings.pid_path.write_text(
-        json.dumps({"pid": pid, "version": version, "source_mtime_ns": mtime_ns}),
+        json.dumps(
+            {
+                "pid": pid,
+                "version": version,
+                "source_mtime_ns": mtime_ns,
+                # The store's current schema, so this helper stands in for "the
+                # code changed" and only that. Leaving it out would make every
+                # daemon it describes stale for the schema too, and a test that
+                # asserts a replacement could stop testing the reason it names.
+                "schema_digest": lifecycle.schema_digest(settings),
+            }
+        ),
         encoding="utf-8",
     )
+
+
+class TestTheSchemaTheDaemonLoaded:
+    """A container resolves `docs-schema.yaml` once, and the daemon holds one.
+
+    So an edit to the file was honoured in process and ignored over the socket
+    until the daemon idled out (issue-c2e8ce341a00). The digest rides in the pid
+    file, which is the mechanism that already makes a mismatched daemon
+    disposable.
+    """
+
+    def _schema(self, settings: Settings, text: str) -> None:
+        settings.schema_path.parent.mkdir(parents=True, exist_ok=True)
+        settings.schema_path.write_text(text, encoding="utf-8")
+
+    def test_the_pid_file_records_the_schema_it_loaded(self, settings: Settings) -> None:
+        settings.ensure_directories()
+        self._schema(settings, "types: []\n")
+        digest = lifecycle.schema_digest(settings)
+        assert digest is not None
+        lifecycle.write_pid(settings, digest)
+        record = lifecycle.read_pid_record(settings)
+        assert record is not None and record.schema_digest == digest
+        assert lifecycle.serves_current_schema(settings)
+
+    def test_an_edited_schema_stops_matching(self, settings: Settings) -> None:
+        settings.ensure_directories()
+        self._schema(settings, "types: []\n")
+        lifecycle.write_pid(settings, lifecycle.schema_digest(settings))
+        assert lifecycle.serves_current_schema(settings)
+
+        self._schema(settings, "types: []\nrelation_types:\n  - governs\n")
+        assert not lifecycle.serves_current_schema(settings)
+        # The build never moved, so the replacement is the schema and nothing
+        # else — the two reasons have to stay separable to be reportable.
+        assert lifecycle.serves_current_code(settings)
+
+    def test_a_pid_file_written_before_the_digest_never_matches(self, settings: Settings) -> None:
+        # Unknown, so replace: the same reading an unstamped build gets, and the
+        # same safe direction.
+        settings.ensure_directories()
+        self._schema(settings, "types: []\n")
+        stamp = lifecycle.current_stamp()
+        settings.pid_path.write_text(
+            json.dumps(
+                {
+                    "pid": os.getpid(),
+                    "version": stamp.version,
+                    "source_mtime_ns": stamp.source_mtime_ns,
+                }
+            ),
+            encoding="utf-8",
+        )
+        assert lifecycle.serves_current_code(settings)
+        assert not lifecycle.serves_current_schema(settings)
 
 
 class TestDaemonOnOtherCodeIsReplaced:
@@ -499,7 +566,7 @@ class TestDaemonOnOtherCodeIsReplaced:
     def test_a_daemon_on_this_build_is_left_alone(
         self, settings: Settings, spy: Counter[str]
     ) -> None:
-        lifecycle.write_pid(settings)
+        lifecycle.write_pid(settings, lifecycle.schema_digest(settings))
         lifecycle.ensure_running(settings)
         assert spy == Counter()
 
@@ -542,7 +609,7 @@ class TestStatusReportsTheServedBuild:
         return settings
 
     def test_current_daemon_reports_its_version(self, running: Settings) -> None:
-        lifecycle.write_pid(running)
+        lifecycle.write_pid(running, lifecycle.schema_digest(running))
         snapshot = lifecycle.status(running)
         assert snapshot.version == __version__
         assert snapshot.stale_code is False
@@ -562,6 +629,22 @@ class TestStatusReportsTheServedBuild:
     def test_a_stopped_daemon_reports_no_build(self, settings: Settings) -> None:
         snapshot = lifecycle.status(settings)
         assert snapshot.version is None
+        assert snapshot.stale_code is False
+        assert snapshot.stale_schema is False
+
+    def test_a_daemon_on_an_older_schema_reads_as_stale(self, running: Settings) -> None:
+        running.schema_path.parent.mkdir(parents=True, exist_ok=True)
+        running.schema_path.write_text("types: []\n", encoding="utf-8")
+        lifecycle.write_pid(running, lifecycle.schema_digest(running))
+        assert lifecycle.status(running).stale_schema is False
+
+        running.schema_path.write_text(
+            "types: []\nrelation_types:\n  - governs\n", encoding="utf-8"
+        )
+        snapshot = lifecycle.status(running)
+        assert snapshot.stale_schema is True
+        # Reported apart from the build, which never moved: `daemon status` says
+        # which one the next command is about to replace it for.
         assert snapshot.stale_code is False
 
 
@@ -583,7 +666,12 @@ class TestDaemonStatusOutput:
         output = self._render(
             monkeypatch,
             lifecycle.DaemonStatus(
-                running=True, pid=7, socket_path="/tmp/s.sock", version="0.9.0", stale_code=False
+                running=True,
+                pid=7,
+                socket_path="/tmp/s.sock",
+                version="0.9.0",
+                stale_code=False,
+                stale_schema=False,
             ),
         )
         assert "0.9.0" in output
@@ -593,7 +681,12 @@ class TestDaemonStatusOutput:
         output = self._render(
             monkeypatch,
             lifecycle.DaemonStatus(
-                running=True, pid=7, socket_path="/tmp/s.sock", version="0.8.0", stale_code=True
+                running=True,
+                pid=7,
+                socket_path="/tmp/s.sock",
+                version="0.8.0",
+                stale_code=True,
+                stale_schema=False,
             ),
         )
         assert "0.8.0" in output
@@ -605,7 +698,12 @@ class TestDaemonStatusOutput:
         output = self._render(
             monkeypatch,
             lifecycle.DaemonStatus(
-                running=True, pid=7, socket_path="/tmp/s.sock", version=None, stale_code=True
+                running=True,
+                pid=7,
+                socket_path="/tmp/s.sock",
+                version=None,
+                stale_code=True,
+                stale_schema=False,
             ),
         )
         assert "unknown build" in output
@@ -760,6 +858,66 @@ class TestRealDaemon:
             second = lifecycle.read_pid(daemon_settings)
             assert second is not None and second != first
             assert lifecycle.serves_current_code(daemon_settings)
+        finally:
+            lifecycle.stop(daemon_settings)
+
+
+@pytest.mark.slow
+class TestDaemonOnAnOlderSchemaIsReplaced:
+    """The schema is container state, and a daemon holds one container.
+
+    OBSERVED while declaring a store check in docir's own schema: `docir check`
+    did not report it and `docir --no-daemon check` did, on the same store and
+    the same commit, until the daemon was stopped (issue-c2e8ce341a00). Tier 0
+    reads that same object, so the stale answer also *refused a write* the file
+    had come to permit — silent, and in the direction that loses work rather
+    than just reporting badly. That is the half worth a real subprocess.
+    """
+
+    def test_a_relation_kind_added_to_the_schema_works_without_a_restart(
+        self, settings: Settings
+    ) -> None:
+        daemon_settings = Settings.resolve(settings.home, use_daemon=True)
+        try:
+            lifecycle.ensure_running(daemon_settings)
+            executor = SocketExecutor(daemon_settings)
+            first = lifecycle.read_pid(daemon_settings)
+            assert first is not None
+
+            def _add(title: str) -> str:
+                reply = executor.execute(
+                    Request(
+                        command="add",
+                        payload={"type": "decision", "title": title, "description": "d"},
+                    )
+                )
+                assert reply.ok, reply.error
+                assert isinstance(reply.data, dict)
+                return str(reply.data["id"])
+
+            source, target = _add("Source"), _add("Target")
+            relate = Request(
+                command="update",
+                payload={"doc_id": source, "set_related": [f"{target}:governs"]},
+            )
+            assert not executor.execute(relate).ok, "the kind is undeclared, so Tier 0 refuses it"
+
+            schema = daemon_settings.schema_path
+            schema.write_text(
+                schema.read_text(encoding="utf-8") + "\nrelation_types:\n  - governs\n",
+                encoding="utf-8",
+            )
+
+            accepted = executor.execute(relate)
+            assert accepted.ok, accepted.error
+            assert isinstance(accepted.data, dict)
+            # The accepted *kind*, not the exit code: a refused write and a
+            # daemon that never came up are the same failure to a test that only
+            # reads a status.
+            assert [edge["kind"] for edge in accepted.data["related"]] == ["governs"]
+
+            replaced = lifecycle.read_pid(daemon_settings)
+            assert replaced is not None and replaced != first
         finally:
             lifecycle.stop(daemon_settings)
 

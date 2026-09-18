@@ -1,12 +1,12 @@
 ---
 code:
-- src/docir/entry_points/daemon/watcher.py
+- src/docir/entry_points/daemon/lifecycle.py
 - src/docir/entry_points/daemon/cmds.py
-- src/docir/entry_points/composition.py
+- src/docir/entry_points/doctor.py
 code_baseline:
-  src/docir/entry_points/composition.py: e59f157c6b81
   src/docir/entry_points/daemon/cmds.py: f2ba24c1089c
-  src/docir/entry_points/daemon/watcher.py: 5761eeeaf18c
+  src/docir/entry_points/daemon/lifecycle.py: 0147e6d0a53d
+  src/docir/entry_points/doctor.py: eeda831bac4b
 created: '2026-09-18'
 description: The daemon loads the schema once at startup, its watcher does not react
   to the schema file, and nothing stamps that file into the pid record — so a schema
@@ -16,7 +16,7 @@ owner: maintainer
 related:
 - adr-d2ae4604a01e
 - arch-1cfb1b212237
-status: open
+status: resolved
 tags:
 - daemon
 - schema
@@ -89,3 +89,32 @@ Verify by injection: with a daemon running, add a relation kind to
 `docs-schema.yaml` and assert that a write using it succeeds with no manual
 restart. Assert the accepted kind, not just an exit code — refusing the write and
 refusing to start are the same failure to a test that only reads the status.
+
+## Resolution
+
+FIXED 2026-09-18, by the second shape: the schema rides in the pid file, so a
+daemon that loaded a different one is stopped and replaced by the mechanism that
+already makes a mismatched build disposable. No new lifecycle, and the watcher is
+untouched.
+
+`write_pid` takes the digest from its caller, and `_run_server` reads it *before*
+`build_container` resolves the file. Reading it after would record a schema the
+daemon may not be serving — this defect in miniature — while reading early can
+only over-report a mismatch, which costs one respawn.
+
+A pid file carrying no digest never matches, the same reading an unstamped build
+gets and the same safe direction. `daemon status` and `docir doctor` report the
+schema case apart from stale code: "stale code" sends a reader to `src/` for a
+change that is in their own store.
+
+Four guards, each proven by injecting the bug it claims to catch — reverting
+`ensure_running` to code only, dropping the digest when the pid file is read,
+making `status` stop reporting the mismatch, and silencing the doctor finding.
+The first is a real subprocess: with a daemon running it adds a relation kind to
+`docs-schema.yaml` and asserts the edge comes back carrying that kind, because a
+refused write and a daemon that never came up are the same failure to a test that
+only reads an exit code.
+
+What is argued rather than pinned is the ordering inside `_run_server`. Recording
+the digest after the load would leave a window no test opens, so the docstring
+carries the reason instead.

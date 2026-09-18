@@ -597,7 +597,12 @@ def _environment(**overrides) -> doctor.Environment:
         "embedder_env": "",
         "embedder_id": "fastembed:BAAI/bge-small-en-v1.5",
         "daemon": DaemonStatus(
-            running=True, pid=7, socket_path="/tmp/s.sock", version="1.2.3", stale_code=False
+            running=True,
+            pid=7,
+            socket_path="/tmp/s.sock",
+            version="1.2.3",
+            stale_code=False,
+            stale_schema=False,
         ),
         "daemon_env_disabled": False,
         "watch": True,
@@ -667,9 +672,36 @@ def test_writes_landing_in_the_global_store_from_inside_a_repo_are_reported() ->
     assert "docir init" in finding.fix
 
 
+def test_a_daemon_that_loaded_another_schema_is_reported_and_says_so() -> None:
+    """issue-c2e8ce341a00: the container resolves `docs-schema.yaml` once, so a
+    daemon started before an edit answered from the old one — and Tier 0 reads
+    the same object, so it also refused writes the file had come to permit.
+
+    Reported apart from the build, which has not moved here: "stale code" would
+    send the reader to `src/` for a change that is in their store.
+    """
+    daemon = DaemonStatus(
+        running=True,
+        pid=7,
+        socket_path="/tmp/s.sock",
+        version="1.2.3",
+        stale_code=False,
+        stale_schema=True,
+    )
+    finding = _find(_report(daemon=daemon), "stale-daemon")
+    assert "docs-schema.yaml" in finding.message
+    assert finding.severity == doctor.WARNING, "the next command already replaced it"
+    assert "re-run anything you acted on" in finding.fix
+
+
 def test_a_stale_daemon_names_the_version_gap_when_there_is_one() -> None:
     daemon = DaemonStatus(
-        running=True, pid=7, socket_path="/tmp/s.sock", version="1.0.0", stale_code=True
+        running=True,
+        pid=7,
+        socket_path="/tmp/s.sock",
+        version="1.0.0",
+        stale_code=True,
+        stale_schema=False,
     )
     assert (
         "serving docir 1.0.0 while this process is 1.2.3"
@@ -683,7 +715,12 @@ def test_a_stale_daemon_on_the_same_version_says_what_actually_differs() -> None
     pair anyway read as "serving 1.2.3 while this process is 1.2.3", which looks
     like a bug in the check rather than the finding it is."""
     daemon = DaemonStatus(
-        running=True, pid=7, socket_path="/tmp/s.sock", version="1.2.3", stale_code=True
+        running=True,
+        pid=7,
+        socket_path="/tmp/s.sock",
+        version="1.2.3",
+        stale_code=True,
+        stale_schema=False,
     )
     message = _find(_report(daemon=daemon), "stale-daemon").message
     assert "1.2.3 while this process is 1.2.3" not in message
@@ -694,7 +731,12 @@ def test_a_daemon_from_before_the_version_check_reads_as_unknown() -> None:
     """A bare-integer pid file has no stamp; unknown never matches, which is
     correct — that daemon predates the check that would have replaced it."""
     daemon = DaemonStatus(
-        running=True, pid=7, socket_path="/tmp/s.sock", version=None, stale_code=True
+        running=True,
+        pid=7,
+        socket_path="/tmp/s.sock",
+        version=None,
+        stale_code=True,
+        stale_schema=False,
     )
     assert "unknown build" in _find(_report(daemon=daemon), "stale-daemon").message
 

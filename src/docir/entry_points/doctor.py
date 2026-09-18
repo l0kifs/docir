@@ -720,12 +720,13 @@ def _embedding_findings(
 
 
 def _daemon_findings(environment: Environment) -> list[DoctorFinding]:
-    """The daemon: stale code is a warning because the next command repairs it.
+    """The daemon: staleness is a warning because the next command repairs it.
 
-    ``ensure_running`` stops and replaces a daemon serving another build, so by
-    the time the caller reads this the condition is already gone. It is still
-    worth a line, and this is the only place that can produce one: it explains
-    an answer they may have already acted on.
+    ``ensure_running`` stops and replaces a daemon serving another build, or one
+    that loaded a different ``docs-schema.yaml``, so by the time the caller reads
+    this the condition is already gone. It is still worth a line, and this is the
+    only place that can produce one: it explains an answer they may have already
+    acted on.
     """
     findings: list[DoctorFinding] = []
     daemon = environment.daemon
@@ -736,6 +737,19 @@ def _daemon_findings(environment: Environment) -> list[DoctorFinding]:
                 message=(
                     f"the daemon (pid {daemon.pid}) was {_served(daemon, environment.version)} — "
                     "answers from it described code this process is not running"
+                ),
+                fix="already replaced by this command; re-run anything you acted on",
+            )
+        )
+    if daemon.stale_schema:
+        findings.append(
+            DoctorFinding(
+                kind="stale-daemon",
+                message=(
+                    f"the daemon (pid {daemon.pid}) had loaded a different "
+                    "`docs-schema.yaml` — it resolves the schema once, so reads from it "
+                    "answered by rules this store no longer declares, and writes were "
+                    "validated against them"
                 ),
                 fix="already replaced by this command; re-run anything you acted on",
             )

@@ -790,11 +790,15 @@ def _doctor_daemon(daemon: Mapping[str, object]) -> str:
         # would describe a moment that had already passed when it was printed.
         return "[dim]was not running when this command started[/]"
     served = daemon.get("serving") or "an unknown build"
-    state = (
-        f"[yellow]was serving stale code ({served}) — replaced by this command[/]"
-        if daemon.get("stale_code")
-        else f"[green]serving {served}[/]"
-    )
+    if daemon.get("stale_code"):
+        state = f"[yellow]was serving stale code ({served}) — replaced by this command[/]"
+    elif daemon.get("stale_schema"):
+        state = (
+            f"[yellow]was serving {served} against an older docs-schema.yaml — "
+            "replaced by this command[/]"
+        )
+    else:
+        state = f"[green]serving {served}[/]"
     watching = "" if daemon.get("watching") else "  [dim]not watching docs/[/]"
     return f"pid {daemon.get('pid')} · {state}{watching}"
 

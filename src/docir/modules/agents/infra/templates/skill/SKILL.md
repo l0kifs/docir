@@ -160,6 +160,12 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
   place even on a document nobody will review. Re-pointing one with `--set-code`
   carries the old fingerprint over, so a drift outlives every mechanical edit
   until somebody reads it.
+- **The fingerprint covers what the repository tracks.** Anything its
+  `.gitignore` files exclude is skipped, so `--code "src/**"` does not drift
+  when a build writes `bin/` or `target/` beside the sources. Write the glob
+  over the source tree and leave the exclusions to `.gitignore`: a `!`-prefixed
+  entry is **refused on write**, because these are `pathlib` globs where `!` is
+  an ordinary character and would have excluded nothing.
 - **`docir update <id> --verified` raises that finding to `code-changed`.** It
   re-takes the fingerprints as *you* read them, which is the stronger of the two
   claims — stamp it only when you did that reading.

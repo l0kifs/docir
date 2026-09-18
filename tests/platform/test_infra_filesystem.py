@@ -326,3 +326,114 @@ class TestCodeFingerprint:
             assert matcher.fingerprint("src/auth/**") is None
         finally:
             locked.chmod(0o644)
+
+
+class TestTheRepositorysOwnIgnoreFiles:
+    """A glob hashes what the repository tracks (guards issue-ec3819b1f13c).
+
+    The skip set in `code_matcher` is five directory names, every one of them
+    Python or git, while the same argument applies to every language's build
+    output — `bin/` and `obj/` for .NET, `target/`, `dist/`, `build/`. So one
+    compile drifted every `src/**`-style glob at once, and the finding was
+    indistinguishable from a real one.
+    """
+
+    def _repo(self, root: Path, ignore: str) -> RepositoryCodeMatcher:
+        (root / ".gitignore").write_text(ignore, encoding="utf-8")
+        (root / "src" / "bin").mkdir(parents=True)
+        (root / "src" / "keep.py").write_text("tracked\n", encoding="utf-8")
+        (root / "src" / "bin" / "out.o").write_text("built\n", encoding="utf-8")
+        return RepositoryCodeMatcher(root)
+
+    def test_a_rebuild_does_not_move_the_digest(self, tmp_path: Path) -> None:
+        matcher = self._repo(tmp_path, "bin/\n")
+        before = matcher.fingerprint("src/**")
+
+        (tmp_path / "src" / "bin" / "out.o").write_text("built again\n", encoding="utf-8")
+
+        assert RepositoryCodeMatcher(tmp_path).fingerprint("src/**") == before
+
+    def test_an_edit_to_tracked_source_still_does(self, tmp_path: Path) -> None:
+        # The half that makes the test above mean something: a matcher that
+        # ignored everything would pass it and detect nothing.
+        matcher = self._repo(tmp_path, "bin/\n")
+        before = matcher.fingerprint("src/**")
+
+        (tmp_path / "src" / "keep.py").write_text("tracked, edited\n", encoding="utf-8")
+
+        assert RepositoryCodeMatcher(tmp_path).fingerprint("src/**") != before
+
+    def test_a_glob_reaching_only_ignored_files_matches_nothing(self, tmp_path: Path) -> None:
+        matcher = self._repo(tmp_path, "bin/\n")
+        assert matcher.matches("src/**") is True
+        assert matcher.matches("src/bin/**") is False
+
+    def test_a_negated_rule_re_includes_what_it_names(self, tmp_path: Path) -> None:
+        # `!` is a real rule and has to work, which is why this parses the file
+        # rather than treating each line as a name to skip.
+        matcher = self._repo(tmp_path, "*.o\n!src/bin/out.o\n")
+        before = matcher.fingerprint("src/**")
+
+        (tmp_path / "src" / "bin" / "out.o").write_text("built again\n", encoding="utf-8")
+
+        assert RepositoryCodeMatcher(tmp_path).fingerprint("src/**") != before
+
+    def test_a_negation_cannot_resurrect_a_file_under_an_excluded_directory(
+        self, tmp_path: Path
+    ) -> None:
+        """git's rule, and the one easiest to implement the wrong way round.
+
+        git never descends into an excluded directory, so it never reads the
+        rule that would bring a file back. Taken from `git check-ignore` rather
+        than from the manual page::
+
+            $ printf 'bin/\\n!src/bin/out.o\\n' > .gitignore
+            $ git check-ignore -q src/bin/out.o && echo IGNORED
+            IGNORED
+
+        A per-file matcher gets this backwards, reports the file as re-included
+        and hashes a build artifact — which is the whole defect, arrived at
+        through the fix for it.
+        """
+        matcher = self._repo(tmp_path, "bin/\n!src/bin/out.o\n")
+        before = matcher.fingerprint("src/**")
+
+        (tmp_path / "src" / "bin" / "out.o").write_text("built again\n", encoding="utf-8")
+
+        assert RepositoryCodeMatcher(tmp_path).fingerprint("src/**") == before
+
+    def test_a_nested_ignore_file_applies_below_itself(self, tmp_path: Path) -> None:
+        matcher = self._repo(tmp_path, "")
+        (tmp_path / "src" / ".gitignore").write_text("*.o\n", encoding="utf-8")
+        before = matcher.fingerprint("src/**")
+
+        (tmp_path / "src" / "bin" / "out.o").write_text("built again\n", encoding="utf-8")
+
+        assert RepositoryCodeMatcher(tmp_path).fingerprint("src/**") == before
+
+    def test_a_tree_with_no_ignore_file_behaves_as_before(self, tmp_path: Path) -> None:
+        # docir does not require a git repository, and a store in a plain
+        # directory must keep hashing everything it finds.
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "a.py").write_text("a\n", encoding="utf-8")
+        matcher = RepositoryCodeMatcher(tmp_path)
+        before = matcher.fingerprint("src/**")
+
+        (tmp_path / "src" / "a.py").write_text("b\n", encoding="utf-8")
+
+        assert RepositoryCodeMatcher(tmp_path).fingerprint("src/**") != before
+
+    def test_the_skip_set_holds_even_where_the_repository_un_ignores_it(
+        self, tmp_path: Path
+    ) -> None:
+        # The floor: `.gitignore` can say `!__pycache__/`, and a digest half
+        # made of bytecode is still one that moves on a teammate's machine.
+        matcher = self._repo(tmp_path, "bin/\n!__pycache__/\n")
+        cache = tmp_path / "src" / "__pycache__"
+        cache.mkdir()
+        (cache / "keep.cpython-312.pyc").write_bytes(b"\x00")
+        before = matcher.fingerprint("src/**")
+
+        (cache / "keep.cpython-312.pyc").write_bytes(b"\x01")
+
+        assert RepositoryCodeMatcher(tmp_path).fingerprint("src/**") == before

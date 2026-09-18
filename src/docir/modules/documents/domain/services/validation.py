@@ -67,12 +67,22 @@ class Tier0Validator:
         it moved). That question is Tier 1's — a `check` warning — so this
         rejects only patterns that can never mean anything.
 
-        The three rejections are the three ways an entry silently matches
-        nothing forever: an absolute path (the globs are resolved against the
-        repository root, so a leading ``/`` addresses a machine, not a repo), a
-        ``..`` segment (which escapes the repo the store belongs to), and a
-        Windows separator (``src\\docir`` is one literal filename to every glob
-        implementation docir would use).
+        The rejections are the ways an entry silently matches nothing forever:
+        an absolute path (the globs are resolved against the repository root, so
+        a leading ``/`` addresses a machine, not a repo), a ``..`` segment
+        (which escapes the repo the store belongs to), a Windows separator
+        (``src\\docir`` is one literal filename to every glob implementation
+        docir would use), and a leading ``!``.
+
+        The ``!`` is the one that looks like it works. These are `pathlib`
+        globs, where ``!`` is an ordinary character, so ``!src/bin/**`` asks for
+        a directory named ``!src`` — while whoever wrote it meant a gitignore
+        exclusion and got the opposite of one, since the subtree they wanted out
+        stays in. `check` did report it, as `unmatched-code` a reindex later and
+        in the vocabulary of "matches nothing"; refusing it here answers the
+        question that was actually asked (issue-ec3819b1f13c). What replaces it
+        is that a glob no longer reaches what the repository ignores
+        (adr-1d1eddbb6fbd), so the common exclusion needs no syntax at all.
         """
         for pattern in patterns:
             if not pattern.strip():
@@ -85,6 +95,12 @@ class Tier0Validator:
             if "\\" in pattern:
                 raise InvalidCodeReferenceError(
                     f"code pattern {pattern!r} uses '\\'; separate path segments with '/'"
+                )
+            if pattern.startswith("!"):
+                raise InvalidCodeReferenceError(
+                    f"code pattern {pattern!r} starts with '!', which a `code` glob reads as "
+                    f"a literal character rather than an exclusion; a glob already skips "
+                    f"whatever the repository's .gitignore excludes, so drop the entry"
                 )
             if ".." in PurePosixPath(pattern).parts:
                 raise InvalidCodeReferenceError(

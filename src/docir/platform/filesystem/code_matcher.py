@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
+from docir.platform.filesystem.gitignore import GitignoreIndex
 from docir.platform.filesystem.ports import CodeMatcher
 
 #: Hex characters kept from the digest. It rides in committed frontmatter and is
@@ -19,18 +20,25 @@ from docir.platform.filesystem.ports import CodeMatcher
 #: edit rather than any damage.
 DIGEST_LENGTH = 12
 
-#: Directories never walked when fingerprinting: the ones whose contents are
-#: *generated* and rewrite themselves. ``.git`` does it on every operation, so a
-#: pattern broad enough to reach it would report the code as changed after a
-#: checkout that touched nothing.
+#: Directories never walked when fingerprinting, whatever the repository says:
+#: the ones whose contents are *generated* and rewrite themselves. ``.git`` does
+#: it on every operation, so a pattern broad enough to reach it would report the
+#: code as changed after a checkout that touched nothing — and ``.gitignore``
+#: never lists it, because git excludes it without being asked.
 #:
 #: ``__pycache__`` does it on every interpreter run, and measurably: of the 39
 #: files ``src/docir/modules/publishing/**`` matched in this repository, **19**
 #: were ``.pyc``. A digest half made of bytecode moves when nothing was edited,
 #: and moves differently on a teammate's machine — the same glob on a clean
 #: checkout would have reported drift against a baseline they never diverged
-#: from. The cache directories beside it are listed on the same rule rather than
-#: waiting to be discovered one at a time.
+#: from. The cache directories beside it are listed on the same rule.
+#:
+#: This is the **floor**, not the list. The repository's own ``.gitignore``
+#: files are consulted beside it (adr-1d1eddbb6fbd), which is what generalises
+#: the argument above from Python to every language's build output; these five
+#: stay because a tree with no ignore file at all still needs them, and because
+#: a repository is free to un-ignore its caches and would then be hashing
+#: bytecode again.
 _SKIPPED_DIRS = frozenset({".git", "__pycache__", ".mypy_cache", ".ruff_cache", ".pytest_cache"})
 
 
@@ -39,6 +47,7 @@ class RepositoryCodeMatcher(CodeMatcher):
 
     def __init__(self, root: Path) -> None:
         self._root = root
+        self._ignored = GitignoreIndex(root)
 
     def matches(self, pattern: str) -> bool:
         """Whether the pattern names at least one existing path.
@@ -52,9 +61,14 @@ class RepositoryCodeMatcher(CodeMatcher):
         write, so one can only arrive by hand-editing the file, and `check` is
         the command that exists to be run over hand-edited files: crashing on
         one would take the other findings down with it.
+
+        Ignored paths do not count, for the same reason they are not hashed: a
+        glob that reaches nothing but build output governs nothing anyone wrote,
+        and saying so is what `unmatched-code` is for. The short-circuit
+        survives — it now stops at the first match that is *code*.
         """
         try:
-            return next(iter(self._root.glob(pattern)), None) is not None
+            return any(not self._skipped(path) for path in self._root.glob(pattern))
         except (ValueError, NotImplementedError, IndexError, OSError):
             return False
 
@@ -126,4 +140,12 @@ class RepositoryCodeMatcher(CodeMatcher):
         return found
 
     def _skipped(self, path: Path) -> bool:
-        return any(part in _SKIPPED_DIRS for part in path.relative_to(self._root).parts)
+        """Whether ``path`` is generated rather than written.
+
+        Two sources, and the order is an optimisation only: the always-skipped
+        floor is a set lookup per path part, while the ignore files cost a parse
+        the first time a directory is asked about.
+        """
+        if any(part in _SKIPPED_DIRS for part in path.relative_to(self._root).parts):
+            return True
+        return self._ignored.ignores(path)

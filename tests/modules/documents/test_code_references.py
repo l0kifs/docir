@@ -115,6 +115,7 @@ class TestTier0Shape:
             ("../other-repo/**", "'..' escapes the repository the store belongs to"),
             ("src\\docir", "a backslash is a literal filename to every glob matcher"),
             ("   ", "an empty entry names nothing"),
+            ("!src/bin/**", "a '!' is a literal here, so it excludes nothing and matches nothing"),
         ],
     )
     def test_unusable_patterns_are_refused_on_write(
@@ -125,6 +126,27 @@ class TestTier0Shape:
                 "add",
                 {"type": "decision", "title": "T", "description": "d", "code": [pattern]},
             )
+
+    def test_the_refusal_of_a_bang_names_what_replaces_it(self, dispatcher: Dispatcher) -> None:
+        """Guards issue-ec3819b1f13c's second half.
+
+        The author wrote an exclusion and got the opposite of one — the subtree
+        they wanted out stayed in, and `check` said "matches nothing" a reindex
+        later. A refusal that only says "unusable" would repeat that: the
+        message has to name the mechanism that does the job, which is that a
+        glob no longer reaches what the repository ignores.
+        """
+        with pytest.raises(InvalidCodeReferenceError) as raised:
+            dispatcher.dispatch(
+                "add",
+                {
+                    "type": "decision",
+                    "title": "T",
+                    "description": "d",
+                    "code": ["src/**", "!src/bin/**"],
+                },
+            )
+        assert ".gitignore" in str(raised.value)
 
     def test_update_is_guarded_too(self, dispatcher: Dispatcher) -> None:
         view = dispatcher.dispatch("add", {"type": "decision", "title": "T", "description": "d"})

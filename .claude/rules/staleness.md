@@ -86,7 +86,15 @@ Staleness is the one trust signal the product offers, so the rules protect the c
   nobody reads twice; it also means no history is needed. A pattern naming a **directory is
   expanded to the files under it**, because `**` yields directories and the read path already
   resolves `src/auth/**` that way — without it the most natural pattern records nothing and
-  says so silently. `.git` is never walked. **Absent means unverified**, never unchanged, in
+  says so silently. `.git` is never walked, **and neither is anything the repository's own
+  `.gitignore` files exclude** (adr-1d1eddbb6fbd). The hardcoded skip set is a *floor* for a
+  tree with no ignore file, not the list: every entry in it is Python or git, while the same
+  argument covers every language's build output — and the defect was live on this repo's own
+  `benchmarks/**` through `.coverage`, which a set of directory *names* cannot reach
+  (issue-ec3819b1f13c). Only the ignore files **in the tree**: not `.git/info/exclude`, not the
+  user's global excludes, both per-machine, which is this same defect one door wider — and the
+  reason it parses the files rather than asking `git check-ignore`, which answers with all
+  three. **Absent means unverified**, never unchanged, in
   all three places it can be absent (no digest recorded, pattern unresolvable, no matcher at
   all), so a global store and a never-verified document report nothing. With **no matcher the
   digests are dropped, not carried forward**: a digest from an older review under a fresh

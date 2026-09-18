@@ -44,9 +44,12 @@ Read paths exist to save the caller's context, which is why they return less tha
 
 - **A document's `code` globs are validated for shape on write and for reality only in Tier 1.**
   Optional `code:` frontmatter names the code a document governs (issue-90aea6d1b891). Tier 0
-  refuses an absolute path, a `..` segment, a backslash separator and an empty entry — patterns
-  that can never match — but *accepts* one that matches nothing today, because a decision is
-  routinely written before the code it decides. `docir check` then reports `unmatched-code` as a
+  refuses an absolute path, a `..` segment, a backslash separator, an empty entry and a leading
+  `!` — patterns that can never match — but *accepts* one that matches nothing today, because a
+  decision is routinely written before the code it decides. The `!` is the one that looks like it
+  works: these are `pathlib` globs, so it excludes nothing and the subtree stays in; what replaces
+  it is that the forward matcher skips whatever `.gitignore` excludes (adr-1d1eddbb6fbd).
+  `docir check` then reports `unmatched-code` as a
   warning, and only when `Settings.code_root` finds a `.git` above the store: a global
   `~/.docir` has no tree to resolve a repo-relative pattern against, and an unresolved pattern
   (absent from the map handed to `GraphChecker`) means *unknown*, not missing — the same rule

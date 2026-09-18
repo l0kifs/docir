@@ -35,7 +35,14 @@ def add(
     owner: Annotated[str | None, typer.Option("--owner", help="Steward for staleness.")] = None,
     code: Annotated[
         str | None,
-        typer.Option("--code", help="Comma-separated repo-relative globs this document governs."),
+        typer.Option(
+            "--code",
+            help="Comma-separated repo-relative globs this document governs. Whatever the "
+            "repository's .gitignore excludes is skipped, so a glob over a source tree "
+            "does not drift when a build writes beside it; a '!' exclusion is refused, "
+            'because these are pathlib globs where "!" is a literal. '
+            'Example: --code "src/auth/**,src/api/routes.py"',
+        ),
     ] = None,
     isolated: Annotated[
         str | None,
@@ -166,7 +173,8 @@ def update(
             help="Comma-separated repo-relative globs this document governs "
             '(pass "" to clear them). A glob this adds is watched from now; one '
             "it keeps holds the baseline it already had, so re-declaring a "
-            "pattern never clears a drift nobody has read.",
+            "pattern never clears a drift nobody has read. Ignored files are "
+            "skipped and a '!' exclusion is refused, as for --code.",
         ),
     ] = None,
     verified: Annotated[

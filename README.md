@@ -138,7 +138,8 @@ opts out, at a measured cost to recall:
   docir reads a code span or fence as code. It stays out of the graph — `orphan` reads
   `related:` alone.
 - **A document can name the code it governs.** Optional `code` globs
-  (`docir add --code "src/auth/**"`) record which files a decision is about, and
+  (`docir add --code "src/auth/**"`, which skips whatever your `.gitignore` excludes, so a
+  build does not read as a change) record which files a decision is about, and
   `docir query --code src/auth/login.py` asks it in reverse: which decisions govern the
   file I am editing. At review time,
   `docir query --code $(git diff --name-only origin/main...HEAD)` lists what a branch

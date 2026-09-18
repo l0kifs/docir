@@ -60,4 +60,7 @@ Read paths exist to save the caller's context, which is why they return less tha
   `_scanned_page`); a document governing a directory governs the files in it, since a miss costs
   an unread decision and a false hit costs a glance. The forward check (`RepositoryCodeMatcher`,
   "does this pattern still name anything") stays `Path.glob`; the two answer different questions
-  and only their *grammar* has to agree.
+  and only their *grammar* has to agree. Inside the text matcher the pattern and the path go
+  through **one** normalizer: a leading `./` is noise on either side, a leading dot in a name is
+  not, and two spellings of "strip the prefix" is how a whole dotted directory went unreachable
+  (issue-325742d96896).

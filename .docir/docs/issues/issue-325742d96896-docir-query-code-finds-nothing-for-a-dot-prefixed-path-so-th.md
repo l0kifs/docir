@@ -15,7 +15,7 @@ related:
 - kind: refines
   to: issue-90aea6d1b891
 - adr-b2cfed9d5888
-status: open
+status: resolved
 tags:
 - cli
 - retrieval
@@ -92,3 +92,26 @@ Verify by injection: restore the `lstrip` and assert the four documents above ar
 no longer returned for `.github/workflows/ci.yml`. A count alone will not do it —
 assert which ids come back, or the guard cannot tell "nothing governs this" from
 "the matcher is blind".
+
+## Resolution
+
+FIXED 2026-09-18. `_normalize` now strips a leading `./` as a *prefix* rather than
+as a character class, and **both** sides go through it: `matches` normalizes the
+pattern as well as the path, so the two cannot drift apart again, and `_compiled`
+is cached on the one spelling rather than on however a pattern was typed.
+
+Against this store, `.github/workflows/ci.yml` now returns the seven documents
+that govern it, where it returned none.
+
+Guarded in two places, each proven by restoring the `lstrip`. The grammar table in
+`test_domain_services.py` gains the dotted cases, including `src/auth/**` against
+`.src/auth/login.py`, which must stay **false** — the dot is part of the name, not
+noise to be stripped, and a fix that over-stripped would pass every other case.
+`TestQueryByPath` asserts *which* id comes back for a dotted path, because an empty
+list cannot distinguish "nothing governs this" from "the matcher is blind". A third
+injection — normalizing the path but not the pattern — is caught by the same table.
+
+The forward check is untouched. `RepositoryCodeMatcher` still answers "does this
+pattern still name anything" by walking the tree, which handled a dotted directory
+correctly all along. Only the grammars had to agree, and the shared normalizer is
+what makes that structural rather than remembered.

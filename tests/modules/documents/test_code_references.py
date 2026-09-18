@@ -888,6 +888,34 @@ class TestQueryByPath:
         hits = dispatcher.dispatch("query", {"code": ["src/api/routes.py"]})
         assert [hit["id"] for hit in hits] == [ids["dir"]]
 
+    def test_a_dot_prefixed_path_finds_the_documents_governing_it(
+        self, dispatcher: Dispatcher
+    ) -> None:
+        """issue-325742d96896: the normalizer stripped `./` with `lstrip`, which
+        takes a character set, so `.github/workflows/ci.yml` became
+        `github/workflows/ci.yml` and matched no pattern that declared it.
+
+        Four documents in docir's own store govern `.github/workflows/**`, and
+        the CI step that lists the decisions a branch touches could not return
+        one of them for a workflow change — an answer indistinguishable from
+        having nothing to say. Asserts *which* id comes back for that reason.
+        """
+        self._corpus(dispatcher)  # ordinary documents, none of which may answer
+        workflow = dispatcher.dispatch(
+            "add",
+            {
+                "type": "decision",
+                "title": "CI",
+                "description": "d",
+                "code": [".github/workflows/**"],
+            },
+        )["id"]
+        hits = dispatcher.dispatch("query", {"code": [".github/workflows/ci.yml"]})
+        assert [hit["id"] for hit in hits] == [workflow]
+        # The dot is part of the directory's name, so the undotted sibling is a
+        # different directory and must not resolve to it.
+        assert dispatcher.dispatch("query", {"code": ["github/workflows/ci.yml"]}) == []
+
     def test_several_paths_are_matched_as_any_of(self, dispatcher: Dispatcher) -> None:
         # The shape of the real use: the files a branch touched.
         ids = self._corpus(dispatcher)

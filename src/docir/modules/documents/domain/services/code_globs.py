@@ -16,6 +16,10 @@ thing to `docir check` and to `docir query --code`:
 * ``[...]`` is a character class (``[!...]`` negates it),
 * everything else is literal.
 
+A leading ``./`` is noise on either side and is dropped. A leading **dot that is
+part of a name** is not: ``.github/workflows`` is that directory and nothing
+else.
+
 A document that governs a directory governs what is inside it, so a path also
 matches when any of its **ancestors** does: ``src/auth`` covers
 ``src/auth/login.py``. This query is how someone finds the decisions they should
@@ -65,10 +69,13 @@ def _translate_segment(segment: str) -> str:
 def _compiled(pattern: str) -> re.Pattern[str]:
     """``pattern`` as an anchored regex over a whole relative path.
 
+    ``pattern`` arrives from :func:`matches` already normalized, so the cache is
+    keyed on the one spelling rather than on however it was typed.
+
     Cached because a query matches every document's patterns against every path
     given, and the pattern set of a corpus is small and repetitive.
     """
-    segments = pattern.strip("/").split("/")
+    segments = pattern.split("/")
     # A trailing `**` is "this directory, and everything under it" — the way
     # `Path.glob` reads it — so it is peeled off first: written as a segment in
     # the loop below it would demand a trailing separator and match neither.
@@ -95,16 +102,32 @@ def _compiled(pattern: str) -> re.Pattern[str]:
     return re.compile(f"^{joined}{suffix}$")
 
 
-def _normalize(path: str) -> str:
-    return path.strip().lstrip("./").strip("/")
+def _normalize(value: str) -> str:
+    """A pattern or a path reduced to one spelling: no surrounding blanks, no
+    leading ``./``, no surrounding ``/``.
+
+    **Both sides go through this**, which is the fix for issue-325742d96896.
+    The path used to be trimmed with ``lstrip("./")``, and ``lstrip`` takes a
+    *character set*, not a prefix — so it ate the leading dot of every dotted
+    path while the pattern kept its own, and the two could never meet. A
+    document governing ``.github/workflows/**`` was unreachable from the file it
+    named, and no guard saw it: ``check`` resolves patterns through the
+    tree-walking matcher in ``platform/filesystem``, so only this text query was
+    blind, and its own tests all used ``src/`` paths.
+    """
+    trimmed = value.strip()
+    while trimmed.startswith("./"):
+        trimmed = trimmed[2:]
+    return trimmed.strip("/")
 
 
 def matches(pattern: str, path: str) -> bool:
     """Whether ``path`` — or a directory containing it — falls under ``pattern``."""
     normalized = _normalize(path)
-    if not normalized or not pattern.strip():
+    cleaned = _normalize(pattern)
+    if not normalized or not cleaned:
         return False
-    regex = _compiled(pattern.strip())
+    regex = _compiled(cleaned)
     segments = normalized.split("/")
     # The path itself first, then each ancestor: a document governing a
     # directory governs the files under it, and the exact hit is the common

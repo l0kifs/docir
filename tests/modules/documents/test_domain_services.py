@@ -630,6 +630,16 @@ class TestCodeGlobs:
             ("src/auth", "src/auth", True),
             ("src/auth", "src/other.py", False),
             ("src/auth/**", "./src/auth/login.py", True),  # a `./` prefix is noise
+            ("./src/auth/**", "src/auth/login.py", True),  # on the pattern too
+            # A dotted path is an ordinary path (issue-325742d96896): `lstrip`
+            # took the leading `.` as a character, so `.github/...` normalized
+            # to `github/...` and matched nothing that declared it.
+            (".github/workflows/**", ".github/workflows/ci.yml", True),
+            (".github/workflows/ci.yml", ".github/workflows/ci.yml", True),
+            (".github/workflows/**", ".github/workflows", True),
+            (".docir/**", ".docir/docs/decisions/adr-0001.md", True),
+            # ...and the dot is part of the name, not noise to be stripped.
+            ("src/auth/**", ".src/auth/login.py", False),
             ("src/[unclosed", "src/[unclosed", True),  # a bad class is a literal
             ("src/**", "", False),
         ],

@@ -7,6 +7,119 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-09-18
+
+### Added
+
+- **The writing skill says a document is the current state (adr-c7ff45803a31).** Agents
+  append: `--append-section` destroys nothing, so it never refuses, and over a few sessions a
+  document becomes a log of its own life. Two costs, and the second is the one that is not
+  obvious — the body grows against the ceiling its type sets, and the superseded half keeps
+  being *retrieved*, because the index has no idea a later paragraph overruled an earlier one.
+  Rule 3, "One point in time": git holds what was true before, so something that changed is
+  **edited** rather than answered beside. A date in a *heading* is the signal; dates inside
+  prose are often the claim itself. Terminal states are exempt — an issue's `Resolution`, a
+  decision's `Consequences`. It ships as prevention only: `lint --deep` already reports the
+  symptom, and a Tier 2 finding on heading text would fire on correct usage, since `Resolution`
+  appears on 82 of this store's documents.
+- **`docir doctor` reports where the embedding model lives**, under `embedding.cache`. "Why did
+  that command take sixteen seconds" and "where did the disk go" are the same question, and
+  nothing answered either.
+
+### Fixed
+
+- **A daemon that cannot be started runs the command in process** (GitHub #15). The daemon
+  keeps the model warm and serializes writes; it decides nothing, and every command it answers
+  `--no-daemon` answers too. But the client spawned it on first dispatch with nowhere to fall
+  back to, so inside a read-only agent sandbox every read ended in a Python traceback — `spawn`
+  cannot open the daemon log there, and the socket path cannot even ask for a temporary
+  directory, and neither failure is a `DocirError`. It now falls back with one warning on
+  stderr naming the reason and `DOCIR_NO_DAEMON=1`, stdout untouched. `DaemonError` and
+  `OSError` and nothing wider: a `SchemaError` raised while a container loads is not a
+  transport failure. **The MCP server built its own executor beside the CLI's**, so a CLI-only
+  fix would have left the crash exactly where an adopter meets it; both entry points now call
+  one function.
+- **`docir doctor` and `docir daemon status` survive a home with nowhere to listen.** They read
+  the socket path directly to report it, so the two commands somebody runs *to diagnose* the
+  first failure still ended in a traceback. `daemon status` now says "cannot run here" rather
+  than "not running" — the latter reads as "start it", and nothing in that environment can
+  finish that sentence — and `doctor` reports `no-daemon-socket` as a **warning**, because
+  every command still answers and an error would fail `--strict` on a setup that works and is
+  merely slow. `daemon serve` is the one caller that still refuses: a client without a socket
+  runs in process, while a server with nowhere to bind is not a degraded daemon.
+- **A `code:` glob hashes what the repository tracks, not what it builds** (GitHub #20). Every
+  file under a pattern was fingerprinted, ignored ones included, so touching only a build
+  artifact made `docir check` report `code-drifted` on a document whose governed source had not
+  moved. In a repository whose build writes beside its sources — `bin/` and `obj/` for .NET,
+  `target/`, `dist/`, `build/` — one compile drifted every `src/**`-style glob at once, and the
+  finding was indistinguishable from a real one. The matcher now consults the repository's own
+  `.gitignore` files, and **only those**: not `.git/info/exclude`, not the user's global
+  excludes, both per-machine, which is the same defect one door wider. Measured across all
+  12,307 paths in docir's own tree, it differs from `git check-ignore` on exactly three, all
+  excluded by `.git/info/exclude` alone. It was live here too: of 116 patterns, `benchmarks/**`
+  drifted on every test run, through `benchmarks/.coverage` — a *file*, which a skip set made of
+  directory names cannot reach. A `!`-prefixed entry is now refused on write: these are
+  `pathlib` globs where `!` is a literal, so it excluded nothing.
+- **`docir self upgrade` brings the store's `.gitignore` up to the running build** (GitHub #21).
+  `release-check.json` — the `self status` cache, machine-local and dated — was written into
+  every store and ignored nowhere. And the file is written once, by the `init` that created the
+  store, so every entry docir has added since reached only the stores created afterwards;
+  `feedback/` is the one that cost something, since in an older store the first upstream draft
+  an agent writes shows up untracked, and that draft is the one thing nobody has reviewed for
+  redaction. Entries are **appended** under a comment naming the version that added them, never
+  rewritten over: `init --force` regenerates because the caller asked for that, while an upgrade
+  is routine and a store's ignore file is somewhere people add their own lines.
+- **The embedding model is cached where it will still be tomorrow (adr-78090be868ec).**
+  fastembed's default is `tempfile.gettempdir()/fastembed_cache`; a downloaded model is durable
+  state and a temp directory is where the system puts what it may delete, so the 64 MB download
+  was re-paid on every sweep, arriving as a read that takes sixteen seconds instead of two. It
+  now lives in `~/.docir/models` — user-level, because a project store is one per repository
+  and a committed artifact — passed as fastembed's `cache_dir`. The argument and not the
+  variable: `define_cache_dir` computes its temp-directory default *before* reading
+  `FASTEMBED_CACHE_PATH`, so in a sandbox setting that variable does nothing. docir reads it
+  itself and passes what it finds, so an image that pins it is unaffected.
+- **A cached peer reader expires when that peer moves.** The federated reader cached every peer
+  it opened for the daemon's life, verdict included, so a peer repaired after first contact
+  stayed skipped over the socket while `--no-daemon` read it. A failed open is no longer cached
+  at all — it costs neither an engine nor a schema load — and a successful one is keyed on the
+  peer's schema digest and index revision, so a peer that migrated or broke underneath is
+  skipped with a reason rather than queried by a reader built for what it used to be.
+- **A daemon that loaded a different `docs-schema.yaml` is replaced.** The daemon resolves the
+  schema once and answers every later request from it, so an edit was honoured in process and
+  ignored over the socket until it idled out — a declared check went unreported, and Tier 0
+  refused a write the file had come to permit, silently and in both directions. The pid file now
+  records the schema digest beside the code stamp.
+- **`docir query --code` finds a document whose glob starts with a dot.** `.github/workflows/**`
+  matched nothing, because the pattern and the path went through two different spellings of
+  "strip the leading `./`" and a leading dot in a *name* is not a prefix to strip.
+- **`docir self upgrade` counts the corpus instead of reciting it.** An upgrade is exactly the
+  event that moves a lot of code at once, and enumerating every finding buried the three lines
+  the command was run for — upgrading docir inside docir's own repository drifted 56 governed
+  documents. Errors still print in full; warnings are tallied by kind, and `--json` is
+  unaffected.
+
+### Changed
+
+- **The store's generated `.gitignore` gains `release-check.json` and `models/`.** The second
+  matters only where the store *is* the global `~/.docir` the model downloads to — otherwise a
+  git-tracked notes store would commit 64 MB.
+
+### Upgrading
+
+- **Expect one `code-drifted` per pattern whose match set shrank**, cleared the way the finding
+  already says: read the document against the code and `docir update <id> --verified`. In a
+  repository where the defect was live that is every governed document, and there the
+  re-baseline *is* the fix arriving, because the drift reported before was false. There is
+  deliberately no migration that re-mints baselines: doing it on `reindex` would let an upgrade
+  clear a standing drift.
+- **Until everyone upgrades, `code-drifted` is a per-build opinion.** Measured on one store at
+  one moment, 0.28.0 reports nothing where 0.27.0 reports drift. Neither refuses anything and
+  `doctor --strict` exits 0 on both.
+- **The model is re-downloaded once**, because it moves out of the temp directory. It is the
+  last one a sweep can force.
+- `docir self upgrade` tops up the store's `.gitignore` with the two new entries and names what
+  it added.
+
 ## [0.27.0] - 2026-09-17
 
 ### Added
@@ -2550,7 +2663,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.27.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.28.0...HEAD
+[0.28.0]: https://github.com/l0kifs/docir/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/l0kifs/docir/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/l0kifs/docir/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/l0kifs/docir/compare/v0.24.0...v0.25.0

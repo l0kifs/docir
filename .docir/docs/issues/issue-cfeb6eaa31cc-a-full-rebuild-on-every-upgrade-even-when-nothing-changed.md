@@ -31,7 +31,7 @@ tags:
 - release
 title: A full rebuild on every upgrade, even when nothing changed
 type: issue
-updated: '2026-09-17'
+updated: '2026-09-18'
 ---
 
 ## What was measured
@@ -78,8 +78,9 @@ already shipped.
 
 `docir self upgrade` ran an unconditional full reindex — including the run that reports
 "already the newest build", where no package moved and no file changed. A full rebuild
-re-embeds every document it re-saves, so all 1,326 vectors were recomputed
-byte-identical to the ones already stored.
+re-embedded every document it re-saved, so all 1,326 vectors were recomputed
+byte-identical to the ones already stored. (It queues them now and the drain skips
+what matches, which is issue-77dd42e3a03a rather than this issue.)
 
 `docir check --fix` paid it twice: its repair reindexes in full before allocating ids,
 and again after re-issuing duplicates.

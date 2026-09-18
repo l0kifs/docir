@@ -30,7 +30,9 @@ The daemon is a cache for a warm model and a lock for SQLite, nothing else. Ever
   then exactly one response; the client discards keepalives and each frame re-arms the
   socket, so the budget is never a deadline on the work. It has to be, because
   `docir self upgrade` always runs the *full* resync — the package step is what makes the
-  build stamp unequal — which re-embeds every vector at 58.4s per 315 documents. A flat 300s
+  build stamp unequal — which re-embedded every vector at 58.4s per 315 documents until
+  issue-77dd42e3a03a keyed each on its own inputs, and still does whenever the model or the
+  chunking moves. A flat 300s
   meant that past ~1,500 documents the upgrade could not finish, failing after the package
   was already replaced and before `agent update` and `check`. **Do not "simplify" this back
   to a single reply read, and do not answer a slow corpus with a bigger number** — that was

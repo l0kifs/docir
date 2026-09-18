@@ -94,15 +94,18 @@ files and the derived index never disagree.
   either way the index ends up agreeing with the filesystem.
   `ReindexResult.documents_skipped` counts source files that would not parse: the scan is
   best-effort, so a partial rebuild must say so rather than look complete.
-  `ReindexResult.embeddings_recomputed` reports the drained queue: a rebuild re-embeds every
-  document it re-saves, and never said so — which is what let a "recompute the vectors" mode
-  look necessary (adr-6a4718fa7a7d). It counts *documents*; `ReindexResult.vectors_written`
-  is the vector count, ~4x larger, and the one that explains the runtime — embedding is ~96%
-  of a rebuild and is linear in vectors, not documents.
+  `ReindexResult.embeddings_recomputed` reports the drained queue: a rebuild queues every
+  document it re-saves and never said what came back — which is what let a "recompute the
+  vectors" mode look necessary (adr-6a4718fa7a7d). The drain recomputes only the vectors whose
+  model, text or chunking moved, so an unchanged corpus reports 0 (issue-77dd42e3a03a). It
+  counts *documents*; `ReindexResult.vectors_written` is the vector count, ~4x larger, and the
+  one that explains the runtime — embedding is ~96% of a rebuild that embeds at all, and is
+  linear in vectors, not documents.
 - `MaintenanceService.resync() -> ReindexResult` — what `docir self upgrade` runs. Reads the
   build stamp and rebuilds in full only when some other version wrote it, since a full pass
-  re-embeds everything it re-saves (~96% of the command) and has nothing to recompute on a
-  store this build already indexed. Equality against the running version, so a downgrade
+  re-reads every document's metadata and has nothing to re-read on a store this build already
+  indexed. The stamp no longer decides what is *embedded*: the drain compares each document's
+  inputs and skips what matches (issue-77dd42e3a03a). Equality against the running version, so a downgrade
   rebuilds too, and an absent stamp rebuilds — unlike `check`'s `stale-index-build`, where
   absent means unknown and stays silent, here unknown means the vectors predate the stamp.
 - `MaintenanceService.check()` also reports **`empty-index`**, an `error`: the index holds

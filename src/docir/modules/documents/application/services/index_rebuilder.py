@@ -44,9 +44,11 @@ class ReindexResult:
     tags_indexed: int
     documents_skipped: int = 0
     #: Documents re-embedded before the run returned -- the drained queue, which
-    #: is keyed by document. A full reindex re-embeds everything it re-saved, so
+    #: is keyed by document. A full reindex re-embedded everything it re-saved, so
     #: this was always happening and simply went unreported, which is what let
-    #: `--embeddings` look like the only way to get it (issue-b24e14474820).
+    #: `--embeddings` look like the only way to get it (issue-b24e14474820). It
+    #: queues every one and the drain recomputes what is owed now
+    #: (issue-77dd42e3a03a), so on an unchanged corpus this is 0.
     #:
     #: Not a vector count -- `vectors_written` is. It is also not always
     #: `documents_indexed`: an archived document is re-saved and has its vectors
@@ -55,8 +57,9 @@ class ReindexResult:
     #: Vectors actually written by the drain: one per document plus one per `##`
     #: section (adr-927aa43d9635), so ~4x `embeddings_recomputed` on a real
     #: corpus. This is the number that explains the runtime -- embedding is ~96%
-    #: of a full rebuild, and it is linear in vectors rather than documents, so
-    #: the document count alone cannot say why 315 of them took a minute.
+    #: of a rebuild *that embeds*, and it is linear in vectors rather than
+    #: documents, so the document count alone cannot say why 315 of them took a
+    #: minute. A rebuild whose inputs all match skips the lot and writes none.
     vectors_written: int = 0
 
 

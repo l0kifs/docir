@@ -260,7 +260,10 @@ class Dispatcher:
         # There is no `embeddings` key. It used to return here with vectors
         # recomputed and neither stamp written, so a store that had just been
         # reindexed still reported `stale-index-build`; the rebuild it skipped
-        # re-embeds everything anyway (adr-6a4718fa7a7d, issue-b24e14474820).
+        # recomputes the same vectors anyway — it queues every document it
+        # re-saves, and the drain recomputes each whose inputs moved, which on a
+        # model change is all of them (adr-6a4718fa7a7d, issue-b24e14474820,
+        # issue-77dd42e3a03a).
         # `resync` is a payload key rather than a command of its own: it is
         # reached only by `docir self upgrade`, which is deliberately not an MCP
         # tool (the halves it orchestrates already are, adr-31aa7aa60d11), and a

@@ -89,10 +89,13 @@ def self_upgrade(
     version built the index. Pass --no-package to skip the install and only
     resync the store.
 
-    The rebuild is the expensive half — it re-embeds every document it re-saves —
-    so it runs in full only when the index carries a different version's build
-    stamp. Against a store this build already indexed there is nothing for a full
-    pass to recompute, and the run reports 0 documents rather than paying for it.
+    The rebuild runs in full only when the index carries a different version's
+    build stamp. Against a store this build already indexed there is nothing for a
+    full pass to re-read, and the run reports 0 documents rather than paying for
+    it. A full pass is no longer expensive by itself either: it queues every
+    document it re-saves, and the drain recomputes only the vectors whose model,
+    text or chunking moved, so the release that changes none of them re-embeds
+    nothing (issue-77dd42e3a03a).
     """
     if not no_package and upgraded_from is None:
         _upgrade_the_package_then_restart()

@@ -19,7 +19,7 @@ tags:
 - material
 title: The daemon keepalives; the reply timeout bounds silence, not work
 type: decision
-updated: '2026-09-17'
+updated: '2026-09-18'
 ---
 
 ## Context
@@ -27,9 +27,13 @@ updated: '2026-09-17'
 `docir self upgrade` runs `reindex --resync` through the daemon. After the
 package step the index build stamp always differs from the running version — by
 construction, that is what the step changed — so the resync is always the *full*
-pass, and a full pass marks every document dirty and re-embeds every vector.
-Its cost is the size of the corpus: 58.4s for 315 documents and 1,326 vectors on
-this repository.
+pass, and a full pass marks every document dirty. At the time it also re-embedded
+every vector, which made the cost the size of the corpus: 58.4s for 315 documents
+and 1,326 vectors on this repository. The drain now skips a document whose inputs
+are unchanged, so that price is paid by the release that moves the model or the
+chunking rather than by every release — which does not weaken the case below,
+since that is still the longest request docir makes, and `build`, `check` and
+`embed --flush` were bounded by the same budget.
 
 The client bounded the daemon's reply at a flat `DEFAULT_REQUEST_TIMEOUT` of
 300s. So the one command guaranteed to issue the longest request docir can make
@@ -79,7 +83,9 @@ produce it.
 - Both ends of a connection always run the same build — the pid file's code
   stamp stops and replaces a mismatched daemon — so the extra frame is not a
   versioned wire concern and needs no negotiation.
-- Not fixed here: the resync stamp is the docir *version*, so every release
-  re-embeds the whole corpus even when neither the model nor the chunking moved.
-  That is a cost problem rather than a correctness one, and it is recorded
-  separately.
+- Not fixed here, and fixed since: the resync stamp is the docir *version*, so
+  every release re-embedded the whole corpus even when neither the model nor the
+  chunking moved. That was a cost problem rather than a correctness one, so it
+  was recorded separately and closed on its own (issue-77dd42e3a03a). Each vector
+  is now keyed on the model, the embedding text and the chunk triples, and the
+  version stamp decides only whether the *metadata* pass is full.

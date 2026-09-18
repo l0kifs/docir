@@ -15,7 +15,7 @@ tags:
 - architecture
 title: Doc-Index CLI — the read path
 type: architecture
-updated: '2026-09-17'
+updated: '2026-09-18'
 ---
 
 ## Read path
@@ -131,8 +131,11 @@ if the embedding model is upgraded, existing
 vectors become stale — but nothing has to name them. Each row records the
 model that produced it, so a foreign `model_id` reads as dirty and
 `docir embed --flush` recomputes exactly those. A full `docir reindex`
-does it too, since it re-embeds every document it re-saves and reports
-the count as `embeddings_recomputed`; there is no separate flag for it
+does it too, and now for a stated reason: it re-saves and queues every
+document, and the model id is part of the digest the drain compares, so
+after a model change every vector is owed and every one is recomputed —
+while a corpus whose inputs did not move pays nothing (issue-77dd42e3a03a).
+`embeddings_recomputed` reports how many; there is no separate flag for it
 (adr-6a4718fa7a7d).
 
 ### Also powers Tier 2 DRY linting

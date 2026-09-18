@@ -69,13 +69,19 @@ def self_upgrade(
 ) -> None:
     """Upgrade docir, then bring this store and its generated files in line with it.
 
-    Four things in one command. It upgrades the package where docir owns its
+    Five things in one command. It upgrades the package where docir owns its
     environment (a uv tool, a pipx install, a virtualenv) — and where it does
     not, says why and carries on. Then it rebuilds the index (derived,
     gitignored, and the only place the schema baseline and the build version are
     recorded), refreshes any installed agent instruction file to the running
-    version, and reports what `check` still finds — `check` last, so the findings
-    describe the state you are left in.
+    version, tops up the store's own `.gitignore` with anything this docir
+    writes into the store that it did not yet ignore, and reports what `check`
+    still finds — `check` last, so the findings describe the state you are left
+    in.
+
+    The `.gitignore` step **appends and never rewrites**. Your own lines in that
+    file are yours; only the entries this build generates and the file lacks are
+    added, under a comment naming the version that added them.
 
     That report is **counted, not listed**: errors print in full, warnings are
     tallied by kind, and `docir check` reads them. An upgrade is exactly the
@@ -105,6 +111,7 @@ def self_upgrade(
             lambda executor: upgrade_store(
                 lambda command, payload: execute_with(executor, command, payload),
                 project_root=directory.resolve(),
+                store_home=get_state().settings.home,
                 version=__version__,
                 upgraded_from=upgraded_from,
             )
@@ -141,11 +148,18 @@ def _emit_upgrade(result: UpgradeResult) -> None:
             "upgraded_from": result.upgraded_from,
             "reindex": result.reindex,
             "agents": agents,
+            "gitignore_added": list(result.gitignore_added),
             "findings": findings,
         }
         rendering.emit_json(payload, trim=state.trim)
     else:
-        rendering.render_upgrade(result.reindex, agents, findings, result.upgraded_from)
+        rendering.render_upgrade(
+            result.reindex,
+            agents,
+            findings,
+            result.upgraded_from,
+            result.gitignore_added,
+        )
 
 
 def _upgrade_the_package_then_restart() -> None:

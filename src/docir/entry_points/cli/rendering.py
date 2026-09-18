@@ -597,6 +597,7 @@ def render_upgrade(
     agents: Sequence[Mapping[str, object]],
     findings: Sequence[Mapping[str, object]],
     upgraded_from: str | None = None,
+    gitignore_added: Sequence[str] = (),
 ) -> None:
     """Render the outcome of ``docir self upgrade``, step by step.
 
@@ -639,6 +640,11 @@ def render_upgrade(
         + (f"  [yellow]{skipped} skipped[/]" if skipped else "")
     )
     render_setup(agents)
+    if gitignore_added:
+        # Named, not counted, and unlike the findings below there are never many:
+        # this fires once per store per release that adds an entry, and the
+        # reader's next move is `git status` on the paths it names.
+        console.print(f"[cyan]gitignore[/] now ignores {', '.join(gitignore_added)}")
     _render_upgrade_findings(findings)
 
 

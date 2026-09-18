@@ -4,12 +4,12 @@ code:
 - src/docir/entry_points/composition.py
 - src/docir/modules/release/**
 code_baseline:
-  src/docir/entry_points/cli/self_cmds.py: 7569fe2dacbd
-  src/docir/entry_points/composition.py: e59f157c6b81
-  src/docir/modules/release/**: 82a5a4c9e8d8
+  src/docir/entry_points/cli/self_cmds.py: 1e11c74f10de
+  src/docir/entry_points/composition.py: aa8b2c0caf80
+  src/docir/modules/release/**: 8b0b670930c6
 created: '2026-08-09'
 description: 'What to run after a new docir release: the package, the derived index,
-  and the generated files nothing refreshes for you.'
+  and the generated files — the ones self upgrade refreshes and the ones it does not.'
 id: run-f4a756206fe0
 owner: maintainer
 related:
@@ -25,7 +25,13 @@ tags:
 - agents
 title: Upgrade docir in a project
 type: runbook
-updated: '2026-09-17'
+updated: '2026-09-18'
+verified: '2026-09-18'
+verified_code:
+  src/docir/entry_points/cli/self_cmds.py: 1e11c74f10de
+  src/docir/entry_points/composition.py: aa8b2c0caf80
+  src/docir/modules/release/**: 8b0b670930c6
+verified_content: a99913babae4
 ---
 
 docir ships its schema, its agent instructions and its site templates inside the
@@ -105,6 +111,16 @@ committed files, so refreshing them is a commit, and nothing detects that they
 are behind: `check` covers the corpus, not the generated instructions. docir
 0.11.0 shipped with its own skill file still claiming v0.10.0.
 
+The store's own `.gitignore` is generated the same way, and `self upgrade` tops
+it up in the same pass — there is no separate command. It is written once, by
+the `init` that created the store, so every entry docir has added since reached
+only stores created afterwards; `feedback/` is the one that cost something, since
+in a store predating it the first upstream draft an agent writes shows up
+untracked, and that draft is the one thing in the store nobody has reviewed for
+redaction ([[issue-712f5bd17908]]). Entries are **appended, not rewritten over**:
+your own lines in that file are yours, and the report names what was added so
+the next move is a `git status`.
+
 ### `docir check` — new warnings are expected
 
 `missing-required`, `unknown-relation-kind`, `unknown-type` and `schema-drift`
@@ -119,8 +135,9 @@ change nobody will run `check` to discover.
 
 ## If it applies to you
 
-- **`docir init --force`** regenerates the store's `.gitignore`, which is a
-  constant in the package and can gain entries between releases. A
+- **`docir init --force`** regenerates the store's `.gitignore` outright, which
+  is more than the upgrade's top-up does: it also drops any line you added. Reach
+  for it when you want the file back exactly as the package generates it. A
   `docs-schema.yaml` you have edited is preserved and reported, not replaced —
   `--force-schema` is what replaces it.
 - **`docir build --out <dir>`** — the site templates ship in the package, so a

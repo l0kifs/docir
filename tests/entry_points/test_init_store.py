@@ -7,7 +7,12 @@ from pathlib import Path
 import pytest
 
 from docir.config.settings import Settings
-from docir.entry_points.composition import initialize_store
+from docir.entry_points.composition import (
+    _STORE_GITIGNORE,
+    _gitignore_entries,
+    initialize_store,
+    refresh_store_gitignore,
+)
 from docir.platform.errors import SchemaError
 
 
@@ -161,3 +166,137 @@ class TestAShadowedStoreIsReported:
         initialize_store(_settings(tmp_path))
         named = Settings.resolve(home=tmp_path / "docs", use_daemon=False)
         assert initialize_store(named).enclosing_home == (tmp_path / ".docir").resolve()
+
+
+class TestTheStoreIgnoresEverythingDocirWritesIntoIt:
+    """The file's own promise: only `docs/` + `docs-schema.yaml` are committed.
+
+    Guards issue-712f5bd17908, in the shape the defect asks for. `release-check.json`
+    was missing from the generated list while docir wrote it into every store
+    that ran `self status`, and the only test on the list read the list back —
+    which passes on the constant being whatever the constant is.
+    """
+
+    #: The two paths in the store that are meant to be committed, plus the
+    #: ignore file itself. Everything else docir puts in `home` must be ignored.
+    COMMITTED = ("docs_root", "schema_path", "tags_path")
+
+    def _store_paths(self, settings: Settings) -> list[Path]:
+        """Every path ``Settings`` resolves inside the store, found by asking it.
+
+        Introspection rather than a list, so the next path added to ``Settings``
+        is covered by this test on the day it is added rather than on the day
+        someone remembers. ``socket_path`` drops out on its own: it lives
+        outside ``home`` precisely so a deep home cannot blow the ``AF_UNIX``
+        limit.
+        """
+        committed = {getattr(settings, name) for name in self.COMMITTED}
+        found = []
+        for name in dir(type(settings)):
+            if name.startswith("_") or not isinstance(getattr(type(settings), name), property):
+                continue
+            value = getattr(settings, name)
+            if not isinstance(value, Path) or value in committed:
+                continue
+            if value != settings.home and settings.home in value.parents:
+                found.append(value)
+        return sorted(found)
+
+    def test_every_path_settings_resolves_in_the_store_is_ignored(self, tmp_path: Path) -> None:
+        settings = _settings(tmp_path)
+        initialize_store(settings)
+        entries = set(_gitignore_entries((settings.home / ".gitignore").read_text("utf-8")))
+
+        paths = self._store_paths(settings)
+
+        # Which ones, not how many: a count cannot tell "all of them are
+        # ignored" from "Settings stopped exposing any of them".
+        assert {path.name for path in paths} == {
+            "index.db",
+            "daemon.log",
+            "daemon.pid",
+            "release-check.json",
+        }
+        for path in paths:
+            assert path.name in entries, f"docir writes {path.name} and nothing ignores it"
+
+    def test_the_feedback_drafts_are_ignored_too(self, tmp_path: Path) -> None:
+        # Not a `Settings` path — the skill names the directory — and the one
+        # entry whose absence costs something: a draft nobody has reviewed for
+        # redaction, showing up untracked (adr-7144cf291b1a).
+        settings = _settings(tmp_path)
+        initialize_store(settings)
+        entries = _gitignore_entries((settings.home / ".gitignore").read_text("utf-8"))
+        assert "feedback/" in entries
+
+
+class TestAnExistingStoreIsBroughtUpToTheRunningBuild:
+    """`refresh_store_gitignore` — the half `self upgrade` runs (issue-712f5bd17908).
+
+    The file is written by the `init` that created the store and never again, so
+    every entry docir has added since reached only the stores created after it.
+    """
+
+    def _aged(self, tmp_path: Path, keep: str) -> Settings:
+        """A store whose ignore file predates an entry this build generates."""
+        settings = _settings(tmp_path)
+        initialize_store(settings)
+        (settings.home / ".gitignore").write_text(keep, encoding="utf-8")
+        return settings
+
+    def test_it_adds_what_the_file_is_missing(self, tmp_path: Path) -> None:
+        settings = self._aged(tmp_path, "index.db\ndaemon.pid\ndaemon.log\n")
+
+        added = refresh_store_gitignore(settings.home, version="9.9.9")
+
+        assert "feedback/" in added
+        assert "release-check.json" in added
+        text = (settings.home / ".gitignore").read_text("utf-8")
+        assert "feedback/" in _gitignore_entries(text)
+        assert "9.9.9" in text, "the block says which build added it"
+
+    def test_it_keeps_the_lines_somebody_added(self, tmp_path: Path) -> None:
+        # The reason this appends instead of regenerating. `init --force`
+        # rewrites the file because the caller asked for exactly that; an
+        # upgrade is routine, and deleting somebody's line without asking is the
+        # defect `--force-schema` exists to avoid.
+        settings = self._aged(tmp_path, "index.db\n*.local\n")
+
+        refresh_store_gitignore(settings.home)
+
+        entries = _gitignore_entries((settings.home / ".gitignore").read_text("utf-8"))
+        assert "*.local" in entries
+        assert "feedback/" in entries
+
+    def test_a_second_run_adds_nothing(self, tmp_path: Path) -> None:
+        settings = self._aged(tmp_path, "index.db\n")
+        refresh_store_gitignore(settings.home)
+        before = (settings.home / ".gitignore").read_text("utf-8")
+
+        assert refresh_store_gitignore(settings.home) == ()
+        assert (settings.home / ".gitignore").read_text("utf-8") == before
+
+    def test_a_store_this_build_created_needs_nothing(self, tmp_path: Path) -> None:
+        settings = _settings(tmp_path)
+        initialize_store(settings)
+        assert refresh_store_gitignore(settings.home) == ()
+
+    def test_a_store_that_never_ran_init_gets_the_whole_file(self, tmp_path: Path) -> None:
+        # A global `~/.docir` grown by first use rather than created by `init`.
+        settings = _settings(tmp_path)
+        initialize_store(settings)
+        (settings.home / ".gitignore").unlink()
+
+        added = refresh_store_gitignore(settings.home)
+
+        assert "index.db" in added and "feedback/" in added
+        assert (settings.home / ".gitignore").read_text("utf-8") == _STORE_GITIGNORE
+
+    def test_a_file_with_no_trailing_newline_does_not_glue_two_entries(
+        self, tmp_path: Path
+    ) -> None:
+        settings = self._aged(tmp_path, "index.db")
+
+        refresh_store_gitignore(settings.home)
+
+        assert "feedback/" in _gitignore_entries((settings.home / ".gitignore").read_text("utf-8"))

@@ -462,11 +462,15 @@ UnitOfWorkFactory = Callable[[], UnitOfWork]
 
 # -- store initialization (``docir init``) ----------------------------------
 
-#: What ``docir init`` gitignores inside the store: the derived index, the
-#: daemon's runtime files, and the upstream-feedback drafts (adr-7144cf291b1a) —
-#: a report about docir written *here* is correspondence, not corpus, and it
-#: holds the one thing in the store nobody reviewed for redaction yet. Only
-#: ``docs/`` + ``docs-schema.yaml`` are committed.
+#: What docir gitignores inside the store: the derived index, the daemon's
+#: runtime files, the release check's cached answer, and the upstream-feedback
+#: drafts (adr-7144cf291b1a) — a report about docir written *here* is
+#: correspondence, not corpus, and it holds the one thing in the store nobody
+#: reviewed for redaction yet. Only ``docs/`` + ``docs-schema.yaml`` are
+#: committed, which is the line the list is checked against: every path docir
+#: writes into ``home`` belongs here, and ``test_init_store`` asserts it by
+#: walking a store docir has actually written to rather than by reading this
+#: text (issue-712f5bd17908).
 _STORE_GITIGNORE = """\
 # docir derived index + daemon runtime — rebuildable from docs/, do not commit.
 index.db
@@ -475,9 +479,67 @@ index.db-wal
 index.db-shm
 daemon.pid
 daemon.log
+# The release check's cached answer: this machine's, and dated.
+release-check.json
 # Drafted upstream bug reports, awaiting a human's review — never committed.
 feedback/
 """
+
+
+def _gitignore_entries(text: str) -> tuple[str, ...]:
+    """The patterns a gitignore declares — its lines, less blanks and comments."""
+    return tuple(
+        line.strip()
+        for line in text.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    )
+
+
+def refresh_store_gitignore(home: Path, *, version: str = __version__) -> tuple[str, ...]:
+    """Add the entries this build generates that ``home``'s gitignore lacks.
+
+    A store's ``.gitignore`` is written once, by the ``init`` that created it,
+    and every entry docir has added since lands only in stores created after it
+    — so the guarantee the file states ("only ``docs/`` + ``docs-schema.yaml``
+    are committed") decays with the store's age rather than with anything its
+    owner did. `feedback/` is the case that cost something: the drafts an agent
+    writes there are the one thing in the store nobody has reviewed for
+    redaction, and in a store predating the entry the first one shows up as
+    untracked, one ``git add -A`` from being committed (issue-712f5bd17908).
+
+    Missing entries are **appended, not rewritten over**. `init --force`
+    regenerates the file because the caller asked for exactly that; `self
+    upgrade` is routine, and a store's ignore file is somewhere people add their
+    own lines, so replacing it with the constant would delete work nobody was
+    asked about — the defect `--force` already grew a second flag to avoid for
+    the schema. Appending converges on the same set from any starting point and
+    is idempotent, which rewriting is not.
+
+    Returns the patterns it added, empty when there was nothing to add.
+    """
+    path = home / ".gitignore"
+    try:
+        existing = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        # A store that never ran `init` — a global `~/.docir` grown by first
+        # use. Writing the file costs nothing outside a repository and is the
+        # whole point inside one.
+        path.write_text(_STORE_GITIGNORE, encoding="utf-8")
+        return _gitignore_entries(_STORE_GITIGNORE)
+    declared = set(_gitignore_entries(existing))
+    missing = tuple(
+        entry for entry in _gitignore_entries(_STORE_GITIGNORE) if entry not in declared
+    )
+    if not missing:
+        return ()
+    separator = "" if existing.endswith("\n") or not existing else "\n"
+    added = "".join(f"{entry}\n" for entry in missing)
+    path.write_text(
+        f"{existing}{separator}# Added by docir {version}: files docir writes here "
+        f"that this store did not ignore yet.\n{added}",
+        encoding="utf-8",
+    )
+    return missing
 
 
 @dataclass(frozen=True)
@@ -615,12 +677,16 @@ class UpgradeResult:
     #: this process. ``None`` means the package was left alone — a store-only
     #: resync, or an environment docir does not own.
     upgraded_from: str | None = None
+    #: Ignore patterns this build generates that the store's ``.gitignore`` was
+    #: missing, and now carries. Empty is the ordinary case.
+    gitignore_added: tuple[str, ...] = ()
 
 
 def upgrade_store(
     run: CommandRunner,
     *,
     project_root: Path,
+    store_home: Path,
     version: str = __version__,
     upgraded_from: str | None = None,
 ) -> UpgradeResult:
@@ -639,6 +705,13 @@ def upgrade_store(
     * ``agent update`` — the instruction files are rendered from a template
       inside the package and stamped with the version that rendered them.
       Nothing else reports that the stamp has fallen behind.
+    * the store's ``.gitignore`` — generated the same way and by the same
+      module, and until this step nothing refreshed it. It is written by the
+      ``init`` that created the store, so every entry docir has added since
+      reached only the stores created afterwards, and the guarantee the file
+      states decayed with the store's age rather than with anything its owner
+      did (issue-712f5bd17908). Entries are appended, never rewritten over —
+      see :func:`refresh_store_gitignore`.
     * ``check`` — **last**, so its findings describe the state the upgrade left
       behind rather than the one it started from.
 
@@ -659,6 +732,7 @@ def upgrade_store(
     setup = build_agent_service(version).update(
         UpdateRequest(project_root=project_root, global_root=Path.home())
     )
+    gitignore_added = refresh_store_gitignore(store_home, version=version)
     findings = run("check", {})
     return UpgradeResult(
         version=version,
@@ -668,6 +742,7 @@ def upgrade_store(
             _as_mapping(item) for item in (findings if isinstance(findings, list) else [])
         ),
         upgraded_from=upgraded_from,
+        gitignore_added=gitignore_added,
     )
 
 

@@ -107,8 +107,10 @@ Write the body to `<store>/feedback/<YYYY-MM-DD>-<slug>.md`. Read `<store>` from
 project's store and not the scratch one. (`doctor` answers in an empty store, which
 is why it is the source here and a `store` field on a result list is not: a query
 that matched nothing carries no path.) That directory is gitignored by stores created
-with this release; if the draft shows up in `git status`, say so to the human —
-`docir init --force` regenerates the ignore file.
+with this release, and `docir self upgrade` adds the entry to an older store without
+touching the lines already in the file. If the draft still shows up in `git status`,
+say so to the human before writing anything else into it — it is the one thing in the
+store nobody has reviewed for redaction.
 
 The file holds the **issue body and nothing else** — no title line, no shell command,
 no notes to the human — so it can be filed verbatim. Mirror the form's fields as `##`

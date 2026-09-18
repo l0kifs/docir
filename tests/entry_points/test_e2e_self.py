@@ -96,6 +96,55 @@ def test_it_reindexes_checks_and_refreshes_in_one_command(settings: Settings, tm
     assert any(finding["kind"] == "orphan" for finding in report["findings"])
 
 
+class TestItBringsTheStoresGitignoreUpToTheRunningBuild:
+    """The generated file nothing used to refresh (issue-712f5bd17908).
+
+    `self upgrade` already promises to "bring this store and its generated files
+    in line with it", and refreshed the agent instruction file only. The store's
+    `.gitignore` is written by the `init` that created the store and never
+    again, so `feedback/` — added for drafts nobody has reviewed for redaction —
+    never reached a store created before it.
+    """
+
+    def _aged(self, settings: Settings) -> None:
+        """The store's ignore file as a release before `feedback/` wrote it."""
+        (settings.home / ".gitignore").write_text(
+            "# docir derived index + daemon runtime — rebuildable from docs/, do not commit.\n"
+            "index.db\nindex.db-journal\nindex.db-wal\nindex.db-shm\n"
+            "daemon.pid\ndaemon.log\n",
+            encoding="utf-8",
+        )
+
+    def test_the_upgrade_adds_the_entries_and_reports_them(
+        self, settings: Settings, tmp_path
+    ) -> None:
+        _add()
+        self._aged(settings)
+
+        report = _upgrade(str(tmp_path))
+
+        # Which entries, not how many: the report is what tells the reader to
+        # run `git status`, so it has to name what changed.
+        assert set(report["gitignore_added"]) == {"release-check.json", "feedback/"}
+        assert "feedback/" in (settings.home / ".gitignore").read_text("utf-8")
+
+    def test_an_upgrade_with_nothing_to_add_leaves_the_file_alone(
+        self, settings: Settings, tmp_path
+    ) -> None:
+        _add()
+        self._aged(settings)
+        _upgrade(str(tmp_path))
+        settled = (settings.home / ".gitignore").read_text("utf-8")
+
+        result = runner.invoke(
+            app, ["--no-daemon", "--no-trim", "self", "upgrade", str(tmp_path), "--no-package"]
+        )
+
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.stdout)["gitignore_added"] == []
+        assert (settings.home / ".gitignore").read_text("utf-8") == settled
+
+
 def test_it_clears_the_stale_build_finding(
     settings: Settings, tmp_path, uow_factory: Callable[[], UnitOfWork]
 ) -> None:

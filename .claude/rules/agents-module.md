@@ -32,11 +32,23 @@ This module writes files into *other* people's repositories. Edit the packaged t
   (`render_init`, `render_setup` — never the JSON, where the suggestion would reach the wrong
   reader). Its counter-pressure ships even to repos that decline it, as a section of the default
   skill's `reference/troubleshooting.md`.
-  `claude-writing` (`.claude/skills/docir-writing/SKILL.md`, template `writing.md`) teaches how to
-  write the documents — one name per concept, one purpose per document, state each fact once and
-  link it, and keep each `##` section under ~1,200 chars. That last number is `MAX_CHUNK_CHARS`,
-  not a style preference; the skill deliberately carries **no word limit**, because the
-  topic-based standards reject one and `similarity_lint.py` already warns on size. It stays out
+  `claude-writing` (`.claude/skills/docir-writing/SKILL.md`, template `writing/SKILL.md`) teaches
+  how to write the documents — one name per concept, one purpose per document, **one point in
+  time**, state each fact once and link it, and keep each `##` section under ~1,200 chars. That
+  last number is `MAX_CHUNK_CHARS`, not a style preference; the skill deliberately carries **no
+  word limit**, because the topic-based standards reject one and `similarity_lint.py` already
+  warns on size. "One point in time" is the rule against appending a dated section per change
+  (adr-c7ff45803a31): agents reach for `--append-section` because it destroys nothing, and a
+  document becomes a log of its own life — 21 of this store's 235 documents are past the
+  `scope-creep` threshold and the largest is five times it. It ships as **prevention only**, and
+  a Tier 2 finding on heading text was refused rather than forgotten: `Resolution` appears on 82
+  documents and is a terminal state, so the predicate would fire on correct usage the way
+  `unresolved-mention` does. The CLI skill carries the same correction **without naming the
+  writing skill**: `docir-writing` is opt-in, so a cross-reference from the always-installed
+  skill points at a file most repos do not have. Every such rule has to stand on its own
+  wherever it appears — the CLI skill's safest-to-riskiest ranking of body edits is about
+  what each one can *destroy*, and calling appending "the default choice" is what read as
+  advice. It stays out
   of `DEFAULT_AGENTS` since both skills match the same work and a repo that did not ask for the
   second should not pay its context. `TemplateProvider.template(name)` is a keyed catalogue, so a
   fourth skill is a template plus a catalogue entry — do not grow any of them into a grab-bag.

@@ -1,6 +1,6 @@
 ---
 name: docir-writing
-description: How to write the documents themselves — name each concept the same way everywhere, give one document one purpose, state each fact once and link to it instead of repeating it, and keep sections short enough to retrieve. Load whenever you are about to write, restructure, split or review a docir document's title, description or body. It governs the content; the docir skill governs the CLI.
+description: How to write the documents themselves — name each concept the same way everywhere, give one document one purpose, keep it to the current state instead of logging its history, state each fact once and link to it instead of repeating it, and keep sections short enough to retrieve. Load whenever you are about to write, restructure, split or review a docir document's title, description or body. It governs the content; the docir skill governs the CLI.
 ---
 <!-- docir:v0.27.0 — generated file, do not edit by hand; refresh with `docir agent update` after upgrading docir -->
 
@@ -50,7 +50,42 @@ halves go stale on different clocks.
 - `docir schema show` lists the types this store actually has. Use the one that
   fits rather than stretching one that does not.
 
-## 3. State each fact once, link to the rest
+## 3. One point in time
+
+A document says what is true now. Git says what was true before, and says it
+better than a body can: `git log -p` over the file shows what moved, when, and
+with the commit message explaining why.
+
+So when something changes, **edit the section that is now wrong**. Do not add a
+dated section beside it recording the change. That leaves two answers where
+there was one, only one of them current, and a reader has to date-sort prose to
+work out which — while the stale half keeps being retrieved, because the index
+does not know it was superseded.
+
+- `--replace-section` is the edit for something that changed.
+  `--append-section` adds a section the document was *missing*: reach for it
+  when there is a new subject, not a new day.
+- A **terminal state** is not a log entry. An issue's `Resolution` — what closed
+  it — is part of what an issue is for, and so is a decision's `Consequences`.
+  What is not: `Follow-up (2026-07-26)`, `Delta pass`, `Third round`,
+  `What moved since <date>`, `Amendment: …`.
+- **A date in a heading is the signal.** Dates *inside* prose are often the
+  point — "measured on 2026-08-12" is a fact, and dropping it would weaken the
+  claim. A date in the heading means the section is addressed to a moment
+  rather than to a subject, and rule 5 says a heading names its subject.
+- Replacing a whole document is an edge, not a section:
+  `docir update <new> --set-related <old>:supersedes`. Rule 4 says what that
+  edge then buys you.
+- Superseded text is simply deleted. It is not lost — it is in git, under a
+  commit that says why it went.
+
+Measured on a 235-document corpus: the largest body was five times the
+`docir lint --deep` threshold, and the documents at the top were the ones that
+had grown a dated section per working session — three consecutive days of
+`Follow-up — …` stacked in one of them. None of them had a purpose problem. They
+were keeping a diary.
+
+## 4. State each fact once, link to the rest
 
 Duplication is what goes stale: two copies, and only one gets updated. docir's
 alternative to a copy is a typed edge.
@@ -77,7 +112,7 @@ alternative to a copy is a typed edge.
   finding (high cosine, no edge between them). Merge them or link them; do not
   leave both.
 
-## 4. Keep sections retrievable
+## 5. Keep sections retrievable
 
 This is the one hard number, and it comes from the index rather than from taste.
 docir embeds every `##` section separately, and the model reads about 1,900
@@ -92,18 +127,19 @@ worse than either would alone.
 - Prefer several short sections to one long one. Short ones are separately
   retrievable; a long one competes with itself.
 
-## 5. Length follows purpose, not a word count
+## 6. Length follows purpose, not a word count
 
 There is no word limit, and round numbers like "under 1,000 words" do not
 survive a real corpus — the topic-based documentation standards are explicit
 that a topic runs as long as its subject requires and no longer. What is true:
 readers scan, and shorter, split pages measure better than long ones.
 
-So bound length with rule 2, not with counting. A document is too long when it
-has started doing two jobs. `docir lint --deep` warns past ~8,000 characters —
-read that as "check whether this is still one document", not as a ceiling.
+So bound length with rules 2 and 3, not with counting. A document is too long
+when it has started doing two jobs, or when it has started keeping a diary.
+`docir lint --deep` warns past ~8,000 characters — read that as "check whether
+this is still one document, about one moment", not as a ceiling.
 
-## 6. Write the description for a stranger
+## 7. Write the description for a stranger
 
 The `description` is what every search result shows and what ranking reads. It
 is not the opening paragraph of the body.
@@ -117,6 +153,8 @@ is not the opening paragraph of the body.
 ## Before you finish
 
 - One purpose, and the `type` says which.
+- Current state only — nothing dated into the body that git already records, and
+  every section that changed *edited* rather than answered beside.
 - Every concept named the way the rest of the corpus names it.
 - No fact stated here that another document owns — linked instead.
 - Every `[[...]]` names a document that exists, and every real relationship is an edge.

@@ -246,9 +246,12 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
   **strips the edge from each referencing doc**, naming them in its output — so a
   forced delete never leaves a dangling link. Prefer `archive` when the document
   is merely no longer current: it keeps the history and the graph intact.
-- Body edits, safest→riskiest: `--append-section` (default choice) →
-  `--replace-section` → `--replace-body` (needs `--force`; fails "stale write"
-  if the file changed on disk — `docir get` first).
+- Body edits, safest→riskiest: `--append-section` → `--replace-section` →
+  `--replace-body` (needs `--force`; fails "stale write" if the file changed on
+  disk — `docir get` first). That ranking is how much each one can *destroy*,
+  not which to reach for: a new subject appends, and something that changed is
+  `--replace-section`. Delete what it replaced rather than writing past it: an
+  outdated paragraph left in the body still ranks, and still gets read.
 - Name a section by its **text alone** — `"Resolution"`, not `"## Resolution"`.
   The `##` is written for you, and every section flag matches on the text.
 - **`--body` is what goes *under* the heading, never the heading itself.**

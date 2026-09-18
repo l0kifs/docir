@@ -4,7 +4,7 @@ code:
 - src/docir/modules/documents/domain/entities/document.py
 - src/docir/modules/documents/domain/services/checks/verification_rules.py
 code_baseline:
-  src/docir/modules/documents/application/services/document_patch.py: 7b2a442b890c
+  src/docir/modules/documents/application/services/document_patch.py: 5b7b85ac62c7
   src/docir/modules/documents/domain/entities/document.py: 69cfc0a97a7b
   src/docir/modules/documents/domain/services/checks/verification_rules.py: cd968669505d
 created: '2026-09-05'
@@ -27,7 +27,13 @@ tags:
 - cli
 title: A verification is withdrawn when the content it covered moves
 type: decision
-updated: '2026-09-17'
+updated: '2026-09-18'
+verified: '2026-09-18'
+verified_code:
+  src/docir/modules/documents/application/services/document_patch.py: 5b7b85ac62c7
+  src/docir/modules/documents/domain/entities/document.py: 69cfc0a97a7b
+  src/docir/modules/documents/domain/services/checks/verification_rules.py: cd968669505d
+verified_content: 7824779a2650
 ---
 
 ## Context

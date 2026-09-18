@@ -4,7 +4,7 @@ code:
 - src/docir/modules/documents/domain/services/graph_checks.py
 code_baseline:
   src/docir/modules/documents/application/dto.py: f265277c576a
-  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
 created: '2026-08-13'
 description: 'Both halves shipped: query --expr asks a question, and checks: in docs-schema.yaml
   states a rule the store runs.'
@@ -21,7 +21,12 @@ tags:
 - schema
 title: No expression language over the corpus
 type: issue
-updated: '2026-08-25'
+updated: '2026-09-18'
+verified: '2026-09-18'
+verified_code:
+  src/docir/modules/documents/application/dto.py: f265277c576a
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
+verified_content: fd1fad339282
 ---
 
 ## Context

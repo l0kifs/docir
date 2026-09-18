@@ -3,7 +3,7 @@ code:
 - src/docir/entry_points/cli/app.py
 - src/docir/modules/documents/domain/services/schema_shape.py
 code_baseline:
-  src/docir/entry_points/cli/app.py: 632b4c81a902
+  src/docir/entry_points/cli/app.py: a15a6e7698f4
   src/docir/modules/documents/domain/services/schema_shape.py: f8e1f5b5ad84
 created: '2026-08-08'
 description: schema-drift reports a schema change after the fact; nothing renders
@@ -22,7 +22,12 @@ tags:
 - schema
 title: No way to see what a docs-schema.yaml edit will change before it lands
 type: issue
-updated: '2026-08-16'
+updated: '2026-09-18'
+verified: '2026-09-18'
+verified_code:
+  src/docir/entry_points/cli/app.py: a15a6e7698f4
+  src/docir/modules/documents/domain/services/schema_shape.py: f8e1f5b5ad84
+verified_content: f13426b3baca
 ---
 
 **Class:** missing · **Severity:** cosmetic

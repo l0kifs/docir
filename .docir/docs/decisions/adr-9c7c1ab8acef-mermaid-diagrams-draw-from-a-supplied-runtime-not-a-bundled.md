@@ -2,7 +2,7 @@
 code:
 - src/docir/modules/publishing/infra/diagrams.py
 code_baseline:
-  src/docir/modules/publishing/infra/diagrams.py: 82acf633af1c
+  src/docir/modules/publishing/infra/diagrams.py: 63fc23ecd970
 created: '2026-08-12'
 description: Why docir build renders mermaid fences as diagrams, and why the runtime
   is a build input like --logo rather than a vendored asset.
@@ -18,6 +18,10 @@ tags:
 title: Mermaid diagrams draw from a supplied runtime, not a bundled one
 type: decision
 updated: '2026-09-18'
+verified: '2026-09-18'
+verified_code:
+  src/docir/modules/publishing/infra/diagrams.py: 63fc23ecd970
+verified_content: 41b1d4cefff3
 ---
 
 ## Context

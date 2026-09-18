@@ -2,7 +2,7 @@
 code:
 - src/docir/modules/documents/infra/schema_loader.py
 code_baseline:
-  src/docir/modules/documents/infra/schema_loader.py: 95c1dd812abc
+  src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
 created: '2026-09-16'
 description: A partial type block loads only on an unreleased docir, so every command
   refuses for anyone on the current release — and it has already disabled docir's
@@ -21,7 +21,11 @@ tags:
 - integrity
 title: A schema overlay makes the store unreadable by every published docir
 type: issue
-updated: '2026-09-17'
+updated: '2026-09-18'
+verified: '2026-09-18'
+verified_code:
+  src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
+verified_content: 884bb9327e13
 ---
 
 A partial `types:` block loads only on a docir that ships [[adr-6aa2e2f5f403]], which at the

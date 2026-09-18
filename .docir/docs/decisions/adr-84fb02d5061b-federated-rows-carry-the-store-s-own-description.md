@@ -2,7 +2,7 @@
 code:
 - src/docir/entry_points/federation.py
 code_baseline:
-  src/docir/entry_points/federation.py: d4450115acce
+  src/docir/entry_points/federation.py: e41979b7fb31
 created: '2026-08-28'
 description: Why a store describes itself in its own stores.yaml, and why that sentence
   rides on every federated row beside the store path.
@@ -18,7 +18,11 @@ tags:
 - retrieval
 title: Federated rows carry the store's own description
 type: decision
-updated: '2026-08-28'
+updated: '2026-09-18'
+verified: '2026-09-18'
+verified_code:
+  src/docir/entry_points/federation.py: e41979b7fb31
+verified_content: cefaca4061f4
 ---
 
 ## Context

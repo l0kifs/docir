@@ -4,7 +4,7 @@ code:
 - src/docir/modules/release/**
 code_baseline:
   src/docir/entry_points/daemon/release_watch.py: 9a5c3ffb8d25
-  src/docir/modules/release/**: 729888e674f9
+  src/docir/modules/release/**: 8b0b670930c6
 created: '2026-08-09'
 description: How docir self upgrade installs a new docir, which installs it refuses
   to touch, and why the release check is opt-in.
@@ -21,7 +21,12 @@ tags:
 - daemon
 title: 'Upgrading the package: re-exec, and only where docir owns its environment'
 type: decision
-updated: '2026-09-17'
+updated: '2026-09-18'
+verified: '2026-09-18'
+verified_code:
+  src/docir/entry_points/daemon/release_watch.py: 9a5c3ffb8d25
+  src/docir/modules/release/**: 8b0b670930c6
+verified_content: 5fe2eb849432
 ---
 
 ## Context

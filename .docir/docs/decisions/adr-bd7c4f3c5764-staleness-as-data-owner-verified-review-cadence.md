@@ -2,7 +2,7 @@
 code:
 - src/docir/modules/documents/domain/services/graph_checks.py
 code_baseline:
-  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
 created: '2026-07-23'
 description: Why staleness is owner + verified + review cadence data rather than a
   heuristic.
@@ -17,7 +17,11 @@ tags:
 - staleness
 title: Staleness as data (owner + verified + review cadence)
 type: decision
-updated: '2026-08-06'
+updated: '2026-09-18'
+verified: '2026-09-18'
+verified_code:
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
+verified_content: d4c805d704fd
 ---
 
 ## Context
@@ -35,8 +39,10 @@ Model staleness explicitly, as data rather than a heuristic:
   frontmatter. Persisted as `documents.owner` / `documents.verified` (migration
   `0002`).
 - A per-type `review_days` cadence in the schema. A doc is stale when
-  `today - (verified or updated) > review_days`; `review_days: 0` means the type
-  is never stale.
+  `today - (verified, else revoked, else created) > review_days` — **never**
+  `updated`, which any edit moves and which would let a document clear its own
+  review queue ([[adr-fad49eaa4648]] narrowed this). `review_days: 0` means the
+  type is never stale.
 - Surfacing is **Tier 1** (non-blocking `docir check`, a `stale` finding) plus a
   computed `stale` flag on every read view. Stamp the clock with
   `docir update <id> --verified`; set the steward with `--set-owner`.

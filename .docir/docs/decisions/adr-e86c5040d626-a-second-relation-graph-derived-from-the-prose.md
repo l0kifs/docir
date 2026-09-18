@@ -7,10 +7,10 @@ code:
 - src/docir/platform/persistence/repositories.py
 - src/docir/platform/persistence/models.py
 code_baseline:
-  src/docir/modules/documents/domain/entities/document.py: deb78c9e104d
+  src/docir/modules/documents/domain/entities/document.py: 69cfc0a97a7b
   src/docir/modules/documents/domain/services/checks/graph_rules.py: 91431026f476
-  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
-  src/docir/platform/naming/__init__.py: 758f8f09f7fb
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
+  src/docir/platform/naming/__init__.py: a390e8dc9c17
   src/docir/platform/persistence/models.py: f4e5bd6b7529
   src/docir/platform/persistence/repositories.py: 7bcf7e81a5a0
 created: '2026-08-17'
@@ -30,7 +30,16 @@ tags:
 - persistence
 title: A second relation graph, derived from the prose
 type: decision
-updated: '2026-09-17'
+updated: '2026-09-18'
+verified: '2026-09-18'
+verified_code:
+  src/docir/modules/documents/domain/entities/document.py: 69cfc0a97a7b
+  src/docir/modules/documents/domain/services/checks/graph_rules.py: 91431026f476
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
+  src/docir/platform/naming/__init__.py: a390e8dc9c17
+  src/docir/platform/persistence/models.py: f4e5bd6b7529
+  src/docir/platform/persistence/repositories.py: 7bcf7e81a5a0
+verified_content: 711412b53dc0
 ---
 
 `docir check` reported `orphan` for every document whose author had linked it by writing its

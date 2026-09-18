@@ -4,7 +4,7 @@ code:
 - src/docir/modules/documents/application/services/document_patch.py
 - src/docir/modules/documents/application/services/id_generator.py
 code_baseline:
-  src/docir/modules/documents/application/services/document_patch.py: 7b2a442b890c
+  src/docir/modules/documents/application/services/document_patch.py: 5b7b85ac62c7
   src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
   src/docir/modules/documents/application/services/id_generator.py: 294508e5ace0
 created: '2026-08-15'
@@ -19,7 +19,13 @@ tags:
 - architecture
 title: Doc-Index CLI — the write path
 type: architecture
-updated: '2026-09-17'
+updated: '2026-09-18'
+verified: '2026-09-18'
+verified_code:
+  src/docir/modules/documents/application/services/document_patch.py: 5b7b85ac62c7
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
+  src/docir/modules/documents/application/services/id_generator.py: 294508e5ace0
+verified_content: d4f6ade820b7
 ---
 
 ## Write path
@@ -34,7 +40,7 @@ follows within seconds.
 ## Document creation (`docir add`)
 
 ```
-docs add --type decision --title "Refresh token rotation" \
+docir add --type decision --title "Refresh token rotation" \
   --description "When and how refresh tokens are rotated on renewal." \
   --tags auth,api --related adr-0007 \
   --body-file draft.md

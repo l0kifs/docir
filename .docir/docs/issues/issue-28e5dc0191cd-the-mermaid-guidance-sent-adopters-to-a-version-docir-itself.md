@@ -24,7 +24,7 @@ tags:
 - docs
 title: The mermaid guidance sent adopters to a version docir itself stopped using
 type: issue
-updated: '2026-09-17'
+updated: '2026-09-18'
 ---
 
 ## What was wrong
@@ -57,12 +57,12 @@ Both surfaces now name `dist/mermaid.min.js` at 11.16.1 and describe the propert
 that actually matters — the file sets `window.mermaid`, and the `.mjs` entry is
 refused. "UMD" is dropped from the skill and the README: mermaid 11's bundle is a plain
 IIFE assigning a global, not a Universal Module Definition, and the operative
-requirement was never UMD but *classic script*. It survives in two surfaces an
+requirement was never UMD but *classic script*. It survived in two surfaces an
 agent also reads — `docir build --help` and the `.mjs` refusal message in
-`publishing/infra/diagrams.py` — which still send an adopter to 10.9.3 on the
-disproved "ESM-only" grounds, and the skill's `reference/publishing.md` says the
-refusal carries the 11.16.1 URL when it carries the 10.9.3 one. Neither is fixed
-here.
+`publishing/infra/diagrams.py` — which kept sending adopters to 10.9.3 on the
+disproved "ESM-only" grounds, while the skill's `reference/publishing.md`
+described the refusal as carrying the 11.16.1 URL. Those were fixed afterwards,
+in the change that made the URL one constant (`diagrams.MERMAID_RUNTIME_URL`).
 
 adr-9c7c1ab8acef is left alone. Its decision — classic and not a module, because
 `type="module"` is fetched under CORS rules `file://` fails — is correct and is
@@ -73,7 +73,11 @@ the reason this works at all.
 `pages.yml` now opens the built pages in a real browser
 (`scripts/assert_diagrams_render.py`, playwright and chromium) and asserts an `<svg>`
 with content inside every diagram node; a no-op global and an ESM-only module both
-fail it, where the earlier file-exists check passed both. What remains weak is the
-guidance the code itself emits: `docir build --help` and the `.mjs` refusal still name
-mermaid 10.9.3, and the skill's `reference/publishing.md` describes the refusal as
-carrying the 11.16.1 URL.
+fail it, where the earlier file-exists check passed both. The five guidance surfaces
+— the `build` docstring, the refusal, the packaged `reference/publishing.md`,
+`README.md` and `pages.yml` — are now held to one version and to no "UMD" by
+`test_the_mermaid_guidance_agrees.py`.
+
+What that guard does not read is this store. adr-9c7c1ab8acef went on calling the
+runtime the "(UMD) build" after the word was dropped everywhere else, and nothing
+would have reported it: the documents describing a surface are not the surface.

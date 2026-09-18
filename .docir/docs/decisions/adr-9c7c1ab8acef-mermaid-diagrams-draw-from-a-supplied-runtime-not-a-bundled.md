@@ -17,7 +17,7 @@ tags:
 - docs
 title: Mermaid diagrams draw from a supplied runtime, not a bundled one
 type: decision
-updated: '2026-08-12'
+updated: '2026-09-18'
 ---
 
 ## Context
@@ -51,7 +51,11 @@ there with a **relative classic `<script>`**.
 - **Classic, not a module.** A `type="module"` script is fetched under CORS
   rules that `file://` fails, so the site would draw over HTTP and show source
   when opened from disk — the one place it is most likely to be opened. This is
-  also why `--mermaid` expects the browser (UMD) build.
+  also why `--mermaid` expects the browser build: the classic script that sets
+  `window.mermaid`, not the ESM entry. (Called the "UMD" build here until
+  issue-28e5dc0191cd measured that framing wrong — mermaid 11 still publishes
+  `dist/mermaid.min.js`, a plain IIFE; only the package's `exports` name the
+  module.)
 - **Written only when a document drew something**, and loaded only on the pages
   that have a diagram. `render_site` knows both, because it is the layer that
   rendered the bodies; nothing else can.

@@ -159,14 +159,13 @@ Re-fusing the *raw* lexical and vector rankings — which needs the fan-out to
 live inside `indexing` — remains untested and remains the only version of the
 alternative that could still supersede this decision.
 
-## Amendment: build is single-store (2026-08-13)
+## The build publishes one store, never a peer's documents
 
-`docir build` renders one store's corpus, and that is now explicit rather than
-incidental. The build is assembled from `query` plus one `get` per document —
-both federated commands — so a store declaring peers published their documents
-into this repository's site while the summary line still named this store. The
-CLI opts that pair out with a `local_only` payload key, which the fan-out reads
-before anything else.
+`docir build` renders one store's corpus. It is assembled from `query` plus one
+`get` per document — both federated commands — so a store declaring peers would
+otherwise publish their documents into this repository's site while the summary
+line still named this store. The CLI opts that pair out with a `local_only`
+payload key, which the fan-out reads before anything else.
 
 An empty `stores` list could not carry that meaning: the MCP tools send one
 whenever the argument is omitted, and a declared `stores.yaml` must still apply

@@ -17,7 +17,7 @@ tags:
 - retrieval
 title: Semantic embeddings on by default
 type: decision
-updated: '2026-09-17'
+updated: '2026-09-18'
 ---
 
 ## Context
@@ -44,20 +44,11 @@ unnoticed: every retrieval constant (the 25-candidate pool, RRF `k=60`, the 0.9
 lint threshold, `--limit 5`) had been chosen without evidence.
 
 A benchmark was built first, precisely so this decision would not be another
-untested guess — 20 documents, 12 tasks with relevance judgments, half of them
-deliberately phrased in words the documents never use (`benchmarks/`). It gives
-`recall@5` (**these figures are from the 20/12 corpus and no longer reproduce —
-see *Evidence update* below**):
-
-| | hashing embedder | real model |
-|---|---|---|
-| `context` | 0.88 (MRR 0.78) | **0.96 (MRR 0.94)** |
-| `search` (lexical only) | 0.85 (MRR 0.81) | 0.85 (MRR 0.81) |
-| `context`, paraphrased tasks only | 0.83 | **0.92** |
-
-Against plain full-text search, the hashing embedder bought **+0.03 recall and
-−0.03 MRR** — noise at this sample size. The real model bought **+0.11 and
-+0.13**. The hybrid design was sound; the shipped default was not exercising it.
+untested guess — 23 documents, 14 tasks with relevance judgments, half of them
+deliberately phrased in words the documents never use (`benchmarks/`). The
+numbers it gives are in *The measurement, and the instrument it needs*; the
+short form is that the hybrid design was sound and the shipped default was not
+exercising it.
 
 ## Decision
 **Make `fastembed` a required dependency and the default embedder.**
@@ -91,7 +82,9 @@ referencing it. Correct while it was opt-in; a hole the moment it became the
 default, since CI installed the dependency and then exercised none of it.
 Lifting the `ty` exclusion immediately surfaced a real diagnostic (the adapter
 held its model as bare `object`), now fixed with a `_TextEmbedding` Protocol.
-Tests that load the real model are marked `slow`; CI caches `~/.cache/fastembed`.
+Tests that load the real model are marked `slow`. The model is downloaded to
+`~/.docir/models` ([[adr-78090be868ec]]); CI pins `FASTEMBED_CACHE_PATH` and caches
+that directory.
 
 ### Considered and rejected
 
@@ -123,8 +116,8 @@ at container build, and never swapped mid-flight.
 
 ## Consequences
 - Easier: semantic retrieval works from `pip install docir` with no flags;
-  `recall@5` on the benchmark corpus goes 0.88 → 0.96 (0.93 → 0.96 after the
-  re-base below). Retrieval changes can now be evaluated instead of argued about.
+  `recall@5` on the benchmark corpus is 0.96 with the model against 0.93 with the
+  hashing fallback. Retrieval changes can now be evaluated instead of argued about.
 - Harder: install is ~240 MB heavier and first run needs network. Constrained
   environments (CI images, containers, air-gapped hosts) must set
   `DOCIR_EMBEDDER=deterministic` — a documented, tested path, not a degraded
@@ -138,19 +131,13 @@ at container build, and never swapped mid-flight.
   measures whether retrieved context changed what an agent actually did, which is
   the outcome the product exists for.
 
-## Evidence update (2026-07-28) — the decision holds, the numbers moved
+## The measurement, and the instrument it needs
 
-The decision above stands. The measurement it rests on does not reproduce, so
-this records what changed and why the conclusion survives it.
-
-The corpus was re-based to **23 documents / 14 tasks** (v0.4.0). The original had
-no `supersedes` edge and no document in an inactive status, which meant the two
-graph behaviours `docir context` depends on most were unmeasurable — two fixes
-that changed retrieval semantics moved no number at all. Adding a superseded
-decision pair and a closed issue made them visible, and re-based every figure
-in the table above.
-
-Current `recall@5`:
+The corpus is **23 documents / 14 tasks**. It was re-based from 20/12 because the
+original had no `supersedes` edge and no document in an inactive status, so the two
+graph behaviours `docir context` depends on most were unmeasurable — two fixes that
+changed retrieval semantics moved no number at all. A superseded decision pair and a
+closed issue made them visible.
 
 | | hashing embedder | real model |
 |---|---|---|
@@ -158,25 +145,21 @@ Current `recall@5`:
 | `context --expand 0` | 0.80 | **0.87** |
 | `search` (lexical only) | 0.83 (MRR 0.82) | 0.83 (MRR 0.82) |
 
-**This weakens the headline comparison and strengthens the underlying argument.**
-Full `context` now separates the embedders by 0.03 rather than 0.08, because the
-two new tasks depend on the relation graph and expansion lifts both embedders
-equally. Read alone, that reads like a case for reverting.
-
-It is not, because full `context` was always the wrong comparison for a question
-about embedders: it bundles the ranking with a graph traversal that has nothing
-to do with them. `--expand 0` isolates the ranking, and there the hashing
-embedder scores **0.80 recall / 0.80 MRR against plain `search`'s 0.83 / 0.82** —
-it ranks *below* the lexical index it is supposed to be complementing, because it
+**Quote the `--expand 0` pair, not full `context`.** Full `context` separates the
+embedders by 0.03, because it bundles the ranking with a graph traversal that has
+nothing to do with them and expansion lifts both equally. Read alone that looks like
+a case for reverting. `--expand 0` isolates the ranking, and there the hashing
+embedder scores **0.80 recall / 0.80 MRR against plain `search`'s 0.83 / 0.82** — it
+ranks *below* the lexical index it is supposed to be complementing, because it
 measures the same signal with less precision. The model scores 0.87 / 0.95.
 
-So the original claim ("the hashing embedder bought noise") was if anything too
-generous: on the better instrument it is a small net negative. The `--expand 0`
-pair is what README, CLAUDE.md and `benchmarks/README.md` now quote.
+So "the hashing embedder bought noise" was if anything too generous: on the better
+instrument it is a small net negative.
 
-The general lesson, since it will recur: **re-basing a benchmark can invalidate
-the argument the previous baseline was built to support.** The fix is to
-re-derive the argument on the new instrument, not to keep the corpus that
-flattered the conclusion — and to say so where the old numbers are still
-printed, because a reader comparing across a silent re-base draws a conclusion
-about code from a change in the denominator.
+## Re-basing a benchmark can invalidate the argument it was built to support
+
+The general lesson, since it will recur. When the corpus moves, re-derive the
+argument on the new instrument rather than keeping the corpus that flattered the
+conclusion — and say so wherever the old numbers are still printed, because a reader
+comparing across a silent re-base draws a conclusion about code from a change in the
+denominator.

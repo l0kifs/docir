@@ -15,6 +15,7 @@ import typer
 import yaml
 
 from docir import __version__
+from docir.config.settings import model_cache_home
 from docir.entry_points import doctor as doctor_report
 from docir.entry_points.cli import emit, rendering
 from docir.entry_points.cli.runner import execute, get_state, run_local, try_execute, use_json
@@ -373,6 +374,10 @@ def _emit_doctor(report: doctor_report.DoctorReport) -> None:
             "model": environment.embedder_id,
             "configured": environment.embed_model,
             "env": environment.embedder_env,
+            # Where the 64 MB download lives. Reported because "why did this
+            # command take sixteen seconds" and "where did the disk go" are the
+            # same question, and nothing else answers either (adr-78090be868ec).
+            "cache": str(model_cache_home()),
         },
         "daemon": {
             "running": environment.daemon.running,

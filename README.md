@@ -47,8 +47,9 @@ index (metadata + FTS5 full-text + a typed relation graph + semantic embeddings)
 or Windows — everything runs locally, and only the first-run model download needs network.
 
 ```bash
-# 1. install  (~240 MB of deps; a 64 MB embedding model downloads on first use, once —
-#              the only step that needs network. DOCIR_EMBEDDER=deterministic opts out.)
+# 1. install  (~240 MB of deps; a 64 MB embedding model downloads on first use, once,
+#              into ~/.docir/models — the only step that needs network, and the only
+#              thing docir keeps outside a store. DOCIR_EMBEDDER=deterministic opts out.)
 uv tool install docir          # or: pipx install docir
 
 # 2. scope docs to this repo (creates ./.docir, like `git init`)
@@ -240,7 +241,9 @@ archived documents, `--force` overwrites a directory docir did not build.
 **Where state lives.** Store precedence (highest first): `--home` → `DOCIR_HOME` → a
 project-local `.docir/` found by walking up from the CWD → the global `~/.docir`.
 `docir init` keeps docs with the code: `.docir/docs/` and `docs-schema.yaml` are
-**committed**, the derived index is **gitignored**. The daemon keeps the embedding model
+**committed**, the derived index is **gitignored**. The embedding model is the one thing
+that lives outside a store — `~/.docir/models`, one copy per machine, overridable with
+`FASTEMBED_CACHE_PATH`; `docir doctor` reports the path it is using. The daemon keeps the embedding model
 warm and serializes writes; `--no-daemon` runs any command in-process instead, and where
 the daemon cannot be started at all — a read-only sandbox, say — docir says so on stderr
 and runs in-process anyway rather than failing.

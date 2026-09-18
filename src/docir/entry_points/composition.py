@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from docir import __version__
-from docir.config.settings import Settings, enclosing_project_home
+from docir.config.settings import Settings, enclosing_project_home, model_cache_home
 from docir.entry_points.dispatch import Dispatcher
 from docir.entry_points.federation import FederatedDispatcher, Reader
 from docir.modules.agents.api import InstalledFile, UpdateRequest, build_agent_service
@@ -193,7 +193,7 @@ def build_embedder(model_name: str | None = None) -> Embedder:
         return DeterministicEmbedder()
     from docir.platform.embedding.fastembed import FastEmbedEmbedder
 
-    return FastEmbedEmbedder(model_name or DEFAULT_EMBED_MODEL)
+    return FastEmbedEmbedder(model_name or DEFAULT_EMBED_MODEL, cache_dir=model_cache_home())
 
 
 def active_embedder_id(model_name: str | None = None) -> str:
@@ -481,6 +481,9 @@ daemon.pid
 daemon.log
 # The release check's cached answer: this machine's, and dated.
 release-check.json
+# The embedding model, when this store *is* the global ~/.docir it downloads to
+# (adr-78090be868ec). 64 MB, per-machine, and re-fetchable.
+models/
 # Drafted upstream bug reports, awaiting a human's review — never committed.
 feedback/
 """
@@ -534,11 +537,15 @@ def refresh_store_gitignore(home: Path, *, version: str = __version__) -> tuple[
         return ()
     separator = "" if existing.endswith("\n") or not existing else "\n"
     added = "".join(f"{entry}\n" for entry in missing)
-    path.write_text(
-        f"{existing}{separator}# Added by docir {version}: files docir writes here "
-        f"that this store did not ignore yet.\n{added}",
-        encoding="utf-8",
+    header = (
+        f"# Added by docir {version}: files docir writes here that this store did not ignore yet."
     )
+    # One header per version, not per run. Two releases that each add an entry
+    # each say so, which is the point; one version saying it twice is noise in a
+    # committed file, and it happens whenever a store is upgraded again before
+    # the next release.
+    banner = "" if header in existing else f"{header}\n"
+    path.write_text(f"{existing}{separator}{banner}{added}", encoding="utf-8")
     return missing
 
 

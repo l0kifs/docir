@@ -13,12 +13,17 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      # Where fastembed puts the model, pinned so the cache step below can name
-      # the same directory. Without it fastembed 0.8 resolves its cache to
-      # `tempfile.gettempdir()/fastembed_cache` — NOT `~/.cache/fastembed`,
-      # which the cache step used to name — so the key never hit, the post-step
-      # had nothing to save, and every run re-downloaded ~64 MB while the step
-      # claimed it was downloading them once.
+      # Where docir puts the model, pinned so the cache step below can name the
+      # same directory. docir reads this variable itself and passes it to
+      # fastembed as `cache_dir` (adr-78090be868ec); unset, it would default to
+      # `~/.docir/models`, which on a runner is thrown away with the runner.
+      #
+      # The pin predates that and was needed more sharply then: fastembed 0.8
+      # resolved its own cache to `tempfile.gettempdir()/fastembed_cache` — NOT
+      # `~/.cache/fastembed`, which the cache step used to name — so the key
+      # never hit, the post-step had nothing to save, and every run
+      # re-downloaded ~64 MB while the step claimed it was downloading them
+      # once.
       #
       # A plain literal on both sides, and deliberately so. It may not be
       # `~/.cache/fastembed`: a job-level `env:` value is not shell-expanded, so

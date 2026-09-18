@@ -5,6 +5,10 @@ index.db-wal
 index.db-shm
 daemon.pid
 daemon.log
-# Added by docir 0.27.0: files docir writes here that this store did not ignore yet.
+# The release check's cached answer: this machine's, and dated.
 release-check.json
+# The embedding model, when this store *is* the global ~/.docir it downloads to
+# (adr-78090be868ec). 64 MB, per-machine, and re-fetchable.
+models/
+# Drafted upstream bug reports, awaiting a human's review — never committed.
 feedback/

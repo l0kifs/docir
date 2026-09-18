@@ -220,6 +220,18 @@ class TestTheStoreIgnoresEverythingDocirWritesIntoIt:
         for path in paths:
             assert path.name in entries, f"docir writes {path.name} and nothing ignores it"
 
+    def test_the_model_cache_is_ignored_where_the_store_is_the_global_home(
+        self, tmp_path: Path
+    ) -> None:
+        # `~/.docir/models` sits inside the global store, and somebody keeping
+        # personal notes there under git would otherwise commit 64 MB
+        # (adr-78090be868ec). Not a `Settings` path, so the walk above cannot
+        # see it.
+        settings = _settings(tmp_path)
+        initialize_store(settings)
+        entries = _gitignore_entries((settings.home / ".gitignore").read_text("utf-8"))
+        assert "models/" in entries
+
     def test_the_feedback_drafts_are_ignored_too(self, tmp_path: Path) -> None:
         # Not a `Settings` path — the skill names the directory — and the one
         # entry whose absence costs something: a draft nobody has reviewed for
@@ -267,6 +279,23 @@ class TestAnExistingStoreIsBroughtUpToTheRunningBuild:
         entries = _gitignore_entries((settings.home / ".gitignore").read_text("utf-8"))
         assert "*.local" in entries
         assert "feedback/" in entries
+
+    def test_one_version_announces_itself_once(self, tmp_path: Path) -> None:
+        # Two releases that each add an entry each say so. One version saying it
+        # twice is noise in a committed file, and it happens whenever a store is
+        # upgraded again before the next release ships.
+        settings = self._aged(tmp_path, "index.db\n")
+        refresh_store_gitignore(settings.home, version="9.9.9")
+        (settings.home / ".gitignore").write_text(
+            (settings.home / ".gitignore").read_text("utf-8").replace("feedback/\n", ""),
+            encoding="utf-8",
+        )
+
+        refresh_store_gitignore(settings.home, version="9.9.9")
+
+        text = (settings.home / ".gitignore").read_text("utf-8")
+        assert text.count("Added by docir 9.9.9") == 1
+        assert "feedback/" in _gitignore_entries(text)
 
     def test_a_second_run_adds_nothing(self, tmp_path: Path) -> None:
         settings = self._aged(tmp_path, "index.db\n")

@@ -125,7 +125,7 @@ class TestItBringsTheStoresGitignoreUpToTheRunningBuild:
 
         # Which entries, not how many: the report is what tells the reader to
         # run `git status`, so it has to name what changed.
-        assert set(report["gitignore_added"]) == {"release-check.json", "feedback/"}
+        assert set(report["gitignore_added"]) == {"release-check.json", "models/", "feedback/"}
         assert "feedback/" in (settings.home / ".gitignore").read_text("utf-8")
 
     def test_an_upgrade_with_nothing_to_add_leaves_the_file_alone(

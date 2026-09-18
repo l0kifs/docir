@@ -44,6 +44,41 @@ DEFAULT_REQUEST_TIMEOUT = 300.0
 #: (the ``.git`` model). ``docir init`` creates one; commands then scope to it.
 PROJECT_STORE_DIRNAME = ".docir"
 
+#: fastembed's own variable for where it keeps a downloaded model. docir honours
+#: it rather than overriding it: a CI image that pins it is naming a directory it
+#: also caches, and two sides naming different directories is how this repo's own
+#: workflow came to re-download the model on every run.
+MODEL_CACHE_ENV = "FASTEMBED_CACHE_PATH"
+
+
+def model_cache_home() -> Path:
+    """Where the embedding model is downloaded and kept.
+
+    **Not derived from a store's ``home``, and it must not be.** The model is
+    ~67 MB and identical for every store on the machine, while a project store
+    is one per repository and a committed artifact — a copy inside each would
+    be downloaded per repository and would need gitignoring to stay out of
+    everyone's working tree. So this is the *user-level* ``~/.docir``, which is
+    the only docir directory that is per-machine rather than per-project.
+
+    It replaces fastembed's default of ``tempfile.gettempdir()/fastembed_cache``,
+    which is wrong in two ways that are the same way: a downloaded model is
+    durable state, and a temp directory is where the system puts state it is
+    entitled to delete. So the download is re-paid whenever the OS sweeps, and
+    where there is no temp directory at all the call raises before docir runs
+    (issue-c5c089bcc1b2).
+
+    The override is read here and passed as fastembed's ``cache_dir`` argument
+    rather than left to fastembed, because ``define_cache_dir`` computes its
+    default *before* it reads the variable — so in a sandbox with no temp
+    directory, setting ``FASTEMBED_CACHE_PATH`` does not help and passing
+    ``cache_dir`` is the only thing that does.
+    """
+    override = os.environ.get(MODEL_CACHE_ENV, "").strip()
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / PROJECT_STORE_DIRNAME / "models"
+
 
 def discover_project_home(start: Path | None = None) -> Path | None:
     """Walk up from ``start`` (default CWD) for a ``.docir`` store directory.

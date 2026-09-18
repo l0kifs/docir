@@ -90,8 +90,16 @@ Every claim here was measured. Run `uv run python benchmarks/run.py` before and 
   `ty` or omitted from coverage**: it is what every default install runs, so a break there
   reaches every user, and lifting the `ty` exclusion immediately surfaced a real diagnostic
   (the adapter held its model as bare `object`; it now depends on a `_TextEmbedding` Protocol).
-  Tests that load the real model are marked `slow` (~4 s cold, ~2 ms warm); CI caches
-  `~/.cache/fastembed`. Run `uv run python benchmarks/run.py` before and after touching ranking.
+  Tests that load the real model are marked `slow` (~4 s cold, ~2 ms warm). **The model
+  is downloaded to `~/.docir/models` and the path is passed as fastembed's `cache_dir`, not
+  left to it** (adr-78090be868ec): its default is under the temp directory, which is where
+  the system puts what it may delete, so the 64 MB download was re-paid on every sweep — and
+  `define_cache_dir` computes that default *before* reading `FASTEMBED_CACHE_PATH`, so in a
+  sandbox with no temp directory the variable cannot help and the argument is the only thing
+  that can. It is **not** derived from `Settings.home`: the resolved home is usually a
+  project store, which is a committed artifact and one per repository. docir still honours
+  `FASTEMBED_CACHE_PATH` where it is set, which is what keeps CI's cache step naming the same
+  directory the model lands in. Run `uv run python benchmarks/run.py` before and after touching ranking.
   **For a change to the *chunking* rules `run.py` is the wrong instrument**: its corpus has no
   section over the ceiling and none quoting a fenced heading, so a broken splitter scores what a
   working one does (issue-b1a6e57deeec). `benchmarks/chunking.py` is the one that moves. Its

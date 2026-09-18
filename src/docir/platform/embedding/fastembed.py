@@ -13,6 +13,7 @@ The tests that exercise it are marked ``slow``.
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from pathlib import Path
 from typing import Protocol, cast
 
 from docir.platform.embedding.port import Embedder
@@ -35,8 +36,9 @@ class _TextEmbedding(Protocol):
 class FastEmbedEmbedder(Embedder):
     """Wraps ``fastembed.TextEmbedding`` behind the :class:`Embedder` port."""
 
-    def __init__(self, model_name: str = _DEFAULT_MODEL) -> None:
+    def __init__(self, model_name: str = _DEFAULT_MODEL, *, cache_dir: Path | None = None) -> None:
         self._model_name = model_name
+        self._cache_dir = cache_dir
         self._model: _TextEmbedding | None = None
 
     def _ensure_model(self) -> _TextEmbedding:
@@ -48,7 +50,19 @@ class FastEmbedEmbedder(Embedder):
                     "fastembed is not installed; reinstall docir, or set "
                     "DOCIR_EMBEDDER=deterministic to use the model-free embedder"
                 ) from exc
-            self._model = cast(_TextEmbedding, TextEmbedding(model_name=self._model_name))
+            # Passed, not left to fastembed's default. `define_cache_dir`
+            # computes `tempfile.gettempdir()/fastembed_cache` *before* it reads
+            # `FASTEMBED_CACHE_PATH`, so the variable cannot rescue a sandbox
+            # with no temp directory and this argument is the only thing that
+            # can — and a temp directory is the wrong home for a 67 MB download
+            # anyway, being where the system puts what it may delete
+            # (issue-c5c089bcc1b2). `None` still means "whatever fastembed
+            # decides", which is what a caller building this directly gets.
+            cache_dir = str(self._cache_dir) if self._cache_dir is not None else None
+            self._model = cast(
+                _TextEmbedding,
+                TextEmbedding(model_name=self._model_name, cache_dir=cache_dir),
+            )
         return self._model
 
     @property

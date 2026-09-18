@@ -437,6 +437,65 @@ class TestBatchFanOutCost:
         assert payload["missing"] == [{"ref": "a", "error": "local: no document with id 'a'"}]
 
 
+class TestARepairedPeerIsRetried:
+    """A peer that could not be opened is retried, not written off.
+
+    MEASURED with two real stores when this was found: with the peer's index
+    deleted, a daemon on the reader returned its own document only; after the
+    peer was reindexed the same daemon still returned only its own, while
+    `--no-daemon` returned both, at the same instant (issue-86bbaabd3944).
+
+    Asserted here against a recording factory rather than two stores, for the
+    reason the batch fan-out is: the property is *which opens were attempted*,
+    and a real peer answers a retried open and a cached verdict identically once
+    it is healthy.
+    """
+
+    def _federated(
+        self, tmp_path: Path
+    ) -> tuple[FederatedDispatcher, list[Path], _RecordingReader]:
+        home, peer_home = tmp_path / "local", tmp_path / "peer"
+        home.mkdir()
+        peer_home.mkdir()
+        _declare(home, peer_home)
+        peer_reader = _RecordingReader({"b"}, label="peer")
+        opens: list[Path] = []
+
+        def factory(requested: Path) -> tuple[object | None, str]:
+            opens.append(requested)
+            if len(opens) == 1:
+                return None, "no index; run `docir reindex` in that store"
+            return peer_reader, ""
+
+        return FederatedDispatcher(_RecordingReader({"a"}), home, factory), opens, peer_reader
+
+    def test_an_unopenable_peer_is_reported_and_then_retried(self, tmp_path: Path) -> None:
+        dispatcher, opens, _ = self._federated(tmp_path)
+        request = {"doc_ids": ["a", "b"]}
+
+        first = dispatcher.dispatch("get", dict(request))
+        assert isinstance(first, dict)
+        assert [row["id"] for row in first["documents"]] == ["a"]
+        assert [peer.home for peer in dispatcher.unavailable] == [(tmp_path / "peer").resolve()]
+
+        # The store was repaired between the two calls, which is what the
+        # comment on `unavailable` has always promised.
+        second = dispatcher.dispatch("get", dict(request))
+        assert isinstance(second, dict)
+        assert [row["id"] for row in second["documents"]] == ["a", "b"]
+        assert dispatcher.unavailable == ()
+        assert len(opens) == 2
+
+    def test_a_peer_that_opened_is_not_opened_again(self, tmp_path: Path) -> None:
+        """The cache still earns its place: removing it rather than narrowing it
+        would pay an engine and a schema load on every request."""
+        dispatcher, opens, _ = self._federated(tmp_path)
+        for _ in range(3):
+            dispatcher.dispatch("get", {"doc_ids": ["a", "b"]})
+        # One failed open, one that succeeded, and nothing after it.
+        assert len(opens) == 2
+
+
 class TestPeersAreReadOnly:
     def test_a_federated_read_does_not_touch_the_peer_index(
         self, container: Container, peer: Container

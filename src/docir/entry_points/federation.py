@@ -287,9 +287,10 @@ class FederatedDispatcher:
         self._base = base
         self._home = home
         self._factory = factory
-        # Readers are cached by resolved home for the process's life: opening a
-        # peer costs an engine and a schema load, and a daemon answers many
-        # requests against the same set.
+        # Successful opens are cached by resolved home for the process's life:
+        # one costs an engine and a schema load, and a daemon answers many
+        # requests against the same set. A *failed* open is not cached, for the
+        # reason in :meth:`_peer`.
         self._cache: dict[Path, Peer] = {}
         #: Peers that could not be opened during the last dispatch, for the
         #: caller to report. Reset per request, because a peer reindexed
@@ -419,12 +420,26 @@ class FederatedDispatcher:
         return merged
 
     def _peer(self, home: Path) -> Peer:
+        """Open ``home`` once, or retry it every dispatch until it opens.
+
+        Only what opened is cached. A failed open cost neither an engine nor a
+        schema load, so caching it bought nothing and froze the verdict for the
+        daemon's life: a peer skipped for a missing index, or for one older than
+        this build, stayed skipped after it was reindexed — the remedy
+        ``peer_status`` itself names. It worked in process and not over the
+        socket, which is the shape of stale answer this project keeps finding
+        (issue-86bbaabd3944).
+
+        The peer *list* was already re-read per dispatch, like the descriptions;
+        this is the verdict catching up with them.
+        """
         cached = self._cache.get(home)
         if cached is not None:
             return cached
         reader, reason = self._factory(home)
         peer = Peer(home=home, reader=reader, unavailable=reason)
-        self._cache[home] = peer
+        if reader is not None:
+            self._cache[home] = peer
         return peer
 
 

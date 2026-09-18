@@ -14,7 +14,7 @@ owner: maintainer
 related:
 - issue-c2e8ce341a00
 - arch-1cfb1b212237
-status: open
+status: resolved
 tags:
 - daemon
 - retrieval
@@ -85,3 +85,38 @@ build stamp would close it, at the cost of two file reads per peer per dispatch.
 Verify by injection: the four steps above as a subprocess test, asserting the
 peer document's **title** comes back after the repair. A count cannot tell a
 skipped peer from an empty one, which is the whole failure.
+
+## Resolution
+
+FIXED 2026-09-18. `_peer` caches only what opened. A failed open costs neither an
+engine nor a schema load, so caching it bought nothing and froze the verdict for
+the daemon's life; it is now retried on every dispatch, which is what the comment
+beside `unavailable` had always promised. A peer that opened is still cached, so
+the cost the cache exists for is unchanged.
+
+The four-step reproduction, re-run against the fix on the same two stores:
+
+```
+1. first read, daemon on A, peer broken   Local decision
+2. B repaired                             (docir reindex in B)
+3. same daemon on A                       Local decision, Peer decision
+4. --no-daemon on A                       Local decision, Peer decision
+```
+
+Step 3 is the point, and so is the pid: the daemon was not replaced between the
+two reads. The peer came back because the open was retried, not because anything
+restarted.
+
+Guarded at the factory seam rather than with two stores, for the reason the batch
+fan-out is: the property is *which opens were attempted*, and a healthy peer
+answers a retried open and a cached verdict identically. Two injections, each
+proven to fail its guard — caching a failed open again, and dropping the cache
+entirely instead of narrowing it. The second matters as much as the first: the
+cheap way to make a repaired peer visible is to stop caching, and that pays an
+engine and a schema load on every request to every peer.
+
+Left open deliberately: a peer that opened keeps its schema for the daemon's
+life. That is the peer-side of issue-c2e8ce341a00 and much smaller, since peers
+are read-only — a stale schema changes how rows project, not what any write is
+validated against — and closing it would cost two file reads per peer per
+dispatch.

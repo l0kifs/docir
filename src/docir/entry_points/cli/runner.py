@@ -291,9 +291,11 @@ def _build_executor(
     settings: Settings,
 ) -> tuple[RequestExecutor, Container | None]:
     if settings.use_daemon:
-        from docir.entry_points.daemon.socket_executor import SocketExecutor
+        from docir.entry_points.daemon.socket_executor import start_daemon_executor
 
-        return SocketExecutor(settings), None
+        daemon = start_daemon_executor(settings)
+        if daemon is not None:
+            return daemon, None
     # The in-process path loads the schema and the embedding model before a
     # single request is dispatched, and on a cold fastembed cache it downloads
     # the model first. The daemon exists so this is paid once; without it every

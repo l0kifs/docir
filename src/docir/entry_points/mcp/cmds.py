@@ -153,17 +153,27 @@ class _UnavailableExecutor(RequestExecutor):
 
 
 def _executor_for(settings: Settings) -> RequestExecutor:
-    """The daemon executor unless ``--no-daemon`` was passed.
+    """The daemon executor unless ``--no-daemon`` was passed, or it will not start.
 
     The in-process container is deliberately never closed: it lives as long as
     the server process, which is the point of holding one open — a per-call
     container would reload the embedding model on every tool call.
-    """
-    if settings.use_daemon:
-        from docir.entry_points.daemon.socket_executor import SocketExecutor
 
-        return SocketExecutor(settings)
+    The fallback goes through the same :func:`start_daemon_executor` the CLI
+    uses, rather than a second `SocketExecutor(settings)` beside it. This server
+    is the transport most likely to meet the failure it exists for — an MCP
+    client spawns it into whatever environment the client runs in, which is
+    where a read-only sandbox denies the socket — and it is exactly the seam
+    where a CLI-only fix would have gone unnoticed (adr-354a4270ecd8).
+    """
     from docir.entry_points.cli import rendering
+
+    if settings.use_daemon:
+        from docir.entry_points.daemon.socket_executor import start_daemon_executor
+
+        daemon = start_daemon_executor(settings)
+        if daemon is not None:
+            return daemon
     from docir.entry_points.composition import build_in_process_executor
 
     # Before the transport is up, so a client spawning this sees nothing happen

@@ -39,8 +39,11 @@ This module writes files into *other* people's repositories. Edit the packaged t
   word limit**, because the topic-based standards reject one and `similarity_lint.py` already
   warns on size. "One point in time" is the rule against appending a dated section per change
   (adr-c7ff45803a31): agents reach for `--append-section` because it destroys nothing, and a
-  document becomes a log of its own life — 21 of this store's 235 documents are past the
-  `scope-creep` threshold and the largest is five times it. It ships as **prevention only**, and
+  document becomes a log of its own life. **Count dated headings, not characters.**
+  `scope-creep` is a per-type ceiling and `reference` opts out of one entirely
+  (issue-5d6a5e854d11), so the longest documents here are the exempt ones — a raw body count
+  against a flat 8000 names 21 documents whose top three are all exempt by design. That went
+  into a first draft of the skill and had to be corrected. It ships as **prevention only**, and
   a Tier 2 finding on heading text was refused rather than forgotten: `Resolution` appears on 82
   documents and is a terminal state, so the predicate would fire on correct usage the way
   `unresolved-mention` does. The CLI skill carries the same correction **without naming the

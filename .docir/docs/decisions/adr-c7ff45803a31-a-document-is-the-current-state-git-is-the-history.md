@@ -3,8 +3,8 @@ code:
 - src/docir/modules/agents/infra/templates/writing/SKILL.md
 - src/docir/modules/agents/infra/templates/skill/SKILL.md
 code_baseline:
-  src/docir/modules/agents/infra/templates/skill/SKILL.md: 9514ea0b4cd1
-  src/docir/modules/agents/infra/templates/writing/SKILL.md: c44b11d34e7a
+  src/docir/modules/agents/infra/templates/skill/SKILL.md: 580a10818b12
+  src/docir/modules/agents/infra/templates/writing/SKILL.md: 50fc5b0a0244
 created: '2026-09-18'
 description: Why the writing skill forbids appending a dated section for every change,
   and why that rule ships as prevention rather than as a new lint finding.
@@ -23,9 +23,9 @@ type: decision
 updated: '2026-09-18'
 verified: '2026-09-18'
 verified_code:
-  src/docir/modules/agents/infra/templates/skill/SKILL.md: 9514ea0b4cd1
-  src/docir/modules/agents/infra/templates/writing/SKILL.md: c44b11d34e7a
-verified_content: 79225f87cda8
+  src/docir/modules/agents/infra/templates/skill/SKILL.md: 580a10818b12
+  src/docir/modules/agents/infra/templates/writing/SKILL.md: 50fc5b0a0244
+verified_content: 5875c0b38601
 ---
 
 ## Decision
@@ -49,14 +49,27 @@ was true in July.
 
 ## Measured
 
-Across this store's 235 documents: median body 3,187 characters, 21 past the 8,000-character
-`scope-creep` threshold, largest 38,954 — five times it. The documents at the top are the
-ones that grew by appending. One 29,099-character reference carries three consecutive
-`Follow-up — … (2026-07-26 / -27 / -28)`; others carry `Delta pass — 2026-07-29`,
-`Third round, 2026-07-30`, `What moved since 2026-08-03`, `Amendment: … (2026-08-13)`.
+Across this store's 236 documents, **8 carry a dated `##` heading**. The two worst are an
+open issue at 10,668 characters and an accepted decision at 10,263, each about a third over
+its type's 8,000-character ceiling, and each carrying two or three sections headed with the
+day the work happened: `Profile — … (2026-08-14)`, `Fixed: … (2026-08-14)`,
+`Candidate 1 was measured and rejected (2026-08-16)`; `Measurement (2026-08-12)`,
+`Amendment: build is single-store (2026-08-13)`.
 
-None of them had a purpose problem, which is what rule 2 would have caught. They were
-keeping a diary.
+The clearest single case was a probe log that had grown four `Follow-up — …` sections over
+three consecutive days plus a delta pass — 16,000 characters of session diary restating
+statuses that the `issue-` documents it named already owned. None of these had a purpose
+problem, which is what rule 2 would have caught.
+
+**A flat character count is the wrong instrument here, and measuring with one is how this
+was first got wrong.** `scope-creep`'s threshold is the *type's* `max_body_chars`, and
+`reference` sets `0` for never ([[issue-5d6a5e854d11]]) — so this store's three largest
+bodies, including a 38,954-character rule register, are the ones deliberately exempt. A
+register of 47 rules is long because it holds 47 rules; split in half it is two
+half-registers. Counting raw bodies against 8,000 named 21 documents, of which the top
+three were all exempt by design.
+
+Size is the symptom and an imprecise one. The dated heading is the signal.
 
 ## Why prevention only
 

@@ -78,11 +78,17 @@ does not know it was superseded.
 - Superseded text is simply deleted. It is not lost — it is in git, under a
   commit that says why it went.
 
-Measured on a 235-document corpus: the largest body was five times the
-`docir lint --deep` threshold, and the documents at the top were the ones that
-had grown a dated section per working session — three consecutive days of
-`Follow-up — …` stacked in one of them. None of them had a purpose problem. They
-were keeping a diary.
+Measured on a 236-document corpus: 8 documents carried a dated `##` heading, and
+the two worst were an open issue and an accepted decision, each about a third
+over its type's ceiling. One had grown a section per working session — three
+consecutive days of `Follow-up — …` — restating status that the issue documents
+it named already owned. None of them had a purpose problem, which is what rule 2
+would have caught. They were keeping a diary.
+
+Read `docir lint --deep`'s `scope-creep` with the same care: the threshold is the
+**type's** `max_body_chars`, not one number, and a type may set `0` for never. A
+register of 47 rules is long because it holds 47 rules, and splitting it in half
+gives two half-registers. Size is the symptom; a dated heading is the signal.
 
 ## 4. State each fact once, link to the rest
 

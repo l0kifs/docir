@@ -98,8 +98,8 @@ def _cli_tree() -> tuple[dict[tuple[str, ...], set[str]], set[tuple[str, ...]]]:
     return tree, groups
 
 
-def invocations(guide: str) -> list[str]:
-    """Every `docir ...` line the guide presents as runnable.
+def command_lines(text: str) -> list[str]:
+    """Every line the prose presents as runnable, whatever program it names.
 
     Two sources, because the guide uses both: lines inside fenced blocks, and
     inline code spans (which may wrap across a source line, e.g. ``**`docir
@@ -110,27 +110,35 @@ def invocations(guide: str) -> list[str]:
     document silently swallows each block into one giant "span" and shifts every
     pair after it, which made an earlier version of this test extract 28
     invocations while missing the exact line it exists to catch.
+
+    One extractor for every caller, and that is the point rather than tidiness:
+    :func:`retired_binary_hits` used to do its own scanning with a regex anchored
+    on a literal backtick, so it saw inline spans and never a fenced block — and
+    a fenced block is the one place a reader copies a line wholesale rather than
+    reading it. `docs add --type decision` sat in an architecture note's example
+    for months with every prose guard green (issue-acff9cbd2b06).
     """
     found: list[str] = []
     prose: list[str] = []
 
     in_fence = False
-    for line in guide.splitlines():
+    for line in text.splitlines():
         if _FENCE.match(line.strip()):
             in_fence = not in_fence
             continue
         if in_fence:
-            if line.strip().startswith("docir "):
-                found.append(line)
+            found.append(line.strip())
         else:
             prose.append(line)
 
-    for span in _INLINE_SPAN.findall("\n".join(prose)):
-        normalized = " ".join(span.split())
-        if normalized.startswith("docir "):
-            found.append(normalized)
+    found.extend(" ".join(span.split()) for span in _INLINE_SPAN.findall("\n".join(prose)))
+    return found
 
-    return [part for raw in found for part in split_line(raw)]
+
+def invocations(guide: str) -> list[str]:
+    """Every `docir ...` line the guide presents as runnable."""
+    docir = [line for line in command_lines(guide) if line.startswith("docir ")]
+    return [part for raw in docir for part in split_line(raw)]
 
 
 def split_line(raw: str) -> list[str]:
@@ -351,7 +359,7 @@ def exemption(invocation: str) -> tuple[str, ...] | None:
 #: anchored on `docir `. The architecture document carried 96 of them.
 _RETIRED_BINARIES = frozenset({"docs"})
 
-_RETIRED_INVOCATION = re.compile(rf"`({'|'.join(sorted(_RETIRED_BINARIES))}) ([a-z][a-z-]*)")
+_RETIRED_INVOCATION = re.compile(rf"^({'|'.join(sorted(_RETIRED_BINARIES))}) ([a-z][a-z-]*)")
 
 
 def retired_binary_hits(text: str) -> list[str]:
@@ -362,5 +370,8 @@ def retired_binary_hits(text: str) -> list[str]:
     the index" is prose, and prose is not in backticks.
     """
     return [
-        f"{binary} {word}" for binary, word in _RETIRED_INVOCATION.findall(text) if (word,) in TREE
+        f"{binary} {word}"
+        for line in command_lines(text)
+        for binary, word in _RETIRED_INVOCATION.findall(line)
+        if (word,) in TREE
     ]

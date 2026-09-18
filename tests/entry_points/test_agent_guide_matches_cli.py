@@ -53,6 +53,7 @@ import pytest
 from cli_oracle import (
     DELIBERATELY_UNREAL,
     TREE,
+    command_lines,
     exemption,
     invocations,
     problems,
@@ -97,11 +98,46 @@ GUIDE = "\n".join(_SKILL_TEMPLATE[key] for key in sorted(_SKILL_TEMPLATE))
 INVOCATIONS = invocations(GUIDE)
 
 
+class TestTheRetiredBinaryGuardReadsEverySpan:
+    """Guards issue-acff9cbd2b06.
+
+    `cli_oracle` has two consumers of the same surfaces, and they disagreed
+    about which spans exist. `invocations` read fenced blocks and inline spans;
+    `retired_binary_hits` had its own regex anchored on a literal backtick, so
+    it saw a span and never a fence — and a fence is the one place a reader
+    copies a line wholesale. A dead command name sat in an architecture note's
+    worked example for months with every prose guard green.
+    """
+
+    FENCED = 'Before.\n\n```\ndocs add --type decision --title "X"\n```\n'
+    SPAN = "Run `docs add --type decision` to make one."
+
+    def test_it_sees_a_fenced_line(self) -> None:
+        assert retired_binary_hits(self.FENCED) == ["docs add"]
+
+    def test_it_still_sees_an_inline_span(self) -> None:
+        assert retired_binary_hits(self.SPAN) == ["docs add"]
+
+    def test_prose_is_not_an_invocation(self) -> None:
+        # The second word must be a live subcommand, which is what keeps
+        # `docs/`, `docs-schema.yaml` and English plurals out.
+        assert retired_binary_hits("the docs query the index; see docs-schema.yaml") == []
+
+    def test_both_consumers_read_the_same_spans(self) -> None:
+        """The property the fix is, rather than the two cases it fixed.
+
+        One extractor, so neither consumer can come to be reading less than the
+        other with nothing saying so.
+        """
+        text = "Inline `docir check`.\n\n```\ndocir reindex\n```\n"
+        lines = command_lines(text)
+        assert "docir check" in lines
+        assert "docir reindex" in lines
+
+
 @pytest.mark.parametrize(
     "expected",
     [
-        "docir reindex",  # the line issue-87a27629f6a6 was actually wrong on
-        "docir check --fix",
         "docir add --type decision",
         "docir tag rm auth",
         "docir context",

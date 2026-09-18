@@ -15,6 +15,7 @@ related:
 - adr-ab9c454b760c
 - adr-fe7c91f61f32
 - arch-1cfb1b212237
+revoked: '2026-09-18'
 status: open
 tags:
 - cli
@@ -22,12 +23,10 @@ tags:
 - material
 title: Interpreter startup, not retrieval, dominates read latency
 type: issue
-updated: '2026-09-17'
-verified: '2026-09-17'
+updated: '2026-09-18'
 verified_code:
   benchmarks/latency.py: 492ab63bc432
   src/docir/entry_points/cli/**: 91fe38046593
-verified_content: d1abb5ae0cd8
 ---
 
 ## What was measured
@@ -83,7 +82,7 @@ every `##` section is embedded, adr-927aa43d9635): warm p50 moves 0.86 -> 1.42 a
 sweep. Past a few thousand documents that scan, not the startup cost, becomes the number
 to attack.
 
-## Profile — where the 0.8s goes (2026-08-14)
+## Profile — where the 0.8s goes
 
 `python -X importtime -m docir version` loads **925 modules**. Attributing self-time to the
 top-level package, the same three lead every run: `sqlalchemy` (145 modules, 156-419 ms),
@@ -122,7 +121,7 @@ So a daemon-mode client that imported only what it uses would start in ~150-340 
 Neither changes behaviour, and `--no-daemon` still pays the full cost — correctly, since it
 does build the container.
 
-## Fixed: the SQLAlchemy chain (2026-08-14)
+## Fixed: the SQLAlchemy chain
 
 `entry_points/composition.py` now imports `platform.persistence.engine`,
 `platform.persistence.sqlalchemy_uow` and `sqlalchemy.exc` **inside** the three functions that
@@ -162,7 +161,7 @@ The floor is now `pydantic` + `pydantic_settings` (~276ms, from `config/settings
 every command) and docir's own 130 modules (~190ms). Removing pydantic-settings from `Settings` is
 a design change, not a lazy import, and it should be prototyped and measured before it is chosen.
 
-## Candidate 1 was measured and rejected (2026-08-16)
+## Candidate 1 was measured and rejected
 
 Deferring `composition` out of `cli/runner.py` module scope moves nothing on its own, and
 the reason is `cli/app.py`: it imports `composition` at module scope too, for `init` /

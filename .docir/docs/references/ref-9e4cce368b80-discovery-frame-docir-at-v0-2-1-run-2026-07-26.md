@@ -14,7 +14,7 @@ tags:
 - docs
 title: Discovery frame — docir at v0.2.1, run 2026-07-26
 type: reference
-updated: '2026-08-25'
+updated: '2026-09-18'
 ---
 
 # Frame
@@ -104,6 +104,6 @@ Quality gates in `SKILL.md` §9, verified in `analysis/99-log.md` under `PHASE 7
    (non-interactive session, no telemetry in product). Evidence ranks 1, 5 and 6 from
    `extraction.md` §1 are **entirely absent**. Everything here rests on ranks 2–4 and 7.
 
-## Note on paths (2026-07-30)
+## About the analysis/ paths in this frame
 
 This document was `analysis/00-frame.md` until the discovery bundle was folded into docir's own store. The `analysis/...` paths in the text above describe where the run wrote its output at the time; those files are documents in this store now — see `docs/README.md` for the map.

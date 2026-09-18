@@ -18,7 +18,7 @@ tags:
 - agents
 title: Competitive landscape — docir vs. the alternatives (2026-08-24)
 type: reference
-updated: '2026-08-25'
+updated: '2026-09-18'
 ---
 
 *A fresh compile, not an edit of ref-a6db21f52427. That document is the 2026-08-03 snapshot and
@@ -36,7 +36,7 @@ Re-verifying docir's own cells in place is this document's standing practice —
 column its author can check against a working tree, and freezing them would make the comparison
 wrong in the only direction it is able to correct.
 
-## What moved since 2026-08-03
+## Where the market moved
 
 Three things, and only one of them is about features.
 

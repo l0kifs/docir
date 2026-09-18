@@ -47,7 +47,7 @@ tags:
 - schema
 title: Business rule register — 47 rules, BR-001..BR-074
 type: reference
-updated: '2026-09-04'
+updated: '2026-09-18'
 ---
 
 # Business rule register
@@ -658,6 +658,6 @@ zero, so dropping it would filter on embedding-queue staleness rather than relev
 **Evidence:**
 - `src/docir/modules/tags/application/services/tag_service.py:43-52`
 
-## Verification status (2026-07-30)
+## Verification status
 
 Of the 47 rules, **9 are `confirmed`, 38 are `assumed`, none is `disputed`.** The five that were disputed described v0.2.1 behaviour and were re-verified on 2026-07-30 by replaying each rule's own Given/When/Then against the current CLI: every disputed claim is now false, and the entries were rewritten to state what the system does rather than flipped. Two of them (BR-043, BR-045) had a wrong *statement*, not merely an unmet one — the layering rule was written as an exemption list, which made `relates_to` a dependency claim, and `--strict` was specified to fail on any finding, which failed a healthy corpus. The other 38 rules have NOT been re-verified since the v0.2.1 pass. `assumed` means reconstructed from the code and never confirmed by anyone who could say what was intended; it does not mean wrong, and it does not mean checked. That distinction is what archived issue issue-b928ad676595 recorded.

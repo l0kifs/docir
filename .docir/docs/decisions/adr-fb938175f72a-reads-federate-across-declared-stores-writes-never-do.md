@@ -17,7 +17,7 @@ tags:
 - retrieval
 title: Reads federate across declared stores; writes never do
 type: decision
-updated: '2026-08-17'
+updated: '2026-09-18'
 ---
 
 ## Context
@@ -126,7 +126,7 @@ only identifier; `store` disambiguates a collision rather than qualifying the id
 - `--limit` against N stores asks each for `limit` and truncates the merge, so a
   federated read costs N times the work of a local one.
 
-## Measurement (2026-08-12)
+## Measurement
 
 Measured on docir's own benchmark corpus (26 documents, 20 tasks, k=5,
 `bge-small-en-v1.5`) by splitting it alternately into two stores and asking

@@ -17,7 +17,7 @@ tags:
 - testing
 title: Probe log — second discovery pass, 2026-07-30
 type: reference
-updated: '2026-08-05'
+updated: '2026-09-18'
 ---
 
 Every probe below was executed against a throwaway store built by `docir init`, with
@@ -108,7 +108,7 @@ from a different direction — "a feature added to close a gap is new surface, a
 degenerate cases are unexamined by construction". Degenerate cases at boundaries is where
 to look next.
 
-## Third round, 2026-07-30 — the two areas the pass skipped
+## The two areas the pass skipped
 
 The second round listed Alembic's upgrade path and `lint --deep` as not reached. Both were then reached.
 

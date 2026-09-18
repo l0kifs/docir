@@ -159,3 +159,24 @@ checks:
     message: >-
       something supersedes this and it is still in a live status, so a reader
       filtering by status will be handed a document that has been replaced
+
+  # The backlog `code-drifted` cannot see. A `code_baseline` is minted on the
+  # write that first names a glob, so from that moment drift is reported -- but
+  # the mint asserts nothing about whether the text was true when the watching
+  # started, and only `--verified` does. A document written or backfilled after
+  # its code moved is in step with its baseline and wrong about its code at the
+  # same time, which is how arch-03eeae8bf37d described a drain that had changed
+  # eleven days earlier and no finding said so.
+  #
+  # Nothing else asks: an unverified document ages from `created` against a
+  # 365-day cadence, so `docir query --stale` is empty while 95 governed
+  # documents have never been read against their code. Expect this to be loud
+  # until that backlog is worked down -- it is a warning, so `--strict` and CI
+  # stay green, and it clears one `docir update <id> --verified` at a time.
+  code-unverified:
+    expr: "code && !verified && !archived"
+    message: >-
+      declares the code it governs and has never been read against it, so its
+      `code_baseline` records when the watching started rather than that
+      anything was true; drift is reported from that moment and whatever was
+      already wrong is not

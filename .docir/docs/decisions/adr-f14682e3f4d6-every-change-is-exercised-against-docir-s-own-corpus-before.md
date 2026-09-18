@@ -2,7 +2,7 @@
 code:
 - CLAUDE.md
 code_baseline:
-  CLAUDE.md: 1c09a5e65461
+  CLAUDE.md: c621eff3b23c
 created: '2026-08-25'
 description: The gates pass on defects that only a real store with history and a warm
   daemon exposes — 0.18.0 shipped three of them past a fully green suite.
@@ -20,7 +20,11 @@ tags:
 - testing
 title: Every change is exercised against docir's own corpus before it is done
 type: decision
-updated: '2026-08-25'
+updated: '2026-09-18'
+verified: '2026-09-18'
+verified_code:
+  CLAUDE.md: c621eff3b23c
+verified_content: 9a2a66e54a3a
 ---
 
 ## Context

@@ -4,7 +4,7 @@ code:
 - src/docir/modules/documents/domain/services/graph_checks.py
 code_baseline:
   src/docir/modules/documents/domain/schema.py: c0ea053f1c39
-  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
 created: '2026-08-25'
 description: One flag was answering two questions — where two types sit, and whether
   one waits for the other — so a decision refining a superseded one read as ready
@@ -21,7 +21,12 @@ tags:
 - schema
 title: Blocking is its own relation property, split from dependency
 type: decision
-updated: '2026-08-25'
+updated: '2026-09-18'
+verified: '2026-09-18'
+verified_code:
+  src/docir/modules/documents/domain/schema.py: c0ea053f1c39
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
+verified_content: 98f7a13e84fa
 ---
 
 ## Context
@@ -46,8 +51,9 @@ superseded, reported
     'adr-...' is ready to start: everything it depends on has closed
 
 which is backwards. A narrowing whose broader rule was just retired is a problem, not a green
-light. `refines` is the most-used kind in docir's own corpus — 34 edges across 31 documents —
-so the misreport was latent everywhere, silent only because no target had closed yet.
+light. `refines` is the most-used *typed* kind in docir's own corpus — 59 edges across 55
+documents, against `relates_to`'s 742 untyped ones — so the misreport was latent everywhere,
+silent only because no target had closed yet.
 
 ## Decision
 

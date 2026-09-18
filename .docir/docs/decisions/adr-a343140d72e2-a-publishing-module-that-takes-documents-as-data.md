@@ -2,7 +2,7 @@
 code:
 - src/docir/modules/publishing/**
 code_baseline:
-  src/docir/modules/publishing/**: 63f00e30d45f
+  src/docir/modules/publishing/**: ed368c841f10
 created: '2026-08-03'
 description: Why docir build renders a static site, and why the module takes JSON
   rather than a DocumentService.
@@ -20,7 +20,11 @@ tags:
 - docs
 title: A publishing module that takes documents as data
 type: decision
-updated: '2026-09-17'
+updated: '2026-09-18'
+verified: '2026-09-18'
+verified_code:
+  src/docir/modules/publishing/**: ed368c841f10
+verified_content: a342833f8838
 ---
 
 ## Context

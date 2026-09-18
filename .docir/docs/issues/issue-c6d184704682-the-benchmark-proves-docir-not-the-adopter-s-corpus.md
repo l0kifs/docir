@@ -2,7 +2,7 @@
 code:
 - benchmarks/**
 code_baseline:
-  benchmarks/**: b4e69df85a14
+  benchmarks/**: 7e900d0c5af2
 created: '2026-08-24'
 description: benchmarks/ lives in the repository, so an adopter inherits docir's retrieval
   numbers as a claim with no way to reproduce them on their own documents.
@@ -17,7 +17,11 @@ tags:
 - testing
 title: The benchmark proves docir, not the adopter's corpus
 type: issue
-updated: '2026-09-17'
+updated: '2026-09-18'
+verified: '2026-09-18'
+verified_code:
+  benchmarks/**: 7e900d0c5af2
+verified_content: 56aea526725c
 ---
 
 ## What happens
@@ -66,12 +70,23 @@ rather than deferred.
 ## What it reports, and why three rows
 
 `context` is the shipped read path. `context --expand 0` removes graph expansion, which lifts
-every embedder and hides the difference between them (ref-e7534f1c812d) — the pair is what
+every embedder and hides the difference between them ([[ref-e7534f1c812d]]) — the pair is what
 isolates the semantic signal. `search` is full-text alone, the floor anything semantic must beat.
 
-`benchmarks/example_fixture.yaml` judges eight tasks against docir's own store and scores
-`context` 0.88 recall@5 / 0.63 MRR, `--expand 0` 0.75, `search` 0.62. That ordering is the
-design working on a real corpus rather than a fixture built to show it.
+`benchmarks/example_fixture.yaml` judges eight tasks against docir's own store:
+
+| | recall@5 | MRR |
+|---|---|---|
+| `context` | 0.875 | 0.598 |
+| `context --expand 0` | 0.625 | 0.542 |
+| `search` | 0.625 | 0.463 |
+
+Read it as a demonstration of the command, not as the ranking benchmark — that is
+`benchmarks/run.py` over `corpus.yaml`, whose judgments were written for the question. On eight
+tasks against a corpus that has since tripled, `--expand 0` now only *matches* `search` on
+recall and beats it on MRR, where it once led on both. Which is the fixture's own lesson: a
+handful of judgments written against one snapshot measures that snapshot, and the numbers move
+under it as the corpus grows.
 
 Two properties follow from what a fixture is. It names document **ids**, not paths, because a
 retitle moves the filename and a retype moves the directory. And it does not federate: a

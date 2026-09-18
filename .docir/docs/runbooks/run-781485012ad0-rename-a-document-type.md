@@ -3,7 +3,7 @@ code:
 - src/docir/modules/documents/application/services/document_patch.py
 - src/docir/modules/documents/infra/schema_loader.py
 code_baseline:
-  src/docir/modules/documents/application/services/document_patch.py: 7b2a442b890c
+  src/docir/modules/documents/application/services/document_patch.py: 5b7b85ac62c7
   src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
 created: '2026-08-16'
 description: 'How a corpus renames a type and keeps the ids it already has: disable_types
@@ -18,7 +18,12 @@ tags:
 - cli
 title: Rename a document type
 type: runbook
-updated: '2026-09-17'
+updated: '2026-09-18'
+verified: '2026-09-18'
+verified_code:
+  src/docir/modules/documents/application/services/document_patch.py: 5b7b85ac62c7
+  src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
+verified_content: 7541b6884a11
 ---
 
 Merging only adds. The core, the enabled profiles and any inline `types:` are

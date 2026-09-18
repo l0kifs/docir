@@ -51,6 +51,10 @@ Each finding carries a `kind`, a `severity` and the command that closes it:
   → unset it, then `docir embed --flush`
 - `stale-daemon` — the daemon was serving code this process is not running. Already replaced by
   the doctor run; **re-run anything you acted on**.
+- `no-daemon-socket` — there is no usable temporary directory, so the daemon cannot run here at
+  all. This is the sandbox case, and nothing is broken: every command still answers, in process,
+  paying the model's cold start. → set `TMPDIR` to a writable directory, or `DOCIR_NO_DAEMON=1`
+  to stop trying and silence the per-command notice.
 - `peer-unavailable` — a store in `stores.yaml` that every federated read is silently skipping.
 - `global-fallback` / `shadowed-store` — writes are about to land in a store other than the one
   you think. → `docir init`

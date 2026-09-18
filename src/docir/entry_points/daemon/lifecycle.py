@@ -19,7 +19,7 @@ from functools import cache
 from pathlib import Path
 
 from docir import __version__
-from docir.config.settings import Settings
+from docir.config.settings import NO_DAEMON_ENV, Settings
 from docir.platform.errors import DaemonError
 from docir.platform.transport.client import DaemonClient
 
@@ -32,9 +32,35 @@ _POLL_INTERVAL = 0.05
 _PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 
 
-def _client(settings: Settings) -> DaemonClient:
-    """A client for this store, carrying the configured reply timeout."""
-    return DaemonClient(settings.socket_path, request_timeout=settings.request_timeout)
+def socket_path(settings: Settings) -> Path | None:
+    """Where this store's daemon listens, or ``None`` if it can listen nowhere.
+
+    The socket lives under the system temp directory, so asking for it asks
+    the platform for one — and in a read-only sandbox there may be none, which
+    `tempfile` reports by raising. Every command that *dispatches* already
+    survives that: the executor falls back to running in process
+    (issue-c4c6349e06d4). The two commands that do not dispatch, `doctor` and
+    `daemon status`, read the path directly to report it, so they ended in a
+    traceback — which lands on the commands somebody runs *to diagnose* the
+    first failure (issue-b9800d8265f6).
+
+    ``None`` is a fact about the environment, not a missing value: there is no
+    daemon here and there cannot be one, so `is_running` is false and `stop` has
+    nothing to unlink. It is never a *default* — `daemon serve` refuses rather
+    than guessing a path, because a server with nowhere to bind cannot serve.
+    """
+    try:
+        return settings.socket_path
+    except OSError:
+        return None
+
+
+def _client(settings: Settings) -> DaemonClient | None:
+    """A client for this store, or ``None`` where no socket path exists."""
+    path = socket_path(settings)
+    if path is None:
+        return None
+    return DaemonClient(path, request_timeout=settings.request_timeout)
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,7 +98,9 @@ class DaemonStatus:
 
     running: bool
     pid: int | None
-    socket_path: str
+    #: ``None`` where the platform offers nowhere to put a socket, which is a
+    #: daemon that cannot exist rather than one that is merely down.
+    socket_path: str | None
     version: str | None
     stale_code: bool
     stale_schema: bool
@@ -204,7 +232,8 @@ def is_running(settings: Settings) -> bool:
     pid = read_pid(settings)
     if pid is None or not process_alive(pid):
         return False
-    return _client(settings).is_available()
+    client = _client(settings)
+    return client is not None and client.is_available()
 
 
 def serves_current_code(settings: Settings) -> bool:
@@ -222,6 +251,8 @@ def serves_current_schema(settings: Settings) -> bool:
 def wait_until_ready(settings: Settings, timeout: float = _READY_TIMEOUT) -> bool:
     """Poll the socket until the daemon accepts connections or time runs out."""
     client = _client(settings)
+    if client is None:
+        return False
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if client.is_available():
@@ -268,7 +299,18 @@ def ensure_running(settings: Settings) -> None:
         stop(settings)
     else:
         clear_pid(settings)
-        settings.socket_path.unlink(missing_ok=True)
+        path = socket_path(settings)
+        if path is None:
+            # Nowhere to put a socket, so there is nothing to spawn *into*. A
+            # typed error rather than the `FileNotFoundError` the property
+            # raises, because the caller falls back to running in process and
+            # prints this as the reason it is doing so.
+            raise DaemonError(
+                "no usable temporary directory, so the daemon has nowhere to "
+                "listen; set TMPDIR to a writable directory, or "
+                f"{NO_DAEMON_ENV}=1 to stop trying"
+            )
+        path.unlink(missing_ok=True)
     written_before = _log_size(settings)
     spawn(settings)
     if not wait_until_ready(settings):
@@ -369,7 +411,7 @@ def stop(settings: Settings) -> bool:
 
     was_running = False
     client = _client(settings)
-    if client.is_available():
+    if client is not None and client.is_available():
         was_running = True
         with contextlib.suppress(DaemonError):
             client.send(Request(command="shutdown"))
@@ -380,7 +422,11 @@ def stop(settings: Settings) -> bool:
             os.kill(pid, 15)
         _await_exit(pid)
     clear_pid(settings)
-    settings.socket_path.unlink(missing_ok=True)
+    # The pid file still goes, even with nowhere to unlink a socket: it lives
+    # under the home and a leftover one outlives the daemon it named.
+    path = socket_path(settings)
+    if path is not None:
+        path.unlink(missing_ok=True)
     return was_running
 
 
@@ -408,7 +454,7 @@ def status(settings: Settings) -> DaemonStatus:
     return DaemonStatus(
         running=running,
         pid=record.pid if record is not None else None,
-        socket_path=str(settings.socket_path),
+        socket_path=str(path) if (path := socket_path(settings)) is not None else None,
         version=stamp.version if stamp is not None else None,
         stale_code=running and stamp != current_stamp(),
         stale_schema=running

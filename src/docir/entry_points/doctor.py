@@ -754,6 +754,26 @@ def _daemon_findings(environment: Environment) -> list[DoctorFinding]:
                 fix="already replaced by this command; re-run anything you acted on",
             )
         )
+    if daemon.socket_path is None:
+        # A warning, not an error. Every command still runs — the executor falls
+        # back to running in process (issue-c4c6349e06d4) — so `--strict` must
+        # not fail a setup that works, only slowly. Saying it here is what turns
+        # a per-command notice on stderr into something the caller can act on,
+        # and this is the report they open when the notice puzzles them.
+        findings.append(
+            DoctorFinding(
+                kind="no-daemon-socket",
+                message=(
+                    "there is no usable temporary directory, so the daemon has nowhere "
+                    "to listen and cannot run here; every command works, in process, "
+                    "paying the embedding model's cold start"
+                ),
+                fix=(
+                    "set TMPDIR to a writable directory to get the daemon back, or "
+                    f"{NO_DAEMON_ENV}=1 to stop trying and silence the per-command notice"
+                ),
+            )
+        )
     if environment.daemon_env_disabled:
         findings.append(
             DoctorFinding(

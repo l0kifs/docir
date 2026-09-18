@@ -20,6 +20,19 @@ Reads federate; writes never do. A peer is another repository, opened read-only,
   than relevance. Rows carry `store` only while federating — the field is pure cost with one
   store, which is why the read paths never carried it before.
 
+- **A peer's reader is cached, and the cache expires when that peer moves.** Opening one
+  costs an engine and a schema load, so a daemon reuses it — but it holds *that store's*
+  schema and an engine over its index, and both were frozen at the moment it opened
+  (issue-86bbaabd3944). A failed open is never cached: it cost neither, so caching it only
+  froze the verdict, and a peer skipped for a missing or older index stayed skipped after
+  the `docir reindex` the message itself asks for. A successful one is keyed on `peer_state`
+  — the schema file's digest and the index's recorded revision, both absent when unreadable,
+  which reopens. Measured at 0.45 ms per peer per dispatch against a 63 ms local query and a
+  482 ms container build, so the check costs about 1/1000 of what it protects. **Do not
+  widen it to anything that moves on an ordinary write** (the index file's mtime, a document
+  count): a peer under active use would then reopen on every request, which is the cache
+  deleted by another name.
+
 - **Every federated row says which store answered *and what that store is*.**
   `store` is a path: it disambiguates two hits and says nothing about the corpus behind
   them, which is the judgement the reader actually has to make about a hit from another

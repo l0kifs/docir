@@ -9,6 +9,7 @@ across stores, and nothing but the four read commands fans out.
 from __future__ import annotations
 
 import hashlib
+import sqlite3
 from collections.abc import Iterator
 from datetime import date
 from pathlib import Path
@@ -33,6 +34,7 @@ from docir.entry_points.federation import (
     FederatedDispatcher,
     merge_ranked,
     peer_homes,
+    peer_state,
     store_description,
     unrecognised_keys,
 )
@@ -494,6 +496,74 @@ class TestARepairedPeerIsRetried:
             dispatcher.dispatch("get", {"doc_ids": ["a", "b"]})
         # One failed open, one that succeeded, and nothing after it.
         assert len(opens) == 2
+
+
+class TestACachedPeerExpiresWhenThatPeerMoves:
+    """A cached reader holds the peer's schema and an engine over its index.
+
+    Both were frozen at the moment it opened, so a peer whose schema changed
+    kept being projected by rules it no longer declared — which of its statuses
+    count as closed, how long its documents may go unreviewed — and one migrated
+    underneath kept being queried by a reader built for the old revision. The
+    cache is keyed on those two facts, which move only when that store does.
+
+    Against the real peer store, because the point is that reading those two
+    values off disk sees a change a second process made.
+    """
+
+    def _federated(self, tmp_path: Path, peer_home: Path) -> tuple[FederatedDispatcher, list[Path]]:
+        home = tmp_path / "reader"
+        home.mkdir()
+        _declare(home, peer_home)
+        opens: list[Path] = []
+
+        def factory(requested: Path) -> tuple[object | None, str]:
+            opens.append(requested)
+            return _RecordingReader({"b"}, label="peer"), ""
+
+        return FederatedDispatcher(_RecordingReader({"a"}), home, factory), opens
+
+    def test_an_unchanged_peer_is_opened_once(self, peer: Container, tmp_path: Path) -> None:
+        """The negative assertions below mean nothing without this: a cache that
+        never hits would pass them all while paying an engine per request."""
+        dispatcher, opens = self._federated(tmp_path, peer.settings.home)
+        for _ in range(3):
+            dispatcher.dispatch("get", {"doc_ids": ["a", "b"]})
+        assert len(opens) == 1
+
+    def test_a_peer_whose_schema_changed_is_reopened(self, peer: Container, tmp_path: Path) -> None:
+        dispatcher, opens = self._federated(tmp_path, peer.settings.home)
+        dispatcher.dispatch("get", {"doc_ids": ["a", "b"]})
+        assert len(opens) == 1
+
+        schema = peer.settings.schema_path
+        schema.write_text(schema.read_text(encoding="utf-8") + "\n# edited\n", encoding="utf-8")
+        dispatcher.dispatch("get", {"doc_ids": ["a", "b"]})
+        assert len(opens) == 2
+
+    def test_a_peer_whose_index_revision_moved_is_reopened(
+        self, peer: Container, tmp_path: Path
+    ) -> None:
+        """A peer is never migrated by us, so its revision moves when somebody
+        reindexes it over there — which is also the remedy for every message
+        that skips one."""
+        dispatcher, opens = self._federated(tmp_path, peer.settings.home)
+        dispatcher.dispatch("get", {"doc_ids": ["a", "b"]})
+        assert len(opens) == 1
+
+        before = peer_state(peer.settings.home)
+        with sqlite3.connect(peer.settings.db_path) as conn:
+            conn.execute("UPDATE alembic_version SET version_num = 'beefcafe'")
+        assert peer_state(peer.settings.home).revision != before.revision
+
+        dispatcher.dispatch("get", {"doc_ids": ["a", "b"]})
+        assert len(opens) == 2
+
+    def test_a_healthy_peer_reads_as_both_facts_present(self, peer: Container) -> None:
+        """Absent would reopen every time and look like the guard working."""
+        state = peer_state(peer.settings.home)
+        assert state.schema is not None
+        assert state.revision is not None
 
 
 class TestPeersAreReadOnly:

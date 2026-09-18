@@ -115,8 +115,14 @@ entirely instead of narrowing it. The second matters as much as the first: the
 cheap way to make a repaired peer visible is to stop caching, and that pays an
 engine and a schema load on every request to every peer.
 
-Left open deliberately: a peer that opened keeps its schema for the daemon's
-life. That is the peer-side of issue-c2e8ce341a00 and much smaller, since peers
-are read-only — a stale schema changes how rows project, not what any write is
-validated against — and closing it would cost two file reads per peer per
-dispatch.
+Left open at first, and closed straight after: a peer that opened kept its
+schema and its engine for the daemon's life. The cache is now keyed on
+`peer_state` — the peer's schema digest and the revision its index records —
+so a reader is reused only while that store still looks the way it did when it
+opened, and a peer that *broke* after opening falls back to being skipped with a
+reason instead of being queried by a reader built for what it used to be.
+
+The cost was the reason to hesitate, so it was measured: 0.45 ms per peer per
+dispatch, against 63 ms for one local query and 482 ms to build the container a
+cache miss pays for. Four more injections, each proven to fail its guard —
+ignoring the state, dropping either half of it, and not caching at all.

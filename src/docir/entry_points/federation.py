@@ -35,6 +35,7 @@ Four rules hold the design up, and each is load-bearing:
 from __future__ import annotations
 
 import difflib
+import hashlib
 import os
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -43,6 +44,7 @@ from typing import Protocol
 
 import yaml
 
+from docir.config.settings import Settings
 from docir.platform.errors import DocirError
 
 #: The committed file naming a store's peers, beside ``docs-schema.yaml``.
@@ -121,6 +123,37 @@ class Peer:
     home: Path
     reader: Reader | None
     unavailable: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class PeerState:
+    """The facts a cached peer reader was opened against.
+
+    Both move only when that store does, so comparing them is what lets a reader
+    be reused without being frozen: the contents of the peer's schema file, and
+    the revision its index is stamped with. ``None`` covers a file that is
+    missing or will not open, which differs from every value a healthy store has
+    and so reopens — the safe direction, and the one that lets a peer which
+    *broke* after it was opened fall back to being skipped with a reason.
+    """
+
+    schema: str | None
+    revision: str | None
+
+
+def peer_state(home: Path) -> PeerState:
+    """What ``home`` looks like now, cheaply enough to ask on every dispatch."""
+    # Deferred: `engine` pulls SQLAlchemy and Alembic, and this module is
+    # imported by the CLI on every invocation, where that chain is most of the
+    # startup cost (issue-9509f9fa3631).
+    from docir.platform.persistence.engine import index_revision
+
+    settings = Settings.resolve(home)
+    try:
+        schema = hashlib.sha256(settings.schema_path.read_bytes()).hexdigest()
+    except OSError:
+        schema = None
+    return PeerState(schema=schema, revision=index_revision(settings.db_path))
 
 
 def peer_homes(home: Path, extra: Sequence[str | Path] = ()) -> tuple[Path, ...]:
@@ -287,11 +320,12 @@ class FederatedDispatcher:
         self._base = base
         self._home = home
         self._factory = factory
-        # Successful opens are cached by resolved home for the process's life:
-        # one costs an engine and a schema load, and a daemon answers many
-        # requests against the same set. A *failed* open is not cached, for the
-        # reason in :meth:`_peer`.
-        self._cache: dict[Path, Peer] = {}
+        # Successful opens are cached by resolved home, against the peer state
+        # they were opened at: one costs an engine and a schema load, and a
+        # daemon answers many requests against the same set. A *failed* open is
+        # not cached, and a cached one expires when that peer moves — both for
+        # the reasons in :meth:`_peer`.
+        self._cache: dict[Path, tuple[PeerState, Peer]] = {}
         #: Peers that could not be opened during the last dispatch, for the
         #: caller to report. Reset per request, because a peer reindexed
         #: between two calls is no longer worth warning about.
@@ -430,16 +464,24 @@ class FederatedDispatcher:
         socket, which is the shape of stale answer this project keeps finding
         (issue-86bbaabd3944).
 
+        A reader that *did* open is reused only while that peer still looks the
+        way it did when it opened, because the reader holds the peer's schema and
+        an engine over its index. A peer whose schema moved was being projected
+        by rules it no longer declares — which statuses count as closed, how long
+        its documents may go unreviewed — and one whose index was migrated may no
+        longer answer the queries this build writes.
+
         The peer *list* was already re-read per dispatch, like the descriptions;
-        this is the verdict catching up with them.
+        this is the reader catching up with them.
         """
+        state = peer_state(home)
         cached = self._cache.get(home)
-        if cached is not None:
-            return cached
+        if cached is not None and cached[0] == state:
+            return cached[1]
         reader, reason = self._factory(home)
         peer = Peer(home=home, reader=reader, unavailable=reason)
         if reader is not None:
-            self._cache[home] = peer
+            self._cache[home] = (state, peer)
         return peer
 
 

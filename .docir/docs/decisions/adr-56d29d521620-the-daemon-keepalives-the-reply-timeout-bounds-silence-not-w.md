@@ -19,7 +19,11 @@ tags:
 - material
 title: The daemon keepalives; the reply timeout bounds silence, not work
 type: decision
-updated: '2026-09-18'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/platform/transport/**: 9c79ebe03425
+verified_content: c51cb4e84e20
 ---
 
 ## Context

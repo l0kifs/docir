@@ -19,7 +19,12 @@ tags:
 - testing
 title: Adopt Modular DDD enforced by tach
 type: decision
-updated: '2026-08-06'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  scripts/check_contract_sync.py: 7d8eacc4e4c0
+  tach.toml: 044f93186ad5
+verified_content: f909c060d09c
 ---
 
 ## Context

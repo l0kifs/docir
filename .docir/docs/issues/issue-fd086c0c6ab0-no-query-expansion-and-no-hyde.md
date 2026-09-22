@@ -21,7 +21,11 @@ tags:
 - retrieval
 title: context takes one query, and the caller has better ones
 type: issue
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/indexing/**: d506e685ec3f
+verified_content: 0a05d1e35f07
 ---
 
 ## What happens

@@ -19,7 +19,13 @@ tags:
 - architecture
 title: Doc-Index CLI — the file format on disk
 type: architecture
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/domain/entities/document.py: 69cfc0a97a7b
+  src/docir/platform/filesystem/markdown_format.py: 7a4aeec0c12e
+  src/docir/platform/filesystem/tag_store.py: 3bb1c0ba5e69
+verified_content: 3bfa0338890d
 ---
 
 ## File format

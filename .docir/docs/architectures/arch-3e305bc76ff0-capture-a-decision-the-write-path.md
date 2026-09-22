@@ -28,7 +28,11 @@ tags:
 - integrity
 title: Capture a decision (the write path)
 type: architecture
-updated: '2026-08-15'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
+verified_content: 3a518649164a
 ---
 
 ## Backbone
@@ -39,18 +43,18 @@ decide → register vocabulary → author → validate → allocate id → persi
 
 | # | Event | Actor | Trigger | Evidence |
 |---|-------|-------|---------|----------|
-| 1 | TagRegistered | ACT-001/002 | `docir tag add <key> --description` | tag_service.py:43-52 |
-| 2 | DocumentRequested | ACT-001/002 | `docir add --type … --title … --description …` | cli/app.py:152-181 |
-| 3 | StatusDefaulted | system | no `--status` given | document_service.py:92 |
-| 4 | Tier0Validated | system | before any write | validation.py:26-93 |
-| 5 | IdAllocated | system | from `id_sequences` counter | id_generator.py:26-40 |
-| 6 | FileWritten | system | `docs/<type>s/<id>-<slug>.md` | markdown_store.py:34-39 |
-| 7 | IndexProjected | system | same transaction: metadata + FTS + relations | document_service.py:120-123 |
-| 8 | EmbeddingMarkedDirty | system | same transaction | document_service.py:122 |
-| 9 | EmbeddingComputed | ACT-004 | inline, or debounced 2s in the daemon | scheduler.py:27-44 |
-| 10 | DocumentUpdated | ACT-001/002 | `docir update <id> …` | document_service.py:128-159 |
-| 11 | DocumentArchived | ACT-001/002 | `docir archive <id>` | document_service.py:161-173 |
-| 12 | DocumentDeleted | ACT-001/002 | `docir delete <id> [--force]` | document_service.py:190-206 |
+| 1 | TagRegistered | ACT-001/002 | `docir tag add <key> --description` | `TagService.add` |
+| 2 | DocumentRequested | ACT-001/002 | `docir add --type … --title … --description …` | `cli.write_cmds.add` |
+| 3 | StatusDefaulted | system | no `--status` given | `DocumentService.add` |
+| 4 | Tier0Validated | system | before any write | `documents.domain.services.validation` |
+| 5 | IdAllocated | system | from `id_sequences` counter | `IdGenerator` |
+| 6 | FileWritten | system | `docs/<type>s/<id>-<slug>.md` | `MarkdownDocumentFileStore.write` |
+| 7 | IndexProjected | system | same transaction: metadata + FTS + relations | `DocumentService.add` |
+| 8 | EmbeddingMarkedDirty | system | same transaction | `DocumentService.add` |
+| 9 | EmbeddingComputed | ACT-004 | inline, or debounced 2s in the daemon | `indexing`, the embedding scheduler |
+| 10 | DocumentUpdated | ACT-001/002 | `docir update <id> …` | `DocumentService.update` |
+| 11 | DocumentArchived | ACT-001/002 | `docir archive <id>` | `DocumentService.archive` |
+| 12 | DocumentDeleted | ACT-001/002 | `docir delete <id> [--force]` | `DocumentService.delete` |
 
 Transaction boundary: events 6–8 commit atomically (one shared UnitOfWork, adr-d3e3616400bf).
 Event 9 is outside it and eventually consistent — the only deferred piece.
@@ -120,7 +124,7 @@ the opt-in Tier 2 `lint --deep` mentions it.
 
 - **Editing markdown by hand.** The product's second thesis is "agents never edit markdown
   directly", but humans plainly do (the whole point of git-backed files, and `reindex` exists
-  "after a hand-edit" — maintenance_service.py:3). A hand-edit that breaks frontmatter is
+  "after a hand-edit" — `MaintenanceService`, module docstring). A hand-edit that breaks frontmatter is
   silently skipped by `scan()` and surfaces only via `check`'s `malformed` finding. The
   boundary between "canonical file you may edit" and "managed artifact you may not" is
   nowhere stated. → `issue-6817ed1851e2`.

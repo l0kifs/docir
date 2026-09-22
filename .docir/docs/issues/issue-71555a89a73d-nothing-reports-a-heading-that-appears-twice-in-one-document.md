@@ -15,7 +15,11 @@ tags:
 - retrieval
 title: Nothing reports a heading that appears twice in one document
 type: issue
-updated: '2026-08-15'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/domain/services/similarity_lint.py: 497f909c8dc4
+verified_content: 0000f519dce0
 ---
 
 ## What happens

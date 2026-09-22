@@ -17,7 +17,12 @@ tags:
 - schema
 title: A partial type block overlays the type the package ships
 type: decision
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/domain/services/store_format.py: eb89d11244ff
+  src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
+verified_content: e6347b95d6e9
 ---
 
 ## Context

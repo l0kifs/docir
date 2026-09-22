@@ -22,7 +22,12 @@ tags:
 - schema
 title: A JMESPath expression over the corpus, and no rules of docir's own
 type: decision
-updated: '2026-08-25'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
+  src/docir/modules/documents/domain/services/expressions.py: f19ca3d868d7
+verified_content: 8b0d218619cd
 ---
 
 ## Context

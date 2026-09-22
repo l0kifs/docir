@@ -19,7 +19,11 @@ tags:
 - integrity
 title: A code-coverage advisory was measured and not built
 type: decision
-updated: '2026-08-25'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/domain/services/similarity_lint.py: 497f909c8dc4
+verified_content: ec1fe24057fa
 ---
 
 ## Context

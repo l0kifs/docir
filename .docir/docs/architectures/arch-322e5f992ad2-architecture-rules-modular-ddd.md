@@ -17,7 +17,12 @@ tags:
 - testing
 title: Architecture Rules — Modular DDD
 type: architecture
-updated: '2026-08-06'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  scripts/check_contract_sync.py: 7d8eacc4e4c0
+  tach.toml: 044f93186ad5
+verified_content: 25447aa4d8e5
 ---
 
 Audience: AI coding agent creating and maintaining this project.

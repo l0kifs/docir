@@ -20,7 +20,11 @@ tags:
 - retrieval
 title: Several queries take turns rather than pooling their scores
 type: decision
-updated: '2026-08-24'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/indexing/domain/scoring.py: 98ccb3377db2
+verified_content: 12326bd53218
 ---
 
 ## Context

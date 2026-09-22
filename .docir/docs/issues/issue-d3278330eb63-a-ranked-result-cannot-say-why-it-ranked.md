@@ -20,7 +20,12 @@ tags:
 - retrieval
 title: A ranked result cannot say why it ranked
 type: issue
-updated: '2026-08-24'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
+  src/docir/modules/indexing/domain/scoring.py: 98ccb3377db2
+verified_content: f1c930b197fb
 ---
 
 ## What happens

@@ -19,7 +19,11 @@ tags:
 - retrieval
 title: Pseudo-relevance feedback, built and rejected on measurement
 type: decision
-updated: '2026-08-24'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
+verified_content: 45a7e63aff82
 ---
 
 ## Context

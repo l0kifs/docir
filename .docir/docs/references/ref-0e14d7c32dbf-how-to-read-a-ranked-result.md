@@ -18,7 +18,12 @@ tags:
 - retrieval
 title: How to read a ranked result
 type: reference
-updated: '2026-08-25'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
+  src/docir/modules/indexing/domain/scoring.py: 98ccb3377db2
+verified_content: f6fe189f1c8a
 ---
 
 Every read path that ranks — `context` and `search` — returns two numbers per hit, and

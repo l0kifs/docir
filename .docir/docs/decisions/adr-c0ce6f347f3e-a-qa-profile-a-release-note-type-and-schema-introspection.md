@@ -18,7 +18,11 @@ tags:
 - schema
 title: A qa profile, a release_note type, and schema introspection
 type: decision
-updated: '2026-08-06'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/infra/profiles.py: 9ed5ebc9dc12
+verified_content: cb3367a2c437
 ---
 
 ## Context

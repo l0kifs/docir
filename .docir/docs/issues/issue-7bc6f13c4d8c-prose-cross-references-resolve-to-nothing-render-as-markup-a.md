@@ -19,7 +19,11 @@ tags:
 title: Prose cross-references resolve to nothing, render as markup, and no check sees
   them
 type: issue
-updated: '2026-09-11'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/platform/naming/links.py: 5c7ca5dd25fb
+verified_content: 68de27b7acba
 ---
 
 **Class:** missing · **Severity:** material

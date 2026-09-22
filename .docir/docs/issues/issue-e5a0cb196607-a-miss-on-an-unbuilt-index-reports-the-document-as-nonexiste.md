@@ -19,7 +19,11 @@ tags:
 - material
 title: A miss on an unbuilt index reports the document as nonexistent
 type: issue
-updated: '2026-08-29'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
+verified_content: 4a9d94fa0f8b
 ---
 
 **Class:** misleading · **Severity:** material

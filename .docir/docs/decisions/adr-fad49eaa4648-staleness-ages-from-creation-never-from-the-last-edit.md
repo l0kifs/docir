@@ -20,7 +20,12 @@ tags:
 - schema
 title: Staleness ages from creation, never from the last edit
 type: decision
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/domain/entities/document.py: 69cfc0a97a7b
+  src/docir/modules/documents/domain/services/checks/verification_rules.py: cd968669505d
+verified_content: 7a4987687b9e
 ---
 
 ## Context

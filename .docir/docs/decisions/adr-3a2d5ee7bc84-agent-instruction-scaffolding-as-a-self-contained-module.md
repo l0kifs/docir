@@ -4,7 +4,7 @@ code:
 - src/docir/entry_points/cli/agent_cmds.py
 code_baseline:
   src/docir/entry_points/cli/agent_cmds.py: 03f1105e98db
-  src/docir/modules/agents/**: fba99326556f
+  src/docir/modules/agents/**: ead710338f3f
 created: '2026-07-24'
 description: Why agent-instruction scaffolding is a self-contained module that bypasses
   the daemon.
@@ -20,7 +20,12 @@ tags:
 - architecture
 title: Agent-instruction scaffolding as a self-contained module
 type: decision
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/entry_points/cli/agent_cmds.py: 03f1105e98db
+  src/docir/modules/agents/**: ead710338f3f
+verified_content: f9792cb8c604
 ---
 
 ## Context

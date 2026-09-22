@@ -4,8 +4,8 @@ code:
 - src/docir/entry_points/daemon/socket_executor.py
 - src/docir/platform/transport/client.py
 code_baseline:
-  src/docir/entry_points/daemon/lifecycle.py: 584a75aa7d42
-  src/docir/entry_points/daemon/socket_executor.py: 5ad7704f083a
+  src/docir/entry_points/daemon/lifecycle.py: 3e55861fc705
+  src/docir/entry_points/daemon/socket_executor.py: 6c1ad13320de
   src/docir/platform/transport/client.py: 5fca48050e14
 created: '2026-09-16'
 description: The client spawns a daemon, waits, and reports the wait — so a store
@@ -16,13 +16,20 @@ owner: maintainer
 related:
 - issue-2f07f83e6b84
 - adr-56d29d521620
+- issue-c4c6349e06d4
 status: resolved
 tags:
 - cli
 - integrity
 title: A daemon that dies at startup is reported as a timeout
 type: issue
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/entry_points/daemon/lifecycle.py: 3e55861fc705
+  src/docir/entry_points/daemon/socket_executor.py: 6c1ad13320de
+  src/docir/platform/transport/client.py: 5fca48050e14
+verified_content: 37546f556c86
 ---
 
 A store whose schema will not load takes the daemon down at startup. The client cannot see
@@ -32,19 +39,17 @@ caller looks.
 
 ## Measured
 
-With the daemon enabled, which is the default:
+With the daemon enabled, which is the default, a store whose schema will not load produced
+the wait rather than the reason:
 
 ```
-DOCIR_HOME=<store whose schema will not load> python -m docir mcp serve
-# instructions: the ordinary ones — the server never read the schema
-# docir_query -> ToolError: daemon failed to become ready in time
+docir_query -> ToolError: daemon failed to become ready in time
 ```
 
-Only `docir --no-daemon` answers the same store instantly and correctly, because that mode
-builds the container — and so resolves the schema — in process. In the default mode the CLI
-is a socket client that loads no schema: it spawns the daemon and waits out the same
-ten-second deadline the MCP server does, and since the fix it too quotes what the daemon
-wrote.
+Only `docir --no-daemon` answered that store correctly, because that mode builds the
+container — and so resolves the schema — in process. In the default mode the CLI was a socket
+client that loaded no schema: it spawned the daemon and waited out the same ten-second
+deadline the MCP server did.
 
 ## Not the same defect as [[issue-2f07f83e6b84]]
 
@@ -87,6 +92,14 @@ the log.
 Quoted as *what it said*, never as the cause: a healthy daemon can miss this deadline too, on
 a cold model load, and then those lines are progress. The reader is the one who can tell, and
 now has something to tell it from.
+
+**Then closed a second time, and better.** [[issue-c4c6349e06d4]] made a daemon that will not
+start a reason to run in process rather than a reason to fail, so this store no longer reaches
+the timeout at all: the client falls back, the container resolves the schema, and the caller
+gets the error itself instead of a quoted log tail. Measured on a store whose
+`default_status` names no declared status — the default transport and `--no-daemon` now print
+the same sentence. The log quoting still matters for a daemon that fails *after* starting to
+come up, where the fallback's own warning names the wait and the log names the cause.
 
 The other half of [[adr-56d29d521620]] is untouched. This is the spawn-and-wait path only —
 the reply timeout still bounds silence rather than work, and the two still raise different

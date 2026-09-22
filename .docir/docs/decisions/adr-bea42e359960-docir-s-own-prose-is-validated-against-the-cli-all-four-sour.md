@@ -2,7 +2,7 @@
 code:
 - tests/entry_points/test_agent_guide_matches_cli.py
 code_baseline:
-  tests/entry_points/test_agent_guide_matches_cli.py: a46a6f29224b
+  tests/entry_points/test_agent_guide_matches_cli.py: bef9c1ad70de
 created: '2026-08-15'
 description: Why the command-resolution guard covers CLAUDE.md and the project store
   as well as the shipped guide, why a retired binary name needs a separate check,
@@ -20,9 +20,13 @@ tags:
 - agents
 - docs
 - testing
-title: docir's own prose is validated against the CLI, all four sources
+title: docir's own prose is validated against the CLI, all six sources
 type: decision
-updated: '2026-08-15'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  tests/entry_points/test_agent_guide_matches_cli.py: bef9c1ad70de
+verified_content: 7dda1d0dea24
 ---
 
 ## Context
@@ -74,18 +78,17 @@ Three parts are load-bearing and are the reason this is a decision rather than a
 
 ### A retired binary name needs its own check, in every source
 
-The extractor is anchored on `docir `. A code span opening with the binary's *previous*
-name therefore never reaches it — the line reads as "nothing to validate", which is
-indistinguishable from "valid". That is precisely how one document accumulated 96 of
-them while the guard beside it was green, and how `src/` kept 37 after the markdown
-side was clean. `_RETIRED_BINARIES` matches an old name
-followed by a word that is a live subcommand; requiring the second word to resolve is
-what keeps the docs *directory* and `docs-schema.yaml` out, since neither is followed
-by a space and a command.
+The extractor is anchored on `docir `, so a span opening with the binary's *previous* name
+never reaches it — the line reads as "nothing to validate", indistinguishable from "valid".
+That is how one document accumulated 96 while the guard beside it was green, and `src/` kept
+37 after the markdown side was clean. `_RETIRED_BINARIES` matches an old name followed by a
+word that is a live subcommand; requiring the second to resolve keeps the docs *directory*
+and `docs-schema.yaml` out.
 
-Generalising: a guard anchored on the correct spelling cannot see the incorrect one.
-Whenever a name changes, the retired name needs an explicit check or the rename is
-unenforced in exactly the places nobody re-reads.
+Generalising twice. A guard anchored on the correct spelling cannot see the incorrect one, so
+a rename goes unenforced without an explicit check. And it must read the same **spans** as its
+sibling, not just the same sources — [[issue-acff9cbd2b06]] is the 97th, in a fenced block the
+retired-name regex could not see.
 
 ### Prose that names an unreal command is exempted by list, and the list may only shrink
 

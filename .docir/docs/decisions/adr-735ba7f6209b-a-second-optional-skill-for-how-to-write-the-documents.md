@@ -6,25 +6,28 @@ code:
 code_baseline:
   src/docir/modules/agents/domain/targets.py: 5a26e980792b
   src/docir/modules/agents/infra/template_provider.py: bb886a00047b
-  src/docir/modules/agents/infra/templates/writing/**: 8d6a41a51c1e
+  src/docir/modules/agents/infra/templates/writing/**: 50fc5b0a0244
 created: '2026-08-15'
 description: Why documentation-writing rules ship as their own opt-in skill rather
   than a section of the CLI guide, and why the length rule is a section limit rather
   than a word count.
 id: adr-735ba7f6209b
 related:
-- kind: refines
-  to: adr-3a2d5ee7bc84
-- adr-6ed847e02fe5
-- kind: depends_on
-  to: adr-927aa43d9635
+- adr-3a2d5ee7bc84
+- adr-c7ff45803a31
 status: accepted
 tags:
 - agents
 - docs
 title: A second, optional skill for how to write the documents
 type: decision
-updated: '2026-08-25'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/agents/domain/targets.py: 5a26e980792b
+  src/docir/modules/agents/infra/template_provider.py: bb886a00047b
+  src/docir/modules/agents/infra/templates/writing/**: 50fc5b0a0244
+verified_content: 577548f36434
 ---
 
 ## Context
@@ -46,7 +49,7 @@ splitting documents and rewriting every reference.
 ## Decision
 Ship the rules as a **second, opt-in skill**: target `claude-writing` →
 `.claude/skills/docir-writing/SKILL.md`, from its own packaged template
-`writing.md`. `TemplateProvider` becomes a keyed catalogue (`template(name)`)
+directory `writing/`. `TemplateProvider` becomes a keyed catalogue (`template(name)`)
 and `AgentTarget` names its template, so a skill is a catalogue entry plus a
 file rather than a branch in the renderer.
 
@@ -61,7 +64,9 @@ so a repo that did not ask for the second one should not pay its context. The
 `points_to` stayed the pointer's *floor* rather than becoming its full contents.
 
 ## The rules, and what backs them
-Four rules, three of them well supported and one deliberately reshaped.
+Seven rules. Four were here at the start — three of them well supported and one
+deliberately reshaped — and the skill has grown three more since, of which
+*One point in time* carries its own decision ([[adr-c7ff45803a31]]).
 
 **One name per concept** and **state each fact once** are standard: style guides
 put terminology consistency first, and single-sourcing exists precisely because

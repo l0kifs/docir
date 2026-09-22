@@ -4,7 +4,7 @@ code:
 - src/docir/modules/agents/infra/templates/feedback/**
 code_baseline:
   src/docir/modules/agents/domain/targets.py: 5a26e980792b
-  src/docir/modules/agents/infra/templates/feedback/**: 0317aefaad1b
+  src/docir/modules/agents/infra/templates/feedback/**: 33e985284029
 created: '2026-09-14'
 description: Why upstream feedback ships as its own opt-in skill that only drafts
   a report, why it is suggested at every adoption moment but never installed by default,
@@ -21,7 +21,12 @@ tags:
 - docs
 title: A third, opt-in skill for reporting docir defects upstream
 type: decision
-updated: '2026-09-14'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/agents/domain/targets.py: 5a26e980792b
+  src/docir/modules/agents/infra/templates/feedback/**: 33e985284029
+verified_content: ef726cebe371
 ---
 
 ## Context

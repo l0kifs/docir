@@ -3,7 +3,7 @@ code:
 - src/docir/entry_points/mcp/**
 - src/docir/entry_points/payload.py
 code_baseline:
-  src/docir/entry_points/mcp/**: 340ab6499fd2
+  src/docir/entry_points/mcp/**: c830d100f54f
   src/docir/entry_points/payload.py: dc0ebcca2589
 created: '2026-08-03'
 description: Why docir mcp serve is a third client of the dispatcher rather than a
@@ -21,7 +21,12 @@ tags:
 - architecture
 title: MCP as a second transport over the dispatcher
 type: decision
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/entry_points/mcp/**: c830d100f54f
+  src/docir/entry_points/payload.py: dc0ebcca2589
+verified_content: 0a2bebfbc154
 ---
 
 ## Context

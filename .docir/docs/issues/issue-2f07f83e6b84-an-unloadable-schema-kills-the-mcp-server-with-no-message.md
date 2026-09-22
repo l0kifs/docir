@@ -3,8 +3,8 @@ code:
 - src/docir/entry_points/mcp/cmds.py
 - src/docir/entry_points/mcp/server.py
 code_baseline:
-  src/docir/entry_points/mcp/cmds.py: e0c5ec7e32e4
-  src/docir/entry_points/mcp/server.py: 310948427caa
+  src/docir/entry_points/mcp/cmds.py: d1b6879eb575
+  src/docir/entry_points/mcp/server.py: f8a743539681
 created: '2026-09-16'
 description: docir mcp serve dies in build_server when the schema will not load, so
   the client sees only a closed connection where the CLI prints the error that names
@@ -20,11 +20,11 @@ tags:
 - integrity
 title: An unloadable schema kills the MCP server with no message
 type: issue
-updated: '2026-09-17'
-verified: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
 verified_code:
-  src/docir/entry_points/mcp/cmds.py: e0c5ec7e32e4
-  src/docir/entry_points/mcp/server.py: 310948427caa
+  src/docir/entry_points/mcp/cmds.py: d1b6879eb575
+  src/docir/entry_points/mcp/server.py: f8a743539681
 verified_content: 653e1ff45611
 ---
 

@@ -2,7 +2,7 @@
 code:
 - src/docir/entry_points/doctor.py
 code_baseline:
-  src/docir/entry_points/doctor.py: a02599f46617
+  src/docir/entry_points/doctor.py: ce032a47b5e6
 created: '2026-08-25'
 description: Why the environment checks scattered across five commands became one
   command, and why the corpus is deliberately not part of it.
@@ -26,10 +26,10 @@ tags:
 - integrity
 title: docir doctor — one report for every way docir is subtly wrong
 type: decision
-updated: '2026-09-17'
-verified: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
 verified_code:
-  src/docir/entry_points/doctor.py: a02599f46617
+  src/docir/entry_points/doctor.py: ce032a47b5e6
 verified_content: 03143848f57c
 ---
 

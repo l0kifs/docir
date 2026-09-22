@@ -16,7 +16,6 @@ related:
 - adr-bd3a820cc57a
 - adr-dbe6633405ca
 - issue-d891ab5501e6
-revoked: '2026-09-22'
 status: resolved
 tags:
 - cosmetic
@@ -24,9 +23,11 @@ tags:
 title: No way to see what a docs-schema.yaml edit will change before it lands
 type: issue
 updated: '2026-09-22'
+verified: '2026-09-22'
 verified_code:
   src/docir/entry_points/cli/app.py: a15a6e7698f4
   src/docir/modules/documents/domain/services/schema_shape.py: f8e1f5b5ad84
+verified_content: 1355269c9f93
 ---
 
 **Class:** missing · **Severity:** cosmetic

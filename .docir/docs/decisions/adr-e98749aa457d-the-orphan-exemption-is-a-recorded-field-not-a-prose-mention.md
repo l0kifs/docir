@@ -7,7 +7,7 @@ code:
 code_baseline:
   src/docir/modules/documents/domain/entities/document.py: 69cfc0a97a7b
   src/docir/modules/documents/domain/services/checks/graph_rules.py: 91431026f476
-  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
   src/docir/platform/persistence/ports.py: 59b18ac11106
 created: '2026-09-04'
 description: 'Why check stopped reading the mention graph and gained an isolated:
@@ -25,12 +25,12 @@ tags:
 - integrity
 title: The orphan exemption is a recorded field, not a prose mention
 type: decision
-updated: '2026-09-17'
-verified: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
 verified_code:
   src/docir/modules/documents/domain/entities/document.py: 69cfc0a97a7b
   src/docir/modules/documents/domain/services/checks/graph_rules.py: 91431026f476
-  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
   src/docir/platform/persistence/ports.py: 59b18ac11106
 verified_content: f1d2a769aeb3
 ---

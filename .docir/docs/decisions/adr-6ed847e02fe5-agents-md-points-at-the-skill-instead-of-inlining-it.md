@@ -4,7 +4,7 @@ code:
 - tests/entry_points/test_e2e_agent.py
 - tests/modules/agents/**
 code_baseline:
-  src/docir/modules/agents/**: 9a5731002e85
+  src/docir/modules/agents/**: ead710338f3f
   tests/entry_points/test_e2e_agent.py: 3322a6e2f3e1
   tests/modules/agents/**: 7f145bd3afd1
 created: '2026-08-15'
@@ -21,10 +21,10 @@ tags:
 - docs
 title: AGENTS.md points at the skill instead of inlining it
 type: decision
-updated: '2026-09-17'
-verified: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
 verified_code:
-  src/docir/modules/agents/**: 9a5731002e85
+  src/docir/modules/agents/**: ead710338f3f
   tests/entry_points/test_e2e_agent.py: 3322a6e2f3e1
   tests/modules/agents/**: 7f145bd3afd1
 verified_content: 8c42d16ec6e8

@@ -2,7 +2,7 @@
 code:
 - src/docir/modules/publishing/**
 code_baseline:
-  src/docir/modules/publishing/**: 5e91b7859841
+  src/docir/modules/publishing/**: ed368c841f10
 created: '2026-08-15'
 description: 'How docir build renders the corpus for the people who approve decisions:
   the flags, publishing from CI, the --out guard, and mermaid diagrams.'
@@ -18,10 +18,10 @@ tags:
 - cli
 title: Publish the store as a static site
 type: runbook
-updated: '2026-09-17'
-verified: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
 verified_code:
-  src/docir/modules/publishing/**: 5e91b7859841
+  src/docir/modules/publishing/**: ed368c841f10
 verified_content: aa73b81465e9
 ---
 

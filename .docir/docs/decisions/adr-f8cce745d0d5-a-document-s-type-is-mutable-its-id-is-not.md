@@ -5,7 +5,7 @@ code:
 - src/docir/modules/documents/infra/schema_loader.py
 - src/docir/platform/filesystem/markdown_store.py
 code_baseline:
-  src/docir/modules/documents/application/services/document_patch.py: 7b2a442b890c
+  src/docir/modules/documents/application/services/document_patch.py: 5b7b85ac62c7
   src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
   src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
   src/docir/platform/filesystem/markdown_store.py: 5aa8ee165728
@@ -27,10 +27,10 @@ tags:
 - schema
 title: A document's type is mutable; its id is not
 type: decision
-updated: '2026-09-17'
-verified: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
 verified_code:
-  src/docir/modules/documents/application/services/document_patch.py: 7b2a442b890c
+  src/docir/modules/documents/application/services/document_patch.py: 5b7b85ac62c7
   src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
   src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
   src/docir/platform/filesystem/markdown_store.py: 5aa8ee165728

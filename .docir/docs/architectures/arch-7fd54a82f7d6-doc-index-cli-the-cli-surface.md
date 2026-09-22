@@ -5,10 +5,10 @@ code:
 - src/docir/entry_points/mcp/cmds.py
 - src/docir/entry_points/dispatch.py
 code_baseline:
-  src/docir/entry_points/cli/**: 91fe38046593
-  src/docir/entry_points/daemon/cmds.py: f2ba24c1089c
-  src/docir/entry_points/dispatch.py: 267ddf5a24e9
-  src/docir/entry_points/mcp/cmds.py: e0c5ec7e32e4
+  src/docir/entry_points/cli/**: 8b97a450d4c1
+  src/docir/entry_points/daemon/cmds.py: f1efcea6c68c
+  src/docir/entry_points/dispatch.py: 282abcf40e30
+  src/docir/entry_points/mcp/cmds.py: d1b6879eb575
 created: '2026-08-15'
 description: The command vocabulary agents drive docir with, the static site build,
   and a worked flow through them end to end.
@@ -21,14 +21,14 @@ tags:
 - architecture
 title: Doc-Index CLI — the CLI surface
 type: architecture
-updated: '2026-09-17'
-verified: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
 verified_code:
-  src/docir/entry_points/cli/**: 91fe38046593
-  src/docir/entry_points/daemon/cmds.py: f2ba24c1089c
-  src/docir/entry_points/dispatch.py: 267ddf5a24e9
-  src/docir/entry_points/mcp/cmds.py: e0c5ec7e32e4
-verified_content: 89901c34d34a
+  src/docir/entry_points/cli/**: 8b97a450d4c1
+  src/docir/entry_points/daemon/cmds.py: f1efcea6c68c
+  src/docir/entry_points/dispatch.py: 282abcf40e30
+  src/docir/entry_points/mcp/cmds.py: d1b6879eb575
+verified_content: 54bb2f80e406
 ---
 
 ## CLI commands
@@ -93,6 +93,8 @@ Every command below exists in `docir --help`; the groups are `agent`, `daemon`,
 | `docir tag add <key> --description "..."` / `docir tag list` | Manage the tag registry |
 | `docir tag rename <old> <new>` / `docir tag rm <key> [--force]` | Rename a tag across all documents / remove it (blocked while in use unless forced, which strips the key from referencing documents) |
 | `docir reindex [--changed]` | Manual fallback: rebuild index after external/manual file edits |
+| `docir doctor [--strict] [--probe]` | The environment, not the corpus: install, store, index, embedder, daemon, peers, and every surface with a sunset date. Snapshotted *before* the first dispatch, so it reports the conditions the dispatch would repair |
+| `docir daemon status` / `docir daemon stop` | Which build is serving and whether it is stale / stop it. Escape hatches — the daemon is otherwise never managed by hand |
 
 ---
 

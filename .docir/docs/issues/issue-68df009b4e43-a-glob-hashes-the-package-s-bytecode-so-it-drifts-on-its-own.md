@@ -2,7 +2,7 @@
 code:
 - src/docir/platform/filesystem/code_matcher.py
 code_baseline:
-  src/docir/platform/filesystem/code_matcher.py: 2ae7c3726fe7
+  src/docir/platform/filesystem/code_matcher.py: 49e035db439d
 created: '2026-09-17'
 description: 'code: patterns ending in ** fingerprinted __pycache__ alongside the
   source, so a digest moved when no line was edited and differed across machines.'
@@ -10,18 +10,18 @@ id: issue-68df009b4e43
 owner: maintainer
 related:
 - adr-d9e6d5ccd0b4
-- adr-49bb8cc48938
+- adr-1d1eddbb6fbd
 status: resolved
 tags:
 - cli
 - integrity
 title: A ** glob hashes the package's bytecode, so it drifts on its own
 type: issue
-updated: '2026-09-17'
-verified: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
 verified_code:
-  src/docir/platform/filesystem/code_matcher.py: 2ae7c3726fe7
-verified_content: b887b231d9ab
+  src/docir/platform/filesystem/code_matcher.py: 49e035db439d
+verified_content: aae793b6d946
 ---
 
 A `code:` glob ending in `**` over a Python package hashes the package's `__pycache__` as well
@@ -60,3 +60,10 @@ The 16 contaminated baselines were re-minted, each by dropping only the affected
 adding it back so the mint-once rule left every sibling's evidence alone. They were safe to
 re-mint because their stored value still equalled what the old rule computes today: proof that
 nothing but bytecode had moved under them.
+
+The class turned out to be wider than a list of directory names can reach.
+[[adr-1d1eddbb6fbd]] made the matcher consult the repository's own `.gitignore` files and
+kept these five as the floor — which is what generalises this argument from Python to every
+language's build output. The case that proved it here was `benchmarks/.coverage`: a *file*,
+rewritten by every test run under coverage, that no set of directory names could have
+excluded.

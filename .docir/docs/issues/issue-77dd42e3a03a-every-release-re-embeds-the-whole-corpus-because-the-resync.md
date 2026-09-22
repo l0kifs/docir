@@ -4,7 +4,7 @@ code:
 - src/docir/modules/documents/application/services/index_rebuilder.py
 - src/docir/platform/persistence/alembic/versions/0012_embedding_input_digest.py
 code_baseline:
-  src/docir/modules/documents/application/services/index_rebuilder.py: fbb0bff13bc4
+  src/docir/modules/documents/application/services/index_rebuilder.py: 9b1fe093b10d
   src/docir/modules/indexing/infra/scheduler.py: 3cc2831c6de3
   src/docir/platform/persistence/alembic/versions/0012_embedding_input_digest.py: fd1cdd2ec6ba
 created: '2026-09-06'
@@ -23,10 +23,10 @@ tags:
 - material
 title: Every release re-embeds the whole corpus, because the resync stamp is the version
 type: issue
-updated: '2026-09-17'
-verified: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
 verified_code:
-  src/docir/modules/documents/application/services/index_rebuilder.py: fbb0bff13bc4
+  src/docir/modules/documents/application/services/index_rebuilder.py: 9b1fe093b10d
   src/docir/modules/indexing/infra/scheduler.py: 3cc2831c6de3
   src/docir/platform/persistence/alembic/versions/0012_embedding_input_digest.py: fd1cdd2ec6ba
 verified_content: 052e2947dd8a

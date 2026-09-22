@@ -6,8 +6,8 @@ code:
 - tests/modules/documents/test_integration_maintenance.py
 code_baseline:
   src/docir/modules/documents/domain/services/checks/schema_rules.py: 3bd4377777cd
-  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
-  tests/modules/documents/test_domain_services.py: 2b717c606516
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
+  tests/modules/documents/test_domain_services.py: 1e0bdf0af18a
   tests/modules/documents/test_integration_maintenance.py: ecb42c0e3b81
 created: '2026-08-07'
 description: unknown-tag and unknown-status are reported, but an edge carrying an
@@ -19,7 +19,6 @@ related:
 - adr-599055502f0e
 - adr-bd3a820cc57a
 - issue-8f6576cd7bc9
-revoked: '2026-09-22'
 status: resolved
 tags:
 - cosmetic
@@ -28,11 +27,13 @@ title: docir check has no finding for an edge whose relation kind the registry n
   longer knows
 type: issue
 updated: '2026-09-22'
+verified: '2026-09-22'
 verified_code:
   src/docir/modules/documents/domain/services/checks/schema_rules.py: 3bd4377777cd
-  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
-  tests/modules/documents/test_domain_services.py: 2b717c606516
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
+  tests/modules/documents/test_domain_services.py: 1e0bdf0af18a
   tests/modules/documents/test_integration_maintenance.py: ecb42c0e3b81
+verified_content: 296bb4fea9da
 ---
 
 **Class:** missing · **Severity:** cosmetic

@@ -5,7 +5,7 @@ code:
 - src/docir/modules/release/**
 code_baseline:
   src/docir/entry_points/cli/self_cmds.py: 1e11c74f10de
-  src/docir/entry_points/composition.py: aa8b2c0caf80
+  src/docir/entry_points/composition.py: 88d0cea954b3
   src/docir/modules/release/**: 8b0b670930c6
 created: '2026-08-09'
 description: 'What to run after a new docir release: the package, the derived index,
@@ -25,13 +25,13 @@ tags:
 - agents
 title: Upgrade docir in a project
 type: runbook
-updated: '2026-09-18'
-verified: '2026-09-18'
+updated: '2026-09-22'
+verified: '2026-09-22'
 verified_code:
   src/docir/entry_points/cli/self_cmds.py: 1e11c74f10de
-  src/docir/entry_points/composition.py: aa8b2c0caf80
+  src/docir/entry_points/composition.py: 88d0cea954b3
   src/docir/modules/release/**: 8b0b670930c6
-verified_content: a99913babae4
+verified_content: 676f2c08c359
 ---
 
 docir ships its schema, its agent instructions and its site templates inside the
@@ -70,7 +70,7 @@ docir self upgrade        # install the new docir, then resync this store
 
 That is the whole procedure where docir owns its environment (a uv tool, a pipx
 install, a virtualenv): it runs the installer, re-executes as the build it just
-installed, and then does the three steps below in order, reporting each. Where
+installed, and then does the steps below in order, reporting each. Where
 docir does *not* own its environment — a checkout, a project whose lockfile pins
 it, an ephemeral `uvx` run — it says so and does the rest anyway; upgrade the
 package where it is pinned. `docir self status` says which case you are in.

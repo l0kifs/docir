@@ -3,7 +3,7 @@ code:
 - src/docir/entry_points/dispatch.py
 - src/docir/modules/documents/domain/value_objects/doc_ref.py
 code_baseline:
-  src/docir/entry_points/dispatch.py: 267ddf5a24e9
+  src/docir/entry_points/dispatch.py: 282abcf40e30
   src/docir/modules/documents/domain/value_objects/doc_ref.py: 331122bf62e9
 created: '2026-08-25'
 description: Why get takes several ids and id#heading addresses in one request, why
@@ -22,10 +22,10 @@ tags:
 - retrieval
 title: The deep read is batched, and its shape follows the key
 type: decision
-updated: '2026-09-17'
-verified: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
 verified_code:
-  src/docir/entry_points/dispatch.py: 267ddf5a24e9
+  src/docir/entry_points/dispatch.py: 282abcf40e30
   src/docir/modules/documents/domain/value_objects/doc_ref.py: 331122bf62e9
 verified_content: 89e873870b96
 ---

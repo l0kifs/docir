@@ -2,7 +2,7 @@
 code:
 - src/docir/entry_points/composition.py
 code_baseline:
-  src/docir/entry_points/composition.py: aa8b2c0caf80
+  src/docir/entry_points/composition.py: 88d0cea954b3
 created: '2026-09-18'
 description: The generated ignore list omits release-check.json, and an existing store's
   copy is written once by init and never brought up to a later release — so the feedback/
@@ -18,10 +18,10 @@ tags:
 - release
 title: The store's generated .gitignore misses release-check.json and is never refreshed
 type: issue
-updated: '2026-09-18'
-verified: '2026-09-18'
+updated: '2026-09-22'
+verified: '2026-09-22'
 verified_code:
-  src/docir/entry_points/composition.py: aa8b2c0caf80
+  src/docir/entry_points/composition.py: 88d0cea954b3
 verified_content: 2656e4f3d9dd
 ---
 

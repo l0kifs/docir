@@ -7,10 +7,10 @@ code:
 - src/docir/modules/documents/domain/services/checks/schema_rules.py
 code_baseline:
   src/docir/entry_points/cli/schema_cmds.py: c79080e9a234
-  src/docir/entry_points/composition.py: e59f157c6b81
+  src/docir/entry_points/composition.py: 88d0cea954b3
   src/docir/modules/documents/application/services/schema_conformance.py: 204dc95f1a8d
   src/docir/modules/documents/domain/services/checks/schema_rules.py: 3bd4377777cd
-  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
 created: '2026-08-16'
 description: Why the command run after a schema edit reports what that schema costs
   the corpus, reads files rather than the index, and never changes the exit code.
@@ -28,14 +28,14 @@ tags:
 - schema
 title: schema validate measures the corpus, not just the file
 type: decision
-updated: '2026-09-17'
-verified: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
 verified_code:
   src/docir/entry_points/cli/schema_cmds.py: c79080e9a234
-  src/docir/entry_points/composition.py: e59f157c6b81
+  src/docir/entry_points/composition.py: 88d0cea954b3
   src/docir/modules/documents/application/services/schema_conformance.py: 204dc95f1a8d
   src/docir/modules/documents/domain/services/checks/schema_rules.py: 3bd4377777cd
-  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
 verified_content: 498ce61e9bac
 ---
 

@@ -4,7 +4,7 @@ code:
 - src/docir/entry_points/daemon/lifecycle.py
 code_baseline:
   src/docir/entry_points/cli/runner.py: 66abea831942
-  src/docir/entry_points/daemon/lifecycle.py: 0147e6d0a53d
+  src/docir/entry_points/daemon/lifecycle.py: 3e55861fc705
 created: '2026-09-18'
 description: The client spawns the daemon on first dispatch and has no fallback, so
   a sandbox that denies the socket or log directory turns every read into a traceback
@@ -13,18 +13,20 @@ id: issue-c4c6349e06d4
 owner: maintainer
 related:
 - arch-1cfb1b212237
+- issue-b9800d8265f6
+- adr-78090be868ec
 status: resolved
 tags:
 - cli
 - daemon
 title: A daemon that cannot be started fails the command instead of running in process
 type: issue
-updated: '2026-09-18'
-verified: '2026-09-18'
+updated: '2026-09-22'
+verified: '2026-09-22'
 verified_code:
   src/docir/entry_points/cli/runner.py: 66abea831942
-  src/docir/entry_points/daemon/lifecycle.py: 0147e6d0a53d
-verified_content: 65cbdf9a6d2f
+  src/docir/entry_points/daemon/lifecycle.py: 3e55861fc705
+verified_content: 57d0bbaf24d0
 ---
 
 ## What is wrong
@@ -123,24 +125,27 @@ answered with real ranking and graph expansion, and the MCP server, driven over
 stdio by a client doing `initialize` / `tools/list` / `tools/call`, did the same
 on `docir_context`. With the log restored, neither warns and the daemon serves.
 
-Five injections, each proven to fail its guard: removing the fallback from the
+Four injections, each proven to fail its guard: removing the fallback from the
 caller, narrowing the catch to `DaemonError` alone (which is the reported
 `OSError` case), widening it to `Exception` (which swallows the schema error),
 and restoring the MCP server's own `SocketExecutor`.
 
-## Left open
+## The half it left open, closed straight after
 
-`docir doctor` and `docir daemon status` still reach `settings.socket_path`
-directly, through `lifecycle.status`, before anything is dispatched. Where the
-failure is that *no* temporary directory is usable at all — the reporter's
-`FileNotFoundError: No usable temporary directory` — those two commands still
-end in a traceback while every dispatched command now falls back. It is the same
-defect one call away, and it lands on the command somebody runs to diagnose the
-first one. Closing it means deciding what `DaemonStatus.socket_path` reports when
-there is no path to report, which is a change to a field rather than a catch.
+`docir doctor` and `docir daemon status` read `settings.socket_path` directly to report it,
+so where *no* temporary directory is usable at all — the reporter's
+`FileNotFoundError: No usable temporary directory` — the two commands somebody runs to
+diagnose the first failure still ended in a traceback. [[issue-b9800d8265f6]] closed that:
+the path reads as absent rather than raising, `daemon status` says "cannot run here" instead
+of "not running", and `doctor` reports `no-daemon-socket` as a warning.
 
-Also deliberately not done: skipping the daemon by default under `CI` or a
-non-tty stdout, which the report asks for as its second point. That changes the
-transport for every scripted caller — a warm daemon is worth most exactly where
-commands come in runs — and `DOCIR_NO_DAEMON` already gives a caller that cannot
-pass a flag the opt-out. Its third point was already true.
+`fastembed` was the third layer and went with [[adr-78090be868ec]] — it raised computing its
+own cache directory, so reads failed inside the library before docir ran. The model lives in
+`~/.docir/models` now. All of `query`, `get`, `search` and `context` answer with no
+temporary directory at all.
+
+Left undone on purpose: skipping the daemon by default under `CI` or a non-tty stdout, which
+the report asks for as its second point. That changes the transport for every scripted
+caller — a warm daemon is worth most exactly where commands come in runs — and
+`DOCIR_NO_DAEMON` already gives a caller that cannot pass a flag the opt-out. Its third point
+was already true.

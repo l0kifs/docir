@@ -2,7 +2,7 @@
 code:
 - tests/**
 code_baseline:
-  tests/**: b5ca82055d3c
+  tests/**: 1704d666c51b
 created: '2026-07-22'
 description: Why tests live in a central tree mirroring the modules instead of beside
   them.
@@ -17,17 +17,17 @@ tags:
 - testing
 title: Keep a central test tree, organized per module
 type: decision
-updated: '2026-09-17'
-verified: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
 verified_code:
-  tests/**: b5ca82055d3c
-verified_content: 8761c17356df
+  tests/**: 1704d666c51b
+verified_content: 325cacdc19ce
 ---
 
 ## Context
 ARCHITECTURE_RULES §9 asks for tests to live inside the module they cover,
 mirroring its structure, so the module layout also removes test fan-out. The
-existing suite is a single top-level `tests/` tree that is green (176 tests).
+existing suite was a single top-level `tests/` tree, green at 176 tests.
 Relocating every test into `src/docir/modules/**` in the same change as the
 structural refactor multiplies the churn and the chance of breakage.
 

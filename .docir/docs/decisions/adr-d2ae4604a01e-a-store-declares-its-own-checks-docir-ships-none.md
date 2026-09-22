@@ -7,7 +7,7 @@ code:
 code_baseline:
   src/docir/modules/documents/domain/services/checks/findings.py: ae30e1b58956
   src/docir/modules/documents/domain/services/checks/graph_rules.py: 91431026f476
-  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
   src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
 created: '2026-08-25'
 description: 'checks: in docs-schema.yaml runs a store''s own JMESPath rules as Tier
@@ -26,12 +26,12 @@ tags:
 - schema
 title: A store declares its own checks; docir ships none
 type: decision
-updated: '2026-09-17'
-verified: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
 verified_code:
   src/docir/modules/documents/domain/services/checks/findings.py: ae30e1b58956
   src/docir/modules/documents/domain/services/checks/graph_rules.py: 91431026f476
-  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
   src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
 verified_content: 8eac83b2c62d
 ---

@@ -3,7 +3,7 @@ code:
 - src/docir/entry_points/dispatch.py
 - src/docir/modules/release/domain/deprecations.py
 code_baseline:
-  src/docir/entry_points/dispatch.py: 267ddf5a24e9
+  src/docir/entry_points/dispatch.py: 282abcf40e30
   src/docir/modules/release/domain/deprecations.py: 79544413bab0
 created: '2026-09-17'
 description: Why the deprecation register is a command and a tool, what test lets
@@ -23,10 +23,10 @@ tags:
 title: A dispatcher command may answer about the build, when place cannot change the
   answer
 type: decision
-updated: '2026-09-17'
-verified: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
 verified_code:
-  src/docir/entry_points/dispatch.py: 267ddf5a24e9
+  src/docir/entry_points/dispatch.py: 282abcf40e30
   src/docir/modules/release/domain/deprecations.py: 79544413bab0
 verified_content: ff5bd568596f
 ---

@@ -86,8 +86,11 @@ Staleness is the one trust signal the product offers, so the rules protect the c
   nobody reads twice; it also means no history is needed. A pattern naming a **directory is
   expanded to the files under it**, because `**` yields directories and the read path already
   resolves `src/auth/**` that way — without it the most natural pattern records nothing and
-  says so silently. `.git` is never walked, **and neither is anything the repository's own
-  `.gitignore` files exclude** (adr-1d1eddbb6fbd). The hardcoded skip set is a *floor* for a
+  says so silently. `.git` is never walked, **and anything the repository's own `.gitignore` files
+  exclude is dropped from a glob that reaches something else** (adr-1d1eddbb6fbd,
+  narrowed by adr-c87e444975e8: a glob reaching *nothing but* ignored files is honoured
+  instead, because nobody sweeps a vendored clone up by accident and erasing it cost one
+  adopting store 288 of 288 governed documents at once — GitHub #24). The hardcoded skip set is a *floor* for a
   tree with no ignore file, not the list: every entry in it is Python or git, while the same
   argument covers every language's build output — and the defect was live on this repo's own
   `benchmarks/**` through `.coverage`, which a set of directory *names* cannot reach
@@ -109,3 +112,17 @@ Staleness is the one trust signal the product offers, so the rules protect the c
   laundering adr-bd7c4f3c5764 guards against, by another door. Whitespace counts (no AST
   normalisation, deliberately: a parser per language, and no answer at all for a language
   without one) — this is where to start if the noise turns out to be real.
+
+- **A glob nothing is watching is a finding (adr-29a43d127e92).** `code-changed` and
+  `code-drifted` both read a recorded digest and treat its absence as *unknown*, which
+  is right on its own terms and leaves a hole: a glob declared before the code it
+  governs mints nothing, `unmatched-code` stops the moment the file arrives, and no
+  later edit is ever reported. `mint_baseline` fills a missing entry only on a *write*,
+  and `check` never writes. `code-unwatched` names the pattern; it is the one code
+  finding `check --fix` may repair, because a baseline records what the tree held and
+  claims nothing about who read it. Watching starts at the next change, not the one
+  already missed — which is why `--fix` reports an action per document rather than
+  running silently. Eight of the nine documents in this state on the reporting corpus
+  produced no finding at all; the ninth was visible only through an unrelated glob, so
+  **being in the queue was never evidence that every glob on a document is armed**
+  (GitHub #25).

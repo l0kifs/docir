@@ -37,10 +37,11 @@ class RepairAction:
     """One repair that was applied, in the caller's terms."""
 
     # The finding kind repaired — `duplicate-id`, `dangling`,
-    # `store-format-undeclared` — or, for the one action that repairs nothing,
-    # what it filed: `code-baseline`. Deliberately not `code-drifted` there:
-    # that action enables the finding rather than clearing it, and an action
-    # naming a finding it did not repair reads as the opposite.
+    # `store-format-undeclared`, `code-unwatched`. The last one is named
+    # `code-baseline` rather than after its finding, and deliberately: the
+    # action files evidence, where the other three undo damage, and it is what
+    # *enables* `code-drifted` rather than clearing it. Renaming it to the
+    # finding it now answers would say the drift had been repaired.
     kind: str
     message: str
     doc_ids: tuple[str, ...]
@@ -133,13 +134,15 @@ class StoreRepairer:
         ]
 
     def _mint_code_baselines(self) -> list[RepairAction]:
-        """Start watching the globs a document declared before baselines existed.
+        """Start watching the globs a document declared but nothing is watching.
 
-        The third repair, and the one that is not repairing damage: a document
-        with a ``code:`` glob and no baseline is intact, resolves, and reports
-        nothing — which is exactly the problem. It was written by a build that
-        minted no baseline, so its globs watch nothing until somebody verifies
-        it, and in this project's own store not one of the 99 ever had.
+        The repair behind `code-unwatched`, and the one that is not repairing
+        damage: a document with a ``code:`` glob and no baseline is intact,
+        resolves, and reports nothing — which is exactly the problem. It was
+        written by a build that minted no baseline, or declared its glob while
+        the path was still absent, so the glob watches nothing until somebody
+        verifies the document; in this project's own store not one of the 99
+        ever had.
 
         It belongs here on the two tests `--fix` applies. It needs no guess —
         the tree in front of it is the only answer a baseline can have — and it

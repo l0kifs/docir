@@ -36,6 +36,7 @@ RESERVED_FINDING_KINDS: frozenset[str] = frozenset(
         "stale",
         "unblocked",
         "unmatched-code",
+        "code-unwatched",
         "code-changed",
         "code-drifted",
         "verification-outdated",
@@ -55,7 +56,8 @@ RESERVED_FINDING_KINDS: frozenset[str] = frozenset(
 
 #: Everything else (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`,
 #: `unknown-status`, `unknown-tag`, `tag-key-format`, `unmatched-code`,
-#: `code-changed`, `code-drifted`, `verification-outdated`, `missing-required`,
+#: `code-unwatched`, `code-changed`, `code-drifted`, `verification-outdated`,
+#: `missing-required`,
 #: `unknown-relation-kind`, `schema-drift`, `store-format-undeclared`,
 #: `stale-index-build`, `unblocked`)
 #: describes shape or classification, not
@@ -80,6 +82,13 @@ RESERVED_FINDING_KINDS: frozenset[str] = frozenset(
 #: tree, on every governed document rather than only the reviewed ones, so an
 #: error kind would fail the CI of every branch that edits code before its
 #: documentation — which is every branch.
+#:
+#: `code-unwatched` is a warning although what it reports is a *blind spot*
+#: rather than a shape: the document is intact, the glob resolves, and the only
+#: thing wrong is that nothing is watching it. An error would red-build the
+#: first commit of every document written before its baseline could be minted —
+#: a glob declared where there was no tree to read, or on a build that minted
+#: none — which is a correct corpus failing for its own history.
 #:
 #: `store-format-undeclared` is a warning because the store it describes is
 #: intact: every read answers, every edge resolves, and the only thing missing is

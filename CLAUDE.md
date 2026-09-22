@@ -214,6 +214,9 @@ enough to stop a wrong edit and never enough to argue with.
   neither the clock nor the cadence.
 - `verified_code` digests live in **frontmatter, not the index**, hash contents rather than
   mtimes, and absent always means *unverified*. It stays a warning, and `--fix` must not clear it.
+- A glob nothing is watching is `code-unwatched`, the one code finding `--fix` may repair —
+  a baseline records what the tree held, never who read it. `.gitignore` drops files from a
+  glob that reaches something else and is not consulted for one that reaches nothing else.
 - A verification is withdrawn by the write that invalidates it, and `revoked` records when; the
   cadence restarts there. Only a *standing* one can be — nothing an unverified document does
   moves its clock. Withdrawing by hand records no date and earns no window.

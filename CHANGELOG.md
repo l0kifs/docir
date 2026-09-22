@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`docir check` reports a `code:` glob nothing is watching** (GitHub #25). A glob declared
+  before the code it governs was written has nothing to fingerprint, so it records no
+  baseline — and the four code findings then partition the world in a way that leaves it out:
+  `unmatched-code` fires only while the path is absent and stops the moment the file arrives,
+  taking the last signal with it, while `code-changed` and `code-drifted` both read a recorded
+  digest and correctly say nothing when there is none. The result is a document that governs a
+  path and reports nothing when that path changes — indistinguishable from one whose code has
+  not moved, which is the state the queue exists to tell apart. `code-unwatched` names the glob;
+  `docir check --fix` already carried the repair and now answers a finding instead of nothing.
+  Watching starts at the next change, not at the one already missed, which is why the repair
+  reports per document rather than running silently. Nine documents in the reporting corpus were
+  in this state, and **eight** produced no finding of any kind; the ninth was visible only by
+  accident — it declared a second, fingerprinted glob that happened to move — so being in the
+  queue was never evidence that every glob on the document was armed.
+
+### Fixed
+
+- **A `code:` glob that names only ignored files is honoured, not erased** (GitHub #24). The fix
+  for #20 excluded ignored paths from *matching* as well as from fingerprinting, so a repository
+  governing a vendored clone, a shallow submodule or a mirrored upstream — checked out into an
+  ignored directory because it is a read-only input and not this repository's source — lost every
+  `code-changed` signal it had and gained one `unmatched-code` per document. In the reporting
+  store that was 288 of 288 governed documents at once, and 102 live findings went to none: an
+  empty queue, indistinguishable from a clean one. `.gitignore` now governs what is *fingerprinted*
+  and only narrows what is *addressable*. The rule is one sentence — ignored files are dropped
+  from a glob that reaches something else, and kept by a glob that reaches nothing else — which
+  keeps #20 fixed (`src/**` still drops `src/bin/`) while a path somebody wrote into `code:` by
+  hand stays a deliberate statement about what governs the document. Implemented as two passes,
+  the second running only for a pattern that used to resolve to nothing, so the common case pays
+  what it paid before and still never descends into an ignored subtree. The hardcoded floor
+  (`.git`, `__pycache__`, the three cache directories) is absolute on both passes: re-admitting it
+  would be the bytecode digest of issue-68df009b4e43 through the door this opens. No stored digest changes value, so
+  nothing reports drift on upgrade — the globs #20 silenced come back as `code-unwatched`, with
+  `docir check --fix` as the named repair.
+
 ## [0.28.0] - 2026-09-18
 
 ### Added

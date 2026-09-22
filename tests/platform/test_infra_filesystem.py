@@ -363,10 +363,61 @@ class TestTheRepositorysOwnIgnoreFiles:
 
         assert RepositoryCodeMatcher(tmp_path).fingerprint("src/**") != before
 
-    def test_a_glob_reaching_only_ignored_files_matches_nothing(self, tmp_path: Path) -> None:
+    def test_a_glob_reaching_only_ignored_files_is_honoured(self, tmp_path: Path) -> None:
+        """The other half of the rule (guards GitHub #24).
+
+        `.gitignore` drops files from a glob that reaches something else; a glob
+        that reaches *nothing* else is a deliberate statement about a path
+        somebody wrote by hand — a vendored clone, a shallow submodule, a
+        mirrored upstream — and erasing it costs the document its invalidation
+        with no signal but `unmatched-code`, which reads as "the pattern is
+        wrong".
+        """
         matcher = self._repo(tmp_path, "bin/\n")
         assert matcher.matches("src/**") is True
-        assert matcher.matches("src/bin/**") is False
+        assert matcher.matches("src/bin/**") is True
+        assert matcher.fingerprint("src/bin/**") is not None
+
+    def test_an_honoured_ignored_glob_still_reports_its_own_edits(self, tmp_path: Path) -> None:
+        # The half that makes the test above mean something: a matcher that
+        # returned a constant would pass it and watch nothing.
+        matcher = self._repo(tmp_path, "bin/\n")
+        before = matcher.fingerprint("src/bin/**")
+
+        (tmp_path / "src" / "bin" / "out.o").write_text("built again\n", encoding="utf-8")
+
+        assert RepositoryCodeMatcher(tmp_path).fingerprint("src/bin/**") != before
+
+    def test_the_floor_is_absolute_on_both_passes(self, tmp_path: Path) -> None:
+        """An all-ignored glob is re-admitted; an all-generated one never is.
+
+        Without this the second pass is issue-68df009b4e43 through a new door:
+        `src/**/__pycache__/**` reaches nothing but bytecode, finds nothing on
+        the first pass, and would hash it on the second.
+        """
+        matcher = self._repo(tmp_path, "bin/\n")
+        cache = tmp_path / "src" / "__pycache__"
+        cache.mkdir()
+        (cache / "keep.cpython-312.pyc").write_bytes(b"\x00bytecode")
+
+        assert matcher.matches("src/__pycache__/**") is False
+        assert matcher.fingerprint("src/__pycache__/**") is None
+
+    def test_an_ignored_file_beside_tracked_source_is_still_dropped(self, tmp_path: Path) -> None:
+        """The first pass is unchanged, which is what keeps issue-ec3819b1f13c fixed.
+
+        Stated as a digest comparison rather than as a count, because the
+        regression this guards against is the second pass running when it
+        should not: a `src/**` whose digest includes `src/bin/out.o` moves on
+        every compile again.
+        """
+        matcher = self._repo(tmp_path, "bin/\n")
+        both = matcher.fingerprint("src/**")
+
+        (tmp_path / "src" / "bin").rename(tmp_path / "src" / "bin-gone")
+        (tmp_path / ".gitignore").write_text("bin-gone/\n", encoding="utf-8")
+
+        assert RepositoryCodeMatcher(tmp_path).fingerprint("src/**") == both
 
     def test_a_negated_rule_re_includes_what_it_names(self, tmp_path: Path) -> None:
         # `!` is a real rule and has to work, which is why this parses the file

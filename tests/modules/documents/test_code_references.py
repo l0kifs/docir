@@ -873,6 +873,176 @@ class TestBackfillingTheBaseline:
             container.close()
 
 
+class TestTheUnwatchedGlob:
+    """`code-unwatched`: a glob that resolves and that no digest is watching.
+
+    The blind spot between the other four (GitHub #25). `unmatched-code` covers
+    a glob that names nothing; `code-changed` and `code-drifted` both read a
+    *recorded* digest and correctly stay silent when there is none. A glob that
+    names something real and carries neither digest falls between them, and
+    nothing — not the file arriving, not a later edit to it — is ever reported.
+
+    Reachable without a hand-edit, which is what makes it worth a finding: a
+    decision written before the code it decides mints nothing, because there is
+    nothing to hash yet, and `mint_baseline` re-arms it only on a *write*.
+    `check` never writes.
+    """
+
+    def _declared_before_the_code(
+        self, docs: Dispatcher, tmp_path: Path, pattern: str
+    ) -> tuple[str, Path]:
+        """A verified document governing ``pattern``, stamped while it matched nothing."""
+        view = docs.dispatch(
+            "add", {"type": "decision", "title": "Auth", "description": "d", "code": [pattern]}
+        )
+        docs.dispatch("update", {"doc_id": str(view["id"]), "verified": True})
+        source = tmp_path / "vendor" / "upstream" / "main.go"
+        source.parent.mkdir(parents=True)
+        source.write_text("package main\n", encoding="utf-8")
+        return str(view["id"]), source
+
+    def test_a_glob_stamped_before_its_path_existed_is_reported_once_it_resolves(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            pattern = "vendor/upstream/main.go"
+            doc_id, source = self._declared_before_the_code(docs, tmp_path, pattern)
+
+            findings = [i for i in docs.dispatch("check", {}) if i["kind"] == "code-unwatched"]
+            assert [i["doc_ids"] for i in findings] == [(doc_id,)]
+            assert pattern in findings[0]["message"]
+            # A blind spot, not damage: `--strict` stays green on a corpus whose
+            # only fault is a document written before the code it governs.
+            assert findings[0]["severity"] == "warning"
+
+            # And it names a repair that exists: `--fix` arms the glob, the
+            # finding clears, and the next edit is reported.
+            docs.dispatch("repair", {})
+            assert not [i for i in docs.dispatch("check", {}) if i["kind"] == "code-unwatched"]
+            source.write_text("package main // edit\n", encoding="utf-8")
+            assert [
+                i["doc_ids"] for i in docs.dispatch("check", {}) if i["kind"] == "code-drifted"
+            ] == [(doc_id,)]
+        finally:
+            container.close()
+
+    def test_a_glob_that_matches_nothing_is_unmatched_and_not_unwatched(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        """The two partition the patterns rather than overlapping on them.
+
+        Naming one problem twice is the noise that teaches a reader to skim the
+        report, and `unmatched-code` has the sharper sentence to say: repoint
+        the pattern. There is nothing to start watching.
+        """
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            docs.dispatch(
+                "add",
+                {"type": "decision", "title": "T", "description": "d", "code": ["src/gone/**"]},
+            )
+            kinds = {i["kind"] for i in docs.dispatch("check", {})}
+            assert "unmatched-code" in kinds
+            assert "code-unwatched" not in kinds
+        finally:
+            container.close()
+
+    def test_a_document_reported_for_one_glob_is_still_reported_for_the_blind_one(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        """The masking case, measured on the reporter's own corpus.
+
+        A document declaring two globs, one armed and one not, was already in
+        the queue — for the armed one — while staying silent on the other. Being
+        in the queue is not evidence that every glob on it is watched, so the
+        finding has to name the pattern and fire per pattern.
+        """
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            armed = tmp_path / "src" / "auth.py"
+            armed.parent.mkdir()
+            armed.write_text("original\n", encoding="utf-8")
+            view = docs.dispatch(
+                "add",
+                {
+                    "type": "decision",
+                    "title": "Auth",
+                    "description": "d",
+                    "code": ["src/auth.py", "vendor/upstream/main.go"],
+                },
+            )
+            doc_id = str(view["id"])
+            blind = tmp_path / "vendor" / "upstream" / "main.go"
+            blind.parent.mkdir(parents=True)
+            blind.write_text("package main\n", encoding="utf-8")
+            armed.write_text("rewritten\n", encoding="utf-8")
+
+            report = docs.dispatch("check", {})
+            drifted = [i for i in report if i["kind"] == "code-drifted"]
+            unwatched = [i for i in report if i["kind"] == "code-unwatched"]
+            assert [i["doc_ids"] for i in drifted] == [(doc_id,)]
+            assert [i["doc_ids"] for i in unwatched] == [(doc_id,)]
+            # Which glob, not just which document — the distinction the
+            # per-document reading loses.
+            assert "vendor/upstream/main.go" in unwatched[0]["message"]
+            assert "src/auth.py" not in unwatched[0]["message"]
+        finally:
+            container.close()
+
+    def test_a_watched_glob_and_an_archived_document_are_both_silent(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        """The half that makes the tests above mean something.
+
+        A check that fired on every governed document would pass all three and
+        report nothing anyone can act on.
+        """
+        source = tmp_path / "src" / "auth.py"
+        source.parent.mkdir()
+        source.write_text("original\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            docs.dispatch(
+                "add",
+                {"type": "decision", "title": "Watched", "description": "d", "code": ["src/*.py"]},
+            )
+            assert not [i for i in docs.dispatch("check", {}) if i["kind"] == "code-unwatched"]
+
+            gone = docs.dispatch(
+                "add", {"type": "decision", "title": "Gone", "description": "d", "code": []}
+            )
+            doc_id = str(gone["id"])
+            docs.dispatch("update", {"doc_id": doc_id, "verified": True})
+            blind = tmp_path / "vendor" / "upstream" / "main.go"
+            blind.parent.mkdir(parents=True)
+            blind.write_text("package main\n", encoding="utf-8")
+            docs.dispatch("update", {"doc_id": doc_id, "code": ["vendor/upstream/main.go"]})
+            docs.dispatch("archive", {"doc_id": doc_id})
+            assert not [i for i in docs.dispatch("check", {}) if i["kind"] == "code-unwatched"]
+        finally:
+            container.close()
+
+    def test_a_store_with_no_repository_reports_nothing(self, settings: Settings) -> None:
+        # The global-store case: no tree to resolve a repo-relative glob
+        # against, so all four code findings go silent together.
+        settings.ensure_directories()
+        container = build_container(settings, background_embeddings=False)
+        try:
+            docs = container.dispatcher
+            docs.dispatch(
+                "add",
+                {"type": "decision", "title": "T", "description": "d", "code": ["src/**"]},
+            )
+            assert not [i for i in docs.dispatch("check", {}) if i["kind"] == "code-unwatched"]
+        finally:
+            container.close()
+
+
 class TestQueryByPath:
     """`query --code <path>` — which documents govern this file (step 3)."""
 

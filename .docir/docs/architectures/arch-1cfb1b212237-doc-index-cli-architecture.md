@@ -2,7 +2,7 @@
 code:
 - src/docir/**
 code_baseline:
-  src/docir/**: 0c32642abed8
+  src/docir/**: 1e8ff65e1920
 created: '2026-07-30'
 description: 'The shape of the system: git as the source of truth, the SQLite index
   as a derived projection, the layer map and the daemon — with each part of the pipeline
@@ -23,7 +23,11 @@ tags:
 - retrieval
 title: Doc-Index CLI — Architecture
 type: architecture
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/**: 1e8ff65e1920
+verified_content: d82c55ccfb59
 ---
 
 ## Principle
@@ -106,8 +110,10 @@ persistent process keeps the model warm and serializes writes.
    Requests are serialized through one `SerializingExecutor`, which resolves
    write races without file locking.
 5. The daemon is disposable: killed, missing, or answering on a stale socket,
-   the CLI transparently respawns it. No command hard-fails because the daemon
-   was not up.
+   the CLI transparently respawns it. Where it cannot be *started* at all — a
+   read-only sandbox with nowhere to put a socket — the client says so on stderr
+   and runs the command in process instead. No command hard-fails because the
+   daemon was not up, and none because it could not come up.
 6. An idle timeout (`DOCIR_IDLE_TIMEOUT`, 900s) keeps it from lingering as a
    forgotten background process.
 

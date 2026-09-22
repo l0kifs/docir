@@ -7,12 +7,12 @@ code:
 - src/docir/modules/documents/domain/services/checks/verification_rules.py
 - src/docir/platform/filesystem/code_matcher.py
 code_baseline:
-  src/docir/modules/documents/application/services/document_patch.py: 7b2a442b890c
+  src/docir/modules/documents/application/services/document_patch.py: 5b7b85ac62c7
   src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
-  src/docir/modules/documents/domain/entities/document.py: deb78c9e104d
+  src/docir/modules/documents/domain/entities/document.py: 69cfc0a97a7b
   src/docir/modules/documents/domain/services/checks/verification_rules.py: cd968669505d
-  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
-  src/docir/platform/filesystem/code_matcher.py: a3314a26eb06
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
+  src/docir/platform/filesystem/code_matcher.py: 49e035db439d
 created: '2026-08-16'
 description: Why --verified fingerprints the globs a document governs, why the digests
   live in the file, and why the resulting code-changed finding stays a warning.
@@ -30,7 +30,16 @@ tags:
 - persistence
 title: A verification records what the code looked like
 type: decision
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/application/services/document_patch.py: 5b7b85ac62c7
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
+  src/docir/modules/documents/domain/entities/document.py: 69cfc0a97a7b
+  src/docir/modules/documents/domain/services/checks/verification_rules.py: cd968669505d
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
+  src/docir/platform/filesystem/code_matcher.py: 49e035db439d
+verified_content: 00598b6f1b98
 ---
 
 A verification now records what the code looked like, and `docir check` reports when it
@@ -60,10 +69,11 @@ A clone rebuilds it from the file like every other field.
 
 ## Why it hashes contents
 
-The digest covers the bytes of every file the pattern reaches, with each path folded in
-beside its hash so an added, removed or renamed file registers too. A pattern naming a
-directory is expanded to the files under it, because that is already what such a pattern
-means on the read path.
+The digest covers the bytes of every file the pattern reaches **that the repository
+tracks**, with each path folded in beside its hash so an added, removed or renamed file
+registers too. A pattern naming a directory is expanded to the files under it, because that
+is already what such a pattern means on the read path. What `.gitignore` excludes is skipped,
+so a build writing beside its sources does not read as a change ([[adr-1d1eddbb6fbd]]).
 
 Not mtimes and not a commit id: a clone, a checkout and a rebase move both without changing
 a line, and a finding that fires after `git clone` is one nobody reads twice. Hashing bytes

@@ -5,15 +5,15 @@ description: A typo in `FastEmbedEmbedder.embed` would have shipped green to eve
 id: issue-0ff355fa21dd
 owner: maintainer
 related:
+- issue-82b01d7f80d0
 - adr-ab9c454b760c
-- arch-f220a644d654
 status: resolved
 tags:
 - embeddings
 - material
 title: The default embedder path was excluded from every quality gate
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** unstated · **Severity:** material
@@ -34,7 +34,7 @@ A typo in `FastEmbedEmbedder.embed` would have shipped green to every default in
 
 ## Proposed default
 
-FIXED. Both exclusions dropped; the adapter now depends on a `_TextEmbedding` Protocol instead of `object`, so it type-checks honestly. Three `slow` tests exercise the real model (dimension, meaning-over-wording, determinism) plus fast tests for embedder selection and the missing-dependency fallback. Coverage of the file went from omitted to 97%. CI caches `~/.cache/fastembed` so the ~64 MB download happens once, not per run. `pytest -m "not slow"` still runs model-free for local work.
+FIXED. Both exclusions dropped; the adapter now depends on a `_TextEmbedding` Protocol instead of `object`, so it type-checks honestly. Three `slow` tests exercise the real model (dimension, meaning-over-wording, determinism) plus fast tests for embedder selection and the missing-dependency fallback. Coverage of the file went from omitted to 97%. CI caches the model so the ~64 MB download happens once, not per run — naming the directory `~/.cache/fastembed`, which fastembed had already stopped writing to, so the key never hit and every run re-downloaded it anyway ([[issue-82b01d7f80d0]]). `pytest -m "not slow"` still runs model-free for local work.
 
 ## Actors affected
 

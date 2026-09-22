@@ -3,8 +3,8 @@ code:
 - .github/workflows/ci.yml
 - src/docir/modules/documents/domain/services/code_globs.py
 code_baseline:
-  .github/workflows/ci.yml: 41280301f869
-  src/docir/modules/documents/domain/services/code_globs.py: 27940b520ad4
+  .github/workflows/ci.yml: a4b0e9a8fdd6
+  src/docir/modules/documents/domain/services/code_globs.py: 8d1df3b56ee5
 created: '2026-08-06'
 description: 'Gap 6 closes as a decision: a testable decision is bound to the test
   that enforces it, CI prints the decisions a branch touches as a notice, and docir
@@ -23,7 +23,12 @@ tags:
 - integrity
 title: Decisions are enforced by tests, not by a rule engine
 type: decision
-updated: '2026-08-06'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  .github/workflows/ci.yml: a4b0e9a8fdd6
+  src/docir/modules/documents/domain/services/code_globs.py: 8d1df3b56ee5
+verified_content: a8d4cced830f
 ---
 
 ## Context

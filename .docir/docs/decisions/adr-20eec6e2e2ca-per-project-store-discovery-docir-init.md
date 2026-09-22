@@ -2,7 +2,7 @@
 code:
 - src/docir/config/settings.py
 code_baseline:
-  src/docir/config/settings.py: 49d614f03082
+  src/docir/config/settings.py: d20a58cb3775
 created: '2026-07-24'
 description: Why a project-local .docir store is discovered the way git finds .git.
 id: adr-20eec6e2e2ca
@@ -16,7 +16,11 @@ tags:
 - persistence
 title: Per-project store discovery + docir init
 type: decision
-updated: '2026-08-06'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/config/settings.py: d20a58cb3775
+verified_content: b99d9061d978
 ---
 
 ## Context

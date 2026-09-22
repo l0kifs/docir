@@ -3,8 +3,8 @@ code:
 - .github/workflows/ci.yml
 - src/docir/entry_points/doctor.py
 code_baseline:
-  .github/workflows/ci.yml: 41280301f869
-  src/docir/entry_points/doctor.py: 230f5796ddb3
+  .github/workflows/ci.yml: a4b0e9a8fdd6
+  src/docir/entry_points/doctor.py: ce032a47b5e6
 created: '2026-08-25'
 description: check --strict ran on a gitignored index, so dangling edges — half the
   merge guard — never fired; CI now reindexes and runs doctor --strict first.
@@ -19,7 +19,12 @@ tags:
 - testing
 title: CI's document-integrity gate ran over an empty index
 type: issue
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  .github/workflows/ci.yml: a4b0e9a8fdd6
+  src/docir/entry_points/doctor.py: ce032a47b5e6
+verified_content: 56633644b1b1
 ---
 
 ## What was wrong

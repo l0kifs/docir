@@ -104,6 +104,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   matters only where the store *is* the global `~/.docir` the model downloads to — otherwise a
   git-tracked notes store would commit 64 MB.
 
+### Measured and rejected
+
+- **`pathspec` as the gitignore engine.** It shipped first as a dependency, and taking it back
+  out cost about 120 lines. The reason is not weight: hand-rolling the grammar is only
+  defensible when correctness comes from `git check-ignore` rather than from a reading of
+  `gitignore(5)`, and doing that caught an error the library version had — a file under an
+  excluded directory cannot be re-included, because git never descends into the directory to
+  read the `!` that would bring it back. A per-file matcher says it can, and hashes a build
+  artifact. That is the whole defect, arrived at through the fix for it.
+- **A Tier 2 `lint --deep` finding for dated section headings.** The predicate would key on a
+  date or a word like "follow-up" in a `##`, and this corpus says that fires on correct usage:
+  `Resolution` is an issue's terminal state and appears on 82 documents. The same shape as
+  `unresolved-mention`, whose every finding here is correct usage. `scope-creep` already fires
+  on the documents in question and could name the cause without inventing a predicate.
+- **Re-minting `code_baseline` during `reindex`** so this release's re-baseline would be
+  silent. It would also hand anybody a way to clear a standing drift by upgrading, which is the
+  laundering `adr-49bb8cc48938` refused through `--set-code`.
+
 ### Upgrading
 
 - **Expect one `code-drifted` per pattern whose match set shrank**, cleared the way the finding

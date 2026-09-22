@@ -3,8 +3,8 @@ code:
 - src/docir/entry_points/composition.py
 - src/docir/modules/documents/application/services/index_rebuilder.py
 code_baseline:
-  src/docir/entry_points/composition.py: f1e7c5f79526
-  src/docir/modules/documents/application/services/index_rebuilder.py: fbb0bff13bc4
+  src/docir/entry_points/composition.py: 88d0cea954b3
+  src/docir/modules/documents/application/services/index_rebuilder.py: 9b1fe093b10d
 created: '2026-08-29'
 description: Why a fresh clone or git worktree now rebuilds its index on open instead
   of failing until someone runs reindex, why only the empty case qualifies, and why
@@ -24,7 +24,12 @@ tags:
 - integrity
 title: Opening a store with no index builds one, deferring the vectors
 type: decision
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/entry_points/composition.py: 88d0cea954b3
+  src/docir/modules/documents/application/services/index_rebuilder.py: 9b1fe093b10d
+verified_content: 414abc54170b
 ---
 
 ## Context

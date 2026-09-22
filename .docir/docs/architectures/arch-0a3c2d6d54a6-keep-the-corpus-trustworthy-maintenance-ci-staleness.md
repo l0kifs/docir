@@ -8,13 +8,13 @@ code:
 - src/docir/modules/documents/domain/services/graph_checks.py
 - src/docir/modules/documents/domain/services/checks/**
 code_baseline:
-  .github/workflows/ci.yml: 41280301f869
-  src/docir/modules/documents/application/services/document_patch.py: 7b2a442b890c
-  src/docir/modules/documents/application/services/index_rebuilder.py: fbb0bff13bc4
-  src/docir/modules/documents/application/services/maintenance_service.py: dbedd2e64320
+  .github/workflows/ci.yml: a4b0e9a8fdd6
+  src/docir/modules/documents/application/services/document_patch.py: 5b7b85ac62c7
+  src/docir/modules/documents/application/services/index_rebuilder.py: 9b1fe093b10d
+  src/docir/modules/documents/application/services/maintenance_service.py: d63801115bf9
   src/docir/modules/documents/application/services/store_repairer.py: 84452625a9b0
   src/docir/modules/documents/domain/services/checks/**: b28b2d4f6708
-  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
 created: '2026-07-30'
 description: 'How the corpus stays consistent: reindex, check, repair, and the merge
   guard.'
@@ -38,7 +38,17 @@ tags:
 - persistence
 title: Keep the corpus trustworthy (maintenance, CI, staleness)
 type: architecture
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  .github/workflows/ci.yml: a4b0e9a8fdd6
+  src/docir/modules/documents/application/services/document_patch.py: 5b7b85ac62c7
+  src/docir/modules/documents/application/services/index_rebuilder.py: 9b1fe093b10d
+  src/docir/modules/documents/application/services/maintenance_service.py: d63801115bf9
+  src/docir/modules/documents/application/services/store_repairer.py: 84452625a9b0
+  src/docir/modules/documents/domain/services/checks/**: b28b2d4f6708
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
+verified_content: 8adab3474e23
 ---
 
 ## Backbone

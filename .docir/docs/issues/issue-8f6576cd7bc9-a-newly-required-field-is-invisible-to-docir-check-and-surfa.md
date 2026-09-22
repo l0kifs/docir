@@ -7,10 +7,10 @@ code:
 - tests/modules/documents/test_integration_maintenance.py
 code_baseline:
   src/docir/modules/documents/domain/services/checks/schema_rules.py: 3bd4377777cd
-  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
-  src/docir/modules/documents/domain/services/validation.py: 18b842a51fe9
-  tests/modules/documents/test_domain_services.py: 2b717c606516
-  tests/modules/documents/test_integration_maintenance.py: 7478e7c0d19b
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
+  src/docir/modules/documents/domain/services/validation.py: aa4794b0dcdd
+  tests/modules/documents/test_domain_services.py: 1e0bdf0af18a
+  tests/modules/documents/test_integration_maintenance.py: ecb42c0e3b81
 created: '2026-08-07'
 description: Adding 'required:' to a live type leaves every existing document in violation
   with no finding of any kind; the first report is an unrelated update failing, one
@@ -30,7 +30,15 @@ tags:
 title: A newly-required field is invisible to docir check, and surfaces one write
   at a time
 type: issue
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/domain/services/checks/schema_rules.py: 3bd4377777cd
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
+  src/docir/modules/documents/domain/services/validation.py: aa4794b0dcdd
+  tests/modules/documents/test_domain_services.py: 1e0bdf0af18a
+  tests/modules/documents/test_integration_maintenance.py: ecb42c0e3b81
+verified_content: a7963fe2b34c
 ---
 
 **Class:** missing · **Severity:** material
@@ -67,8 +75,8 @@ longer describes how it is classified:
 
 | the schema change | what `docir check` says |
 |---|---|
-| a type is removed (profile disabled) | `unknown-type` warning (`graph_checks.py:268`) |
-| a status is removed from a type | `unknown-status` warning (`graph_checks.py:169`) |
+| a type is removed (profile disabled) | `unknown-type` warning (`checks/schema_rules.py`) |
+| a status is removed from a type | `unknown-status` warning (`checks/schema_rules.py`) |
 | **a field becomes required** | **nothing** |
 
 `GraphChecker.check` (`graph_checks.py:92`) never consults `required_fields`, and
@@ -119,7 +127,7 @@ Deliberately not proposed:
 ## Evidence
 
 - `src/docir/modules/documents/domain/services/graph_checks.py:92` — `check` never reads `required_fields`
-- `src/docir/modules/documents/domain/services/graph_checks.py:169,268` — the two sibling findings
+- `src/docir/modules/documents/domain/services/checks/schema_rules.py` — the two sibling findings
 - `src/docir/modules/documents/domain/services/validation.py:35` — `validate_required_fields`
 - `src/docir/modules/documents/application/services/document_service.py:158,206` — its only two callers
 - `src/docir/modules/documents/infra/profiles.py` — why the change can arrive without a local edit

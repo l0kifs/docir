@@ -2,7 +2,7 @@
 code:
 - .github/workflows/**
 code_baseline:
-  .github/workflows/**: f7a17f7b3983
+  .github/workflows/**: b4d187966a43
 created: '2026-08-25'
 description: A job-level env used the runner context, so GitHub rejected ci.yml and
   zero jobs ran; actionlint now gates workflows locally and in CI.
@@ -18,7 +18,11 @@ tags:
 title: A workflow context error took main red, and nothing local could have caught
   it
 type: issue
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  .github/workflows/**: b4d187966a43
+verified_content: 02c349a85cee
 ---
 
 ## What happened

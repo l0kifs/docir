@@ -5,9 +5,9 @@ code:
 - src/docir/modules/documents/infra/schema_loader.py
 - src/docir/modules/agents/**
 code_baseline:
-  src/docir/config/settings.py: 49d614f03082
-  src/docir/entry_points/composition.py: f1e7c5f79526
-  src/docir/modules/agents/**: fba99326556f
+  src/docir/config/settings.py: d20a58cb3775
+  src/docir/entry_points/composition.py: 88d0cea954b3
+  src/docir/modules/agents/**: ead710338f3f
   src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
 created: '2026-07-30'
 description: How a repository gets a store and an agent learns to drive it.
@@ -30,7 +30,14 @@ tags:
 - cli
 title: Adopt docir in a repository (bootstrap, schema, agent onboarding)
 type: architecture
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/config/settings.py: d20a58cb3775
+  src/docir/entry_points/composition.py: 88d0cea954b3
+  src/docir/modules/agents/**: ead710338f3f
+  src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
+verified_content: 32be14e578a6
 ---
 
 ## Backbone
@@ -41,13 +48,13 @@ install → `docir init` → choose profiles → `docir agent install` → first
 
 | # | Event | Actor | Trigger | Evidence |
 |---|-------|-------|---------|----------|
-| 1 | StoreInitialized | ACT-002 | `docir init [--profiles a,b] [--id-style s]` | composition.py:534 |
-| 2 | SchemaWritten | system | `docs-schema.yaml` from core+profiles+id_style | composition.py:573-577 |
-| 3 | IndexGitignored | system | `.docir/.gitignore` | composition.py:470 |
-| 4 | MigrationsRun | system | same startup path as every command | composition.py:586 |
-| 5 | AgentInstructionsInstalled | ACT-002 | `docir agent install [--agent …]` | agents/application/service.py:75 |
-| 6 | StoreDiscovered | system | walk up from CWD for `.docir` | settings.py:48 |
-| 7 | SchemaInspected | ACT-001/002 | `docir schema show` / `validate` | cli/schema_cmds.py:17-30 |
+| 1 | StoreInitialized | ACT-002 | `docir init [--profiles a,b] [--id-style s]` | `composition.initialize_store` |
+| 2 | SchemaWritten | system | `docs-schema.yaml` from core+profiles+id_style | `initialize_store`, schema half |
+| 3 | IndexGitignored | system | `.docir/.gitignore` | `composition._STORE_GITIGNORE` |
+| 4 | MigrationsRun | system | same startup path as every command | `initialize_store` → `run_migrations` |
+| 5 | AgentInstructionsInstalled | ACT-002 | `docir agent install [--agent …]` | `agents.application.service.install` |
+| 6 | StoreDiscovered | system | walk up from CWD for `.docir` | `settings.discover_project_home` |
+| 7 | SchemaInspected | ACT-001/002 | `docir schema show` / `validate` | `cli.schema_cmds` |
 | 8 | TeammateCloned | ACT-002 | `git clone`; index absent (gitignored) | README.md |
 | 9 | IndexRebuilt | ACT-002 | `docir reindex` | → arch-0a3c2d6d54a6 |
 
@@ -72,7 +79,7 @@ Opening a store whose index is empty now rebuilds it before anything is dispatch
 Every command fell back to the global `~/.docir` silently, so `docir add` in an uninitialised
 repository succeeded and wrote the document into the user's *home* store.
 
-*Closed* — the fallback still exists (`settings.py:161`), but from inside a repository docir
+*Closed* — the fallback still exists (`Settings.is_unintended_global_fallback`), but from inside a repository docir
 now warns on stderr that the store is the global one (`Settings.is_unintended_global_fallback`,
 `emit.warn_on_global_fallback`), and every write reports its `store`. → `issue-34b4f0ca1e13`.
 

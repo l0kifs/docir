@@ -4,9 +4,9 @@ code:
 - src/docir/entry_points/daemon/cmds.py
 - src/docir/entry_points/doctor.py
 code_baseline:
-  src/docir/entry_points/daemon/cmds.py: f2ba24c1089c
-  src/docir/entry_points/daemon/lifecycle.py: 0147e6d0a53d
-  src/docir/entry_points/doctor.py: eeda831bac4b
+  src/docir/entry_points/daemon/cmds.py: f1efcea6c68c
+  src/docir/entry_points/daemon/lifecycle.py: 3e55861fc705
+  src/docir/entry_points/doctor.py: ce032a47b5e6
 created: '2026-09-18'
 description: The daemon loads the schema once at startup, its watcher does not react
   to the schema file, and nothing stamps that file into the pid record — so a schema
@@ -23,7 +23,13 @@ tags:
 title: A docs-schema.yaml edit is invisible to every daemon-served command until the
   daemon is replaced
 type: issue
-updated: '2026-09-18'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/entry_points/daemon/cmds.py: f1efcea6c68c
+  src/docir/entry_points/daemon/lifecycle.py: 3e55861fc705
+  src/docir/entry_points/doctor.py: ce032a47b5e6
+verified_content: 3f54eef3f67d
 ---
 
 ## What is wrong

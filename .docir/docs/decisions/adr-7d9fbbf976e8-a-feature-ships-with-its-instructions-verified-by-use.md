@@ -5,10 +5,10 @@ code:
 - src/docir/entry_points/mcp/cmds.py
 - src/docir/modules/agents/infra/templates/**
 code_baseline:
-  README.md: 4b8cf4375661
-  src/docir/entry_points/cli/**: 91fe38046593
-  src/docir/entry_points/mcp/cmds.py: e0c5ec7e32e4
-  src/docir/modules/agents/infra/templates/**: 589d2f0899a0
+  README.md: ae67f55fffb0
+  src/docir/entry_points/cli/**: 8b97a450d4c1
+  src/docir/entry_points/mcp/cmds.py: d1b6879eb575
+  src/docir/modules/agents/infra/templates/**: 1c2abe332f96
 created: '2026-08-24'
 description: A business feature is done when an agent holding only the installed package
   can tell what it is, when to reach for it and how to invoke it — and somebody has
@@ -25,7 +25,14 @@ tags:
 - testing
 title: A feature ships with its instructions, verified by use
 type: decision
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  README.md: ae67f55fffb0
+  src/docir/entry_points/cli/**: 8b97a450d4c1
+  src/docir/entry_points/mcp/cmds.py: d1b6879eb575
+  src/docir/modules/agents/infra/templates/**: 1c2abe332f96
+verified_content: f5486d7a7545
 ---
 
 ## Context

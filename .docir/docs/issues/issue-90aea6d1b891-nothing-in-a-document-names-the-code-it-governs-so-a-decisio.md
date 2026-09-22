@@ -3,8 +3,8 @@ code:
 - src/docir/modules/documents/domain/services/code_globs.py
 - src/docir/platform/filesystem/code_matcher.py
 code_baseline:
-  src/docir/modules/documents/domain/services/code_globs.py: 27940b520ad4
-  src/docir/platform/filesystem/code_matcher.py: a3314a26eb06
+  src/docir/modules/documents/domain/services/code_globs.py: 8d1df3b56ee5
+  src/docir/platform/filesystem/code_matcher.py: 49e035db439d
 created: '2026-08-06'
 description: No frontmatter field points at code, and the schema's 'required' hook
   that appears to allow one is unsatisfiable — which blocks enforcement against code
@@ -23,7 +23,12 @@ tags:
 title: Nothing in a document names the code it governs, so a decision cannot be found
   from, or checked against, the codebase
 type: issue
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/domain/services/code_globs.py: 8d1df3b56ee5
+  src/docir/platform/filesystem/code_matcher.py: 49e035db439d
+verified_content: 629e11379a96
 ---
 
 **Class:** missing · **Severity:** material
@@ -70,7 +75,8 @@ profiles):
 1. Optional `code:` in frontmatter: a list of repo-relative globs, on `Document`, the markdown
    store and the index. Tier 0 validates the *shape*, not whether the target exists — a write must
    not fail because a branch has not created the file yet.
-2. A Tier 1 `check` finding when a governed glob matches nothing on disk. `warning`, not `error`:
+2. A Tier 1 `check` finding when a governed glob matches nothing the repository tracks
+   (since [[adr-1d1eddbb6fbd]]; before it, anything on disk). `warning`, not `error`:
    code moving is normal and the corpus is not broken by it (`graph_checks.ERROR_KINDS`).
 3. Only then consider gap 6. With 1 and 2, "which decisions govern what this PR touched" is a query,
    which is most of what an executable-rule engine would be wanted for, without the engine.

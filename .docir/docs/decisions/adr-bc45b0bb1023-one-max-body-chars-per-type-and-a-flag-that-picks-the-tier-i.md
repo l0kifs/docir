@@ -5,7 +5,7 @@ code:
 - src/docir/modules/documents/domain/schema.py
 code_baseline:
   src/docir/modules/documents/domain/schema.py: c0ea053f1c39
-  src/docir/modules/documents/domain/services/validation.py: 18b842a51fe9
+  src/docir/modules/documents/domain/services/validation.py: aa4794b0dcdd
   src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
 created: '2026-09-15'
 description: One max_body_chars per type, read by both tiers; max_body_chars_enforce
@@ -21,7 +21,13 @@ tags:
 - integrity
 title: One max_body_chars per type, and a flag that picks the tier it acts at
 type: decision
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/domain/schema.py: c0ea053f1c39
+  src/docir/modules/documents/domain/services/validation.py: aa4794b0dcdd
+  src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
+verified_content: 6f988458cf46
 ---
 
 ## Context

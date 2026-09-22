@@ -4,7 +4,7 @@ code:
 - src/docir/platform/embedding/**
 code_baseline:
   src/docir/modules/documents/domain/schema.py: c0ea053f1c39
-  src/docir/platform/embedding/**: 1548aadeb100
+  src/docir/platform/embedding/**: 3732fa1ff3cb
 created: '2026-08-15'
 description: What the default embedder costs to install, what the model-free fallback
   loses, and how a store names a different model.
@@ -19,7 +19,12 @@ tags:
 - retrieval
 title: 'The embedding model: what it costs, and what the fallback loses'
 type: reference
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/domain/schema.py: c0ea053f1c39
+  src/docir/platform/embedding/**: 3732fa1ff3cb
+verified_content: fb83bae88b8e
 ---
 
 Semantic search runs on a real embedding model, installed by default. It is quantized,

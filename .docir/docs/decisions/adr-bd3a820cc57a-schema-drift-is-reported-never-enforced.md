@@ -6,9 +6,9 @@ code:
 - src/docir/entry_points/cli/runner.py
 - src/docir/platform/persistence/alembic/versions/0005_schema_baseline.py
 code_baseline:
-  src/docir/entry_points/cli/runner.py: 48c8f16222e8
-  src/docir/modules/documents/application/services/index_rebuilder.py: fbb0bff13bc4
-  src/docir/modules/documents/application/services/maintenance_service.py: dbedd2e64320
+  src/docir/entry_points/cli/runner.py: 66abea831942
+  src/docir/modules/documents/application/services/index_rebuilder.py: 9b1fe093b10d
+  src/docir/modules/documents/application/services/maintenance_service.py: d63801115bf9
   src/docir/modules/documents/domain/services/schema_shape.py: f8e1f5b5ad84
   src/docir/platform/persistence/alembic/versions/0005_schema_baseline.py: e9094dc76fda
 created: '2026-08-08'
@@ -32,7 +32,15 @@ tags:
 - schema
 title: Schema drift is reported, never enforced
 type: decision
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/entry_points/cli/runner.py: 66abea831942
+  src/docir/modules/documents/application/services/index_rebuilder.py: 9b1fe093b10d
+  src/docir/modules/documents/application/services/maintenance_service.py: d63801115bf9
+  src/docir/modules/documents/domain/services/schema_shape.py: f8e1f5b5ad84
+  src/docir/platform/persistence/alembic/versions/0005_schema_baseline.py: e9094dc76fda
+verified_content: 7d9677b57b9f
 ---
 
 ## Context

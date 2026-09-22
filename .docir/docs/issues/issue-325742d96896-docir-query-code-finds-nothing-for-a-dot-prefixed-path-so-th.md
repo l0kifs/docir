@@ -3,8 +3,8 @@ code:
 - src/docir/modules/documents/domain/services/code_globs.py
 - .github/workflows/ci.yml
 code_baseline:
-  .github/workflows/ci.yml: bdba3b7c9037
-  src/docir/modules/documents/domain/services/code_globs.py: 27940b520ad4
+  .github/workflows/ci.yml: a4b0e9a8fdd6
+  src/docir/modules/documents/domain/services/code_globs.py: 8d1df3b56ee5
 created: '2026-09-18'
 description: _normalize strips a leading dot as a character class, so a document governing
   .github/workflows/** can never be returned by the reverse query — while check's
@@ -22,7 +22,12 @@ tags:
 title: docir query --code finds nothing for a dot-prefixed path, so the CI notice
   step is blind to workflow changes
 type: issue
-updated: '2026-09-18'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  .github/workflows/ci.yml: a4b0e9a8fdd6
+  src/docir/modules/documents/domain/services/code_globs.py: 8d1df3b56ee5
+verified_content: 7f114469e8b2
 ---
 
 ## What is wrong

@@ -6,11 +6,11 @@ code:
 - src/docir/modules/documents/application/services/maintenance_service.py
 - src/docir/modules/documents/application/services/index_rebuilder.py
 code_baseline:
-  src/docir/entry_points/cli/maintenance_cmds.py: c37ca8c40b29
-  src/docir/entry_points/cli/rendering.py: dd8caad049a7
-  src/docir/entry_points/dispatch.py: 204d358a9285
-  src/docir/modules/documents/application/services/index_rebuilder.py: fbb0bff13bc4
-  src/docir/modules/documents/application/services/maintenance_service.py: dbedd2e64320
+  src/docir/entry_points/cli/maintenance_cmds.py: 63e44c8f25ea
+  src/docir/entry_points/cli/rendering.py: e6bc542be6db
+  src/docir/entry_points/dispatch.py: 282abcf40e30
+  src/docir/modules/documents/application/services/index_rebuilder.py: 9b1fe093b10d
+  src/docir/modules/documents/application/services/maintenance_service.py: d63801115bf9
 created: '2026-08-16'
 description: The --embeddings flag re-embeds exactly what a plain reindex already
   re-embeds, for the same time, while skipping the two stamps the rebuild writes —
@@ -30,7 +30,15 @@ tags:
 - release
 title: reindex --embeddings replaces the rebuild rather than adding to it
 type: issue
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/entry_points/cli/maintenance_cmds.py: 63e44c8f25ea
+  src/docir/entry_points/cli/rendering.py: e6bc542be6db
+  src/docir/entry_points/dispatch.py: 282abcf40e30
+  src/docir/modules/documents/application/services/index_rebuilder.py: 9b1fe093b10d
+  src/docir/modules/documents/application/services/maintenance_service.py: d63801115bf9
+verified_content: 61274fb6bce6
 ---
 
 ## The flag is dominated, not complementary

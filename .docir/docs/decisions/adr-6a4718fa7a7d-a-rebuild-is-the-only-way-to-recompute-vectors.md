@@ -5,9 +5,9 @@ code:
 - src/docir/modules/documents/application/services/index_rebuilder.py
 - src/docir/modules/indexing/infra/scheduler.py
 code_baseline:
-  src/docir/entry_points/cli/maintenance_cmds.py: c37ca8c40b29
-  src/docir/entry_points/dispatch.py: 204d358a9285
-  src/docir/modules/documents/application/services/index_rebuilder.py: fbb0bff13bc4
+  src/docir/entry_points/cli/maintenance_cmds.py: 63e44c8f25ea
+  src/docir/entry_points/dispatch.py: 282abcf40e30
+  src/docir/modules/documents/application/services/index_rebuilder.py: 9b1fe093b10d
   src/docir/modules/indexing/infra/scheduler.py: 3cc2831c6de3
 created: '2026-08-16'
 description: 'Retire reindex --embeddings instead of repairing it: it recomputed exactly
@@ -25,7 +25,14 @@ tags:
 - persistence
 title: A rebuild is the only way to recompute vectors
 type: decision
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/entry_points/cli/maintenance_cmds.py: 63e44c8f25ea
+  src/docir/entry_points/dispatch.py: 282abcf40e30
+  src/docir/modules/documents/application/services/index_rebuilder.py: 9b1fe093b10d
+  src/docir/modules/indexing/infra/scheduler.py: 3cc2831c6de3
+verified_content: 232d96729389
 ---
 
 ## Context

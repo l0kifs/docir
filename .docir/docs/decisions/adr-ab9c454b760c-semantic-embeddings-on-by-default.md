@@ -2,7 +2,7 @@
 code:
 - src/docir/platform/embedding/**
 code_baseline:
-  src/docir/platform/embedding/**: 1548aadeb100
+  src/docir/platform/embedding/**: 3732fa1ff3cb
 created: '2026-07-27'
 description: Why a real embedding model is the default and the hashing embedder only
   the fallback.
@@ -17,7 +17,11 @@ tags:
 - retrieval
 title: Semantic embeddings on by default
 type: decision
-updated: '2026-09-18'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/platform/embedding/**: 3732fa1ff3cb
+verified_content: 9f2f7a2f47ec
 ---
 
 ## Context

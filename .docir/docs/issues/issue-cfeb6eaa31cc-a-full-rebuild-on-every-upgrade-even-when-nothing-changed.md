@@ -6,10 +6,10 @@ code:
 - src/docir/modules/documents/application/services/index_rebuilder.py
 - src/docir/modules/documents/application/services/store_repairer.py
 code_baseline:
-  src/docir/entry_points/composition.py: f1e7c5f79526
-  src/docir/entry_points/dispatch.py: 204d358a9285
-  src/docir/modules/documents/application/services/index_rebuilder.py: fbb0bff13bc4
-  src/docir/modules/documents/application/services/maintenance_service.py: dbedd2e64320
+  src/docir/entry_points/composition.py: 88d0cea954b3
+  src/docir/entry_points/dispatch.py: 282abcf40e30
+  src/docir/modules/documents/application/services/index_rebuilder.py: 9b1fe093b10d
+  src/docir/modules/documents/application/services/maintenance_service.py: d63801115bf9
   src/docir/modules/documents/application/services/store_repairer.py: 84452625a9b0
 created: '2026-08-16'
 description: 'docir self upgrade ran an unconditional full reindex, and 96% of that
@@ -31,7 +31,15 @@ tags:
 - release
 title: A full rebuild on every upgrade, even when nothing changed
 type: issue
-updated: '2026-09-18'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/entry_points/composition.py: 88d0cea954b3
+  src/docir/entry_points/dispatch.py: 282abcf40e30
+  src/docir/modules/documents/application/services/index_rebuilder.py: 9b1fe093b10d
+  src/docir/modules/documents/application/services/maintenance_service.py: d63801115bf9
+  src/docir/modules/documents/application/services/store_repairer.py: 84452625a9b0
+verified_content: 74f02c07d38c
 ---
 
 ## What was measured

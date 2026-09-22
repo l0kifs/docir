@@ -6,7 +6,7 @@ code:
 code_baseline:
   src/docir/modules/documents/domain/services/checks/**: b28b2d4f6708
   src/docir/modules/documents/domain/services/similarity_lint.py: 497f909c8dc4
-  src/docir/modules/documents/domain/services/validation.py: 18b842a51fe9
+  src/docir/modules/documents/domain/services/validation.py: aa4794b0dcdd
 created: '2026-08-15'
 description: The three tiers deciding what blocks a write, what a check reports and
   what stays advisory, plus how a schema change is detected against the index build.
@@ -19,7 +19,13 @@ tags:
 - architecture
 title: Doc-Index CLI — validation strictness tiers
 type: architecture
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/domain/services/checks/**: b28b2d4f6708
+  src/docir/modules/documents/domain/services/similarity_lint.py: 497f909c8dc4
+  src/docir/modules/documents/domain/services/validation.py: aa4794b0dcdd
+verified_content: c6b05428ce31
 ---
 
 ## Validation strictness tiers
@@ -65,9 +71,13 @@ The distinction is not cosmetic. `orphan` used to fire for every document with
 no `related:` edges — the default state of a new one, and of any document linked
 only by someone writing its id in a sentence — so a fail-on-any-finding gate went
 red on a healthy corpus, and the only way to keep CI green was to drop the gate,
-which also dropped the duplicate-id detection that was its actual purpose. It now
-reads the derived mention graph too (adr-e86c5040d626), which removes most of
-that noise; the severity split stays, because the finding is still about shape.
+which also dropped the duplicate-id detection that was its actual purpose. For a
+while it read the derived mention graph too, and that was reverted
+([[issue-77a09761e1d4]]): the body most likely to name a queue of orphan ids is
+the triage diagnosing them, so writing "these four still need wiring" emptied the
+queue tracking those four. The exemption is `isolated:` instead — a reviewed
+answer somebody wrote on purpose. The severity split stays, because the finding
+is still about shape.
 `CheckIssue` derives `severity` from `kind`, so a new check classifies itself by
 being added to `ERROR_KINDS` or not.
 
@@ -76,8 +86,13 @@ being added to `ERROR_KINDS` or not.
 | `duplicate-id` | error | two files claim one id; the index dedupes, so one document is invisible. Found by scanning the *files*, not the index |
 | `dangling` | error | a `related` edge points at nothing |
 | `malformed` | error | a file the loader cannot parse — absent from every read path |
-| `orphan` | warning | nothing connects to it — no `related` edge either way, and no other document names its id in prose |
+| `orphan` | warning | no `related` edge connects it, in either direction. Prose does not count; `isolated:` is the exemption |
 | `cycle` | warning | a loop in the graph |
+| `unblocked` | warning | everything it waits on has closed — the one finding that reports readiness rather than damage |
+| `code-drifted` | warning | the files a `code:` glob matched when the document declared it have moved, and nobody has verified it since |
+| `verification-outdated` | warning | the title/description/body a `--verified` covered are not the ones on disk |
+| `empty-index` | error | the index holds nothing while `docs/` holds files — every read answers nothing |
+| `store-format-undeclared` | warning | the file's contents need a higher `store_format:` floor than it records |
 | `layering` | warning | a higher-level type *depends on* a lower one |
 | `stale` | warning | past the type's `review_days`, measured from `verified` else `updated` |
 | `code-changed` | warning | the code a document governs differs from what it was when somebody last verified it |

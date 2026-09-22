@@ -3,8 +3,8 @@ code:
 - src/docir/entry_points/federation.py
 - src/docir/entry_points/composition.py
 code_baseline:
-  src/docir/entry_points/composition.py: e59f157c6b81
-  src/docir/entry_points/federation.py: d4450115acce
+  src/docir/entry_points/composition.py: 88d0cea954b3
+  src/docir/entry_points/federation.py: e41979b7fb31
 created: '2026-09-18'
 description: The federated reader caches each opened peer per container, so a peer
   repaired after first contact keeps being skipped over the socket while --no-daemon
@@ -21,7 +21,12 @@ tags:
 title: A peer that was unreadable when the daemon first tried it stays skipped for
   the daemon's life
 type: issue
-updated: '2026-09-18'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/entry_points/composition.py: 88d0cea954b3
+  src/docir/entry_points/federation.py: e41979b7fb31
+verified_content: ed7d5e74270b
 ---
 
 ## What is wrong

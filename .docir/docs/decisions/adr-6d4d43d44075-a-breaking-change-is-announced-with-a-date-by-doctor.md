@@ -2,7 +2,7 @@
 code:
 - src/docir/entry_points/doctor.py
 code_baseline:
-  src/docir/entry_points/doctor.py: 230f5796ddb3
+  src/docir/entry_points/doctor.py: ce032a47b5e6
 created: '2026-09-16'
 description: Why deprecations carry a sunset date, why docir doctor is the channel
   rather than a release note, and why --strict stays green until the date passes.
@@ -21,7 +21,11 @@ tags:
 - docs
 title: A breaking change is announced with a date, by doctor
 type: decision
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/entry_points/doctor.py: ce032a47b5e6
+verified_content: 95b45e81d509
 ---
 
 A floor stops a break; it does not give anybody time. The reader who needs the warning is an

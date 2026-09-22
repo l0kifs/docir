@@ -3,8 +3,8 @@ code:
 - src/docir/config/settings.py
 - src/docir/platform/embedding/**
 code_baseline:
-  src/docir/config/settings.py: 49d614f03082
-  src/docir/platform/embedding/**: 1548aadeb100
+  src/docir/config/settings.py: d20a58cb3775
+  src/docir/platform/embedding/**: 3732fa1ff3cb
 created: '2026-08-24'
 description: bge-small-en-v1.5 is compiled in as the only real embedder, so a corpus
   not written in English retrieves worse than plain full-text search, with nothing
@@ -23,7 +23,12 @@ tags:
 - retrieval
 title: The embedding model is pinned, and it is English-only
 type: issue
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/config/settings.py: d20a58cb3775
+  src/docir/platform/embedding/**: 3732fa1ff3cb
+verified_content: 3c370eb24303
 ---
 
 ## What happens

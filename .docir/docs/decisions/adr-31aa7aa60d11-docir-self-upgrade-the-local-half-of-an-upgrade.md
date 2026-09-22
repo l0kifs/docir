@@ -5,9 +5,9 @@ code:
 - src/docir/modules/documents/application/services/index_rebuilder.py
 - src/docir/platform/persistence/alembic/versions/0006_index_build.py
 code_baseline:
-  src/docir/entry_points/cli/self_cmds.py: 211c54b8b993
-  src/docir/entry_points/composition.py: f1e7c5f79526
-  src/docir/modules/documents/application/services/index_rebuilder.py: fbb0bff13bc4
+  src/docir/entry_points/cli/self_cmds.py: 1e11c74f10de
+  src/docir/entry_points/composition.py: 88d0cea954b3
+  src/docir/modules/documents/application/services/index_rebuilder.py: 9b1fe093b10d
   src/docir/platform/persistence/alembic/versions/0006_index_build.py: 5d30151abe53
 created: '2026-08-09'
 description: One command for the steps that follow a new docir release, and why installing
@@ -18,6 +18,7 @@ related:
 - adr-3a2d5ee7bc84
 - adr-927aa43d9635
 - adr-bd3a820cc57a
+- issue-712f5bd17908
 status: accepted
 tags:
 - agents
@@ -25,7 +26,14 @@ tags:
 - schema
 title: 'docir self upgrade: the local half of an upgrade'
 type: decision
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/entry_points/cli/self_cmds.py: 1e11c74f10de
+  src/docir/entry_points/composition.py: 88d0cea954b3
+  src/docir/modules/documents/application/services/index_rebuilder.py: 9b1fe093b10d
+  src/docir/platform/persistence/alembic/versions/0006_index_build.py: 5d30151abe53
+verified_content: 949c2c0126bd
 ---
 
 ## Context
@@ -41,9 +49,12 @@ like in practice.
 
 ## Decision
 
-**`docir self upgrade` runs the three local steps, in that order.** `check` goes
-last, so its findings describe the state the upgrade left rather than the one it
-started from.
+**`docir self upgrade` runs the local steps, in that order.** Three at first —
+`reindex`, `agent update`, `check` — and a fourth since [[issue-712f5bd17908]]:
+the store's own `.gitignore` is topped up with the entries this build generates,
+beside `agent update` because both are generated files. `check` goes last
+whatever the count, so its findings describe the state the upgrade left rather
+than the one it started from.
 
 **A `self` group, not a top-level verb.** `docir update <id>` already means
 "edit a document", and a bare `docir upgrade` sits one typo away from it in a

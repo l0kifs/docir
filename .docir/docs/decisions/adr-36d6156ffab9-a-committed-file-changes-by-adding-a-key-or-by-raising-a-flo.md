@@ -5,9 +5,9 @@ code:
 - src/docir/platform/filesystem/schema_store.py
 - src/docir/entry_points/doctor.py
 code_baseline:
-  src/docir/entry_points/doctor.py: b1818e09c68d
+  src/docir/entry_points/doctor.py: ce032a47b5e6
   src/docir/modules/documents/domain/services/store_format.py: eb89d11244ff
-  src/docir/modules/documents/infra/schema_loader.py: 25ccb49adaeb
+  src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
   src/docir/platform/filesystem/schema_store.py: 64b0230bb494
 created: '2026-09-16'
 description: Why new meaning goes in a new key older builds ignore, why the fallback
@@ -29,7 +29,14 @@ tags:
 - persistence
 title: A committed file changes by adding a key, or by raising a floor
 type: decision
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/entry_points/doctor.py: ce032a47b5e6
+  src/docir/modules/documents/domain/services/store_format.py: eb89d11244ff
+  src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
+  src/docir/platform/filesystem/schema_store.py: 64b0230bb494
+verified_content: 328a46956df1
 ---
 
 Two file changes shipped a release apart, against the same store, and only one of them

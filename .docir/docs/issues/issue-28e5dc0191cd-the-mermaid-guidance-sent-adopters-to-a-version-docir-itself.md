@@ -7,10 +7,10 @@ code:
 - .github/workflows/pages.yml
 code_baseline:
   .github/workflows/pages.yml: 268ada90f0a2
-  README.md: 61935297d547
-  src/docir/entry_points/cli/app.py: 632b4c81a902
-  src/docir/modules/agents/infra/templates/**: 589d2f0899a0
-  src/docir/modules/publishing/infra/diagrams.py: 82acf633af1c
+  README.md: ae67f55fffb0
+  src/docir/entry_points/cli/app.py: a15a6e7698f4
+  src/docir/modules/agents/infra/templates/**: 1c2abe332f96
+  src/docir/modules/publishing/infra/diagrams.py: 63fc23ecd970
 created: '2026-08-25'
 description: skill and README named mermaid 10.9.3 on the false grounds that 11 is
   ESM-only, while docir's own pages.yml published with 11.16.1.
@@ -24,7 +24,15 @@ tags:
 - docs
 title: The mermaid guidance sent adopters to a version docir itself stopped using
 type: issue
-updated: '2026-09-18'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  .github/workflows/pages.yml: 268ada90f0a2
+  README.md: ae67f55fffb0
+  src/docir/entry_points/cli/app.py: a15a6e7698f4
+  src/docir/modules/agents/infra/templates/**: 1c2abe332f96
+  src/docir/modules/publishing/infra/diagrams.py: 63fc23ecd970
+verified_content: 773eecc511e6
 ---
 
 ## What was wrong

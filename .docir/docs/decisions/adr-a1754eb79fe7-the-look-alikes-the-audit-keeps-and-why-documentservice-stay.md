@@ -16,15 +16,15 @@ code:
 code_baseline:
   src/docir/entry_points/cli/emit.py: 1e591d08eca5
   src/docir/entry_points/cli/read_cmds.py: 9cf0437a2e8e
-  src/docir/entry_points/cli/write_cmds.py: da7ca1502484
-  src/docir/entry_points/composition.py: f1e7c5f79526
-  src/docir/entry_points/dispatch.py: 204d358a9285
-  src/docir/entry_points/doctor.py: 230f5796ddb3
-  src/docir/entry_points/mcp/server.py: 310948427caa
+  src/docir/entry_points/cli/write_cmds.py: 22a0a7dcbc44
+  src/docir/entry_points/composition.py: 88d0cea954b3
+  src/docir/entry_points/dispatch.py: 282abcf40e30
+  src/docir/entry_points/doctor.py: ce032a47b5e6
+  src/docir/entry_points/mcp/server.py: f8a743539681
   src/docir/modules/documents/application/dto.py: f265277c576a
   src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
-  src/docir/modules/documents/domain/services/checks: dbc81f0a3141
-  src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
+  src/docir/modules/documents/domain/services/checks: b28b2d4f6708
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
   src/docir/modules/publishing/infra/assets.py: 9adb73e77dc2
   src/docir/platform/persistence/repositories.py: 7bcf7e81a5a0
 created: '2026-09-11'
@@ -40,7 +40,23 @@ tags:
 - architecture
 title: The look-alikes the audit keeps, and why DocumentService stays whole
 type: decision
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/entry_points/cli/emit.py: 1e591d08eca5
+  src/docir/entry_points/cli/read_cmds.py: 9cf0437a2e8e
+  src/docir/entry_points/cli/write_cmds.py: 22a0a7dcbc44
+  src/docir/entry_points/composition.py: 88d0cea954b3
+  src/docir/entry_points/dispatch.py: 282abcf40e30
+  src/docir/entry_points/doctor.py: ce032a47b5e6
+  src/docir/entry_points/mcp/server.py: f8a743539681
+  src/docir/modules/documents/application/dto.py: f265277c576a
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
+  src/docir/modules/documents/domain/services/checks: b28b2d4f6708
+  src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
+  src/docir/modules/publishing/infra/assets.py: 9adb73e77dc2
+  src/docir/platform/persistence/repositories.py: 7bcf7e81a5a0
+verified_content: 2770087a351d
 ---
 
 ## Context

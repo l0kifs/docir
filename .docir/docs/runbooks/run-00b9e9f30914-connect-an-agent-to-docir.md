@@ -3,8 +3,8 @@ code:
 - src/docir/entry_points/mcp/**
 - src/docir/modules/agents/**
 code_baseline:
-  src/docir/entry_points/mcp/**: 93ed4d7cb7d7
-  src/docir/modules/agents/**: 66d32de05359
+  src/docir/entry_points/mcp/**: c830d100f54f
+  src/docir/modules/agents/**: ead710338f3f
 created: '2026-08-16'
 description: The two transports an agent can use — the installed CLI skill or the
   bundled MCP server — and why both answer identically.
@@ -19,7 +19,12 @@ tags:
 - cli
 title: Connect an agent to docir
 type: runbook
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/entry_points/mcp/**: c830d100f54f
+  src/docir/modules/agents/**: ead710338f3f
+verified_content: df995f050b8e
 ---
 
 Some agents run shell commands; some only call MCP tools. docir supports both, and the

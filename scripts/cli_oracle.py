@@ -62,14 +62,22 @@ _ROOT_TAKES_VALUE: dict[str, bool] = {}
 _PLACEHOLDER = re.compile(r"^(\.\.\.|…|<.+>)$")
 
 
-def _cli_tree() -> tuple[dict[tuple[str, ...], set[str]], set[tuple[str, ...]]]:
-    """Command path -> its long flags, plus the set of paths that are groups.
+def _cli_tree() -> tuple[
+    dict[tuple[str, ...], set[str]], set[tuple[str, ...]], set[tuple[str, ...]]
+]:
+    """Command path -> its long flags, the paths that are groups, and the hidden ones.
 
     Groups matter for resolution: after `docir schema` the next word *must* be a
     subcommand, while after `docir get` it is the document id.
+
+    Hidden matters for the other direction. `test_the_cli_surface_document_is_complete`
+    asserts every command is documented, and `daemon serve` is not one a reader
+    should ever type — it is how the client respawns the daemon. A guard that
+    demanded it documented would be demanding the wrong thing.
     """
     tree: dict[tuple[str, ...], set[str]] = {}
     groups: set[tuple[str, ...]] = set()
+    hidden: set[tuple[str, ...]] = set()
 
     def walk(command: object, path: tuple[str, ...]) -> None:
         params = getattr(command, "params", [])
@@ -88,6 +96,8 @@ def _cli_tree() -> tuple[dict[tuple[str, ...], set[str]], set[tuple[str, ...]]]:
                     if opt.startswith("--")
                 }
             )
+        if getattr(command, "hidden", False):
+            hidden.add(path)
         children = getattr(command, "commands", {})
         if children:
             groups.add(path)
@@ -95,7 +105,7 @@ def _cli_tree() -> tuple[dict[tuple[str, ...], set[str]], set[tuple[str, ...]]]:
             walk(sub, (*path, name))
 
     walk(typer.main.get_command(app), ())
-    return tree, groups
+    return tree, groups, hidden
 
 
 def command_lines(text: str) -> list[str]:
@@ -315,7 +325,7 @@ def _shipped_vocabulary() -> tuple[dict[str, frozenset[str]], frozenset[str]]:
     return statuses, frozenset().union(*statuses.values())
 
 
-TREE, GROUPS = _cli_tree()
+TREE, GROUPS, HIDDEN = _cli_tree()
 TYPE_STATUSES, ALL_STATUSES = _shipped_vocabulary()
 
 

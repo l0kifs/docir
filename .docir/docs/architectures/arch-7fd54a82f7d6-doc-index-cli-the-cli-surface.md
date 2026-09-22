@@ -28,13 +28,16 @@ verified_code:
   src/docir/entry_points/daemon/cmds.py: f1efcea6c68c
   src/docir/entry_points/dispatch.py: 282abcf40e30
   src/docir/entry_points/mcp/cmds.py: d1b6879eb575
-verified_content: 54bb2f80e406
+verified_content: eae2f0a1a09f
 ---
 
 ## CLI commands
 
-Every command below exists in `docir --help`; the groups are `agent`, `daemon`,
-`mcp`, `schema`, `self` and `tag`. Global flags come *before* the command
+Every command below exists in `docir --help` **and every command the CLI offers
+is below** — `tests/entry_points/test_agent_guide_matches_cli.py` asserts both
+directions, exempting only hidden `docir daemon serve`, which the client runs
+for you and no reader should type. The groups are `agent`, `daemon`, `mcp`,
+`schema`, `self` and `tag`. Global flags come *before* the command
 (`docir --pretty get <id>`): `--home`, `--store`, `--no-daemon`, `--json`,
 `--pretty`, `--no-trim`.
 

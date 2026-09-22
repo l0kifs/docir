@@ -52,6 +52,7 @@ import re
 import pytest
 from cli_oracle import (
     DELIBERATELY_UNREAL,
+    HIDDEN,
     TREE,
     command_lines,
     exemption,
@@ -312,6 +313,48 @@ def test_every_exemption_is_still_needed(key: tuple[str, ...]) -> None:
         f"no prose still writes `docir {' '.join(key)}` — drop the exemption "
         f"({DELIBERATELY_UNREAL[key]})"
     )
+
+
+#: The store document whose stated job is the CLI surface. Named once: the guard
+#: below reads it by filename rather than by id, because that is what the sweep
+#: over `_STORE_DOCS` already yields.
+_CLI_SURFACE = "arch-7fd54a82f7d6-doc-index-cli-the-cli-surface.md"
+
+
+def test_the_cli_surface_document_names_every_command() -> None:
+    """The direction the oracle never checked, and `doctor` fell through it.
+
+    Every other guard here asks whether a line the prose *carries* resolves. A
+    command the prose never mentions carries no line, so it is invisible to all
+    of them — and `arch-7fd54a82f7d6`, whose stated job is the CLI surface, was
+    missing `doctor`, `daemon status` and `daemon stop` while its 34 rows all
+    resolved. A table cannot be checked for what is not in it by looking at what
+    is (issue-193c443791c5).
+
+    Hidden commands are exempt: `daemon serve` is how the client respawns the
+    daemon, not something a reader should type, and demanding it be documented
+    would be demanding the wrong thing.
+    """
+    document = REPO_PROSE.get(_CLI_SURFACE)
+    assert document is not None, (
+        f"{_CLI_SURFACE} is not in the store sweep — it was renamed or deleted, "
+        "and this guard is checking nothing"
+    )
+    missing = sorted(
+        " ".join(path)
+        for path in TREE
+        if path and path not in HIDDEN and f"docir {' '.join(path)}" not in document
+    )
+    assert not missing, (
+        f"{_CLI_SURFACE} documents the CLI surface and does not name:\n  " + "\n  ".join(missing)
+    )
+
+
+def test_the_cli_surface_guard_would_notice_an_undocumented_command() -> None:
+    """Guard the guard: the assertion above passes trivially on an empty tree."""
+    documentable = {path for path in TREE if path and path not in HIDDEN}
+    assert len(documentable) > 20, f"only {len(documentable)} commands — is TREE being walked?"
+    assert HIDDEN, "no command is hidden — the exemption is untested and may be inert"
 
 
 @pytest.mark.parametrize("source", sorted(REPO_PROSE))

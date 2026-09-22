@@ -18,7 +18,11 @@ tags:
 - cosmetic
 title: publishing/infra/rendering.py changes for three unrelated reasons
 type: issue
-updated: '2026-09-11'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/publishing/infra/rendering.py: 16d9f4392c5b
+verified_content: 3d7f95a53564
 ---
 
 ## Context

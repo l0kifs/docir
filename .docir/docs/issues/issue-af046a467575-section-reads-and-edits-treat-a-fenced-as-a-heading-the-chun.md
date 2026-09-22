@@ -19,7 +19,12 @@ tags:
 - retrieval
 title: 'Section reads and edits treat a fenced ## as a heading; the chunker does not'
 type: issue
-updated: '2026-08-15'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/domain/services/chunking.py: 8cd7f3e66eac
+  src/docir/modules/documents/domain/services/markdown_sections.py: 60d806f63b70
+verified_content: 7381b5e4434c
 ---
 
 ## What happens

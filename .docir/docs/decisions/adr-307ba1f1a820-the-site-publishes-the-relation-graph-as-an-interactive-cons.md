@@ -18,7 +18,11 @@ tags:
 - docs
 title: The site publishes the relation graph as an interactive constellation page
 type: decision
-updated: '2026-09-18'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/publishing/infra/graph.py: 48c3cad0074a
+verified_content: 16cce9de327a
 ---
 
 ## Context

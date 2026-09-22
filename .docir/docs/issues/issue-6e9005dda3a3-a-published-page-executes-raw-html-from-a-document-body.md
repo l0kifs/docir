@@ -17,7 +17,11 @@ tags:
 - material
 title: A published page executes raw HTML from a document body
 type: issue
-updated: '2026-08-16'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/publishing/infra/rendering.py: 16d9f4392c5b
+verified_content: 51e5a9c65cef
 ---
 
 `docir build` renders each document body with a CommonMark parser that passes raw HTML

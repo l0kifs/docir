@@ -15,7 +15,11 @@ tags:
 - architecture
 title: Doc-Index CLI — the read path
 type: architecture
-updated: '2026-09-18'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/indexing/**: d506e685ec3f
+verified_content: a62e9cc92dd2
 ---
 
 ## Read path
@@ -104,7 +108,7 @@ separated:
   relations. Cheap, and search correctness depends on it — ready by the
   time the command returns.
 - **Deferred, eventually consistent (embeddings only):** a content
-  change sets an `embedding_dirty` flag on the row (persisted in SQLite,
+  change sets the `embeddings.dirty` flag on the row (persisted in SQLite,
   so it survives a daemon crash/restart) and returns immediately. A
   background worker inside the daemon drains dirty rows with a short
   **debounce** window (a few seconds), coalescing a burst of edits to

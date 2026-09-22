@@ -26,7 +26,16 @@ tags:
 - testing
 title: The retrieval benchmark corpus cannot exercise any of the chunking rules
 type: issue
-updated: '2026-08-15'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  benchmarks/chunking.py: 4b591b6d26a5
+  benchmarks/chunking_corpus.yaml: b7d3a770db59
+  benchmarks/chunking_tasks.yaml: bb2ced6b32c4
+  benchmarks/corpus.yaml: 460371cc5152
+  benchmarks/run.py: a4252a5f27da
+  benchmarks/tasks.yaml: c4d3e05a4895
+verified_content: 4c010933e8a5
 ---
 
 ## What is missing

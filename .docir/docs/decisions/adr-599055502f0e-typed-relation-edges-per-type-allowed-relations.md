@@ -17,7 +17,11 @@ tags:
 - schema
 title: Typed relation edges + per-type allowed relations
 type: decision
-updated: '2026-08-06'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/domain/value_objects/relations.py: 424533ff6837
+verified_content: 2b206f7fa906
 ---
 
 ## Context

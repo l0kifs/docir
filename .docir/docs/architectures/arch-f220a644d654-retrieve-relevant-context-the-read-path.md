@@ -24,7 +24,12 @@ tags:
 - retrieval
 title: Retrieve relevant context (the read path)
 type: architecture
-updated: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
+  src/docir/modules/indexing/**: d506e685ec3f
+verified_content: 2c976e777309
 ---
 
 ## Backbone
@@ -35,15 +40,15 @@ express intent → rank (lexical + semantic) → filter visibility → expand on
 
 | # | Event | Actor | Trigger | Evidence |
 |---|-------|-------|---------|----------|
-| 1 | ContextRequested | ACT-001 | `docir context "<task>"` | cli/app.py:299-311 |
-| 2 | QueryEmbedded | system | always, before the transaction | document_service.py:252 |
-| 3 | LexicalCandidatesFetched | system | FTS5 MATCH, capped at 25 | document_service.py:256 |
-| 4 | SemanticRankingComputed | system | cosine over **all** active vectors | document_service.py:257 |
-| 5 | RankingsFused | system | Reciprocal Rank Fusion, k=60 | scoring.py:44-73 |
-| 6 | VisibilityFiltered | system | drops archived + inactive statuses | document_service.py:265-268 |
-| 7 | GraphExpanded | system | one hop along outgoing edges | document_service.py:297-307 |
-| 8 | SkeletonsReturned | system | no body — `DocumentSummary` | dto.py:84-135 |
-| 9 | BodyFetched | ACT-001 | `docir get <id>` | document_service.py:210-214 |
+| 1 | ContextRequested | ACT-001 | `docir context "<task>"` | `cli.read_cmds.context` |
+| 2 | QueryEmbedded | system | always, before the transaction | `DocumentService.context` |
+| 3 | LexicalCandidatesFetched | system | FTS5 MATCH, capped at 25 | `DocumentService.context` |
+| 4 | SemanticRankingComputed | system | cosine over **all** active vectors | `DocumentService.context` |
+| 5 | RankingsFused | system | Reciprocal Rank Fusion, k=60 | `indexing.domain.scoring` |
+| 6 | VisibilityFiltered | system | drops archived + inactive statuses | `DocumentService._visible_ranked` |
+| 7 | GraphExpanded | system | one hop along outgoing edges | `DocumentService.context`, expansion |
+| 8 | SkeletonsReturned | system | no body — `DocumentSummary` | `dto.DocumentSummary` |
+| 9 | BodyFetched | ACT-001 | `docir get <id>` | `DocumentService.get` |
 
 `query` and `search` share steps 6 and 8 but skip 2–5 and 7.
 
@@ -84,7 +89,7 @@ results come back with no indication that filtering, not scarcity, caused it.
 
 ### H6 — semantic ranking loads every active vector into memory on every call
 
-(`active_vectors()`, repositories.py:309-320). Fine at thousands; no stated ceiling, no
+(`active_vectors()`, `repositories`, `active_vectors`). Fine at thousands; no stated ceiling, no
 pagination, no test at scale. Recorded as a limit-of-validity question, not a defect. → `issue-f6a5d0b86806`.
 
 ### H7 — graph expansion follows outgoing edges only.
@@ -97,7 +102,7 @@ reader needs ("has this been replaced?"). → `issue-5bfbc6f2699d`.
 ### H8 — get ignores every visibility rule
 
 and returns archived/inactive docs in full
-(document_service.py:210-214, docstring says "regardless of status"). Deliberate and
+(`DocumentService.get`, docstring says "regardless of status"). Deliberate and
 documented; recorded so the asymmetry is not mistaken for a bug.
 
 ## Off-system steps

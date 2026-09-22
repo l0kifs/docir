@@ -22,7 +22,11 @@ tags:
 - integrity
 title: A prose link resolves, renders and is checked — and stays out of the graph
 type: decision
-updated: '2026-09-11'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/publishing/infra/rendering.py: 16d9f4392c5b
+verified_content: f2967577705f
 ---
 
 A body cites another document two ways. `related:` frontmatter is the typed, authored edge:

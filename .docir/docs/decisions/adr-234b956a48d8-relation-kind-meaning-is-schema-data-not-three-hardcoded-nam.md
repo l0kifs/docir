@@ -22,7 +22,11 @@ tags:
 - schema
 title: Relation-kind meaning is schema data, not three hardcoded name sets
 type: decision
-updated: '2026-08-06'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/domain/schema.py: c0ea053f1c39
+verified_content: 36c72687051f
 ---
 
 ## Context

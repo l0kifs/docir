@@ -20,7 +20,11 @@ tags:
 - schema
 title: No type key, no body, and an unknown field is refused
 type: decision
-updated: '2026-08-25'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/domain/services/expressions.py: f19ca3d868d7
+verified_content: ed77b389d38b
 ---
 
 ## Context

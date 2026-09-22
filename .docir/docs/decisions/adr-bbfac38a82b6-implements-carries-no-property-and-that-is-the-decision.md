@@ -19,7 +19,11 @@ tags:
 - schema
 title: implements carries no property, and that is the decision
 type: decision
-updated: '2026-08-25'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/domain/schema.py: c0ea053f1c39
+verified_content: b1976e83bc0f
 ---
 
 ## Context

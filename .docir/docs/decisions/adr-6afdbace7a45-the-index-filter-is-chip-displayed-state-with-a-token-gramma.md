@@ -19,7 +19,11 @@ tags:
 - docs
 title: The index filter is chip-displayed state with a token grammar
 type: decision
-updated: '2026-08-06'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/publishing/infra/rendering.py: 16d9f4392c5b
+verified_content: 18283b7a9b18
 ---
 
 ## Context

@@ -21,7 +21,12 @@ tags:
 - retrieval
 title: Embed each section, because the model never read the rest
 type: decision
-updated: '2026-08-06'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/domain/services/chunking.py: 8cd7f3e66eac
+  src/docir/modules/indexing/domain/scoring.py: 98ccb3377db2
+verified_content: 887ed7ef6dde
 ---
 
 ## Context

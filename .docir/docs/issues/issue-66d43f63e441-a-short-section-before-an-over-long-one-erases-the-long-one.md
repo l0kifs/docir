@@ -17,7 +17,11 @@ tags:
 title: A short section before an over-long one erases the long one's heading from
   the index
 type: issue
-updated: '2026-08-15'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/documents/domain/services/chunking.py: 8cd7f3e66eac
+verified_content: c044a2d3106f
 ---
 
 ## What happens

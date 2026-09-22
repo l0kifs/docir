@@ -21,7 +21,11 @@ tags:
 title: A ranked hit names the document but not the section that matched, so the paired
   section read is a guess
 type: issue
-updated: '2026-08-07'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_code:
+  src/docir/modules/indexing/domain/scoring.py: 98ccb3377db2
+verified_content: 2f038fee1a36
 ---
 
 **Class:** missing · **Severity:** material
@@ -33,9 +37,9 @@ updated: '2026-08-07'
 
 The section that matched is known at ranking time and discarded one line later.
 `semantic_ranking` receives document *and* chunk vectors in one list and keeps each document's best
-score, dropping which vector won (`scoring.py:63-69`); `DocumentSummary` has no field to carry it
-(`dto.py:105-125`). The heading is already stored — `chunk_embeddings.heading`
-(`models.py:100-107`) — so nothing needs to be recomputed or migrated.
+score, dropping which vector won (`scoring.FusedScore`); `DocumentSummary` has no field to carry it
+(`dto.DocumentSummary`). The heading is already stored — `chunk_embeddings.heading`
+(`models.ChunkEmbeddingRow`) — so nothing needs to be recomputed or migrated.
 
 ## What happens today
 
@@ -107,10 +111,10 @@ bit-identical with and without the field: recall@5 0.97, MRR 0.97.
 
 ## Evidence
 
-- `src/docir/modules/indexing/domain/scoring.py:47-69`
-- `src/docir/modules/documents/application/services/document_service.py:434-436`
-- `src/docir/modules/documents/application/dto.py:105-125`
-- `src/docir/platform/persistence/models.py:92-107`
+- `src/docir/modules/indexing/domain/scoring.py` — `FusedScore`
+- `src/docir/modules/documents/application/services/document_service.py`
+- `src/docir/modules/documents/application/dto.py` — `DocumentSummary`
+- `src/docir/platform/persistence/models.py` — `ChunkEmbeddingRow`
 
 ---
 

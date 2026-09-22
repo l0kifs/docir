@@ -23,7 +23,7 @@ tags:
 - docs
 title: Glossary — one term, one definition, one owner
 type: reference
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 Synonyms and homonyms are findings, not tidy-ups: where one word means two things
@@ -116,7 +116,7 @@ A per-type integer expressing architectural abstraction height; a dependency edg
 
 **Evidence:**
 - `src/docir/modules/documents/domain/schema.py:46-47`
-- `src/docir/modules/documents/domain/services/graph_checks.py:194-223`
+- `src/docir/modules/documents/domain/services/graph_checks.py`
 
 ## check / lint
 

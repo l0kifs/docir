@@ -17,7 +17,7 @@ tags:
 title: The cycle check counts symmetric `relates_to` edges, so a mutual reference
   is a permanent warning
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** incorrect · **Severity:** material
@@ -25,7 +25,7 @@ updated: '2026-08-05'
 
 ## Finding
 
-`_find_cycles` (`graph_checks.py:285-288`) builds its adjacency from **every** relation,
+`_find_cycles` (`graph_checks.py`) builds its adjacency from **every** relation,
 regardless of kind. `relates_to` — the default kind, and the one a bare id in `related:`
 means — asserts no direction: "A relates to B" and "B relates to A" are the same claim.
 Two documents that each name the other therefore form a two-node cycle that `check`

@@ -47,7 +47,7 @@ tags:
 - schema
 title: Business rule register — 47 rules, BR-001..BR-074
 type: reference
-updated: '2026-09-18'
+updated: '2026-09-22'
 ---
 
 # Business rule register
@@ -261,7 +261,7 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 **Pattern:** event · **Flow:** arch-3e305bc76ff0 · **Actor:** — · **Confidence:** observed · **Status:** assumed · **Owner:** repo maintainer
 
 **Evidence:**
-- `src/docir/platform/filesystem/markdown_store.py:156-168`
+- `src/docir/platform/filesystem/markdown_store.py`
 - `docs/adr/adr-599055502f0e-typed-relation-edges.md`
 
 ## BR-018

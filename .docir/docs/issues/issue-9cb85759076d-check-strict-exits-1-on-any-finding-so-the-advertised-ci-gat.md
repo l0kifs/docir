@@ -16,7 +16,7 @@ tags:
 title: '`check --strict` exits 1 on any finding, so the advertised CI gate fails on
   a healthy corpus'
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** misleading · **Severity:** blocking
@@ -51,7 +51,7 @@ FIXED 2026-07-26. `CheckIssue` now carries a `severity`, derived from `kind` in 
 ## Evidence
 
 - `src/docir/entry_points/cli/app.py:419-440`
-- `src/docir/modules/documents/domain/services/graph_checks.py:173-192`
+- `src/docir/modules/documents/domain/services/graph_checks.py`
 - `ref-1509d5dbb4c3 (discovery probe log)`
 
 ---

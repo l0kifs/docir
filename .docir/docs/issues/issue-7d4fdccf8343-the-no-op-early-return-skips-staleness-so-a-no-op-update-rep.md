@@ -13,7 +13,7 @@ tags:
 title: The no-op early return skips staleness, so a no-op `update` reports a stale
   document as fresh
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** misleading · **Severity:** cosmetic
@@ -26,7 +26,7 @@ The no-op early return builds the view without computing staleness, so a stale d
 
 ## What happens today
 
-document_service.py:166 and :180 call `from_document(document)` with no `stale=` argument; the dataclass default is False (dto.py:50).
+document_service.py:166 and :180 call `from_document(document)` with no `stale=` argument; the dataclass default is False (dto.py).
 
 ## Impact
 

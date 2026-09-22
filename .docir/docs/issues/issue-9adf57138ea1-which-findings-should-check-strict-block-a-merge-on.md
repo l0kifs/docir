@@ -15,7 +15,7 @@ tags:
 - blocking
 title: Which findings should `check --strict` block a merge on?
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Gap:** issue-9cb85759076d
@@ -28,7 +28,7 @@ updated: '2026-08-05'
 
 ## What the system does today
 
-OBSERVED: a fresh store with two unrelated, otherwise-healthy documents exits 1 from two `orphan` findings. No severity, no `--only <kind>`, no ignore file. Evidence: cli/app.py:439-440, graph_checks.py:173-192.
+OBSERVED: a fresh store with two unrelated, otherwise-healthy documents exits 1 from two `orphan` findings. No severity, no `--only <kind>`, no ignore file. Evidence: cli/app.py, graph_checks.py.
 
 ## Proposed answer
 

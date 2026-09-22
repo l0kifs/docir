@@ -13,7 +13,7 @@ tags:
 - blocking
 title: Should linking a decision to its motivating issue be a `layering` warning?
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Gap:** issue-40d1792bc9f9
@@ -26,7 +26,7 @@ In the default `software` profile, linking a decision to the issue that motivate
 
 ## What the system does today
 
-OBSERVED: `adr-0001 related: [issue-0003]` → "layering violation: decision 'adr-0001' depends on lower-level issue 'issue-0003'". This is the pairing shown in the README's own quickstart output (README:78-81). Evidence: profiles.py:26-27/44-46, graph_checks.py:194-223, :26.
+OBSERVED: `adr-0001 related: [issue-0003]` → "layering violation: decision 'adr-0001' depends on lower-level issue 'issue-0003'". This is the pairing shown in the README's own quickstart output (README:78-81). Evidence: profiles.py:26-27/44-46, graph_checks.py, :26.
 
 ## Proposed answer
 

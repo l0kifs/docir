@@ -19,6 +19,7 @@ related:
 - adr-599055502f0e
 - adr-bd3a820cc57a
 - issue-8f6576cd7bc9
+revoked: '2026-09-22'
 status: resolved
 tags:
 - cosmetic
@@ -26,14 +27,12 @@ tags:
 title: docir check has no finding for an edge whose relation kind the registry no
   longer knows
 type: issue
-updated: '2026-09-17'
-verified: '2026-09-17'
+updated: '2026-09-22'
 verified_code:
   src/docir/modules/documents/domain/services/checks/schema_rules.py: 3bd4377777cd
   src/docir/modules/documents/domain/services/graph_checks.py: d8fc04f25a84
   tests/modules/documents/test_domain_services.py: 2b717c606516
   tests/modules/documents/test_integration_maintenance.py: ecb42c0e3b81
-verified_content: 52555417cdbf
 ---
 
 **Class:** missing · **Severity:** cosmetic
@@ -105,7 +104,7 @@ reads, which is a guess about meaning, not a mechanical repair.
 ## Evidence
 
 - `src/docir/modules/documents/domain/services/graph_checks.py:92` — `check`, no relation-kind pass
-- `src/docir/modules/documents/domain/services/graph_checks.py:169,199` — the two sibling findings
+- `src/docir/modules/documents/domain/services/graph_checks.py,199` — the two sibling findings
 - `src/docir/modules/documents/domain/schema.py:211,215` — `is_known_relation_kind`, and the core fallback
 - `src/docir/modules/documents/infra/schema_loader.py:152` — `relation_types` merges as a union
 

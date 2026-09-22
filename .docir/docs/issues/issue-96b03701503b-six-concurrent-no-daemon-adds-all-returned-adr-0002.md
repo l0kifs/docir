@@ -12,7 +12,7 @@ tags:
 - blocking
 title: Six concurrent `--no-daemon` adds all returned `adr-0002`
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Gap:** issue-389dc5dac58a
@@ -25,7 +25,7 @@ Six concurrent `--no-daemon` adds all returned `adr-0002`. With the daemon they 
 
 ## What the system does today
 
-OBSERVED: 6 simultaneous `docir --no-daemon add` → six files claiming adr-0002, all exit 0, five documents invisible. Same race with the daemon → adr-0002..adr-0007. CLAUDE.md attributes collision-freedom to the SequenceRow counter; the actual mechanism is the daemon's single-connection server loop (transport/server.py:20-25). The project's own test suite and CI force DOCIR_NO_DAEMON.
+OBSERVED: 6 simultaneous `docir --no-daemon add` → six files claiming adr-0002, all exit 0, five documents invisible. Same race with the daemon → adr-0002..adr-0007. CLAUDE.md attributes collision-freedom to the SequenceRow counter; the actual mechanism is the daemon's single-connection server loop (transport/server.py). The project's own test suite and CI force DOCIR_NO_DAEMON.
 
 ## Proposed answer
 

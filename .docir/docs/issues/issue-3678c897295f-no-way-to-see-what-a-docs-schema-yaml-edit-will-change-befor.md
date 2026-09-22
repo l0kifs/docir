@@ -16,18 +16,17 @@ related:
 - adr-bd3a820cc57a
 - adr-dbe6633405ca
 - issue-d891ab5501e6
+revoked: '2026-09-22'
 status: resolved
 tags:
 - cosmetic
 - schema
 title: No way to see what a docs-schema.yaml edit will change before it lands
 type: issue
-updated: '2026-09-18'
-verified: '2026-09-18'
+updated: '2026-09-22'
 verified_code:
   src/docir/entry_points/cli/app.py: a15a6e7698f4
   src/docir/modules/documents/domain/services/schema_shape.py: f8e1f5b5ad84
-verified_content: f13426b3baca
 ---
 
 **Class:** missing · **Severity:** cosmetic
@@ -81,7 +80,7 @@ bounded, since `schema-drift` reports the change on the very next `check`.
 
 - `src/docir/modules/documents/domain/services/schema_shape.py` — the renderer and the differ both exist
 - `src/docir/config/settings.py:124` — the only mention of `.git`, and it is directory detection
-- `src/docir/entry_points/cli/app.py:529` — the shell pipes git in; docir does not call it
+- `src/docir/entry_points/cli/app.py` — the shell pipes git in; docir does not call it
 
 ## Resolution
 

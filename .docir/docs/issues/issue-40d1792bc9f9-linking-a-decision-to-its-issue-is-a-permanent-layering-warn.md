@@ -17,7 +17,7 @@ tags:
 title: Linking a decision to its issue is a permanent `layering` warning in the `software`
   profile
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** incorrect · **Severity:** material
@@ -52,7 +52,7 @@ FIXED 2026-07-27, as proposed, under issue-f2591bdbca13's recorded assumption (t
 ## Evidence
 
 - `src/docir/modules/documents/infra/profiles.py:26-27, 44-46`
-- `src/docir/modules/documents/domain/services/graph_checks.py:194-223`
+- `src/docir/modules/documents/domain/services/graph_checks.py`
 - `ref-1509d5dbb4c3 (discovery probe log)`
 
 ---

@@ -11,7 +11,7 @@ tags:
 - material
 title: Should `agent install --agent <unknown>` fail instead of being a silent no-op?
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Gap:** issue-b8220546282c
@@ -24,7 +24,7 @@ Should `docir agent install --agent <unknown>` fail? Today it is a silent no-op,
 
 ## What the system does today
 
-OBSERVED: `--agent claud` → prints [], exit 0, writes nothing. Evidence: agents/application/service.py:96-98 vs composition.py:177-180.
+OBSERVED: `--agent claud` → prints [], exit 0, writes nothing. Evidence: agents/application/service.py vs composition.py:177-180.
 
 ## Proposed answer
 

@@ -12,7 +12,7 @@ tags:
 - cosmetic
 title: An edge's target key is `to` in frontmatter and `target` in JSON output
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** misleading · **Severity:** cosmetic
@@ -25,7 +25,7 @@ An edge's target key is `to` in frontmatter and `target` in JSON output.
 
 ## What happens today
 
-markdown_store.py:167 writes `{to, kind}`; dto.py:17-25 emits `{target, kind}`.
+markdown_store.py writes `{to, kind}`; dto.py emits `{target, kind}`.
 
 ## Impact
 
@@ -45,7 +45,7 @@ FIXED 2026-07-29 exactly as proposed: `target` is accepted as a synonym for `to`
 
 ## Evidence
 
-- `src/docir/platform/filesystem/markdown_store.py:156-168`
+- `src/docir/platform/filesystem/markdown_store.py`
 - `src/docir/modules/documents/application/dto.py:17-25`
 
 ---

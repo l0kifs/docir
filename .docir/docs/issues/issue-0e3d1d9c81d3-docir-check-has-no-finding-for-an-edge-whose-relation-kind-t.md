@@ -33,7 +33,7 @@ verified_code:
   src/docir/modules/documents/domain/services/graph_checks.py: 7a789c9edc8d
   tests/modules/documents/test_domain_services.py: 1e0bdf0af18a
   tests/modules/documents/test_integration_maintenance.py: ecb42c0e3b81
-verified_content: 296bb4fea9da
+verified_content: 91ffbb1f6247
 ---
 
 **Class:** missing · **Severity:** cosmetic
@@ -61,14 +61,14 @@ docir update <id> --set-related <adr>:depends_on
 ```
 
 So Tier 0 refuses to *write* the kind while the corpus keeps *holding* it, and the one command
-that exists to find that class of drift is silent. `GraphChecker.check` (`graph_checks.py:92`)
-never consults `Schema.is_known_relation_kind` (`schema.py:211`), which has exactly one caller —
+that exists to find that class of drift is silent. `GraphChecker.check` (`graph_checks.py:92` (`check`))
+never consults `Schema.is_known_relation_kind` (`schema.py`), which has exactly one caller —
 the write-path validator.
 
 ## Exposure
 
 Narrower than it looks, which is why this is filed as cosmetic rather than material.
-`_merge_profiled` merges `relation_types` as a **union** (`schema_loader.py:152`), so a schema with
+`_merge_profiled` merges `relation_types` as a **union** (`schema_loader.py`), so a schema with
 a `profiles:` key can only ever *widen* the registry — the core six are always present and cannot
 be removed by editing the file. Reaching the state above takes one of:
 
@@ -84,7 +84,7 @@ for them.
 
 Low and bounded: the edge still resolves, and its behaviour is unchanged, because
 `Schema.relation_kind` falls back to `CORE_RELATION_KINDS` for any kind the file does not describe
-(`schema.py:215`) — so a dropped `depends_on` is still cycle-checked and still read as a
+(`schema.py`) — so a dropped `depends_on` is still cycle-checked and still read as a
 dependency by the layering check. What is lost is the report: the registry has stopped describing
 the corpus, and `docir check` — which says so for tags, statuses and types — does not say so here.
 
@@ -104,10 +104,10 @@ reads, which is a guess about meaning, not a mechanical repair.
 
 ## Evidence
 
-- `src/docir/modules/documents/domain/services/graph_checks.py:92` — `check`, no relation-kind pass
+- `src/docir/modules/documents/domain/services/graph_checks.py:92` (`check`) — `check`, no relation-kind pass
 - `src/docir/modules/documents/domain/services/graph_checks.py,199` — the two sibling findings
-- `src/docir/modules/documents/domain/schema.py:211,215` — `is_known_relation_kind`, and the core fallback
-- `src/docir/modules/documents/infra/schema_loader.py:152` — `relation_types` merges as a union
+- `src/docir/modules/documents/domain/schema.py,215` — `is_known_relation_kind`, and the core fallback
+- `src/docir/modules/documents/infra/schema_loader.py` — `relation_types` merges as a union
 
 ## Resolution
 

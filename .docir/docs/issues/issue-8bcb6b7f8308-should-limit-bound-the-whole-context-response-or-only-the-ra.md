@@ -13,7 +13,7 @@ tags:
 - blocking
 title: Should `--limit` bound the whole `context` response, or only the ranked seeds?
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Gap:** issue-996b567e5131
@@ -26,7 +26,7 @@ updated: '2026-08-05'
 
 ## What the system does today
 
-OBSERVED: 3 decisions with out-degree 2, `--limit 3` → 9 results. Worst case is limit × (1 + max out-degree), growing with graph density. Evidence: document_service.py:260-273 (limit enforced), :297-307 (expansion, uncapped).
+OBSERVED: 3 decisions with out-degree 2, `--limit 3` → 9 results. Worst case is limit × (1 + max out-degree), growing with graph density. Evidence: `document_service.py` — the limit is enforced where the page is cut, and the expansion that follows it is uncapped.
 
 ## Proposed answer
 

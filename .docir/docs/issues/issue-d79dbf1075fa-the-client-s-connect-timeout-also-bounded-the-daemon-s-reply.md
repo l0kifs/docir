@@ -14,7 +14,7 @@ tags:
 title: The client's connect timeout also bounded the daemon's reply, so any command
   slower than 5s failed
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** incorrect · **Severity:** blocking
@@ -59,9 +59,9 @@ failing command, `docir reindex` over the 65-document store through the daemon, 
 - CI job
 
 ## Evidence
-- `src/docir/platform/transport/client.py:20-79`
-- `src/docir/entry_points/daemon/socket_executor.py:26-40`
-- `src/docir/config/settings.py:28-40`
+- `src/docir/platform/transport/client.py`
+- `src/docir/entry_points/daemon/socket_executor.py`
+- `src/docir/config/settings.py`
 - `tests/entry_points/test_e2e_daemon.py` (TestReplyTimeoutIsSeparateFromConnect, TestSocketExecutorRetryPolicy)
 
 ---

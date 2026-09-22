@@ -15,7 +15,7 @@ tags:
 title: 'Staleness is detected and never routed: `owner` reaches one `check` message
   and nothing else'
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** missing · **Severity:** material
@@ -49,8 +49,8 @@ FIXED 2026-07-28, as proposed and no further. `docir query --owner <name>` and `
 
 ## Evidence
 
-- `src/docir/modules/documents/domain/services/graph_checks.py:100-102`
-- `src/docir/modules/documents/domain/entities/document.py:37`
+- `src/docir/modules/documents/domain/services/graph_checks.py`
+- `src/docir/modules/documents/domain/entities/document.py`
 
 ---
 

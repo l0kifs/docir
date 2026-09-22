@@ -13,7 +13,7 @@ tags:
 - material
 title: Should graph expansion follow incoming edges too?
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Gap:** issue-5bfbc6f2699d
@@ -26,7 +26,7 @@ Should graph expansion follow incoming edges too? Today it is outgoing-only, so 
 
 ## What the system does today
 
-`_augment_with_related` uses `outgoing()` only (document_service.py:301); `incoming()` exists and is used solely by delete (repositories.py:133-135).
+`_augment_with_related` uses `outgoing()` only (document_service.py); `incoming()` exists and is used solely by delete (repositories.py).
 
 ## Proposed answer
 

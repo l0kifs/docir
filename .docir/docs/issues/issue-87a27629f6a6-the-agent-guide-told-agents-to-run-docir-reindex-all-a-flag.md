@@ -16,7 +16,7 @@ tags:
 title: The agent guide told agents to run `docir reindex --all`, a flag that does
   not exist
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** incorrect · **Severity:** material
@@ -51,7 +51,7 @@ Typo corrected 2026-07-26; the guard written 2026-07-28, which is what closes th
 ## Evidence
 
 - `src/docir/modules/agents/infra/templates/skill.md`
-- `src/docir/entry_points/cli/app.py:409-417`
+- `src/docir/entry_points/cli/app.py`
 
 ---
 

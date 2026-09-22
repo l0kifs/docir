@@ -16,7 +16,7 @@ tags:
 title: No relevance floor, and `score` carries no absolute meaning, so noise reads
   like a match
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** misleading · **Severity:** material
@@ -49,7 +49,7 @@ FIXED 2026-07-28, as proposed, in both halves. `FusedScore` and `DocumentSummary
 
 ## Evidence
 
-- `src/docir/modules/indexing/domain/scoring.py:36-73`
+- `src/docir/modules/indexing/domain/scoring.py`
 - `README.md:90-95`
 - `ref-1509d5dbb4c3 (discovery probe log)`
 

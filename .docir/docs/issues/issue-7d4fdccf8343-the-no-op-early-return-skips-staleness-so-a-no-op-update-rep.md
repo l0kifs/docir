@@ -26,7 +26,7 @@ The no-op early return builds the view without computing staleness, so a stale d
 
 ## What happens today
 
-document_service.py:166 and :180 call `from_document(document)` with no `stale=` argument; the dataclass default is False (dto.py).
+document_service.py and :180 call `from_document(document)` with no `stale=` argument; the dataclass default is False (dto.py).
 
 ## Impact
 
@@ -46,9 +46,9 @@ FIXED 2026-07-29. Both no-op early returns now pass `stale=self._is_stale(docume
 
 ## Evidence
 
-- `src/docir/modules/documents/application/services/document_service.py:166`
+- `src/docir/modules/documents/application/services/document_service.py`
 - `180`
-- `src/docir/modules/documents/application/dto.py:50`
+- `src/docir/modules/documents/application/dto.py`
 
 ---
 

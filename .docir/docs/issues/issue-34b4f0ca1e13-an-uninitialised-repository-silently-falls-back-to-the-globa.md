@@ -16,7 +16,7 @@ tags:
 - material
 title: An uninitialised repository silently falls back to the global `~/.docir` store
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** misleading · **Severity:** material
@@ -29,7 +29,7 @@ Commands run in an uninitialised repository silently fall back to the global `~/
 
 ## What happens today
 
-`Settings.resolve` returns the global default with no signal (settings.py:104), and `load_schema` writes a default schema on first touch (schema_loader.py:26-31). `docir add` reports success and a relative path that looks repo-local.
+`Settings.resolve` returns the global default with no signal (settings.py), and `load_schema` writes a default schema on first touch (schema_loader.py). `docir add` reports success and a relative path that looks repo-local.
 
 ## Impact
 
@@ -50,8 +50,8 @@ FIXED 2026-07-29, taking both halves of the proposed default rather than choosin
 
 ## Evidence
 
-- `src/docir/config/settings.py:96-104`
-- `src/docir/modules/documents/infra/schema_loader.py:26-31`
+- `src/docir/config/settings.py`
+- `src/docir/modules/documents/infra/schema_loader.py`
 
 ---
 

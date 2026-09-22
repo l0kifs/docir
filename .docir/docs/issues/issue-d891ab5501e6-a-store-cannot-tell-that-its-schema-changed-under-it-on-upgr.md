@@ -40,7 +40,7 @@ verified_code:
   src/docir/modules/documents/domain/services/schema_shape.py: f8e1f5b5ad84
   src/docir/platform/persistence/alembic/versions/0005_schema_baseline.py: e9094dc76fda
   tests/modules/documents/test_schema_shape.py: c2c63b7721e1
-verified_content: 80045e3cad14
+verified_content: 82ee2d0052a6
 ---
 
 **Class:** missing · **Severity:** material
@@ -55,7 +55,7 @@ release that edits the frozen core or a bundled profile changes what every exist
 enforces, silently, with no local edit to review and nothing in any output that says so.
 
 The change arrives through the package, not the file. `CORE_SCHEMA_YAML` and `PROFILE_YAMLS` are
-YAML strings compiled into `infra/profiles.py`, and `_merge_profiled` (`schema_loader.py:121`)
+YAML strings compiled into `infra/profiles.py`, and `_merge_profiled` (`schema_loader.py`)
 re-resolves `core -> profiles -> inline` on **every command**. A store whose file says
 `profiles: [software]` therefore picks up a new type, a new `required:` entry, a changed status
 graph or a changed cadence the moment docir is upgraded. `git diff` on the store shows nothing:
@@ -80,7 +80,7 @@ at load, and its own upgrade note has to explain by hand what a schema author wi
 Nothing bridges the gap. `docir schema show` prints the merged result, but there is no baseline to
 compare it against. `docir check` sees documents, never the schema's own history. `docir init
 --force` compares the file byte-for-byte against what the *current* release would generate
-(`composition.py:313`), so a store scaffolded by an older docir — whose generated header text has
+(`composition.py`), so a store scaffolded by an older docir — whose generated header text has
 since changed — reads as "customised" and is preserved with a warning, even untouched. The
 CHANGELOG's "Upgrade notes" section is the entire migration channel, and it is prose.
 
@@ -120,9 +120,9 @@ Deliberately not proposed:
 
 ## Evidence
 
-- `src/docir/modules/documents/infra/schema_loader.py:121` — `_merge_profiled`, re-resolved per command
+- `src/docir/modules/documents/infra/schema_loader.py` — `_merge_profiled`, re-resolved per command
 - `src/docir/modules/documents/infra/profiles.py` — core + profiles compiled into the package
-- `src/docir/entry_points/composition.py:313` — `--force` refreshes only a byte-identical file
+- `src/docir/entry_points/composition.py` — `--force` refreshes only a byte-identical file
 - `src/docir/platform/persistence/alembic/versions/` — migrations `0001`–`0004` cover the index only
 - `CHANGELOG.md:16` — "Upgrade notes" as the only migration channel
 

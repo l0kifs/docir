@@ -20,11 +20,11 @@ tags:
 title: A type may declare a required field no document can carry, and the schema loads
   anyway
 type: issue
-updated: '2026-09-17'
-verified: '2026-09-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
 verified_code:
   src/docir/modules/documents/infra/schema_loader.py: 4cbd9ed6460b
-verified_content: 135f1e258ffd
+verified_content: 58eba02ce625
 ---
 
 **Class:** incorrect · **Severity:** material
@@ -36,21 +36,21 @@ verified_content: 135f1e258ffd
 A type may declare `required: [anything]` and the schema loads. Every `add` of that type then
 fails, permanently, with no way to satisfy the field.
 
-`_parse_type` checks only that `required` is a list (`schema_loader.py:290-292`) — unlike
+`_parse_type` checks only that `required` is a list (`schema_loader.py`) — unlike
 `default_status`, transition targets and `inactive_statuses`, which are all checked against the
 declared statuses. `Tier0Validator.validate_required_fields` then reads each name with
-`getattr(document, name, None)` (`validation.py:33-42`), so a name that is not a `Document`
+`getattr(document, name, None)` (`validation.py`), so a name that is not a `Document`
 attribute is `None` for every document ever written.
 
 Reproduced in a throwaway store: a type declaring `required: [code]` rejects every add with
 `required field 'code' is missing or empty for type 'probe'`. No CLI flag can supply it, and the
-markdown store would drop the key on the next write anyway (`markdown_store.py:118-160`).
+markdown store would drop the key on the next write anyway (`markdown_store.py`).
 
 ## What happens today
 
 The doc comment shipped in every generated schema invites exactly this: "extra frontmatter fields
 this type must carry, on top of the always-required id/title/description/type/status/created/
-updated" (`default_schema.py:80-81`). It reads as an extension point and is one only for the
+updated" (`default_schema.py`). It reads as an extension point and is one only for the
 handful of names that are already entity attributes (`owner`, `verified`, `tags`, `related`,
 `body`, `path`). The failure surfaces at the first write, names a field the author believes they
 declared correctly, and does not mention the schema.
@@ -104,7 +104,7 @@ Both halves were confirmed by injecting the bug each claims to catch.
 
 ## Evidence
 
-- `src/docir/modules/documents/infra/schema_loader.py:290-292`
-- `src/docir/modules/documents/domain/services/validation.py:33-42`
-- `src/docir/modules/documents/infra/default_schema.py:80-81`
-- `src/docir/platform/filesystem/markdown_store.py:118-160`
+- `src/docir/modules/documents/infra/schema_loader.py`
+- `src/docir/modules/documents/domain/services/validation.py`
+- `src/docir/modules/documents/infra/default_schema.py`
+- `src/docir/platform/filesystem/markdown_store.py`

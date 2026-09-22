@@ -13,7 +13,7 @@ tags:
 - material
 title: Should `--override` leave a trace of a forced illegal transition?
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Gap:** issue-0783d236d565
@@ -26,7 +26,7 @@ Should `--override` leave a trace? Today a forced illegal status transition is i
 
 ## What the system does today
 
-document_service.py:324-329 — status changes, nothing records that a Tier 0 rule was bypassed.
+document_service.py — status changes, nothing records that a Tier 0 rule was bypassed.
 
 ## Proposed answer
 

@@ -11,7 +11,7 @@ tags:
 - cosmetic
 title: No usage counts, so dead tags are invisible
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** missing · **Severity:** cosmetic
@@ -24,7 +24,7 @@ No usage counts, so dead tags are invisible.
 
 ## What happens today
 
-tag_service.py:54-60 returns key + description only.
+tag_service.py returns key + description only.
 
 ## Impact
 
@@ -40,7 +40,7 @@ Include a document count per tag.
 
 ## Evidence
 
-- `src/docir/modules/tags/application/services/tag_service.py:54-60`
+- `src/docir/modules/tags/application/services/tag_service.py`
 
 ---
 

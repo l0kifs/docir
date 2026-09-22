@@ -13,7 +13,7 @@ tags:
 title: Tags are in neither the FTS index nor the embedded text, so `search` cannot
   find them
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** unstated · **Severity:** cosmetic
@@ -26,7 +26,7 @@ Tags are neither in the FTS index nor in the embedded text, so `docir search aut
 
 ## What happens today
 
-FTS5 indexes title/description/body (migration 0001:88-92); `embedding_text()` is title+description+body (document.py:40-47).
+FTS5 indexes title/description/body (migration 0001:88-92); `embedding_text()` is title+description+body (document.py).
 
 ## Impact
 
@@ -46,8 +46,8 @@ DOCUMENTED 2026-07-29, as proposed — the design stands. Tags are a controlled 
 
 ## Evidence
 
-- `src/docir/platform/persistence/alembic/versions/0001_initial_index.py:88-92`
-- `src/docir/modules/documents/domain/entities/document.py:40-47`
+- `src/docir/platform/persistence/alembic/versions/0001_initial_index.py`
+- `src/docir/modules/documents/domain/entities/document.py`
 
 ---
 

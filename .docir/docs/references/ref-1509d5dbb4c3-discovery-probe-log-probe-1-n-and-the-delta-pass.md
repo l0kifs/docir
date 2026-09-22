@@ -43,7 +43,7 @@ tags:
 - testing
 title: Discovery probe log — PROBE-1..N and the delta pass
 type: reference
-updated: '2026-09-18'
+updated: '2026-09-22'
 ---
 
 # Run log — append-only
@@ -147,13 +147,13 @@ Smell scan (`gap-checklists.md` §3, automated regex over all 45 rule statements
 Ran against my own register, not the code. Four defects found and fixed:
 
 ```
-SELF-1  GAP-013 was hedged ("advanced and committed... or not"). Re-read repositories.py:55 —
+SELF-1  GAP-013 was hedged ("advanced and committed... or not"). Re-read repositories.py —
         next_number only *flushes*, so the counter rolls back with the transaction while the
         already-written file survives. Rewritten as a concrete third duplicate-id path.
 SELF-2  GAP-012 was severity:material but meets my own blocking rubric ("touches data loss").
         Raised to blocking; register re-sorted.
 SELF-3  BR-034 has four conditions and no decision table — violates quality gate §9.
-        Table added (verified against runner.py:36-48).
+        Table added (verified against runner.py).
 SELF-4  Q/BR/GAP cross-references were inconsistent after renumbering. Reconciled by script;
         verified no dangling or undefined ids in either direction.
 ```

@@ -13,7 +13,7 @@ tags:
 - blocking
 title: '`--limit` bounds the ranked seed set but not the response'
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** incorrect · **Severity:** blocking
@@ -46,8 +46,8 @@ FIXED 2026-07-26. `--limit` is now a hard ceiling on the response and graph expa
 
 ## Evidence
 
-- `src/docir/modules/documents/application/services/document_service.py:260-273`
-- `src/docir/modules/documents/application/services/document_service.py:297-307`
+- `src/docir/modules/documents/application/services/document_service.py`
+- `src/docir/modules/documents/application/services/document_service.py`
 - `ref-1509d5dbb4c3 (discovery probe log)`
 
 ---

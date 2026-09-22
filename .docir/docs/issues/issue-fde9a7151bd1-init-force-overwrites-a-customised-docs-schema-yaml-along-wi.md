@@ -13,7 +13,7 @@ tags:
 - material
 title: '`init --force` overwrites a customised `docs-schema.yaml` along with the `.gitignore`'
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** unstated · **Severity:** material
@@ -26,7 +26,7 @@ updated: '2026-08-05'
 
 ## What happens today
 
-composition.py:184-192 — both writes are guarded by the same `force` flag. The help text reads 'Overwrite an existing docs-schema.yaml / .gitignore.'
+composition.py — both writes are guarded by the same `force` flag. The help text reads 'Overwrite an existing docs-schema.yaml / .gitignore.'
 
 ## Impact
 
@@ -46,8 +46,8 @@ FIXED 2026-07-29, taking the second option but *skipping* rather than refusing. 
 
 ## Evidence
 
-- `src/docir/entry_points/composition.py:182-192`
-- `src/docir/entry_points/cli/app.py:97-100`
+- `src/docir/entry_points/composition.py`
+- `src/docir/entry_points/cli/app.py`
 
 ---
 

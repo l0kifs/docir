@@ -15,7 +15,7 @@ tags:
 - material
 title: '"Agents never edit markdown directly" is stated for agents and never for humans'
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** unstated · **Severity:** material
@@ -53,7 +53,7 @@ FIXED 2026-07-29, as proposed, after two prerequisites the proposal assumed were
 ## Evidence
 
 - `README.md:100-102`
-- `src/docir/modules/documents/application/services/maintenance_service.py:1-7`
+- `src/docir/modules/documents/application/services/maintenance_service.py`
 
 ---
 

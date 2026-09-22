@@ -15,7 +15,7 @@ tags:
 - blocking
 title: Should the corrupt-state findings have a repair path, or only detection?
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Gap:** issue-476b4e188fab · **Also resolves:** issue-fd547a293d01
@@ -28,7 +28,7 @@ duplicate-id, dangling, malformed and unknown-type all describe corrupt state, a
 
 ## What the system does today
 
-`check` reports; nothing repairs. OBSERVED: after `delete issue-0001 --force`, adr-0001's file still reads `related: [issue-0001]`, and `update adr-0001 --set-title X` succeeds and re-persists the broken edge — Tier 0 validates only edges supplied in the current call. Evidence: document_service.py:190-206, validation.py:61-66; contrast tag_service.py:97-103.
+`check` reports; nothing repairs. OBSERVED: after `delete issue-0001 --force`, adr-0001's file still reads `related: [issue-0001]`, and `update adr-0001 --set-title X` succeeds and re-persists the broken edge — Tier 0 validates only edges supplied in the current call. Evidence: document_service.py, validation.py; contrast tag_service.py.
 
 ## Proposed answer
 

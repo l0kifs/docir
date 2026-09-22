@@ -1,7 +1,7 @@
 ---
 created: '2026-07-30'
-description: Fine at the 'thousands of documents' scale the id-entropy comment assumes
-  (identifiers.py:23-25).
+description: Fine at the 'thousands of documents' scale the id-entropy comment in
+  identifiers.py assumes; nothing states the ceiling or what happens past it.
 id: issue-f6a5d0b86806
 owner: maintainer
 related:
@@ -15,7 +15,7 @@ tags:
 title: 'No stated corpus ceiling: `context` loads every active embedding into memory
   per call'
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** unstated · **Severity:** cosmetic
@@ -28,11 +28,11 @@ No stated corpus ceiling. `context` loads every active embedding into memory per
 
 ## What happens today
 
-repositories.py:309-320 selects all active vectors; similarity_lint.py:36-40 compares every pair.
+repositories.py selects all active vectors; similarity_lint.py compares every pair.
 
 ## Impact
 
-Fine at the 'thousands of documents' scale the id-entropy comment assumes (identifiers.py:23-25). That assumption is stated in a comment about ids and nowhere else.
+Fine at the 'thousands of documents' scale the id-entropy comment assumes (identifiers.py). That assumption is stated in a comment about ids and nowhere else.
 
 ## Proposed default
 
@@ -49,8 +49,8 @@ FIXED 2026-07-29 properly, at the maintainer's direction, who expects much large
 
 ## Evidence
 
-- `src/docir/platform/persistence/repositories.py:309-320`
-- `src/docir/modules/documents/domain/services/similarity_lint.py:33-53`
+- `src/docir/platform/persistence/repositories.py`
+- `src/docir/modules/documents/domain/services/similarity_lint.py`
 
 ---
 

@@ -12,7 +12,7 @@ tags:
 - material
 title: Renaming a tag onto an existing key is rejected, so two tags cannot be merged
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** missing · **Severity:** material
@@ -25,7 +25,7 @@ Renaming a tag onto an existing key is rejected, so two tags cannot be merged.
 
 ## What happens today
 
-tag_service.py:69-70 raises TagAlreadyExistsError. The only path is `tag rm --force` on one (losing the classification) then re-tagging by hand.
+tag_service.py raises TagAlreadyExistsError. The only path is `tag rm --force` on one (losing the classification) then re-tagging by hand.
 
 ## Impact
 
@@ -45,7 +45,7 @@ FIXED 2026-07-29, as proposed. `tag rename old new --merge` folds `old` into an 
 
 ## Evidence
 
-- `src/docir/modules/tags/application/services/tag_service.py:69-70`
+- `src/docir/modules/tags/application/services/tag_service.py`
 
 ---
 

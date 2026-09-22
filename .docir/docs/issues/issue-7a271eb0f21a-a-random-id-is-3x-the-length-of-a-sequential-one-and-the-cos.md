@@ -14,7 +14,7 @@ tags:
 title: A random id is ~3x the length of a sequential one, and the cost is paid on
   every read
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** unstated · **Severity:** cosmetic
@@ -43,8 +43,8 @@ Fold "tokens returned per result set" into the benchmark proposed for issue-e183
 
 ## Evidence
 
-- `src/docir/modules/documents/domain/value_objects/identifiers.py:23-25`
-- `src/docir/entry_points/composition.py:50-56`
+- `src/docir/modules/documents/domain/value_objects/identifiers.py`
+- `src/docir/entry_points/composition.py`
 
 ---
 

@@ -14,7 +14,7 @@ tags:
 - blocking
 title: With `--no-daemon`, concurrent `add` invocations all receive the same id
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** incorrect · **Severity:** blocking
@@ -49,9 +49,9 @@ FIXED 2026-07-26. `next_number` is now a single atomic upsert (`INSERT … ON CO
 
 ## Evidence
 
-- `src/docir/platform/persistence/repositories.py:48-56`
-- `src/docir/platform/transport/server.py:20-25`
-- `src/docir/modules/documents/application/services/id_generator.py:3-5`
+- `src/docir/platform/persistence/repositories.py`
+- `src/docir/platform/transport/server.py`
+- `src/docir/modules/documents/application/services/id_generator.py`
 - `ref-1509d5dbb4c3 (discovery probe log)`
 
 ---

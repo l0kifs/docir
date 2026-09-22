@@ -24,6 +24,8 @@ tags:
 title: Glossary — one term, one definition, one owner
 type: reference
 updated: '2026-09-22'
+verified: '2026-09-22'
+verified_content: 1ca0a7324081
 ---
 
 Synonyms and homonyms are findings, not tidy-ups: where one word means two things
@@ -36,7 +38,7 @@ One markdown file with YAML frontmatter, identified by a type-prefixed id, and t
 **Owner:** repo maintainer · **Used in:** documents, indexing, tags, CLI
 
 **Evidence:**
-- `src/docir/modules/documents/domain/entities/document.py:19-38`
+- `src/docir/modules/documents/domain/entities/document.py`
 
 ## index
 
@@ -61,10 +63,10 @@ OVERLOADED — three unrelated meanings in one codebase: (1) a document past its
 - *context* document_service.update(); *definition* The local variable `stale` (sense 2) sits eleven lines from `self._is_stale(...)` (sense 1) in the same method. Both are booleans about the same document and they mean entirely different things.; *gap* issue-d8295c5c76d1
 
 **Evidence:**
-- `src/docir/modules/documents/domain/services/graph_checks.py:84`
-- `src/docir/platform/errors/__init__.py:101-104`
-- `src/docir/modules/documents/application/services/document_service.py:136`
-- `src/docir/modules/documents/application/services/maintenance_service.py:168`
+- `src/docir/modules/documents/domain/services/graph_checks.py`
+- `src/docir/platform/errors/__init__.py`
+- `src/docir/modules/documents/application/services/document_service.py`
+- `src/docir/modules/documents/application/services/maintenance_service.py`
 
 ## archived
 
@@ -76,7 +78,7 @@ A document withdrawn from retrieval but kept on disk and in the metadata table. 
 - *context* inactive status; *definition* `inactive_statuses` (e.g. `resolved`, `superseded`, `deprecated`) also withdraws a document from the list read paths. Two independent mechanisms with near-identical user-visible effect, different flags to defeat (`--include-archived` vs `--include-resolved`), and different enforcement points — which is why one of them leaks through graph expansion and the other does not.; *gap* issue-8c37bf22ba3c
 
 **Evidence:**
-- `src/docir/modules/documents/application/services/document_service.py:161-188`
+- `src/docir/modules/documents/application/services/document_service.py`
 
 ## resolved
 
@@ -88,10 +90,10 @@ In the CLI: the flag name `--include-resolved` for "also show documents in an in
 - *context* the schema; *definition* `resolved` is a status of exactly two types (`issue` in the software profile, `incident` in ops). For a `decision` the flag means "include rejected and superseded"; for a `policy`, "include superseded and retired". The wire field is named `include_inactive` — correctly — and the CLI renames it to something narrower on the way out. A user asking for decisions cannot guess that `--include-resolved` is the flag they need.; *gap* issue-efc29234eb57
 
 **Evidence:**
-- `src/docir/entry_points/cli/app.py:269`
+- `src/docir/entry_points/cli/app.py`
 - `288`
 - `303`
-- `src/docir/entry_points/dispatch.py:116`
+- `src/docir/entry_points/dispatch.py`
 
 ## related
 
@@ -115,7 +117,7 @@ A per-type integer expressing architectural abstraction height; a dependency edg
 - *context* the shipped software profile; *definition* The levels assigned (decision 3, issue 1) make the ordinary and intended relationship "this decision addresses that issue" a violation. The term's definition and the shipped values disagree about what the ordering means.; *gap* issue-40d1792bc9f9
 
 **Evidence:**
-- `src/docir/modules/documents/domain/schema.py:46-47`
+- `src/docir/modules/documents/domain/schema.py`
 - `src/docir/modules/documents/domain/services/graph_checks.py`
 
 ## check / lint
@@ -125,10 +127,10 @@ A per-type integer expressing architectural abstraction height; a dependency edg
 **Owner:** repo maintainer · **Used in:** CLI, documents.application
 
 **Conflicts:** 
-- *context* `--strict`; *definition* `check` is documented as producing "warnings rather than failing an agent mid-task" (graph_checks.py:3-5), yet `--strict` turns every one of them into a build failure with no severity distinction. The tier model says these are warnings; the CI integration treats them as errors.; *gap* issue-9cb85759076d
+- *context* `--strict`; *definition* `check` is documented as producing "warnings rather than failing an agent mid-task" (`graph_checks.py`, module docstring), yet `--strict` turns every one of them into a build failure with no severity distinction. The tier model says these are warnings; the CI integration treats them as errors.; *gap* issue-9cb85759076d
 
 **Evidence:**
-- `src/docir/entry_points/cli/app.py:419-456`
+- `src/docir/entry_points/cli/app.py`
 - `CLAUDE.md`
 
 ## score
@@ -141,7 +143,7 @@ The reciprocal-rank-fusion value for a context result.
 - *context* what a reader will assume; *definition* Published as a bare number in agent-facing JSON, where it reads as a relevance measure. It is a rank-position artefact: bounded near 1/(k+1)+1/(k+1) ≈ 0.033, essentially identical for a perfect match and a nonsense query. README:95 says "ordering is the point", which is correct — but the value is still emitted, and nothing prevents an agent thresholding on it.; *gap* issue-93152f7b9213
 
 **Evidence:**
-- `src/docir/modules/indexing/domain/scoring.py:44-73`
+- `src/docir/modules/indexing/domain/scoring.py:44-73` (`FusedScore`)
 - `README.md:90-95`
 
 ## home / store
@@ -154,7 +156,7 @@ The single resolved directory holding docs/, docs-schema.yaml and the index.
 - *context* naming; *definition* Called "home" in code and `--home`/`DOCIR_HOME`, "store" in the CLI help and adr-20eec6e2e2ca, and "data root" in the `--home` option help — three names for one concept in user-facing text.; *gap* issue-a40dbcc7a19a
 
 **Evidence:**
-- `src/docir/config/settings.py:51-104`
+- `src/docir/config/settings.py`
 
 ## profile
 
@@ -163,7 +165,7 @@ A named bundle of document types layered onto the frozen core schema.
 **Owner:** repo maintainer · **Used in:** documents.infra, CLI
 
 **Evidence:**
-- `src/docir/modules/documents/infra/profiles.py:41-208`
+- `src/docir/modules/documents/infra/profiles.py`
 
 ## skeleton
 
@@ -172,7 +174,7 @@ A `DocumentSummary`: frontmatter, typed edges and staleness, with no body. The u
 **Owner:** repo maintainer · **Used in:** documents.application, README
 
 **Evidence:**
-- `src/docir/modules/documents/application/dto.py:84-108`
+- `src/docir/modules/documents/application/dto.py`
 
 ## owner
 
@@ -184,4 +186,4 @@ A free-form string naming who is accountable for re-verifying a document.
 - *context* what the word implies vs what it does; *definition* The word implies an accountable party. The field is written, stored, and interpolated into one `check` message — nothing else. It cannot be queried or filtered on, triggers no notification, and is not validated against anything. It names a responsibility the system never routes to anyone.; *gap* issue-b4f441c7210f
 
 **Evidence:**
-- `src/docir/modules/documents/domain/entities/document.py:37`
+- `src/docir/modules/documents/domain/entities/document.py:37` (`Document`)

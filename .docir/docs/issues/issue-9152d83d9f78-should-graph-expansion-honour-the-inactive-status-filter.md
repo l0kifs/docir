@@ -13,7 +13,7 @@ tags:
 - blocking
 title: Should graph expansion honour the inactive-status filter?
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Gap:** issue-8c37bf22ba3c
@@ -26,7 +26,7 @@ A `resolved` issue is returned by `docir context` without `--include-resolved`, 
 
 ## What the system does today
 
-OBSERVED: issue-0001 (status resolved) referenced by adr-0001 is returned by `docir context auth --limit 5` with `via_graph: true`; the same document is hidden by `docir search auth` and `docir query`. Evidence: document_service.py:265-268 vs :297-307.
+OBSERVED: issue-0001 (status resolved) referenced by adr-0001 is returned by `docir context auth --limit 5` with `via_graph: true`; the same document is hidden by `docir search auth` and `docir query`. Evidence: document_service.py vs :297-307.
 
 ## Proposed answer
 

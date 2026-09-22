@@ -12,7 +12,7 @@ tags:
 - cosmetic
 title: '''home'', ''store'' and ''data root'' name one concept in three places'
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** misleading · **Severity:** cosmetic
@@ -45,8 +45,8 @@ FIXED 2026-07-29, as proposed. User-facing prose says "store"; `--home` keeps it
 
 ## Evidence
 
-- `src/docir/entry_points/cli/app.py:58-61`
-- `src/docir/entry_points/cli/app.py:102-108`
+- `src/docir/entry_points/cli/app.py`
+- `src/docir/entry_points/cli/app.py`
 
 ---
 

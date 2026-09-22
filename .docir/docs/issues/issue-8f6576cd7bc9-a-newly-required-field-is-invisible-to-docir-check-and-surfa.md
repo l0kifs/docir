@@ -38,7 +38,7 @@ verified_code:
   src/docir/modules/documents/domain/services/validation.py: aa4794b0dcdd
   tests/modules/documents/test_domain_services.py: 1e0bdf0af18a
   tests/modules/documents/test_integration_maintenance.py: ecb42c0e3b81
-verified_content: a7963fe2b34c
+verified_content: 5f5a7e011590
 ---
 
 **Class:** missing · **Severity:** material
@@ -64,7 +64,7 @@ docir update <id> --set-title "Renamed"
 ```
 
 The failing command asked to change the *title*. `update` validates the whole merged document
-(`document_service.py:206`), which is right — but it means an unrelated patch is where the
+(`document_service.py`), which is right — but it means an unrelated patch is where the
 schema change is announced.
 
 ## What happens today
@@ -79,9 +79,9 @@ longer describes how it is classified:
 | a status is removed from a type | `unknown-status` warning (`checks/schema_rules.py`) |
 | **a field becomes required** | **nothing** |
 
-`GraphChecker.check` (`graph_checks.py:92`) never consults `required_fields`, and
-`Tier0Validator.validate_required_fields` (`validation.py:35`) is reachable only from the two
-write paths (`document_service.py:158`, `:206`).
+`GraphChecker.check` (`graph_checks.py:92` (`check`)) never consults `required_fields`, and
+`Tier0Validator.validate_required_fields` (`validation.py`) is reachable only from the two
+write paths (`document_service.py`, `:206`).
 
 The gap widens with how a schema change actually arrives. Core and profile types are YAML
 strings compiled into the package (`profiles.py`), re-merged on every command, so a store whose
@@ -126,10 +126,10 @@ Deliberately not proposed:
 
 ## Evidence
 
-- `src/docir/modules/documents/domain/services/graph_checks.py:92` — `check` never reads `required_fields`
+- `src/docir/modules/documents/domain/services/graph_checks.py:92` (`check`) — `check` never reads `required_fields`
 - `src/docir/modules/documents/domain/services/checks/schema_rules.py` — the two sibling findings
-- `src/docir/modules/documents/domain/services/validation.py:35` — `validate_required_fields`
-- `src/docir/modules/documents/application/services/document_service.py:158,206` — its only two callers
+- `src/docir/modules/documents/domain/services/validation.py` — `validate_required_fields`
+- `src/docir/modules/documents/application/services/document_service.py,206` — its only two callers
 - `src/docir/modules/documents/infra/profiles.py` — why the change can arrive without a local edit
 
 ## Resolution

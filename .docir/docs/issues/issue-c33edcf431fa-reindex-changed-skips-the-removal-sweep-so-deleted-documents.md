@@ -13,7 +13,7 @@ tags:
 title: '`reindex --changed` skips the removal sweep, so deleted documents stay in
   the index'
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** unstated · **Severity:** material
@@ -26,7 +26,7 @@ updated: '2026-08-05'
 
 ## What happens today
 
-maintenance_service.py:166-174 guards the sweep with `if not changed_only`. Neither `--help` nor the README mentions the difference.
+maintenance_service.py guards the sweep with `if not changed_only`. Neither `--help` nor the README mentions the difference.
 
 ## Impact
 
@@ -47,7 +47,7 @@ FIXED 2026-07-29 with the second option — the sweep is unconditional — after
 
 ## Evidence
 
-- `src/docir/modules/documents/application/services/maintenance_service.py:166-174`
+- `src/docir/modules/documents/application/services/maintenance_service.py`
 
 ---
 

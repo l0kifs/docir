@@ -13,7 +13,7 @@ tags:
 - material
 title: '`owner` is captured and only ever interpolated into a `check` message'
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Gap:** issue-b4f441c7210f
@@ -26,7 +26,7 @@ updated: '2026-08-05'
 
 ## What the system does today
 
-No notification, no `--owner` filter, no 'documents I own' view, no reminder. Evidence: graph_checks.py:100-102, document.py:37.
+No notification, no `--owner` filter, no 'documents I own' view, no reminder. Evidence: graph_checks.py:100-102 (`check`), document.py.
 
 ## Proposed answer
 

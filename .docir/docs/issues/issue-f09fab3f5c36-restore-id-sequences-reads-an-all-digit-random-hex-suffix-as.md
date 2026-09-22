@@ -13,7 +13,7 @@ tags:
 title: '`_restore_id_sequences` reads an all-digit random hex suffix as a sequential
   number'
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** incorrect · **Severity:** cosmetic
@@ -46,8 +46,8 @@ FIXED 2026-07-26. `_restore_id_sequences` now derives the set of prefixes whose 
 
 ## Evidence
 
-- `src/docir/modules/documents/application/services/maintenance_service.py:136-157`
-- `src/docir/modules/documents/domain/value_objects/identifiers.py:64-73`
+- `src/docir/modules/documents/application/services/maintenance_service.py`
+- `src/docir/modules/documents/domain/value_objects/identifiers.py`
 
 ---
 

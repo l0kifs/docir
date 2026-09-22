@@ -28,7 +28,7 @@ verified: '2026-09-22'
 verified_code:
   src/docir/modules/documents/domain/services/code_globs.py: 8d1df3b56ee5
   src/docir/platform/filesystem/code_matcher.py: 49e035db439d
-verified_content: 629e11379a96
+verified_content: 618a8fca547c
 ---
 
 **Class:** missing · **Severity:** material
@@ -39,9 +39,9 @@ verified_content: 629e11379a96
 
 No frontmatter field names code. `Document` carries id, title, description, type, status, created,
 updated, tags, related, archived, body, path, owner, verified — and nothing else
-(`document.py:23-39`). The markdown store writes exactly that key set and parses exactly that key
+(`document.py:23-39` (`Document`)). The markdown store writes exactly that key set and parses exactly that key
 set, so a hand-added `code:` key is silently dropped on the next write
-(`markdown_store.py:118-160`).
+(`markdown_store.py`).
 
 ## What happens today
 
@@ -52,9 +52,9 @@ CI; trackfw enforces ADR → requirement → roadmap; Log4brains and adrkit at l
 from git log. docir validates the document graph against itself and stops there.
 
 The schema appears to offer a way in and does not. `required:` is documented as "extra frontmatter
-fields this type must carry" (`default_schema.py:80-81`) and the loader accepts any name
-(`schema_loader.py:290-292`), but `validate_required_fields` reads it with `getattr(document, name,
-None)` (`validation.py:33-42`) — a name that is not an entity attribute is missing for every
+fields this type must carry" (`default_schema.py`) and the loader accepts any name
+(`schema_loader.py`), but `validate_required_fields` reads it with `getattr(document, name,
+None)` (`validation.py`) — a name that is not an entity attribute is missing for every
 document, forever. Verified in a throwaway store: a type declaring `required: [code]` rejects every
 `add` with `required field 'code' is missing or empty for type 'probe'`, and no CLI flag can supply
 it. So this is an entity + file-store change, not a schema-only one. (That `required` accepts
@@ -142,11 +142,11 @@ this is issue-e3c4dfad4f7b, filed rather than fixed here.
 
 ## Evidence
 
-- `src/docir/modules/documents/domain/entities/document.py:23-39`
-- `src/docir/platform/filesystem/markdown_store.py:118-160`
-- `src/docir/modules/documents/domain/services/validation.py:33-42`
-- `src/docir/modules/documents/infra/schema_loader.py:290-292`
-- `src/docir/modules/documents/domain/services/graph_checks.py:42`
+- `src/docir/modules/documents/domain/entities/document.py`
+- `src/docir/platform/filesystem/markdown_store.py`
+- `src/docir/modules/documents/domain/services/validation.py`
+- `src/docir/modules/documents/infra/schema_loader.py`
+- `src/docir/modules/documents/domain/services/graph_checks.py`
 
 ---
 

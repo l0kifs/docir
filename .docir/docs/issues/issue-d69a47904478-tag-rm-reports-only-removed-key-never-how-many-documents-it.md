@@ -13,7 +13,7 @@ tags:
 - cosmetic
 title: '`tag rm` reports only `removed <key>`, never how many documents it rewrote'
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** unstated · **Severity:** cosmetic
@@ -26,7 +26,7 @@ Reports only `removed <key>`; never says how many documents it rewrote.
 
 ## What happens today
 
-dispatch.py:159-161 returns `{removed: key}`.
+dispatch.py returns `{removed: key}`.
 
 ## Impact
 
@@ -46,7 +46,7 @@ FIXED 2026-07-29. `TagService.remove` returns the ids it stripped the tag from; 
 
 ## Evidence
 
-- `src/docir/entry_points/dispatch.py:159-161`
+- `src/docir/entry_points/dispatch.py`
 
 ---
 

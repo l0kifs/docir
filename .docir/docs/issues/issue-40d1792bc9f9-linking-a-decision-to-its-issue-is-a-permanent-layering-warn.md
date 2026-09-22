@@ -51,7 +51,7 @@ FIXED 2026-07-27, as proposed, under issue-f2591bdbca13's recorded assumption (t
 
 ## Evidence
 
-- `src/docir/modules/documents/infra/profiles.py:26-27, 44-46`
+- `src/docir/modules/documents/infra/profiles.py, 44-46`
 - `src/docir/modules/documents/domain/services/graph_checks.py`
 - `ref-1509d5dbb4c3 (discovery probe log)`
 

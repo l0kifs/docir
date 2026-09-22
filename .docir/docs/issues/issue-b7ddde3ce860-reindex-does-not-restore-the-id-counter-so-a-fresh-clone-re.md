@@ -14,7 +14,7 @@ tags:
 title: '`reindex` does not restore the id counter, so a fresh clone re-mints a live
   id'
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** incorrect · **Severity:** blocking
@@ -49,8 +49,8 @@ FIXED 2026-07-26. `MaintenanceService._restore_id_sequences` rebuilds the counte
 
 ## Evidence
 
-- `src/docir/modules/documents/application/services/maintenance_service.py:148-174`
-- `src/docir/platform/persistence/repositories.py:48-56`
+- `src/docir/modules/documents/application/services/maintenance_service.py`
+- `src/docir/platform/persistence/repositories.py`
 - `ref-1509d5dbb4c3 (discovery probe log)`
 
 ---

@@ -50,7 +50,7 @@ FIXED 2026-07-26. `CheckIssue` now carries a `severity`, derived from `kind` in 
 
 ## Evidence
 
-- `src/docir/entry_points/cli/app.py:419-440`
+- `src/docir/entry_points/cli/app.py`
 - `src/docir/modules/documents/domain/services/graph_checks.py`
 - `ref-1509d5dbb4c3 (discovery probe log)`
 

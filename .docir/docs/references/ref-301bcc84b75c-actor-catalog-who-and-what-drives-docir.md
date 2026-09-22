@@ -22,7 +22,9 @@ tags:
 - agents
 title: Actor catalog — who and what drives docir
 type: reference
-updated: '2026-08-17'
+updated: '2026-09-22'
+verified: '2026-09-22'
+verified_content: ca0b785e27c3
 ---
 
 Reconstructed from the code and tests. `observed` means read off code or executed;
@@ -37,7 +39,7 @@ Reconstructed from the code and tests. `observed` means read off code or execute
 
 **Authority.** Full write authority — may add, update, archive, delete any document and mutate the tag registry. No permission model exists (adr-90e994d931cc), so it can do anything a human can.
 
-**Evidence:** README.md:8, src/docir/entry_points/cli/rendering.py:1-9, src/docir/modules/agents/infra/templates/skill.md, src/docir/modules/documents/application/dto.py:86-91
+**Evidence:** README.md:8, src/docir/entry_points/cli/rendering.py, src/docir/modules/agents/infra/templates/skill.md, src/docir/modules/documents/application/dto.py
 
 **Confidence:** observed
 
@@ -52,7 +54,7 @@ Reconstructed from the code and tests. `observed` means read off code or execute
 
 **Authority.** Unrestricted. Also the only actor who can edit markdown files directly.
 
-**Evidence:** README.md:50-68, src/docir/entry_points/cli/rendering.py:21
+**Evidence:** README.md:50-68, src/docir/entry_points/cli/rendering.py
 
 **Confidence:** observed
 
@@ -65,7 +67,7 @@ Reconstructed from the code and tests. `observed` means read off code or execute
 
 **Authority.** Read-only; signals via exit code only.
 
-**Evidence:** src/docir/entry_points/cli/app.py:419-440, CLAUDE.md
+**Evidence:** src/docir/entry_points/cli/app.py, CLAUDE.md
 
 **Confidence:** observed
 
@@ -80,7 +82,7 @@ Reconstructed from the code and tests. `observed` means read off code or execute
 
 **Authority.** May recompute or drop any embedding row. Cannot alter documents.
 
-**Evidence:** src/docir/modules/indexing/infra/scheduler.py:27-44, src/docir/modules/indexing/infra/scheduler.py:105-115
+**Evidence:** src/docir/modules/indexing/infra/scheduler.py, src/docir/modules/indexing/infra/scheduler.py
 
 **Confidence:** observed
 
@@ -93,7 +95,7 @@ Reconstructed from the code and tests. `observed` means read off code or execute
 
 **Authority.** Executes every command on behalf of a client; self-terminates when idle.
 
-**Evidence:** src/docir/platform/transport/server.py:20-49, src/docir/config/settings.py:29
+**Evidence:** src/docir/platform/transport/server.py, src/docir/config/settings.py
 
 **Confidence:** observed
 
@@ -108,7 +110,7 @@ Reconstructed from the code and tests. `observed` means read off code or execute
 
 **Authority.** Can create any file state, including two files with the same id.
 
-**Evidence:** src/docir/modules/documents/application/services/maintenance_service.py:84-124, tests/modules/documents/test_merge_safety.py
+**Evidence:** src/docir/modules/documents/application/services/maintenance_service.py, tests/modules/documents/test_merge_safety.py
 
 **Confidence:** observed
 
@@ -123,7 +125,7 @@ Reconstructed from the code and tests. `observed` means read off code or execute
 
 **Authority.** None modelled — `owner` is a free-form string with no behaviour attached.
 
-**Evidence:** src/docir/modules/documents/domain/entities/document.py:37, src/docir/modules/documents/domain/services/graph_checks.py:100-102
+**Evidence:** src/docir/modules/documents/domain/entities/document.py, src/docir/modules/documents/domain/services/graph_checks.py
 
 **Confidence:** observed
 

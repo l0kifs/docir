@@ -13,7 +13,7 @@ tags:
 - cosmetic
 title: No format rule for tag keys — any non-empty string is accepted
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** missing · **Severity:** cosmetic
@@ -43,8 +43,8 @@ Validate against `^[a-z][a-z0-9-]*$` and normalise case.
 
 ## Evidence
 
-- `src/docir/modules/tags/application/services/tag_service.py:43-52`
-- `src/docir/modules/documents/domain/value_objects/identifiers.py:21`
+- `src/docir/modules/tags/application/services/tag_service.py`
+- `src/docir/modules/documents/domain/value_objects/identifiers.py`
 
 ---
 

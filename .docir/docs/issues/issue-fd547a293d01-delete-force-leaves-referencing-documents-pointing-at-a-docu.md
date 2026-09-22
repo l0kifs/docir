@@ -16,7 +16,7 @@ tags:
 title: '`delete --force` leaves referencing documents pointing at a document that
   no longer exists'
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** missing · **Severity:** material
@@ -50,8 +50,8 @@ FIXED 2026-07-28, as proposed. `DocumentService.delete` strips the edge from eve
 
 ## Evidence
 
-- `src/docir/modules/documents/application/services/document_service.py:190-206`
-- `src/docir/modules/documents/domain/services/validation.py:61-66`
+- `src/docir/modules/documents/application/services/document_service.py`
+- `src/docir/modules/documents/domain/services/validation.py`
 - `ref-1509d5dbb4c3 (discovery probe log)`
 
 ---

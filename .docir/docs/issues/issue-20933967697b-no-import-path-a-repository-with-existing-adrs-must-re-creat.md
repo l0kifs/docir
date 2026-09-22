@@ -16,7 +16,7 @@ tags:
 title: 'No import path: a repository with existing ADRs must re-create every document
   by hand'
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** missing · **Severity:** material
@@ -50,7 +50,7 @@ FIXED 2026-07-29 with `docir add --id <id>` — one flag, not the command that w
 ## Evidence
 
 - `src/docir/entry_points/cli/app.py`
-- `src/docir/modules/documents/application/services/id_generator.py:26-40`
+- `src/docir/modules/documents/application/services/id_generator.py`
 
 ---
 

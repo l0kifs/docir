@@ -4,7 +4,7 @@ code:
 - tests/entry_points/test_code_citations.py
 code_baseline:
   scripts/code_citations.py: 0d503fb3a529
-  tests/entry_points/test_code_citations.py: 2a5239ba084c
+  tests/entry_points/test_code_citations.py: 6a642cd40926
 created: '2026-09-22'
 description: Line numbers move with every insertion above them; five documents carried
   citation columns that had shifted wholesale, and a sample of eighteen in-bounds
@@ -24,8 +24,8 @@ updated: '2026-09-22'
 verified: '2026-09-22'
 verified_code:
   scripts/code_citations.py: 0d503fb3a529
-  tests/entry_points/test_code_citations.py: 2a5239ba084c
-verified_content: 0f4fda39af44
+  tests/entry_points/test_code_citations.py: 6a642cd40926
+verified_content: 067e17dfff45
 ---
 
 ## What is wrong
@@ -73,30 +73,28 @@ halves can disagree, and disagreement is detectable in the commit that causes it
 
 ## Resolution
 
-FIXED 2026-09-22. `scripts/code_citations.py` resolves a citation to a file and a line, and
-names the innermost symbol spanning it; `tests/entry_points/test_code_citations.py` runs it
-over every document in the store.
+The grandfathered set is gone. It was written with 250 entries and deleted in the same pass:
+a baseline is for a rule that cannot yet hold everywhere, and this one can.
 
-Two rules, because only one of them is decidable today.
+The sweep that made it holdable applied one rule per citation. Where the surrounding prose
+already named the symbol the file holds at that line, the citation was **paired** — a
+confirmation rather than a derivation. Everywhere else the line was **dropped and the file
+kept**, because a line that is wrong two times in five is worse than no line.
 
-**Every citation must resolve** to a real file at an existing line. The sixteen that did not
-are fixed — their line numbers are dropped and the file kept, since the intent ("this file is
-the evidence") survives while the precision does not.
+Of 266: nine were self-confirming, fifty-five in the rule register and sixty-six more across
+two other references were evidence lists whose files are the useful part, and the rest went
+the same way. **Seventeen survive, every one checked.** `arch-0a3c2d6d54a6` is the document
+that kept the most — nine of nine matched their prose, because nothing this release touched
+`maintenance_service.py`.
 
-**Every new citation must name its symbol**, so the pair can disagree. The 250 that predate
-the rule are grandfathered per document by **count**, not by a list of 250 entries: a
-grandfathered document may not grow a new unpaired citation, and fixing one must shrink its
-number — the assertion is equality, so a fix that is not recorded fails too. Editing such a
-citation changes its line, which is exactly the moment to adopt the paired form.
+Three stragglers needed hands. Two were in a `description`, which is the field every search
+result shows and which the guard scans because it reads the whole file rather than the body.
+The third paired a range with a parenthetical *note* rather than a symbol and continued with
+a bare second range — a compound the sweep read as already paired.
 
-Four injections, each proven to fail its guard: an unpaired citation in a document with none,
-a pairing that names the wrong symbol, a line past end of file, and a grandfathered count
-lowered without updating the table. Plus two unit guards on the oracle itself, because a
-checker that judges nothing passes everything.
-
-A bare filename resolves only when it is unique. `dto.py` exists under both `tags` and
-`documents`, and guessing between them reports a healthy citation as broken — worse than
-declining to judge it. A repo-relative path always wins.
+`require_pair` is now unconditional, and the only way to satisfy the guard by deleting
+citations is itself guarded: a floor asserts the store still cites code at all, since a
+checker over an empty set passes for the wrong reason.
 
 ## What it does not do
 

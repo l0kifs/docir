@@ -13,7 +13,7 @@ tags:
 title: Should `docir add` in an uninitialised repository succeed against the global
   store?
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Gap:** issue-34b4f0ca1e13
@@ -26,7 +26,7 @@ Should `docir add` in an uninitialised repository succeed silently against the g
 
 ## What the system does today
 
-settings.py:96-104 falls back silently; schema_loader.py:26-31 writes a default schema on first touch. The reported path looks repo-relative.
+settings.py falls back silently; schema_loader.py writes a default schema on first touch. The reported path looks repo-relative.
 
 ## Proposed answer
 

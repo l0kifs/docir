@@ -15,7 +15,7 @@ tags:
 title: Only `--replace-body` has a stale-write guard; the other four edit modes have
   none
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** unstated · **Severity:** material
@@ -28,7 +28,7 @@ Only `--replace-body` has a stale-write guard. Two concurrent metadata patches t
 
 ## What happens today
 
-The content_hash comparison is computed on every update (document_service.py:136) but consulted only in the `replace_body` branch (:374).
+The content_hash comparison is computed on every update (document_service.py) but consulted only in the `replace_body` branch (:374).
 
 ## Impact
 
@@ -48,7 +48,7 @@ STATED 2026-07-29, not changed — the scoping turned out to be correct and the 
 
 ## Evidence
 
-- `src/docir/modules/documents/application/services/document_service.py:136`
+- `src/docir/modules/documents/application/services/document_service.py`
 - `369-380`
 
 ---

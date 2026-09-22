@@ -15,7 +15,7 @@ tags:
 title: The default embedder does not capture meaning; it is the signal FTS5 already
   gives
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** misleading · **Severity:** material
@@ -49,7 +49,7 @@ FIXED 2026-07-26 as a documentation-honesty change; no code changed, because the
 
 ## Evidence
 
-- `src/docir/platform/embedding/deterministic.py:1-8`
+- `src/docir/platform/embedding/deterministic.py`
 - `benchmarks/README.md`
 - `README.md:42`
 

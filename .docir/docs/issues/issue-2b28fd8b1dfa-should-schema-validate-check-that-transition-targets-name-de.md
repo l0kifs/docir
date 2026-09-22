@@ -13,7 +13,7 @@ tags:
 - material
 title: Should `schema validate` check that transition targets name declared statuses?
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Gap:** issue-b47a1203baa2
@@ -26,7 +26,7 @@ Should `schema validate` check that transition targets and `inactive_statuses` n
 
 ## What the system does today
 
-OBSERVED: `statuses: {open: [closd], closed: []}`, `inactive_statuses: [done]` → `{"valid":true}`. The eventual error, `invalid transition 'open' -> 'closed'`, names a status that IS declared and points at the write rather than the schema. Evidence: schema_loader.py:142-192, schema.py:97-117.
+OBSERVED: `statuses: {open: [closd], closed: []}`, `inactive_statuses: [done]` → `{"valid":true}`. The eventual error, `invalid transition 'open' -> 'closed'`, names a status that IS declared and points at the write rather than the schema. Evidence: schema_loader.py, schema.py.
 
 ## Proposed answer
 

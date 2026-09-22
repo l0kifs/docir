@@ -12,7 +12,7 @@ tags:
 - cosmetic
 title: '`stale` names three unrelated concepts in one codebase'
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** misleading · **Severity:** cosmetic
@@ -45,9 +45,9 @@ FIXED 2026-07-29, and two-thirds of it incidentally. Sense (2), "changed on disk
 
 ## Evidence
 
-- `src/docir/modules/documents/application/services/document_service.py:136`
-- `src/docir/modules/documents/application/services/document_service.py:288-295`
-- `src/docir/modules/documents/application/services/maintenance_service.py:168`
+- `src/docir/modules/documents/application/services/document_service.py`
+- `src/docir/modules/documents/application/services/document_service.py`
+- `src/docir/modules/documents/application/services/maintenance_service.py`
 
 ---
 

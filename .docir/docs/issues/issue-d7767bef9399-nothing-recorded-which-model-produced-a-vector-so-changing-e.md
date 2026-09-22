@@ -13,7 +13,7 @@ tags:
 title: Nothing recorded which model produced a vector, so changing embedder broke
   every read
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** unstated · **Severity:** material
@@ -43,9 +43,9 @@ FIXED. `set_vector` writes `model_id`; `active_vectors(model_id)` returns only m
 
 ## Evidence
 
-- `src/docir/platform/persistence/repositories.py:272-300`
+- `src/docir/platform/persistence/repositories.py`
 - `src/docir/platform/embedding/vector.py`
-- `src/docir/platform/persistence/alembic/versions/0001_initial_index.py:69-80`
+- `src/docir/platform/persistence/alembic/versions/0001_initial_index.py`
 
 ---
 

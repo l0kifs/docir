@@ -12,7 +12,7 @@ tags:
 - cosmetic
 title: Documented as leaving `unknown-type` documents; the recovery path is not documented
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** unstated · **Severity:** cosmetic
@@ -45,7 +45,7 @@ DOCUMENTED 2026-07-29, as proposed. The agent guide's maintenance section now st
 
 ## Evidence
 
-- `src/docir/modules/documents/domain/services/graph_checks.py:60-82`
+- `src/docir/modules/documents/domain/services/graph_checks.py`
 - `CLAUDE.md`
 
 ---

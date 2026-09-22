@@ -13,7 +13,7 @@ tags:
 - material
 title: Should `docir context` be able to return nothing?
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Gap:** issue-93152f7b9213
@@ -26,7 +26,7 @@ Should `docir context` be able to return nothing? There is no similarity floor, 
 
 ## What the system does today
 
-OBSERVED: against a store containing only "Postgres connection pooling", `context "how do I bake sourdough bread" --limit 3` returns it with score 0.0328. Evidence: scoring.py:36-73, document_service.py:257.
+OBSERVED: against a store containing only "Postgres connection pooling", `context "how do I bake sourdough bread" --limit 3` returns it with score 0.0328. Evidence: scoring.py, document_service.py.
 
 ## Proposed answer
 

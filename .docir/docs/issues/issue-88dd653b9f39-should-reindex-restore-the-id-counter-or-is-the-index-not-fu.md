@@ -14,7 +14,7 @@ tags:
 - blocking
 title: Should `reindex` restore the id counter, or is the index not fully rebuildable?
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Gap:** issue-b7ddde3ce860 · **Also resolves:** issue-61b66ed696de
@@ -27,7 +27,7 @@ updated: '2026-08-05'
 
 ## What the system does today
 
-OBSERVED: clone (index absent, it is gitignored) → `docir reindex` → `docir add` returns an id that is already in use. Two files claim it; the index keeps the newer; the older document is unreachable via get/query/search/context though its file is untouched. Exit code 0 throughout. Evidence: maintenance_service.py:148-174, repositories.py:48-56.
+OBSERVED: clone (index absent, it is gitignored) → `docir reindex` → `docir add` returns an id that is already in use. Two files claim it; the index keeps the newer; the older document is unreachable via get/query/search/context though its file is untouched. Exit code 0 throughout. Evidence: maintenance_service.py, repositories.py.
 
 ## Proposed answer
 

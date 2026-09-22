@@ -15,7 +15,7 @@ tags:
 title: The markdown file is written before the transaction commits, so an interruption
   duplicates an id
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** unstated · **Severity:** material
@@ -28,11 +28,11 @@ The markdown file is written before the transaction commits, so an interruption 
 
 ## What happens today
 
-document_service.py:118-123 — write, then save/index/mark, then commit. No test covers the interruption; `reindex` would repair it if anyone knew to run it.
+document_service.py — write, then save/index/mark, then commit. No test covers the interruption; `reindex` would repair it if anyone knew to run it.
 
 ## Impact
 
-A third route to a duplicate id, and the sharpest one. `next_number` only *flushes* inside the transaction (repositories.py:55), so an interruption before the commit rolls the counter back while the file it already wrote survives on disk. The next `add` therefore issues that same id again. Since the file is canonical the document is not lost — the correct trade-off — but the atomicity boundary is documented as covering "file, metadata, FTS, relations" (CLAUDE.md) and in fact covers only the last three.
+A third route to a duplicate id, and the sharpest one. `next_number` only *flushes* inside the transaction (repositories.py), so an interruption before the commit rolls the counter back while the file it already wrote survives on disk. The next `add` therefore issues that same id again. Since the file is canonical the document is not lost — the correct trade-off — but the atomicity boundary is documented as covering "file, metadata, FTS, relations" (CLAUDE.md) and in fact covers only the last three.
 
 ## Proposed default
 
@@ -49,7 +49,7 @@ MITIGATED 2026-07-26 by the same change as issue-b7ddde3ce860: a crash between t
 
 ## Evidence
 
-- `src/docir/modules/documents/application/services/document_service.py:118-123`
+- `src/docir/modules/documents/application/services/document_service.py`
 
 ---
 

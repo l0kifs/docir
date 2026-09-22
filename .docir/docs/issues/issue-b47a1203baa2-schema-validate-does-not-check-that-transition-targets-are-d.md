@@ -1,8 +1,7 @@
 ---
 created: '2026-07-30'
 description: A command whose entire purpose is "check an edit before it reaches a
-  write" (app.py:138) passes the most likely schema error, and the eventual message
-  misdirects.
+  write" passes the most likely schema error, and the eventual message misdirects.
 id: issue-b47a1203baa2
 owner: maintainer
 related:
@@ -17,7 +16,7 @@ tags:
 - material
 title: '`schema validate` does not check that transition targets are declared statuses'
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** misleading · **Severity:** material
@@ -34,7 +33,7 @@ OBSERVED. `statuses: {open: [closd], closed: []}` plus `inactive_statuses: [done
 
 ## Impact
 
-A command whose entire purpose is "check an edit before it reaches a write" (app.py:138) passes the most likely schema error, and the eventual message misdirects. Documents can be created in a state with no legal exit.
+A command whose entire purpose is "check an edit before it reaches a write" (app.py) passes the most likely schema error, and the eventual message misdirects. Documents can be created in a state with no legal exit.
 
 ## Proposed default
 
@@ -50,8 +49,8 @@ FIXED 2026-07-28 — the rejections, not the warning. `_parse_type` now rejects 
 
 ## Evidence
 
-- `src/docir/modules/documents/infra/schema_loader.py:142-192`
-- `src/docir/modules/documents/domain/schema.py:97-117`
+- `src/docir/modules/documents/infra/schema_loader.py`
+- `src/docir/modules/documents/domain/schema.py`
 - `ref-1509d5dbb4c3 (discovery probe log)`
 
 ---

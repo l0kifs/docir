@@ -15,7 +15,7 @@ tags:
 title: The inactive-status filter is enforced on three read paths and skipped on the
   fourth
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** incorrect · **Severity:** material
@@ -48,8 +48,8 @@ FIXED 2026-07-27, as proposed. `DocumentService._is_visible` is now the single p
 
 ## Evidence
 
-- `src/docir/modules/documents/application/services/document_service.py:297-307`
-- `src/docir/modules/documents/application/services/document_service.py:265-268`
+- `src/docir/modules/documents/application/services/document_service.py`
+- `src/docir/modules/documents/application/services/document_service.py`
 - `ref-1509d5dbb4c3 (discovery probe log)`
 
 ---

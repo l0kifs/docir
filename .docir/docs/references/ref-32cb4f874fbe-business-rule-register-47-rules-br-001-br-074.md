@@ -48,6 +48,8 @@ tags:
 title: Business rule register — 47 rules, BR-001..BR-074
 type: reference
 updated: '2026-09-22'
+verified: '2026-09-22'
+verified_content: 89f0a095bd5e
 ---
 
 # Business rule register
@@ -68,8 +70,8 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 **Boundaries:** empty tag list (allowed), tag registered in the same transaction
 
 **Evidence:**
-- `src/docir/modules/documents/domain/services/validation.py:51-59`
-- `src/docir/modules/documents/application/services/document_service.py:98`
+- `src/docir/modules/documents/domain/services/validation.py`
+- `src/docir/modules/documents/application/services/document_service.py`
 
 ## BR-002
 
@@ -80,7 +82,7 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 **Notes:** Consequence: forward references are impossible. Two documents that reference each other can only be created by adding one, adding the second, then updating the first.
 
 **Evidence:**
-- `src/docir/modules/documents/domain/services/validation.py:61-66`
+- `src/docir/modules/documents/domain/services/validation.py`
 
 ## BR-003
 
@@ -93,8 +95,8 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 **Decision table:** {'conditions': ['relation_types_registry', 'kind_registered', 'allowed_relations_for_type', 'target_type_listed'], 'rows': ['[empty, any, any, any] -> allow', '[non-empty, false, any, any] -> reject:UnknownRelationKindError', '[non-empty, true, empty, any] -> allow', '[non-empty, true, kind absent, any] -> reject:DisallowedRelationError', '[non-empty, true, kind present, empty list] -> allow', '[non-empty, true, kind present, listed] -> allow', '[non-empty, true, kind present, not listed] -> reject:DisallowedRelationError', '[non-empty, true, kind present, target id unknown to index] -> allow']}
 
 **Evidence:**
-- `src/docir/modules/documents/domain/services/validation.py:68-93`
-- `src/docir/modules/documents/domain/schema.py:72-84`
+- `src/docir/modules/documents/domain/services/validation.py`
+- `src/docir/modules/documents/domain/schema.py`
 
 ## BR-004
 
@@ -103,8 +105,8 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 **Pattern:** event · **Flow:** arch-3e305bc76ff0 · **Actor:** — · **Confidence:** observed · **Status:** assumed · **Owner:** repo maintainer
 
 **Evidence:**
-- `src/docir/modules/documents/application/services/document_service.py:92`
-- `src/docir/modules/documents/infra/profiles.py:29`
+- `src/docir/modules/documents/application/services/document_service.py`
+- `src/docir/modules/documents/infra/profiles.py`
 
 ## BR-005
 
@@ -119,8 +121,8 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 **Open questions:** issue-99afeec3a7ce
 
 **Evidence:**
-- `src/docir/modules/documents/application/services/document_service.py:324-329`
-- `src/docir/modules/documents/domain/schema.py:66-70`
+- `src/docir/modules/documents/application/services/document_service.py`
+- `src/docir/modules/documents/domain/schema.py`
 
 ## BR-006
 
@@ -131,9 +133,9 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 **Notes:** Restated 2026-07-26. The original wording ("from a per-prefix counter") described only the sequential path and read as though the counter were the sole mechanism — which is what made BR-007's uniqueness claim look safe when it was not.
 
 **Evidence:**
-- `src/docir/modules/documents/application/services/id_generator.py:26-48`
-- `src/docir/platform/persistence/repositories.py:48-66`
-- `src/docir/modules/documents/domain/value_objects/identifiers.py:40-48`
+- `src/docir/modules/documents/application/services/id_generator.py`
+- `src/docir/platform/persistence/repositories.py`
+- `src/docir/modules/documents/domain/value_objects/identifiers.py`
 
 ## BR-007
 
@@ -149,7 +151,7 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 
 **Evidence:**
 - `CLAUDE.md`
-- `src/docir/modules/documents/application/services/id_generator.py:3-5`
+- `src/docir/modules/documents/application/services/id_generator.py`
 
 ## BR-008
 
@@ -160,7 +162,7 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 **Notes:** Holds for the three index projections (one UoW). Does NOT hold across the file/DB boundary: the file is written before the commit, so a crash in between leaves an unindexed file. → issue-61b66ed696de.
 
 **Evidence:**
-- `src/docir/modules/documents/application/services/document_service.py:118-123`
+- `src/docir/modules/documents/application/services/document_service.py`
 - `docs/adr/adr-d3e3616400bf-shared-derived-index.md`
 
 ## BR-009
@@ -172,8 +174,8 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 **Boundaries:** metadata-only change → embedding NOT marked dirty (correct: tags/status are not in embedding_text)
 
 **Evidence:**
-- `src/docir/modules/documents/application/services/document_service.py:153-158`
-- `src/docir/modules/indexing/infra/scheduler.py:105-115`
+- `src/docir/modules/documents/application/services/document_service.py`
+- `src/docir/modules/indexing/infra/scheduler.py`
 
 ## BR-010
 
@@ -188,7 +190,7 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 **Open questions:** issue-0a4ad65b8a70
 
 **Evidence:**
-- `src/docir/modules/documents/application/services/document_service.py:194-200`
+- `src/docir/modules/documents/application/services/document_service.py`
 
 ## BR-011
 
@@ -199,7 +201,7 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 **Notes:** The stale-write guard protects ONLY `--replace-body`. `--append-section` and `--replace-section` apply to the on-disk version, so they are safe by construction; a metadata-only patch silently absorbs an out-of-band body edit into the index.
 
 **Evidence:**
-- `src/docir/modules/documents/application/services/document_service.py:369-380`
+- `src/docir/modules/documents/application/services/document_service.py`
 
 ## BR-012
 
@@ -208,7 +210,7 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 **Pattern:** unwanted · **Flow:** arch-3e305bc76ff0 · **Actor:** — · **Confidence:** observed · **Status:** assumed · **Owner:** repo maintainer
 
 **Evidence:**
-- `src/docir/modules/documents/application/services/document_service.py:353-359`
+- `src/docir/modules/documents/application/services/document_service.py`
 
 ## BR-013
 
@@ -217,7 +219,7 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 **Pattern:** event · **Flow:** arch-3e305bc76ff0 · **Actor:** — · **Confidence:** observed · **Status:** assumed · **Owner:** repo maintainer
 
 **Evidence:**
-- `src/docir/modules/documents/application/services/document_service.py:142-143`
+- `src/docir/modules/documents/application/services/document_service.py`
 
 ## BR-014
 
@@ -228,7 +230,7 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 **Notes:** Unlike delete, archive does not consider incoming references at all.
 
 **Evidence:**
-- `src/docir/modules/documents/application/services/document_service.py:161-173`
+- `src/docir/modules/documents/application/services/document_service.py`
 
 ## BR-015
 
@@ -239,7 +241,7 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 **Notes:** Consequence: renaming a document's title leaves the old slug in the filename forever. Deliberate (avoids orphaning renamed files) and undocumented for users. Also the mechanism by which the issue-b7ddde3ce860 collision produces two files rather than an overwrite.
 
 **Evidence:**
-- `src/docir/platform/filesystem/markdown_store.py:34-39`
+- `src/docir/platform/filesystem/markdown_store.py`
 - `87-89`
 
 ## BR-016
@@ -251,8 +253,8 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 **Notes:** Silent last-wins deduplication; no warning that an edge was discarded.
 
 **Evidence:**
-- `src/docir/platform/persistence/repositories.py:81-85`
-- `src/docir/platform/persistence/alembic/versions/0002_typed_edges_and_staleness.py:32-35`
+- `src/docir/platform/persistence/repositories.py`
+- `src/docir/platform/persistence/alembic/versions/0002_typed_edges_and_staleness.py`
 
 ## BR-017
 
@@ -273,7 +275,7 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 **Boundaries:** limit = 0 rejected, limit = 1 allowed, limit = -1 rejected, limit above corpus size: allowed, returns everything
 
 **Evidence:**
-- `src/docir/modules/documents/application/services/document_service.py:55-63`
+- `src/docir/modules/documents/application/services/document_service.py`
 
 ## BR-025
 
@@ -284,8 +286,8 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 **Notes:** RRF is rank-based, so the emitted `score` carries no absolute meaning and is not comparable across queries. It is published in the README's agent-facing example (README:90) with no interpretation given. → issue-93152f7b9213.
 
 **Evidence:**
-- `src/docir/modules/indexing/domain/scoring.py:44-73`
-- `src/docir/modules/documents/application/services/document_service.py:256-258`
+- `src/docir/modules/indexing/domain/scoring.py`
+- `src/docir/modules/documents/application/services/document_service.py`
 
 ## BR-026
 
@@ -296,7 +298,7 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 **Notes:** Unexplained magic constant, not configurable, not derived from `limit`. A document ranked 26th lexically can only enter via the semantic side.
 
 **Evidence:**
-- `src/docir/modules/documents/application/services/document_service.py:47`
+- `src/docir/modules/documents/application/services/document_service.py`
 
 ## BR-027
 
@@ -305,7 +307,7 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 **Pattern:** ubiquitous · **Flow:** arch-f220a644d654 · **Actor:** AI coding agent · **Confidence:** observed · **Status:** assumed · **Owner:** repo maintainer
 
 **Evidence:**
-- `src/docir/modules/documents/application/dto.py:84-108`
+- `src/docir/modules/documents/application/dto.py`
 - `README.md:103-106`
 
 ## BR-028
@@ -317,8 +319,8 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 **Notes:** `search` has no --include-archived flag at all; it relies on archived docs being absent from the FTS table. Reaching the same outcome by a different mechanism.
 
 **Evidence:**
-- `src/docir/platform/persistence/repositories.py:115-116`
-- `src/docir/modules/documents/application/services/document_service.py:210-214`
+- `src/docir/platform/persistence/repositories.py`
+- `src/docir/modules/documents/application/services/document_service.py`
 
 ## BR-029
 
@@ -348,7 +350,7 @@ what the system does, not what anybody promised. `pattern` names the rule shape
 **Open questions:** issue-8bcb6b7f8308
 
 **Evidence:**
-- `src/docir/modules/documents/application/services/document_service.py:297-307`
+- `src/docir/modules/documents/application/services/document_service.py`
 
 ## BR-031
 
@@ -389,7 +391,7 @@ zero, so dropping it would filter on embedding-queue staleness rather than relev
 **Boundaries:** empty query → no results, not an error, query of only punctuation → no results
 
 **Evidence:**
-- `src/docir/platform/persistence/repositories.py:352-357`
+- `src/docir/platform/persistence/repositories.py`
 
 ## BR-033
 
@@ -412,12 +414,12 @@ zero, so dropping it would filter on embedding-queue staleness rather than relev
 
 **Pattern:** complex · **Flow:** arch-f220a644d654 · **Actor:** AI coding agent · **Confidence:** observed · **Status:** assumed · **Owner:** repo maintainer
 
-**Decision table:** {'conditions': ['pretty_flag', 'json_flag', 'stdout_is_tty', 'no_trim_flag'], 'rows': ['[true, any, any, any] -> rich tables', '[false, true, any, false] -> compact trimmed JSON', '[false, true, any, true] -> compact full JSON', '[false, false, true, any] -> rich tables', '[false, false, false, false] -> compact trimmed JSON', '[false, false, false, true] -> compact full JSON'], 'notes': '--no-trim has no effect on the table path. Precedence is identical for --help, which is resolved from argv because Click renders it before CliState exists (runner.py:51-66).\n'}
+**Decision table:** {'conditions': ['pretty_flag', 'json_flag', 'stdout_is_tty', 'no_trim_flag'], 'rows': ['[true, any, any, any] -> rich tables', '[false, true, any, false] -> compact trimmed JSON', '[false, true, any, true] -> compact full JSON', '[false, false, true, any] -> rich tables', '[false, false, false, false] -> compact trimmed JSON', '[false, false, false, true] -> compact full JSON'], 'notes': '--no-trim has no effect on the table path. Precedence is identical for --help, which is resolved from argv because Click renders it before CliState exists (runner.py).\n'}
 
 **Notes:** An omitted key always means the field's default, never a real zero or false.
 
 **Evidence:**
-- `src/docir/entry_points/cli/rendering.py:27-57`
+- `src/docir/entry_points/cli/rendering.py`
 - `README.md:85-95`
 
 ## BR-041
@@ -443,8 +445,8 @@ zero, so dropping it would filter on embedding-queue staleness rather than relev
 **Pattern:** event · **Flow:** arch-0a3c2d6d54a6 · **Actor:** CI job · **Confidence:** observed · **Status:** assumed · **Owner:** repo maintainer
 
 **Evidence:**
-- `src/docir/modules/documents/domain/services/graph_checks.py:44-58`
-- `src/docir/modules/documents/application/services/maintenance_service.py:84-124`
+- `src/docir/modules/documents/domain/services/graph_checks.py`
+- `src/docir/modules/documents/application/services/maintenance_service.py`
 
 ## BR-043
 
@@ -470,7 +472,7 @@ zero, so dropping it would filter on embedding-queue staleness rather than relev
 **Notes:** Correct and load-bearing. Note what it implies: when two files share an id the index silently keeps one and drops the other, so the other document is invisible to every read path while its file still exists. That is the actual damage in issue-b7ddde3ce860 and issue-389dc5dac58a.
 
 **Evidence:**
-- `src/docir/modules/documents/application/services/maintenance_service.py:109-124`
+- `src/docir/modules/documents/application/services/maintenance_service.py`
 
 ## BR-045
 
@@ -496,7 +498,7 @@ zero, so dropping it would filter on embedding-queue staleness rather than relev
 **Notes:** Both thresholds are unexplained constants and neither is configurable. The duplicate scan is O(n²) over all active vectors with no cap. 8000 chars is ~2000 tokens — well under a normal ADR for a complex decision.
 
 **Evidence:**
-- `src/docir/modules/documents/domain/services/similarity_lint.py:29-69`
+- `src/docir/modules/documents/domain/services/similarity_lint.py`
 
 ## BR-047
 
@@ -505,7 +507,7 @@ zero, so dropping it would filter on embedding-queue staleness rather than relev
 **Pattern:** event · **Flow:** arch-0a3c2d6d54a6 · **Actor:** — · **Confidence:** observed · **Status:** assumed · **Owner:** repo maintainer
 
 **Evidence:**
-- `src/docir/modules/indexing/infra/scheduler.py:36-39`
+- `src/docir/modules/indexing/infra/scheduler.py`
 
 ## BR-059
 
@@ -518,7 +520,7 @@ zero, so dropping it would filter on embedding-queue staleness rather than relev
 **Boundaries:** nested .docir directories → nearest wins, DOCIR_HOME set to empty string → treated as unset
 
 **Evidence:**
-- `src/docir/config/settings.py:76-104`
+- `src/docir/config/settings.py`
 - `docs/adr/adr-20eec6e2e2ca-per-project-store.md`
 
 ## BR-060
@@ -532,7 +534,7 @@ zero, so dropping it would filter on embedding-queue staleness rather than relev
 **Boundaries:** no `profiles:` key → inline-only, core NOT merged, relation kinds unconstrained, `profiles: []` → core only, all five profiles → 15 types, no prefix collision (verified)
 
 **Evidence:**
-- `src/docir/modules/documents/infra/schema_loader.py:88-117`
+- `src/docir/modules/documents/infra/schema_loader.py`
 - `docs/adr/adr-2a3f625bb2f8-core-plus-profiles.md`
 
 ## BR-061
@@ -548,7 +550,7 @@ zero, so dropping it would filter on embedding-queue staleness rather than relev
 **Open questions:** issue-2b28fd8b1dfa
 
 **Evidence:**
-- `src/docir/modules/documents/domain/schema.py:97-117`
+- `src/docir/modules/documents/domain/schema.py`
 
 ## BR-062
 
@@ -559,7 +561,7 @@ zero, so dropping it would filter on embedding-queue staleness rather than relev
 **Notes:** `--force` overwrites the schema and the .gitignore together, with no separate control, no confirmation and no backup. → issue-fde9a7151bd1.
 
 **Evidence:**
-- `src/docir/entry_points/composition.py:182-192`
+- `src/docir/entry_points/composition.py`
 
 ## BR-063
 
@@ -568,7 +570,7 @@ zero, so dropping it would filter on embedding-queue staleness rather than relev
 **Pattern:** event · **Flow:** arch-90c90751344f · **Actor:** — · **Confidence:** observed · **Status:** assumed · **Owner:** repo maintainer
 
 **Evidence:**
-- `src/docir/modules/agents/application/service.py:110-135`
+- `src/docir/modules/agents/application/service.py`
 - `docs/adr/adr-3a2d5ee7bc84-agent-instruction-scaffolding.md`
 
 ## BR-064
@@ -595,7 +597,7 @@ zero, so dropping it would filter on embedding-queue staleness rather than relev
 **Notes:** Also sets `updated = today` on each, which resets the staleness clock for any document without an explicit `verified` date. → issue-9ed4905e0db8.
 
 **Evidence:**
-- `src/docir/modules/tags/application/services/tag_service.py:62-105`
+- `src/docir/modules/tags/application/services/tag_service.py`
 
 ## BR-070
 
@@ -604,7 +606,7 @@ zero, so dropping it would filter on embedding-queue staleness rather than relev
 **Pattern:** unwanted · **Flow:** arch-ccfcceeb35eb · **Actor:** — · **Confidence:** observed · **Status:** assumed · **Owner:** repo maintainer
 
 **Evidence:**
-- `src/docir/modules/tags/application/services/tag_service.py:90-96`
+- `src/docir/modules/tags/application/services/tag_service.py`
 
 ## BR-071
 
@@ -615,7 +617,7 @@ zero, so dropping it would filter on embedding-queue staleness rather than relev
 **Notes:** The same check blocks renaming a tag onto an existing key, so merging two tags is impossible. → issue-cc61d038cf8f.
 
 **Evidence:**
-- `src/docir/modules/tags/application/services/tag_service.py:46-47`
+- `src/docir/modules/tags/application/services/tag_service.py`
 
 ## BR-073
 
@@ -628,9 +630,9 @@ zero, so dropping it would filter on embedding-queue staleness rather than relev
 **Notes:** `docir init` writes this key explicitly (default `random`); the resolution happens before any type is parsed, which is what lets one line cover profile-contributed types.
 
 **Evidence:**
-- `src/docir/modules/documents/infra/schema_loader.py:105-121`
-- `src/docir/modules/documents/infra/schema_loader.py:134-146`
-- `src/docir/modules/documents/domain/schema.py:34-42`
+- `src/docir/modules/documents/infra/schema_loader.py`
+- `src/docir/modules/documents/infra/schema_loader.py`
+- `src/docir/modules/documents/domain/schema.py`
 
 ## BR-074
 
@@ -644,8 +646,8 @@ zero, so dropping it would filter on embedding-queue staleness rather than relev
 **Notes:** Deliberately differs from DEFAULT_ID_STYLE. `init` scopes docs to a *shared repository*, where two branches can each mint adr-0007; the bare `~/.docir` fallback is a single-user scratch store where readable numbers cost nothing.
 
 **Evidence:**
-- `src/docir/entry_points/composition.py:50-56`
-- `src/docir/entry_points/cli/app.py:95-140`
+- `src/docir/entry_points/composition.py`
+- `src/docir/entry_points/cli/app.py`
 
 ## BR-072
 
@@ -653,10 +655,10 @@ zero, so dropping it would filter on embedding-queue staleness rather than relev
 
 **Pattern:** ubiquitous · **Flow:** arch-ccfcceeb35eb · **Actor:** — · **Confidence:** inferred · **Status:** assumed · **Owner:** repo maintainer
 
-**Notes:** No format rule exists anywhere. Document ids are strictly regex-validated (identifiers.py:21); tag keys are not validated at all. → issue-e71e1ad9b0ef.
+**Notes:** No format rule exists anywhere. Document ids are strictly regex-validated (identifiers.py); tag keys are not validated at all. → issue-e71e1ad9b0ef.
 
 **Evidence:**
-- `src/docir/modules/tags/application/services/tag_service.py:43-52`
+- `src/docir/modules/tags/application/services/tag_service.py`
 
 ## Verification status
 

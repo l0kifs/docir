@@ -46,7 +46,7 @@ FIXED 2026-07-29 exactly as proposed: `target` is accepted as a synonym for `to`
 ## Evidence
 
 - `src/docir/platform/filesystem/markdown_store.py`
-- `src/docir/modules/documents/application/dto.py:17-25`
+- `src/docir/modules/documents/application/dto.py`
 
 ---
 

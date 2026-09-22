@@ -15,7 +15,7 @@ tags:
 title: '`tag rename` sets `updated = today` on every referencing document, resetting
   the review clock'
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** incorrect · **Severity:** material
@@ -28,7 +28,7 @@ Renaming a tag sets `updated = today` on every referencing document, which reset
 
 ## What happens today
 
-`stale_reference_date()` falls back to `updated` when `verified` is unset (document.py:73-75), and tag_service.py:77/99 bump `updated`. A pure classification edit therefore makes overdue documents report as freshly reviewed.
+`stale_reference_date()` falls back to `updated` when `verified` is unset (document.py), and tag_service.py/99 bump `updated`. A pure classification edit therefore makes overdue documents report as freshly reviewed.
 
 ## Impact
 
@@ -49,9 +49,9 @@ FIXED 2026-07-28 with the first of the two proposed options: `tag rename` and `t
 
 ## Evidence
 
-- `src/docir/modules/tags/application/services/tag_service.py:74-80`
+- `src/docir/modules/tags/application/services/tag_service.py`
 - `97-102`
-- `src/docir/modules/documents/domain/entities/document.py:73-75`
+- `src/docir/modules/documents/domain/entities/document.py`
 
 ---
 

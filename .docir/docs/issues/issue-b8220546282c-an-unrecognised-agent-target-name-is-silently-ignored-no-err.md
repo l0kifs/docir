@@ -20,7 +20,7 @@ tags:
 title: 'An unrecognised agent target name is silently ignored: no error, exit 0, nothing
   written'
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** incorrect · **Severity:** material
@@ -53,8 +53,8 @@ FIXED 2026-07-28, as proposed. `_resolve` rejects any name not in `AGENT_TARGETS
 
 ## Evidence
 
-- `src/docir/modules/agents/application/service.py:91-105`
-- `src/docir/entry_points/composition.py:177-180`
+- `src/docir/modules/agents/application/service.py`
+- `src/docir/entry_points/composition.py`
 - `ref-1509d5dbb4c3 (discovery probe log)`
 
 ---

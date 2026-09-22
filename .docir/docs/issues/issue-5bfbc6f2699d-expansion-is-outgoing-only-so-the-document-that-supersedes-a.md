@@ -17,7 +17,7 @@ tags:
 title: Expansion is outgoing-only, so the document that supersedes a hit is never
   reached
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** missing · **Severity:** material
@@ -30,7 +30,7 @@ Expansion follows outgoing edges only, so from a superseded document the documen
 
 ## What happens today
 
-`_augment_with_related` calls `uow.documents.outgoing(seed)` only (document_service.py:301). `incoming()` exists and is used solely by delete.
+`_augment_with_related` calls `uow.documents.outgoing(seed)` only (document_service.py). `incoming()` exists and is used solely by delete.
 
 ## Impact
 
@@ -50,8 +50,8 @@ FIXED 2026-07-27, as proposed. Expansion now walks incoming `supersedes`/`contra
 
 ## Evidence
 
-- `src/docir/modules/documents/application/services/document_service.py:297-307`
-- `src/docir/platform/persistence/repositories.py:133-135`
+- `src/docir/modules/documents/application/services/document_service.py`
+- `src/docir/platform/persistence/repositories.py`
 
 ---
 

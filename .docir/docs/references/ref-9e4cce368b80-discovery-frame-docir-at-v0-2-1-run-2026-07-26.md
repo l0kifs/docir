@@ -14,7 +14,7 @@ tags:
 - docs
 title: Discovery frame — docir at v0.2.1, run 2026-07-26
 type: reference
-updated: '2026-09-18'
+updated: '2026-09-22'
 ---
 
 # Frame
@@ -42,7 +42,7 @@ Run: 2026-07-26 · analyst: Claude (agent) · repo: `docir` @ `main` `560aea5` (
 | Repository maintainer adopting docir | Pays in setup + discipline; gets a durable decision log | inferred |
 | AI coding agent (Claude Code et al.) | Primary *reader*; the token-cost optimisation targets it | observed (README:70-95, modules/agents) |
 | Human developer | Secondary reader (Rich tables); primary *author* of intent | observed (rendering.py) |
-| CI job | Runs `docir check --strict` as a merge gate | observed (app.py:419-440) |
+| CI job | Runs `docir check --strict` as a merge gate | observed (app.py) |
 | docir's own maintainer (Sergei Konovalov) | Sole decision owner for every rule below | observed (LICENSE, git log) |
 
 **No revenue model, no tenancy, no accounts.** MIT, single-maintainer OSS. adr-90e994d931cc records

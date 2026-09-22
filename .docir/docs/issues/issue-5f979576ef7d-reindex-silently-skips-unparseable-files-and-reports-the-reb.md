@@ -13,7 +13,7 @@ tags:
 - material
 title: '`reindex` silently skips unparseable files and reports the rebuild as a success'
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** misleading · **Severity:** material
@@ -26,7 +26,7 @@ updated: '2026-08-05'
 
 ## What happens today
 
-`scan()` swallows ValidationError and continues (markdown_store.py:58-62). `ReindexResult` has no skipped/failed count.
+`scan()` swallows ValidationError and continues (markdown_store.py). `ReindexResult` has no skipped/failed count.
 
 ## Impact
 
@@ -46,8 +46,8 @@ FIXED 2026-07-29, as proposed. `ReindexResult.documents_skipped` counts files th
 
 ## Evidence
 
-- `src/docir/platform/filesystem/markdown_store.py:51-62`
-- `src/docir/modules/documents/application/services/maintenance_service.py:26-33`
+- `src/docir/platform/filesystem/markdown_store.py`
+- `src/docir/modules/documents/application/services/maintenance_service.py`
 
 ---
 

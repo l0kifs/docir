@@ -12,7 +12,7 @@ tags:
 title: '`search` fetches `limit * 2` candidates then filters, so it under-returns
   on a closed corpus'
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** unstated · **Severity:** cosmetic
@@ -25,7 +25,7 @@ updated: '2026-08-05'
 
 ## What happens today
 
-document_service.py:236-247.
+document_service.py.
 
 ## Impact
 
@@ -45,7 +45,7 @@ FIXED 2026-07-29 with the second option: the candidate pool doubles until the li
 
 ## Evidence
 
-- `src/docir/modules/documents/application/services/document_service.py:236-247`
+- `src/docir/modules/documents/application/services/document_service.py`
 
 ---
 

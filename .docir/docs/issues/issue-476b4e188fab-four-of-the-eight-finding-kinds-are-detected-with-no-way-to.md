@@ -17,7 +17,7 @@ tags:
 - blocking
 title: Four of the eight finding kinds are detected with no way to repair them
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** missing · **Severity:** blocking
@@ -51,8 +51,8 @@ FIXED 2026-07-26. `docir check --fix` (`MaintenanceService.repair`) repairs exac
 
 ## Evidence
 
-- `src/docir/modules/documents/application/services/maintenance_service.py:84-124`
-- `src/docir/entry_points/cli/app.py:419-440`
+- `src/docir/modules/documents/application/services/maintenance_service.py`
+- `src/docir/entry_points/cli/app.py`
 
 ---
 

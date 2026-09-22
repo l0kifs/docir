@@ -15,7 +15,7 @@ tags:
 - material
 title: The flag is `--include-resolved` but the concept is "inactive status"
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** misleading · **Severity:** material
@@ -28,7 +28,7 @@ The flag is `--include-resolved` but the concept is "inactive status", which is 
 
 ## What happens today
 
-The wire field is named `include_inactive` (dispatch.py:116) and the CLI renames it to `--include-resolved` on the way out (app.py:269, 288, 303).
+The wire field is named `include_inactive` (dispatch.py) and the CLI renames it to `--include-resolved` on the way out (app.py, 288, 303).
 
 ## Impact
 
@@ -49,8 +49,8 @@ FIXED 2026-07-28, as proposed, on all three read commands (query/search/context)
 
 ## Evidence
 
-- `src/docir/entry_points/cli/app.py:269`
-- `src/docir/entry_points/dispatch.py:116`
+- `src/docir/entry_points/cli/app.py`
+- `src/docir/entry_points/dispatch.py`
 - `src/docir/modules/documents/infra/profiles.py`
 
 ---

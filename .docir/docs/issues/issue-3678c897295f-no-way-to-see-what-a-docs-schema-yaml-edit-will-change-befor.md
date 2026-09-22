@@ -27,7 +27,7 @@ verified: '2026-09-22'
 verified_code:
   src/docir/entry_points/cli/app.py: a15a6e7698f4
   src/docir/modules/documents/domain/services/schema_shape.py: f8e1f5b5ad84
-verified_content: 1355269c9f93
+verified_content: d0f54e6c429d
 ---
 
 **Class:** missing · **Severity:** cosmetic
@@ -80,7 +80,7 @@ bounded, since `schema-drift` reports the change on the very next `check`.
 ## Evidence
 
 - `src/docir/modules/documents/domain/services/schema_shape.py` — the renderer and the differ both exist
-- `src/docir/config/settings.py:124` — the only mention of `.git`, and it is directory detection
+- `src/docir/config/settings.py` — the only mention of `.git`, and it is directory detection
 - `src/docir/entry_points/cli/app.py` — the shell pipes git in; docir does not call it
 
 ## Resolution

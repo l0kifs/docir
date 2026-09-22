@@ -14,7 +14,7 @@ tags:
 - material
 title: Should `tag rename` advance `updated` on every referencing document
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Gap:** issue-9ed4905e0db8
@@ -27,7 +27,7 @@ Should `tag rename` advance `updated` on every referencing document? It resets t
 
 ## What the system does today
 
-tag_service.py:77/99 set `updated = today`; `stale_reference_date()` falls back to `updated` (document.py:73-75). A classification edit makes overdue documents look freshly reviewed.
+tag_service.py/99 set `updated = today`; `stale_reference_date()` falls back to `updated` (document.py). A classification edit makes overdue documents look freshly reviewed.
 
 ## Proposed answer
 

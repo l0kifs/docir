@@ -17,7 +17,7 @@ tags:
 - material
 title: '`--override` bypasses the transition rules and leaves no trace'
 type: issue
-updated: '2026-08-05'
+updated: '2026-09-22'
 ---
 
 **Class:** missing · **Severity:** material
@@ -51,7 +51,7 @@ DECIDED 2026-07-29 by the maintainer, from three options: warn loudly, store not
 
 ## Evidence
 
-- `src/docir/modules/documents/application/services/document_service.py:324-329`
+- `src/docir/modules/documents/application/services/document_service.py`
 
 ---
 

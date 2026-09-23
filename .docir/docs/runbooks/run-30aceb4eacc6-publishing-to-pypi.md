@@ -6,7 +6,7 @@ code:
 code_baseline:
   .github/workflows/**: b4d187966a43
   scripts/check_expressions.py: 0f72799b33ef
-  scripts/cli_oracle.py: 5a45ddc6bd6e
+  scripts/cli_oracle.py: 7de2a0db4c96
 created: '2026-07-30'
 description: How to publish docir to PyPI with uv and GitHub Actions trusted publishing.
 id: run-30aceb4eacc6
@@ -21,13 +21,13 @@ tags:
 - release
 title: Publishing to PyPI
 type: runbook
-updated: '2026-09-22'
-verified: '2026-09-22'
+updated: '2026-09-23'
+verified: '2026-09-23'
 verified_code:
   .github/workflows/**: b4d187966a43
   scripts/check_expressions.py: 0f72799b33ef
-  scripts/cli_oracle.py: 5a45ddc6bd6e
-verified_content: 8309ac01401d
+  scripts/cli_oracle.py: 7de2a0db4c96
+verified_content: a0c1cee16f57
 ---
 
 This project uses [UV](https://docs.astral.sh/uv/) as the package manager and GitHub Actions for automated publishing to PyPI.
@@ -57,7 +57,7 @@ gh release list --limit 10 2>&1 | cat
    version = "0.2.0"  # Update to your new version
    ```
 
-2. **Update CHANGELOG.md** (required): move entries from `[Unreleased]` into a new version section and update the compare links at the bottom. A section per Keep-a-Changelog heading, plus **Measured and rejected** for anything built and removed — the measurement is the artifact, not the code.
+2. **Update CHANGELOG.md** (required): move entries from `[Unreleased]` into a new version section and update the compare links at the bottom. `[Unreleased]` collects one `### Added` / `### Fixed` group per merged change, so **merge them** — one heading per kind in the released section. `tests/entry_points/test_the_changelog_says_each_kind_once.py` fails the build if a released section repeats one, and exempts `[Unreleased]`, which is meant to. A section per Keep-a-Changelog heading, plus **Measured and rejected** for anything built and removed — the measurement is the artifact, not the code.
 
 3. **Refresh the generated agent instructions** (required): `docir agent update`
    stamps the files from the *running* `__version__`, so it has to run after the bump

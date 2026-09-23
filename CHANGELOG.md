@@ -1850,6 +1850,28 @@ MCP tools — with the daemon keeping the index in step with hand edits along th
   reading a decision — the argument adr-bd7c4f3c5764 already made for staleness. What docir will not
   own: a rule DSL, a sandbox for user-supplied rules, and per-language static analysis.
 
+
+- **docir's own documents no longer carry sequence labels.** Every document had two
+  identifiers: its docir id, and a label in the title (`ADR-0015`, `GAP-056`, `FLOW-003`).
+  Only the id addresses anything, so each prose citation of a label was a pointer both the
+  reader and the tooling had to resolve by hand. 481 references across 94 documents became
+  ids, 96 titles lost their label, and 97 files were renamed to match. Forty-nine of those
+  titles were not names at all — they were the opening clause of the finding, cut at ~90
+  characters, with the label doing the naming work — so each was rewritten. The provenance
+  lines ("Migrated from the discovery gap register (GAP-0NN)") keep their labels: those record
+  what a document used to be called, which is history rather than an address.
+
+
+- **The `embeddings` extra is gone.** It was kept as a no-op alias after fastembed became a
+  hard dependency in 0.8.0; `pip install docir[embeddings]` now warns about an unknown extra
+  and installs the same thing it would have anyway. Nothing to migrate — plain
+  `pip install docir` has included the embedding model since 0.8.0.
+
+- **JSON trimming moved to `entry_points/payload.py`.** It was private to `cli/rendering.py`,
+  and the MCP server needs the identical shape — an agent reading an absent field as "the
+  default" must be able to do so whichever transport it came over. No behaviour change; the
+  CLI's `--no-trim` still bypasses it.
+
 ### Fixed
 
 - **A `required:` field name no document can carry is now refused when the schema loads.**
@@ -1870,6 +1892,126 @@ MCP tools — with the daemon keeping the index in step with hand edits along th
   The shipped schema's own comment described `required` as "extra frontmatter fields", which is
   what invited the unsatisfiable name; it now says it takes an existing document field and lists
   them.
+
+
+- **`--append-section "## X"` wrote `## ## X` and said nothing.** The flag names a heading by
+  its *text* and writes the `##` itself, so passing the line as it appears in the file doubled
+  it. Nothing could then repair it: `--replace-section` keeps the heading line by contract,
+  appending again adds a sibling, and `docir check` sees no problem — a doubled `#` is neither
+  malformed frontmatter nor a graph fault. The only way out was `--replace-body --force`, so
+  the *safest* body edit was the one that reached a state only the *riskiest* one could leave.
+  Found when an agent composed the argument from a heading it had just read in a body, where
+  it carries its `##`.
+
+  A heading argument beginning with `#` is now refused at Tier 0, with an error naming the
+  argument that works. Stripping the markers instead would look friendlier and be worse: it
+  makes `"### Notes"` silently mean level 2, guessing at an intent the caller stated. A `#`
+  *inside* the text still passes — `"C# interop"` is a real heading.
+
+  `--replace-section` and `get --section` deliberately keep no such guard. Both match on
+  heading text, so neither can corrupt — they fail rather than accept — and hand-editing
+  markdown is permitted, so a file that already carries a doubled marker must stay readable
+  or nobody can repair it. What they lacked was a message: `--replace-section` answered "no
+  matching heading found" and left the caller guessing, and now shares one miss error with
+  `get --section` that lists the real headings. The heading match and the section end boundary
+  are one shared pair as a result, which is what the module's contract — read the same span
+  you would overwrite — always claimed and two copies of a loop could not guarantee.
+
+- **The daemon kept serving the code it started with, so a fix silently did not take
+  effect.** The daemon loads docir once and lives on (900s idle timeout). Nothing compared
+  the running process against the installed one, so after `uv sync`, a `pip install -U`, or
+  any edit to `src/`, every command was answered by the old code — and the answer looked
+  entirely normal. OBSERVED while fixing the cycle check above: `docir check` reported 117
+  cycle findings and `docir --no-daemon check` reported 0, the difference being a daemon
+  started before the edit. The plausible reading of 117 findings is that the fix is wrong.
+
+  The pid file now records a **code stamp** — `__version__` plus the newest mtime across the
+  package's sources — and `ensure_running` stops and replaces a daemon whose stamp is not the
+  client's. The mtime half is what catches development: nothing bumps `__version__` between
+  commits, so a source edit is invisible to a version comparison. An installed wheel stamps
+  its files at install time, so the same pair moves on an upgrade. Recovery is automatic
+  rather than something you have to suspect and fix with `docir daemon stop`.
+
+  The stamp is computed once per process and frozen, which is what makes the daemon's answer
+  honest: it reports the build it started with, not what is on disk now. `docir daemon
+  status` prints that build (`serving 0.9.0`) and flags a stale one, so the state is
+  inspectable rather than only inferable from an answer that looks wrong. A pid file written
+  by an older docir holds a bare integer; its build is unknown, which never matches — that
+  daemon is exactly the process the check exists to replace.
+
+  `stop()` now waits for the process to actually exit. Its teardown clears the pid file and
+  unlinks the socket, so a replacement spawned while it was winding down could have both
+  removed out from under it, leaving a healthy daemon no client could find.
+
+- **A mutually-referencing pair was reported as a cycle, permanently.** `check`'s cycle
+  detection built its graph from every relation. `relates_to` — the default kind, and what a
+  bare id in `related:` means — is symmetric: "A relates to B" and "B relates to A" are one
+  statement written twice, so two documents that name each other are modelled correctly, not
+  cyclically. `contradicts` is symmetric for the same reason.
+
+  Measured on docir's own store: converting the corpus's prose cross-references into typed
+  edges proposed 260 `relates_to` edges and took `docir check` from 0 findings to **127
+  cycles**, none of them wrong. Keeping `check` readable meant dropping 120 correct edges
+  instead. This is the defect the layering check's kind allowlist was introduced to end, one
+  check over — a warning that fires on correct usage teaches people to ignore `check`, which
+  is where the duplicate-id detection lives.
+
+  A self-edge stays a cycle whatever its kind: symmetry is what makes a mutual pair legitimate
+  and exactly what makes "A relates to A" empty, and `check` is the only thing that sees a
+  self-edge a merge or a hand-edit wrote.
+
+
+- **Most of a long document was not in the semantic index at all.** `bge-small-en-v1.5` reads
+  about 512 tokens and silently ignores the rest — appending a sentence past that point
+  returns a bit-identical vector, cosine 1.000000. Measured on real prose the window is
+  ~1,900 characters, and **84 of the 103 documents in docir's own store exceed it**:
+  corpus-wide, 44% of the text was inside a vector and 56% was not indexed semantically at
+  all. The architecture document had 8% of itself embedded; the rule register had 5%. Those
+  tails were not ranked badly, they were absent, and `docir context` returned a plausible
+  answer every time.
+
+  Full-text search hid it: FTS5 covers the whole body, so any query sharing vocabulary with
+  a document found it and RRF pulled it to rank 1 regardless. The failure showed only on
+  paraphrased queries against long documents — the case `docir context` exists for.
+
+  docir now embeds **each section as well as the document** (ADR-0014). Coverage on its own
+  store goes from **44% to 100%** (695 chunks over 103 documents), and on a real query —
+  "how does the daemon keep the model warm" — the architecture document moves from rank 3
+  with *no vector match* to rank 1 at similarity 0.696. Same corpus, chunking off vs on:
+  recall@5 holds at 0.97 and **MRR rises 0.94 → 0.97**.
+
+  Existing stores recompute on the next write or `docir embed --flush`; migration `0003`
+  marks every embedding dirty so a store whose vectors already match the current model does
+  not upgrade to zero chunks. The cost is ~7x more vectors, and `context` loads every active
+  vector per call, so the practical corpus ceiling drops by about that factor.
+
+- **`docir mcp serve` — the same commands, as MCP tools.** docir reached agents only through
+  `docir agent install`, which teaches an assistant to run the CLI; a client that calls tools
+  over the Model Context Protocol and never runs a shell could not use docir at all, which is
+  most of them (Cursor, Codex, VS Code, ChatGPT, Claude Desktop). The server is built on the
+  existing `Dispatcher` rather than beside it — every tool is one `Request` through a
+  `RequestExecutor`, the same boundary the CLI and the daemon socket cross — so an MCP tool
+  and its CLI command cannot answer differently. 19 tools, one per dispatcher command except
+  the daemon's `ping`, plus a `docir_schema` tool for the one thing an agent needs that is not
+  a command: the valid types, statuses and relation kinds it must write against.
+
+  Details that are contract rather than convenience: reads return the same body-less
+  skeletons (`docir_context` / `docir_search` / `docir_query`), only `docir_get` carries a
+  body; every result goes through the same trimming the piped CLI's JSON does, so a tool
+  result costs an agent what captured CLI output costs it; read tools carry `readOnlyHint`
+  and `docir_delete` / `docir_tag_remove` carry `destructiveHint`; and requests go through
+  the daemon by default, so one warm embedding model serves every call (`--no-daemon` holds
+  a single in-process container instead).
+
+  ```bash
+  claude mcp add docir -- docir mcp serve   # stdio; --transport http also available
+  ```
+
+  `fastmcp` ships as a **default dependency**, not behind an extra. An extra would have been
+  the smaller install, but it puts the discovery problem on the wrong side: an agent that only
+  speaks MCP cannot be told to install the extra, because it cannot reach docir to be told.
+  The stack is ~12 MB against onnxruntime's 68 MB, and it costs no startup time — `mcp/cmds.py`
+  imports the server lazily, so only `docir mcp serve` pays fastmcp's ~0.3s import.
 
 ### Added
 
@@ -2088,150 +2230,6 @@ MCP tools — with the daemon keeping the index in step with hand edits along th
   metric that describes this defect; recall cannot, because on a 26-document corpus FTS5
   rescues the rank either way. Recall is kept beside it as the no-regression gate, which
   matters: max-pooling over sections structurally favours documents with more of them.
-
-### Fixed
-
-- **`--append-section "## X"` wrote `## ## X` and said nothing.** The flag names a heading by
-  its *text* and writes the `##` itself, so passing the line as it appears in the file doubled
-  it. Nothing could then repair it: `--replace-section` keeps the heading line by contract,
-  appending again adds a sibling, and `docir check` sees no problem — a doubled `#` is neither
-  malformed frontmatter nor a graph fault. The only way out was `--replace-body --force`, so
-  the *safest* body edit was the one that reached a state only the *riskiest* one could leave.
-  Found when an agent composed the argument from a heading it had just read in a body, where
-  it carries its `##`.
-
-  A heading argument beginning with `#` is now refused at Tier 0, with an error naming the
-  argument that works. Stripping the markers instead would look friendlier and be worse: it
-  makes `"### Notes"` silently mean level 2, guessing at an intent the caller stated. A `#`
-  *inside* the text still passes — `"C# interop"` is a real heading.
-
-  `--replace-section` and `get --section` deliberately keep no such guard. Both match on
-  heading text, so neither can corrupt — they fail rather than accept — and hand-editing
-  markdown is permitted, so a file that already carries a doubled marker must stay readable
-  or nobody can repair it. What they lacked was a message: `--replace-section` answered "no
-  matching heading found" and left the caller guessing, and now shares one miss error with
-  `get --section` that lists the real headings. The heading match and the section end boundary
-  are one shared pair as a result, which is what the module's contract — read the same span
-  you would overwrite — always claimed and two copies of a loop could not guarantee.
-
-- **The daemon kept serving the code it started with, so a fix silently did not take
-  effect.** The daemon loads docir once and lives on (900s idle timeout). Nothing compared
-  the running process against the installed one, so after `uv sync`, a `pip install -U`, or
-  any edit to `src/`, every command was answered by the old code — and the answer looked
-  entirely normal. OBSERVED while fixing the cycle check above: `docir check` reported 117
-  cycle findings and `docir --no-daemon check` reported 0, the difference being a daemon
-  started before the edit. The plausible reading of 117 findings is that the fix is wrong.
-
-  The pid file now records a **code stamp** — `__version__` plus the newest mtime across the
-  package's sources — and `ensure_running` stops and replaces a daemon whose stamp is not the
-  client's. The mtime half is what catches development: nothing bumps `__version__` between
-  commits, so a source edit is invisible to a version comparison. An installed wheel stamps
-  its files at install time, so the same pair moves on an upgrade. Recovery is automatic
-  rather than something you have to suspect and fix with `docir daemon stop`.
-
-  The stamp is computed once per process and frozen, which is what makes the daemon's answer
-  honest: it reports the build it started with, not what is on disk now. `docir daemon
-  status` prints that build (`serving 0.9.0`) and flags a stale one, so the state is
-  inspectable rather than only inferable from an answer that looks wrong. A pid file written
-  by an older docir holds a bare integer; its build is unknown, which never matches — that
-  daemon is exactly the process the check exists to replace.
-
-  `stop()` now waits for the process to actually exit. Its teardown clears the pid file and
-  unlinks the socket, so a replacement spawned while it was winding down could have both
-  removed out from under it, leaving a healthy daemon no client could find.
-
-- **A mutually-referencing pair was reported as a cycle, permanently.** `check`'s cycle
-  detection built its graph from every relation. `relates_to` — the default kind, and what a
-  bare id in `related:` means — is symmetric: "A relates to B" and "B relates to A" are one
-  statement written twice, so two documents that name each other are modelled correctly, not
-  cyclically. `contradicts` is symmetric for the same reason.
-
-  Measured on docir's own store: converting the corpus's prose cross-references into typed
-  edges proposed 260 `relates_to` edges and took `docir check` from 0 findings to **127
-  cycles**, none of them wrong. Keeping `check` readable meant dropping 120 correct edges
-  instead. This is the defect the layering check's kind allowlist was introduced to end, one
-  check over — a warning that fires on correct usage teaches people to ignore `check`, which
-  is where the duplicate-id detection lives.
-
-  A self-edge stays a cycle whatever its kind: symmetry is what makes a mutual pair legitimate
-  and exactly what makes "A relates to A" empty, and `check` is the only thing that sees a
-  self-edge a merge or a hand-edit wrote.
-
-
-- **Most of a long document was not in the semantic index at all.** `bge-small-en-v1.5` reads
-  about 512 tokens and silently ignores the rest — appending a sentence past that point
-  returns a bit-identical vector, cosine 1.000000. Measured on real prose the window is
-  ~1,900 characters, and **84 of the 103 documents in docir's own store exceed it**:
-  corpus-wide, 44% of the text was inside a vector and 56% was not indexed semantically at
-  all. The architecture document had 8% of itself embedded; the rule register had 5%. Those
-  tails were not ranked badly, they were absent, and `docir context` returned a plausible
-  answer every time.
-
-  Full-text search hid it: FTS5 covers the whole body, so any query sharing vocabulary with
-  a document found it and RRF pulled it to rank 1 regardless. The failure showed only on
-  paraphrased queries against long documents — the case `docir context` exists for.
-
-  docir now embeds **each section as well as the document** (ADR-0014). Coverage on its own
-  store goes from **44% to 100%** (695 chunks over 103 documents), and on a real query —
-  "how does the daemon keep the model warm" — the architecture document moves from rank 3
-  with *no vector match* to rank 1 at similarity 0.696. Same corpus, chunking off vs on:
-  recall@5 holds at 0.97 and **MRR rises 0.94 → 0.97**.
-
-  Existing stores recompute on the next write or `docir embed --flush`; migration `0003`
-  marks every embedding dirty so a store whose vectors already match the current model does
-  not upgrade to zero chunks. The cost is ~7x more vectors, and `context` loads every active
-  vector per call, so the practical corpus ceiling drops by about that factor.
-
-- **`docir mcp serve` — the same commands, as MCP tools.** docir reached agents only through
-  `docir agent install`, which teaches an assistant to run the CLI; a client that calls tools
-  over the Model Context Protocol and never runs a shell could not use docir at all, which is
-  most of them (Cursor, Codex, VS Code, ChatGPT, Claude Desktop). The server is built on the
-  existing `Dispatcher` rather than beside it — every tool is one `Request` through a
-  `RequestExecutor`, the same boundary the CLI and the daemon socket cross — so an MCP tool
-  and its CLI command cannot answer differently. 19 tools, one per dispatcher command except
-  the daemon's `ping`, plus a `docir_schema` tool for the one thing an agent needs that is not
-  a command: the valid types, statuses and relation kinds it must write against.
-
-  Details that are contract rather than convenience: reads return the same body-less
-  skeletons (`docir_context` / `docir_search` / `docir_query`), only `docir_get` carries a
-  body; every result goes through the same trimming the piped CLI's JSON does, so a tool
-  result costs an agent what captured CLI output costs it; read tools carry `readOnlyHint`
-  and `docir_delete` / `docir_tag_remove` carry `destructiveHint`; and requests go through
-  the daemon by default, so one warm embedding model serves every call (`--no-daemon` holds
-  a single in-process container instead).
-
-  ```bash
-  claude mcp add docir -- docir mcp serve   # stdio; --transport http also available
-  ```
-
-  `fastmcp` ships as a **default dependency**, not behind an extra. An extra would have been
-  the smaller install, but it puts the discovery problem on the wrong side: an agent that only
-  speaks MCP cannot be told to install the extra, because it cannot reach docir to be told.
-  The stack is ~12 MB against onnxruntime's 68 MB, and it costs no startup time — `mcp/cmds.py`
-  imports the server lazily, so only `docir mcp serve` pays fastmcp's ~0.3s import.
-
-### Changed
-
-- **docir's own documents no longer carry sequence labels.** Every document had two
-  identifiers: its docir id, and a label in the title (`ADR-0015`, `GAP-056`, `FLOW-003`).
-  Only the id addresses anything, so each prose citation of a label was a pointer both the
-  reader and the tooling had to resolve by hand. 481 references across 94 documents became
-  ids, 96 titles lost their label, and 97 files were renamed to match. Forty-nine of those
-  titles were not names at all — they were the opening clause of the finding, cut at ~90
-  characters, with the label doing the naming work — so each was rewritten. The provenance
-  lines ("Migrated from the discovery gap register (GAP-0NN)") keep their labels: those record
-  what a document used to be called, which is history rather than an address.
-
-
-- **The `embeddings` extra is gone.** It was kept as a no-op alias after fastembed became a
-  hard dependency in 0.8.0; `pip install docir[embeddings]` now warns about an unknown extra
-  and installs the same thing it would have anyway. Nothing to migrate — plain
-  `pip install docir` has included the embedding model since 0.8.0.
-
-- **JSON trimming moved to `entry_points/payload.py`.** It was private to `cli/rendering.py`,
-  and the MCP server needs the identical shape — an agent reading an absent field as "the
-  default" must be able to do so whichever transport it came over. No behaviour change; the
-  CLI's `--no-trim` still bypasses it.
 
 ## [0.9.0] - 2026-07-30
 

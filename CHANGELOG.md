@@ -31,23 +31,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   emit a bare array, and an envelope around them would break every consumer to deliver a
   courtesy.
 
-### Fixed
-
-- **The upgrade notice no longer names a command that declines to run.** It said
-  `run docir self upgrade` to every installation, and the package step of that command refuses
-  for two of the six kinds docir distinguishes — an ephemeral `uvx` run, and a `project`
-  install, which is what an editable checkout and every lockfile-managed project detect as. A
-  `project` install is now told nothing at all (docir's own repository, on the day it publishes
-  the release, was the clearest case), and an installation with no upgrade command carries its
-  own explanation instead — `uvx docir@latest`, or the lockfile.
-
-- **The notice says when to act, and says it once.** `docir self upgrade` replaces the running
-  process, respawns the daemon and rebuilds the index, so the line now says to run it between
-  tasks rather than during one. It is announced at most once per release per day per store,
-  recorded beside the fetched answer in `release-check.json`; `docir self status` stays the
-  unthrottled answer for a reader who is asking rather than being told.
-
-### Added
 
 - **`docir_doctor` gives an MCP client the environment it is running in.** Every other tool is
   one dispatcher command, and `doctor` is not a command and could not be one: it snapshots the
@@ -79,7 +62,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **The daemon reads it once, at spawn.** Run `docir daemon stop` after changing it, or the new
   value silently does not apply.
 
-### Added
 
 - **`docir check --against <ref>` asks about id collisions before the merge** (GitHub #22). Two
   branches cut from one base each allocate the next free sequential id; both are correct alone
@@ -114,6 +96,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   renumber here, deliberately, and `--fix` allocates from the local counter without seeing that
   ref.
 
+
+- **`docir check` reports a `code:` glob nothing is watching** (GitHub #25). A glob declared
+  before the code it governs was written has nothing to fingerprint, so it records no
+  baseline — and the four code findings then partition the world in a way that leaves it out:
+  `unmatched-code` fires only while the path is absent and stops the moment the file arrives,
+  taking the last signal with it, while `code-changed` and `code-drifted` both read a recorded
+  digest and correctly say nothing when there is none. The result is a document that governs a
+  path and reports nothing when that path changes — indistinguishable from one whose code has
+  not moved, which is the state the queue exists to tell apart. `code-unwatched` names the glob;
+  `docir check --fix` already carried the repair and now answers a finding instead of nothing.
+  Watching starts at the next change, not at the one already missed, which is why the repair
+  reports per document rather than running silently. Nine documents in the reporting corpus were
+  in this state, and **eight** produced no finding of any kind; the ninth was visible only by
+  accident — it declared a second, fingerprinted glob that happened to move — so being in the
+  queue was never evidence that every glob on the document was armed.
+
 ### Changed
 
 - **`docir check --fix` decides which of two colliding files keeps the id by git provenance**
@@ -146,6 +144,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The upgrade notice no longer names a command that declines to run.** It said
+  `run docir self upgrade` to every installation, and the package step of that command refuses
+  for two of the six kinds docir distinguishes — an ephemeral `uvx` run, and a `project`
+  install, which is what an editable checkout and every lockfile-managed project detect as. A
+  `project` install is now told nothing at all (docir's own repository, on the day it publishes
+  the release, was the clearest case), and an installation with no upgrade command carries its
+  own explanation instead — `uvx docir@latest`, or the lockfile.
+
+- **The notice says when to act, and says it once.** `docir self upgrade` replaces the running
+  process, respawns the daemon and rebuilds the index, so the line now says to run it between
+  tasks rather than during one. It is announced at most once per release per day per store,
+  recorded beside the fetched answer in `release-check.json`; `docir self status` stays the
+  unthrottled answer for a reader who is asking rather than being told.
+
+
 - **`docir delete` refuses an id more than one file claims** (GitHub #27). Against the state
   `check` already reports as `duplicate-id` — what a merge of two branches on `--id-style
   sequential` produces, or a copied file — `delete` did three things and each was silent. Every
@@ -172,24 +185,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recovery**, and it is exact: the files are canonical, so the history holds what the index
   cannot.
 
-### Added
-
-- **`docir check` reports a `code:` glob nothing is watching** (GitHub #25). A glob declared
-  before the code it governs was written has nothing to fingerprint, so it records no
-  baseline — and the four code findings then partition the world in a way that leaves it out:
-  `unmatched-code` fires only while the path is absent and stops the moment the file arrives,
-  taking the last signal with it, while `code-changed` and `code-drifted` both read a recorded
-  digest and correctly say nothing when there is none. The result is a document that governs a
-  path and reports nothing when that path changes — indistinguishable from one whose code has
-  not moved, which is the state the queue exists to tell apart. `code-unwatched` names the glob;
-  `docir check --fix` already carried the repair and now answers a finding instead of nothing.
-  Watching starts at the next change, not at the one already missed, which is why the repair
-  reports per document rather than running silently. Nine documents in the reporting corpus were
-  in this state, and **eight** produced no finding of any kind; the ninth was visible only by
-  accident — it declared a second, fingerprinted glob that happened to move — so being in the
-  queue was never evidence that every glob on the document was armed.
-
-### Fixed
 
 - **A `code:` glob that names only ignored files is honoured, not erased** (GitHub #24). The fix
   for #20 excluded ignored paths from *matching* as well as from fingerprinting, so a repository

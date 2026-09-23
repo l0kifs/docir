@@ -111,6 +111,7 @@ def build_mcp_server(
     diagnose: Callable[[], dict[str, object]],
     version: str,
     unavailable: str = "",
+    release_notice: str = "",
 ) -> FastMCP:
     """Wire the docir command vocabulary onto a FastMCP server.
 
@@ -132,7 +133,9 @@ def build_mcp_server(
     that has to call a tool to discover the store is unreadable has already
     written its plan around tools that cannot work.
     """
-    mcp: FastMCP = FastMCP(name="docir", instructions=_instructions(unavailable), version=version)
+    mcp: FastMCP = FastMCP(
+        name="docir", instructions=_instructions(unavailable, release_notice), version=version
+    )
     run = _Gateway(executor)
 
     _register_read_tools(mcp, run, describe_schema=describe_schema, diagnose=diagnose)
@@ -143,21 +146,35 @@ def build_mcp_server(
     return mcp
 
 
-def _instructions(unavailable: str) -> str:
-    """The usual instructions, or the store error in front of them.
+def _instructions(unavailable: str, release_notice: str = "") -> str:
+    """The usual instructions, plus whatever the client has to know up front.
 
-    In front rather than instead: the surface is still described, because the
-    reader has to be able to tell that these tools exist and would work — the
-    difference between "docir is broken here" and "this store cannot be opened
-    by this build", which is the difference between upgrading and giving up.
+    The store error goes in front rather than instead: the surface is still
+    described, because the reader has to be able to tell that these tools exist
+    and would work — the difference between "docir is broken here" and "this
+    store cannot be opened by this build", which is the difference between
+    upgrading and giving up.
+
+    **The release notice rides here and nowhere else.** Instructions are read
+    once, at the handshake, which is exactly the cadence the notice wants: a tool
+    result cannot carry it (three of these tools answer with a bare JSON array,
+    which has nowhere to put a key) and appending a line to every result would
+    spend the context budget that `docir_context` and `docir_query` return
+    body-less skeletons to protect. It goes *after* the store error and before
+    the surface: an unopenable store is the more urgent of the two, and is often
+    the same news told properly.
     """
-    if not unavailable:
-        return INSTRUCTIONS
-    return (
-        f"THIS STORE CANNOT BE OPENED: {unavailable}\n\n"
-        f"Every tool below will return that error until it is resolved. "
-        f"The tools and their contracts are unchanged.\n\n{INSTRUCTIONS}"
-    )
+    parts = []
+    if unavailable:
+        parts.append(
+            f"THIS STORE CANNOT BE OPENED: {unavailable}\n\n"
+            f"Every tool below will return that error until it is resolved. "
+            f"The tools and their contracts are unchanged."
+        )
+    if release_notice:
+        parts.append(release_notice)
+    parts.append(INSTRUCTIONS)
+    return "\n\n".join(parts)
 
 
 def _register_read_tools(

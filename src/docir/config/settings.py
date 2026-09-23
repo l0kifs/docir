@@ -44,6 +44,29 @@ DEFAULT_REQUEST_TIMEOUT = 300.0
 #: (the ``.git`` model). ``docir init`` creates one; commands then scope to it.
 PROJECT_STORE_DIRNAME = ".docir"
 
+#: Opts the ambient release notice (and the daemon's daily fetch) in or out for
+#: this shell. Read directly rather than through the ``DOCIR_`` prefix because it
+#: has to be distinguishable from *unset*: set to anything it is the final word,
+#: over the store's own preference and over ``CI``, in both directions.
+UPDATE_CHECK_ENV = "DOCIR_UPDATE_CHECK"
+
+#: The variable every CI provider sets. A build server is the one reader that
+#: cannot act on an upgrade notice and the one place acting on it would do harm:
+#: an agent that follows "run `docir self upgrade`" inside a job makes that job's
+#: docir version depend on the day it ran. Suppressing here is the convention
+#: npm's update-notifier and its imitators already established.
+CI_ENV = "CI"
+
+#: The store's own settings, committed beside ``docs-schema.yaml``. It holds what
+#: a *team* decides once rather than what a machine decides — today, only whether
+#: this store's agents are told about a newer docir.
+#:
+#: **A new file, never a new key in an existing one.** A store is read by whatever
+#: docir each teammate installed (adr-ab4598c6f707), and a build that has never
+#: heard of this file cannot fail on it, while a new key in ``stores.yaml`` is
+#: exactly how 0.20.0 came to refuse every read of a store written by 0.21.0.
+STORE_CONFIG_FILENAME = "config.yaml"
+
 #: fastembed's own variable for where it keeps a downloaded model. docir honours
 #: it rather than overriding it: a CI image that pins it is naming a directory it
 #: also caches, and two sides naming different directories is how this repo's own
@@ -113,6 +136,30 @@ def embed_threads() -> int | None:
     except ValueError:
         return None
     return threads if threads > 0 else None
+
+
+def store_update_check(home: Path) -> bool | None:
+    """What ``<home>/config.yaml`` says about the release notice, if anything.
+
+    ``None`` means the store expressed no preference — no file, an unreadable
+    one, or one that does not carry the key — and the caller keeps its default.
+
+    **Every failure is ``None`` rather than an exception.** This is read on every
+    command, before anything the user asked for happens, from a file a person
+    may hand-edit. A typo in it must cost the notice, never the command; and an
+    older docir reading a key a newer one wrote takes the same path, which is
+    what makes the file safe to add to a committed store at all.
+    """
+    import yaml
+
+    try:
+        document = yaml.safe_load((home / STORE_CONFIG_FILENAME).read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return None
+    if not isinstance(document, dict):
+        return None
+    value = document.get("update_check")
+    return value if isinstance(value, bool) else None
 
 
 def discover_project_home(start: Path | None = None) -> Path | None:
@@ -244,12 +291,27 @@ class Settings(BaseSettings):
     #: the finding cannot cover — a change nobody will run `check` to discover.
     schema_notice: bool = False
     #: Whether to check PyPI for a newer docir and say so on stderr.
-    #: ``DOCIR_UPDATE_CHECK=1`` opts in. Off by default for two reasons that
-    #: point the same way: it is the only network call docir makes, and a notice
-    #: that repeats on every command until someone upgrades stops being read —
-    #: the argument ``schema_notice`` above already makes. When it is on the
-    #: daemon does the fetching, at most once a day, and the CLI only reads the
-    #: answer it left behind.
+    #:
+    #: Three inputs, highest first: ``DOCIR_UPDATE_CHECK`` (set to anything, it
+    #: decides, in both directions) → ``CI`` being set, which forces it off →
+    #: ``update_check:`` in the store's ``config.yaml``, which ``docir init``
+    #: writes as ``true``. The default with none of them is ``False``.
+    #:
+    #: **The default stays off, and the opt-in stays an act somebody performed.**
+    #: This is the only network call docir makes in its life, and a documentation
+    #: tool that phones home unasked is not one people keep installed
+    #: (adr-a555ee6bc484). Creating a store is that act: it is deliberate, it is
+    #: the moment a team decides how this repository's docs are kept, and the
+    #: answer it records is committed, so one decision covers everyone who clones
+    #: it. Nobody who never ran `docir init` is ever contacted.
+    #:
+    #: The repetition argument ``schema_notice`` makes above is answered instead
+    #: by the throttle — `ReleaseService.announce` says it once per version per
+    #: day — and by `notice_for`, which says nothing at all where the upgrade
+    #: cannot be performed.
+    #:
+    #: When it is on the daemon does the fetching, at most once a day, and the
+    #: CLI only reads the answer it left behind.
     update_check: bool = False
     #: How ``home`` was chosen: ``flag`` | ``env`` | ``project`` | ``global``.
     #: Carried so callers can tell a deliberate store from a fallback — a write
@@ -287,6 +349,11 @@ class Settings(BaseSettings):
         """
         if use_daemon is None:
             use_daemon = os.environ.get(NO_DAEMON_ENV, "") == ""
+        return _with_store_preferences(cls._for_home(home, use_daemon=use_daemon))
+
+    @classmethod
+    def _for_home(cls, home: str | os.PathLike[str] | None, *, use_daemon: bool) -> Settings:
+        """The home rule alone, before the store gets a say about anything."""
         if home is not None:
             return cls(home=Path(home), use_daemon=use_daemon, home_origin="flag")
         if os.environ.get(HOME_ENV):
@@ -358,6 +425,11 @@ class Settings(BaseSettings):
         return Path(tempfile.gettempdir()) / f"docir-{digest}.sock"
 
     @property
+    def store_config_path(self) -> Path:
+        """The store's committed settings file (see ``STORE_CONFIG_FILENAME``)."""
+        return self.home / STORE_CONFIG_FILENAME
+
+    @property
     def release_cache_path(self) -> Path:
         """Where the last "is there a newer docir" answer is remembered.
 
@@ -384,3 +456,32 @@ class Settings(BaseSettings):
     def ensure_directories(self) -> None:
         """Create the home and docs directories if they do not yet exist."""
         self.docs_root.mkdir(parents=True, exist_ok=True)
+
+
+def _with_store_preferences(settings: Settings) -> Settings:
+    """Layer the store's own ``config.yaml`` under the environment.
+
+    Separate from :meth:`Settings._for_home` and applied after it, because the
+    file lives *inside* the home the home rule just decided: there is no order in
+    which one pass could do both. It is the same shape as the home rule itself —
+    one function, every input to one decision visible side by side — and it is
+    here for the same reason, which is that ``--home`` was once silently ignored
+    by a second copy of a decision living somewhere else.
+
+    Precedence, highest first:
+
+    * ``DOCIR_UPDATE_CHECK`` set to anything at all. An explicit variable is a
+      person answering the question for this shell, and it wins in *both*
+      directions: ``=0`` silences a store that opted in, ``=1`` overrides ``CI``.
+    * ``CI`` set. A build server cannot act on the notice, and an agent that
+      acts on it there makes the job's docir version depend on the day it ran.
+    * ``update_check:`` in the store's ``config.yaml``.
+    """
+    if os.environ.get(UPDATE_CHECK_ENV, "").strip():
+        return settings
+    if os.environ.get(CI_ENV, "").strip():
+        return settings.model_copy(update={"update_check": False})
+    stored = store_update_check(settings.home)
+    if stored is None:
+        return settings
+    return settings.model_copy(update={"update_check": stored})

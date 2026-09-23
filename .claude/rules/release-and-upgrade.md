@@ -34,7 +34,29 @@ This is the one place docir acts on its own process, so the ordering rules are t
   because it runs from an editable checkout, which detects as `project`** —
   `test_installation.py` asserts exactly that, and it is the guard that keeps a test from
   replacing the environment it runs in. The release check is opt-in
-  (`DOCIR_UPDATE_CHECK=1`), fetched by the daemon at most once a day and *only* read by the
+  (`DOCIR_UPDATE_CHECK=1`, or `update_check: true` in the store's committed `config.yaml`,
+  which `docir init` writes), fetched by the daemon at most once a day and *only* read by the
   CLI, so no command ever blocks on the network; `latest` absent means nobody has checked,
   never "up to date"; ordering is `packaging`'s PEP 440, since a hand-rolled compare makes
   0.9.0 newer than 0.10.0.
+
+- **The notice is a decision table, and it is silent where it cannot be acted on
+  (adr-bea870d0b666).** `notice_for` is pure and reads `ReleaseStatus`: a `project` install —
+  an editable checkout, or a lockfile-managed project — is told **nothing**, because the
+  package step of `self upgrade` declines there and this repository is the clearest case; an
+  installation with an `upgrade_command` is told to run it *between tasks*, because the
+  command re-execs, replaces a mismatched daemon and re-stamps the index; one without carries its own
+  `explanation` instead. `announce()` throttles to one release per day per store, recorded in
+  `release-check.json` beside the fetched answer — so that file is read-modify-write from two
+  processes, and `docir self status` stays the unthrottled answer. Never add a CLI-side
+  fetch: the process exits in 0.4–0.7s, PyPI replies in 0.4–0.5s, and a daemon thread dies at
+  interpreter exit. MCP puts it in the server's **`instructions`**, which a client reads once on
+  connect; no tool result can hold it, because three of them answer with a bare JSON array.
+
+- **Whether it runs at all is decided in `config/settings.py`, beside the home rule**, for
+  the reason both home decisions live there. Precedence: `DOCIR_UPDATE_CHECK` (either
+  direction) → `CI` set, which forces it off → the store's `config.yaml`. The store file is
+  **committed and appended to, never rewritten** — `init` writes it, `self upgrade` tops it
+  up like the `.gitignore`, and a key already present is an answer somebody gave. It is a new
+  file rather than a key in `stores.yaml` because an older build cannot fail on a file it
+  never opens (adr-36d6156ffab9, adr-ab4598c6f707).

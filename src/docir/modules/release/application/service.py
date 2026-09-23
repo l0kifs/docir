@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from docir.modules.release.application.ports import ProcessRunner, ReleaseCache, ReleaseIndex
 from docir.modules.release.domain.installation import PACKAGE, Installation
+from docir.modules.release.domain.notice import notice_for
 from docir.modules.release.domain.results import ReleaseStatus, UpgradeOutcome
 from docir.platform.clock import Clock
 
@@ -58,6 +59,32 @@ class ReleaseService:
             upgrade_command=self._installation.upgrade_command,
             explanation=self._installation.explanation,
         )
+
+    def announce(self) -> str | None:
+        """The line to print about a newer release, or ``None`` to stay quiet.
+
+        Reads the cache and never the network — the fetch is the daemon's job —
+        so this costs one file read on a command someone is waiting for.
+
+        **It is a write as well as a read**, and that is the throttle: the store
+        remembers which version it last announced and on which day, and says it
+        again only when one of the two has moved. Without that, one release
+        prints on every command until somebody upgrades, which is how the
+        warning docir wants read becomes the warning a reader learns to skip —
+        the same argument ``schema_notice`` settles one field over. `docir self
+        status` is the unthrottled answer, for the reader who is asking.
+        """
+        status = self.status()
+        text = notice_for(status)
+        if text is None:
+            return None
+        today = self._clock.today().isoformat()
+        if self._cache.read_announcement() == (status.latest, today):
+            return None
+        # ``latest`` is a string wherever ``notice_for`` returned a line: it is
+        # what ``update_available`` compared.
+        self._cache.record_announcement(str(status.latest), today)
+        return text
 
     def upgrade_package(self) -> UpgradeOutcome:
         """Run the installer, where there is one to run.

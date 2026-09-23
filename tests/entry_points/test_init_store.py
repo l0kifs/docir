@@ -11,6 +11,7 @@ from docir.entry_points.composition import (
     _STORE_GITIGNORE,
     _gitignore_entries,
     initialize_store,
+    refresh_store_config,
     refresh_store_gitignore,
 )
 from docir.platform.errors import SchemaError
@@ -177,9 +178,15 @@ class TestTheStoreIgnoresEverythingDocirWritesIntoIt:
     which passes on the constant being whatever the constant is.
     """
 
-    #: The two paths in the store that are meant to be committed, plus the
-    #: ignore file itself. Everything else docir puts in `home` must be ignored.
-    COMMITTED = ("docs_root", "schema_path", "tags_path")
+    #: The paths in the store that are meant to be committed, plus the ignore
+    #: file itself. Everything else docir puts in `home` must be ignored.
+    #:
+    #: `store_config_path` is committed on purpose: it holds the answers a *team*
+    #: gives once — today only whether this store's readers are told about a
+    #: newer docir — so a teammate's clone inherits them. Per-machine choices are
+    #: environment variables, and `release-check.json` below is where the
+    #: per-machine *result* of this one lands, ignored like the rest.
+    COMMITTED = ("docs_root", "schema_path", "tags_path", "store_config_path")
 
     def _store_paths(self, settings: Settings) -> list[Path]:
         """Every path ``Settings`` resolves inside the store, found by asking it.
@@ -219,6 +226,22 @@ class TestTheStoreIgnoresEverythingDocirWritesIntoIt:
         }
         for path in paths:
             assert path.name in entries, f"docir writes {path.name} and nothing ignores it"
+
+    def test_nothing_meant_to_be_committed_is_ignored(self, tmp_path: Path) -> None:
+        # The other direction, and it needs saying separately: the test above
+        # walks what must be ignored and would stay green if a committed file
+        # were added to the ignore list. `config.yaml` is the one that costs
+        # something — it holds a decision a team took for everyone who clones
+        # the repo, and ignoring it would make that decision this machine's.
+        settings = _settings(tmp_path)
+        initialize_store(settings)
+        entries = set(_gitignore_entries((settings.home / ".gitignore").read_text("utf-8")))
+
+        committed = {getattr(settings, name).name for name in self.COMMITTED}
+
+        assert committed == {"docs", "docs-schema.yaml", "tags.yaml", "config.yaml"}
+        for name in committed:
+            assert name not in entries, f"{name} is meant to be committed and is ignored"
 
     def test_the_model_cache_is_ignored_where_the_store_is_the_global_home(
         self, tmp_path: Path
@@ -329,3 +352,75 @@ class TestAnExistingStoreIsBroughtUpToTheRunningBuild:
         refresh_store_gitignore(settings.home)
 
         assert "feedback/" in _gitignore_entries((settings.home / ".gitignore").read_text("utf-8"))
+
+
+class TestTheStoreRecordsTheReleaseCheckDecision:
+    """`config.yaml` — what a team answers once and commits (adr-a555ee6bc484).
+
+    Creating a store is the act that opts into docir's only network call. The
+    answer is recorded in the store rather than in each person's shell so that a
+    clone inherits it, and `DOCIR_UPDATE_CHECK=0` is how one person opts back
+    out. Everything here is about not overwriting an answer somebody gave.
+    """
+
+    def test_init_writes_the_opt_in(self, tmp_path: Path) -> None:
+        settings = _settings(tmp_path)
+        result = initialize_store(settings)
+        assert result.config_written
+        assert settings.store_config_path.exists()
+        from docir.config.settings import store_update_check
+
+        assert store_update_check(settings.home) is True
+
+    def test_a_store_that_said_no_keeps_saying_no(self, tmp_path: Path) -> None:
+        # The one that matters: `self upgrade` runs the same top-up, so an
+        # opt-out that a routine upgrade reversed would be an opt-out nobody
+        # could hold. A key already present is a decision, whatever its value.
+        settings = _settings(tmp_path)
+        initialize_store(settings)
+        settings.store_config_path.write_text("update_check: false\n", encoding="utf-8")
+
+        added = refresh_store_config(settings.home)
+
+        assert added == ()
+        from docir.config.settings import store_update_check
+
+        assert store_update_check(settings.home) is False
+
+    def test_force_does_not_regenerate_it(self, tmp_path: Path) -> None:
+        # Unlike the `.gitignore` beside it, which `--force` rewrites because it
+        # is a constant this build generates.
+        settings = _settings(tmp_path)
+        initialize_store(settings)
+        settings.store_config_path.write_text("update_check: false\n", encoding="utf-8")
+
+        initialize_store(settings, force=True)
+
+        assert settings.store_config_path.read_text("utf-8") == "update_check: false\n"
+
+    def test_an_older_store_gains_it_on_upgrade(self, tmp_path: Path) -> None:
+        settings = _settings(tmp_path)
+        initialize_store(settings)
+        settings.store_config_path.unlink()
+
+        added = refresh_store_config(settings.home)
+
+        assert "update_check" in added
+        assert settings.store_config_path.exists()
+
+    def test_a_top_up_keeps_the_comments_somebody_wrote(self, tmp_path: Path) -> None:
+        # Appended as text rather than dumped from parsed YAML: a parse-and-dump
+        # round trip deletes every comment in a committed file, which is how a
+        # command asked to add one line removes ten.
+        settings = _settings(tmp_path)
+        initialize_store(settings)
+        settings.store_config_path.write_text(
+            "# why we turned this off\nsomething_else: 1\n", encoding="utf-8"
+        )
+
+        added = refresh_store_config(settings.home)
+
+        text = settings.store_config_path.read_text("utf-8")
+        assert "update_check" in added
+        assert "# why we turned this off" in text
+        assert "something_else: 1" in text

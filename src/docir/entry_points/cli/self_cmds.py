@@ -41,8 +41,21 @@ def self_status(
     call), and skips it when the answer is already from today.
 
     An absent `latest` means *unknown*, never "up to date": nothing has been
-    checked, or the check could not reach the index. Set DOCIR_UPDATE_CHECK=1 to
-    have the daemon keep it fresh and every command say so on stderr.
+    checked, or the check could not reach the index.
+
+    This is the *unthrottled* answer, and it always answers — the ambient notice
+    on other commands says a thing once a day, and says nothing at all in an
+    installation that cannot upgrade itself (a checkout, a lockfile-managed
+    project). Ask here when you want to know rather than to be told.
+
+    Whether the ambient notice runs at all: `update_check: true` in the store's
+    `config.yaml`, which `docir init` writes; `DOCIR_UPDATE_CHECK=0` or `=1`
+    overrides it for one shell, and a CI run never checks.
+
+        docir self status --refresh
+        {"installed":"0.28.0","latest":"0.28.0","update_available":false,
+         "checked_on":"2026-09-23","method":"uv-tool",
+         "upgrade_command":["uv","tool","upgrade","docir"],...}
     """
     state = get_state()
     service = build_release_service(__version__, state.settings.release_cache_path)
@@ -69,19 +82,22 @@ def self_upgrade(
 ) -> None:
     """Upgrade docir, then bring this store and its generated files in line with it.
 
-    Five things in one command. It upgrades the package where docir owns its
+    Six things in one command. It upgrades the package where docir owns its
     environment (a uv tool, a pipx install, a virtualenv) — and where it does
     not, says why and carries on. Then it rebuilds the index (derived,
     gitignored, and the only place the schema baseline and the build version are
     recorded), refreshes any installed agent instruction file to the running
-    version, tops up the store's own `.gitignore` with anything this docir
-    writes into the store that it did not yet ignore, and reports what `check`
-    still finds — `check` last, so the findings describe the state you are left
-    in.
+    version, tops up the store's own `.gitignore` and its `config.yaml` with
+    anything this docir writes that they do not yet carry, and reports what
+    `check` still finds — `check` last, so the findings describe the state you
+    are left in.
 
-    The `.gitignore` step **appends and never rewrites**. Your own lines in that
-    file are yours; only the entries this build generates and the file lacks are
-    added, under a comment naming the version that added them.
+    Both top-ups **append and never rewrite**. Your own lines in those files are
+    yours; only the entries this build generates and the file lacks are added,
+    the `.gitignore` ones under a comment naming the version that added them.
+    A `config.yaml` setting already present keeps its value, whatever it is: it
+    is an answer somebody gave. The file is committed, so what is added there is
+    added for everyone who clones the repo — the command says which keys moved.
 
     That report is **counted, not listed**: errors print in full, warnings are
     tallied by kind, and `docir check` reads them. An upgrade is exactly the
@@ -149,6 +165,7 @@ def _emit_upgrade(result: UpgradeResult) -> None:
             "reindex": result.reindex,
             "agents": agents,
             "gitignore_added": list(result.gitignore_added),
+            "config_added": list(result.config_added),
             "findings": findings,
         }
         rendering.emit_json(payload, trim=state.trim)
@@ -159,6 +176,7 @@ def _emit_upgrade(result: UpgradeResult) -> None:
             findings,
             result.upgraded_from,
             result.gitignore_added,
+            result.config_added,
         )
 
 

@@ -18,6 +18,7 @@ from docir import __version__
 from docir.config.settings import Settings
 from docir.entry_points.cli.runner import get_state
 from docir.modules.documents.api import describe_schema, load_schema
+from docir.modules.release.api import build_release_service
 from docir.platform.errors import DocirError
 from docir.platform.transport.messages import Request, RequestExecutor, Response
 
@@ -114,13 +115,37 @@ def build_server(settings: Settings) -> FastMCP:
             diagnose=lambda: _diagnose(settings, str(store_error)),
             version=__version__,
             unavailable=str(store_error),
+            release_notice=_release_notice(settings),
         )
     return build_mcp_server(
         executor,
         describe_schema=lambda: describe_schema(load_schema(settings.schema_path)),
         diagnose=lambda: _diagnose(settings, "", executor),
         version=__version__,
+        release_notice=_release_notice(settings),
     )
+
+
+def _release_notice(settings: Settings) -> str:
+    """The newer-release line for the client's handshake, or nothing.
+
+    Read from the cache here, once, while the server is being built — the same
+    file read the CLI does per command, and for the same reason it is never a
+    fetch. A server is long-lived, so this is answered once per client session
+    rather than once per tool call: the right cadence for the news, and the only
+    one that does not spend an agent's context on a line it has already read.
+
+    Which also means a server left running across the day a release ships does
+    not learn about it. That is the trade: `docir_doctor` reports the installed
+    version on demand, and the next client session picks it up.
+
+    Announcing is a write (the once-a-day throttle), so this consumes the store's
+    one notice for the day. Correct: an agent holding these tools is talking to
+    this process and not to a shell, so the CLI's copy would reach nobody.
+    """
+    if not settings.update_check:
+        return ""
+    return build_release_service(__version__, settings.release_cache_path).announce() or ""
 
 
 def _diagnose(

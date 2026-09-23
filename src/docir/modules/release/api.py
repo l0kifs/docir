@@ -21,6 +21,7 @@ from docir.modules.release.domain.deprecations import (
     describe_deprecations,
 )
 from docir.modules.release.domain.installation import PACKAGE, Installation, detect
+from docir.modules.release.domain.notice import SILENT_METHODS, notice_for
 from docir.modules.release.domain.results import ReleaseStatus, UpgradeOutcome, is_newer
 from docir.modules.release.infra.adapters import (
     JsonFileReleaseCache,
@@ -53,6 +54,7 @@ def build_release_service(
 __all__ = [
     "DEPRECATIONS",
     "PACKAGE",
+    "SILENT_METHODS",
     "Deprecation",
     "Installation",
     "ReleaseService",
@@ -63,4 +65,5 @@ __all__ = [
     "current_installation",
     "describe_deprecations",
     "is_newer",
+    "notice_for",
 ]

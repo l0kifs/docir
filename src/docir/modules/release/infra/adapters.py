@@ -68,25 +68,56 @@ class PyPIReleaseIndex(ReleaseIndex):
 
 
 class JsonFileReleaseCache(ReleaseCache):
-    """The last answer, as one small JSON file in the store."""
+    """The last answer and the last announcement, as one JSON file in the store.
+
+    Two facts in one file, written by two different processes — the daemon
+    records what PyPI said, the CLI records that it told somebody — so every
+    write is read-modify-write. Writing the whole document from either side
+    would have each one silently erase the other's key, which fails in the
+    direction that is hardest to notice: the notice would simply print on every
+    command again, exactly as it does with no throttle at all.
+    """
 
     def __init__(self, path: Path) -> None:
         self._path = path
 
     def read(self) -> tuple[str, str] | None:
+        return self._pair("latest", "checked_on")
+
+    def write(self, version: str, checked_on: str) -> None:
+        self._merge({"latest": version, "checked_on": checked_on})
+
+    def read_announcement(self) -> tuple[str, str] | None:
+        return self._pair("announced", "announced_on")
+
+    def record_announcement(self, version: str, on: str) -> None:
+        self._merge({"announced": version, "announced_on": on})
+
+    # -- internals ----------------------------------------------------------
+
+    def _document(self) -> dict[str, object]:
+        """Whatever the file holds, or an empty document.
+
+        Unreadable, absent and malformed are one case on purpose. This file is a
+        cache of a courtesy check; the only thing a parse error may cost is one
+        extra fetch, and raising here would turn a corrupt byte into a failure of
+        whatever command the user actually ran.
+        """
         try:
             data = json.loads(self._path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
-            return None
-        if not isinstance(data, dict):
-            return None
-        version, checked_on = data.get("latest"), data.get("checked_on")
-        if not isinstance(version, str) or not isinstance(checked_on, str):
-            return None
-        return version, checked_on
+            return {}
+        return data if isinstance(data, dict) else {}
 
-    def write(self, version: str, checked_on: str) -> None:
+    def _pair(self, version_key: str, date_key: str) -> tuple[str, str] | None:
+        data = self._document()
+        version, on = data.get(version_key), data.get(date_key)
+        if not isinstance(version, str) or not isinstance(on, str):
+            return None
+        return version, on
+
+    def _merge(self, fields: dict[str, str]) -> None:
+        document = self._document()
+        document.update(fields)
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(
-            json.dumps({"latest": version, "checked_on": checked_on}), encoding="utf-8"
-        )
+        self._path.write_text(json.dumps(document), encoding="utf-8")

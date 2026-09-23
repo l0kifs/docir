@@ -8,8 +8,10 @@ is stubbed here and driven for real in ``test_e2e_mcp.py``.
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
@@ -19,6 +21,7 @@ from docir.entry_points.cli.app import app
 from docir.entry_points.composition import InProcessExecutor
 from docir.entry_points.daemon.socket_executor import SocketExecutor
 from docir.entry_points.mcp import cmds
+from docir.modules.release.domain.installation import Evidence
 
 runner = CliRunner()
 
@@ -102,3 +105,54 @@ def test_importing_the_cli_does_not_import_fastmcp() -> None:
     assert subprocess.run([sys.executable, "-c", probe], check=False).returncode == 0, (
         "importing the CLI pulled in fastmcp — the import in mcp/cmds.py must stay lazy"
     )
+
+
+class TestTheReleaseNoticeReachesAnMcpClient:
+    """The one transport with no stderr a client reads.
+
+    An MCP client sees tool results and the handshake, and nothing else. The
+    notice therefore rides on the server's instructions — read once, at the
+    handshake, which is the cadence it wants anyway — rather than on a tool
+    result, where three of these tools answer with a bare JSON array that has
+    nowhere to put a key, and where a line appended to every result would spend
+    the context budget the body-less skeletons exist to protect.
+    """
+
+    OWNED = Evidence(
+        prefix=Path("/nonexistent/env"),
+        executable=Path("/nonexistent/env/bin/python"),
+        has_uv_receipt=True,
+        has_pipx_metadata=False,
+        direct_url=None,
+        editable=False,
+        ephemeral=False,
+    )
+
+    def _cache_says(self, settings: Settings, version: str) -> None:
+        settings.ensure_directories()
+        settings.release_cache_path.write_text(
+            json.dumps({"latest": version, "checked_on": "2026-07-07"}), encoding="utf-8"
+        )
+
+    def test_the_handshake_carries_it_when_the_store_opted_in(
+        self, monkeypatch, settings: Settings
+    ) -> None:
+        monkeypatch.setattr("docir.modules.release.api.gather_evidence", lambda: self.OWNED)
+        monkeypatch.setenv("DOCIR_UPDATE_CHECK", "1")
+        self._cache_says(settings, "99.0.0")
+
+        instructions = cmds.build_server(Settings.resolve()).instructions or ""
+
+        assert "docir 99.0.0 is available" in instructions
+        # In front of the usual instructions, not instead of them.
+        assert "docir stores this project" in instructions
+
+    def test_it_is_absent_when_nobody_opted_in(self, monkeypatch, settings: Settings) -> None:
+        monkeypatch.setattr("docir.modules.release.api.gather_evidence", lambda: self.OWNED)
+        monkeypatch.setenv("DOCIR_UPDATE_CHECK", "0")
+        self._cache_says(settings, "99.0.0")
+
+        instructions = cmds.build_server(Settings.resolve()).instructions or ""
+
+        assert "available" not in instructions
+        assert "docir stores this project" in instructions

@@ -4,9 +4,9 @@ code:
 - src/docir/entry_points/composition.py
 - src/docir/modules/release/**
 code_baseline:
-  src/docir/entry_points/cli/self_cmds.py: 1e11c74f10de
-  src/docir/entry_points/composition.py: 88d0cea954b3
-  src/docir/modules/release/**: 8b0b670930c6
+  src/docir/entry_points/cli/self_cmds.py: f9029ff59ad6
+  src/docir/entry_points/composition.py: 9c53fb140f7d
+  src/docir/modules/release/**: 1c63497956b5
 created: '2026-08-09'
 description: 'What to run after a new docir release: the package, the derived index,
   and the generated files — the ones self upgrade refreshes and the ones it does not.'
@@ -25,13 +25,13 @@ tags:
 - agents
 title: Upgrade docir in a project
 type: runbook
-updated: '2026-09-22'
-verified: '2026-09-22'
+updated: '2026-09-23'
+verified: '2026-09-23'
 verified_code:
-  src/docir/entry_points/cli/self_cmds.py: 1e11c74f10de
-  src/docir/entry_points/composition.py: 88d0cea954b3
-  src/docir/modules/release/**: 8b0b670930c6
-verified_content: 676f2c08c359
+  src/docir/entry_points/cli/self_cmds.py: f9029ff59ad6
+  src/docir/entry_points/composition.py: 9c53fb140f7d
+  src/docir/modules/release/**: 1c63497956b5
+verified_content: 22b0494a3ca5
 ---
 
 docir ships its schema, its agent instructions and its site templates inside the
@@ -157,11 +157,24 @@ release *as last checked*, and an absent `latest` means nobody has checked, not
 "up to date". `--refresh` asks PyPI — docir's only network call, skipped when the
 answer is already from today.
 
-`DOCIR_UPDATE_CHECK=1` turns it into a background fact: the daemon refreshes the
-answer, and every command mentions a newer release on stderr. Off by default,
-because a notice that repeats on every command until you act on it stops being
-read — and because a documentation tool that phones home unasked is not one
-people keep.
+A store created by `docir init` carries `update_check: true` in its committed
+`config.yaml`, which turns it into a background fact: the daemon refreshes the
+answer daily and a command mentions a newer release on stderr — over MCP, in the
+server's instructions at the handshake. Creating the store is the act that opts
+in, so a documentation tool still never phones home unasked, and the answer is
+one the whole team inherits rather than one each person exports
+(adr-bea870d0b666). `DOCIR_UPDATE_CHECK=0` turns it off for one shell, `=1` on;
+a run with `CI` set never checks.
+
+It says a release once per day per store, not once per command, and it says
+nothing at all to an installation that cannot act on it — a checkout, or a docir
+pinned by a project's lockfile, which is upgraded in that project. Those are the
+two reasons a notice repeating until somebody acts stops being read, answered
+rather than avoided.
+
+**Act on it between tasks.** `docir self upgrade` replaces the running process,
+respawns the daemon and rebuilds the index; a task that continues across that
+runs its remaining steps on a build nothing verified.
 
 `docir check` covers the other direction, the one that needs no network at all:
 `stale-index-build` says the index was built by a docir that is no longer

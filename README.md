@@ -370,6 +370,16 @@ docir self upgrade        # install the new docir, then resync this store
 docir self status         # what is installed, and whether anything newer exists
 ```
 
+**You are told when there is one.** `docir init` writes `update_check: true` into the
+store's committed `config.yaml`, so the daemon asks PyPI once a day and a command mentions a
+newer release on stderr — once per release, not once per command, and in the MCP server's
+instructions for an agent that has no stderr to read. It is the only network call docir
+makes, it sends no document content, and it is off for anyone who never created a store.
+`DOCIR_UPDATE_CHECK=0` turns it off for one shell; a CI run never checks.
+
+docir inside a checkout, or pinned by your lockfile, is upgraded in that project and is
+never told to upgrade itself, so it stays silent — `docir self status` is how you ask.
+
 When they do not — or when a read simply contradicts what you can see in the files —
 `docir doctor` also carries a `compat` section: the store format numbers to compare against
 another machine's docir, and each surface scheduled for removal with the day it goes — so "is

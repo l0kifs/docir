@@ -333,6 +333,7 @@ def _emit_init(result: InitResult) -> None:
         "id_style": result.id_style,
         "schema_written": result.schema_written,
         "gitignore_written": result.gitignore_written,
+        "config_written": result.config_written,
         "schema_preserved": result.schema_preserved,
         "enclosing_home": str(result.enclosing_home) if result.enclosing_home else "",
     }

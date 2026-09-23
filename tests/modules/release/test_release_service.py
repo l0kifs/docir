@@ -37,12 +37,19 @@ class FakeIndex(ReleaseIndex):
 class FakeCache(ReleaseCache):
     def __init__(self, entry: tuple[str, str] | None = None) -> None:
         self.entry = entry
+        self.announcement: tuple[str, str] | None = None
 
     def read(self) -> tuple[str, str] | None:
         return self.entry
 
     def write(self, version: str, checked_on: str) -> None:
         self.entry = (version, checked_on)
+
+    def read_announcement(self) -> tuple[str, str] | None:
+        return self.announcement
+
+    def record_announcement(self, version: str, on: str) -> None:
+        self.announcement = (version, on)
 
 
 class RecordingRunner(ProcessRunner):

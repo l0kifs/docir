@@ -41,3 +41,17 @@ class ReleaseCache(ABC):
     @abstractmethod
     def write(self, version: str, checked_on: str) -> None:
         """Record ``version`` as of ``checked_on``."""
+
+    @abstractmethod
+    def read_announcement(self) -> tuple[str, str] | None:
+        """``(version, iso_date)`` last *announced to a reader*, or ``None``.
+
+        A separate fact from what was fetched. The fetch answers "is there a
+        newer docir"; this answers "has this store already said so today", which
+        is what keeps one notice from being reprinted by every command until
+        somebody acts on it.
+        """
+
+    @abstractmethod
+    def record_announcement(self, version: str, on: str) -> None:
+        """Record that ``version`` was announced on ``on``."""

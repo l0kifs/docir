@@ -43,8 +43,15 @@ document is executable content on your site.
 
 **Network.** Two calls, both narrow: the embedding model downloads once from Hugging Face
 on first use (`DOCIR_EMBEDDER=deterministic` skips it entirely), and an opt-in release
-check queries PyPI at most once a day when `DOCIR_UPDATE_CHECK=1` is set. Nothing else
-leaves the machine — no document content is ever sent anywhere.
+check queries PyPI at most once a day. Nothing else leaves the machine — no document
+content is ever sent anywhere, and the release check sends only the request for a package
+page, which carries no identifier docir invented.
+
+The release check is opted into two ways: `DOCIR_UPDATE_CHECK=1` for one shell, or
+`update_check: true` in a store's committed `config.yaml`, which `docir init` writes when
+it creates the store. A machine that has never created a store and never set the variable
+never contacts PyPI. `DOCIR_UPDATE_CHECK=0` turns it off wherever it is on, and a run with
+`CI` set never checks.
 
 **The index.** SQLite, derived and gitignored. It holds nothing the markdown files do not
 already hold, so it is exactly as sensitive as your repository.

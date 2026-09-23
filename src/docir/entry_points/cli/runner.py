@@ -206,20 +206,36 @@ def _with_peers(state: CliState, command: str, payload: dict[str, object]) -> di
 
 
 def warn_about_a_newer_release(settings: Settings) -> None:
-    """Say on stderr that a newer docir exists (``DOCIR_UPDATE_CHECK=1``).
+    """Say on stderr that a newer docir exists, where that is worth saying.
 
     Reads the cached answer and never the network: the fetch is the daemon's
     job, once a day, so the notice costs one file read and a command still works
-    offline. Absent or unreadable means *unknown*, and unknown says nothing.
+    offline. Absent or unreadable means *unknown*, and unknown says nothing —
+    which is also the whole of what ``--no-daemon`` gets in a store no daemon has
+    ever run against. That is deliberate. The alternative is a fetch on the
+    command's own path, and a background thread cannot do it: this process
+    answers and exits in well under the time PyPI takes to reply, and a
+    ``daemon=True`` thread is killed at interpreter exit, so the cache would
+    never be written and every command would pay a TLS handshake for nothing.
+
+    Stderr rather than the payload, for the reason `render_warning` gives — but
+    also because there is nowhere else. `query`, `search` and `context` emit a
+    bare JSON *array*, so a top-level notices key cannot exist for the three
+    commands an agent runs most, and wrapping them in an envelope would break
+    every consumer and every installed build to deliver a courtesy. The MCP
+    transport, which has no stderr a client reads, carries it in the server's
+    instructions instead.
+
+    Whether to say it at all is decided in two other places, and neither is
+    here: `Settings.update_check` (the environment, CI, the store's own
+    `config.yaml`) and `ReleaseService.announce` (the once-a-day throttle and the
+    installations that must not be told to upgrade themselves).
     """
     if not settings.update_check:
         return
-    status = build_release_service(__version__, settings.release_cache_path).status()
-    if status.update_available:
-        rendering.render_warning(
-            f"docir {status.latest} is available (this is {status.installed}) — "
-            "run `docir self upgrade`"
-        )
+    notice = build_release_service(__version__, settings.release_cache_path).announce()
+    if notice:
+        rendering.render_warning(notice)
 
 
 def _warn_about_schema_drift(executor: RequestExecutor) -> None:

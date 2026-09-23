@@ -1,0 +1,8 @@
+# docir store settings — committed, and shared by everyone who clones this repo.
+# Per-machine choices do not belong here; they are environment variables.
+
+# Tell this store's readers when a newer docir has been published. The daemon
+# then asks PyPI at most once a day (docir's only network call) and each command
+# prints at most one line about it. `DOCIR_UPDATE_CHECK=0` overrides it for one
+# shell; a CI run never checks.
+update_check: true

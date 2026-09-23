@@ -478,8 +478,14 @@ def render_init(result: Mapping[str, object]) -> None:
     )
     console.print(f"  [dim]schema:[/]    {schema_note}")
     console.print(f"  [dim]gitignore:[/] {gitignore_note}")
+    if result.get("config_written"):
+        console.print(
+            "  [dim]config:[/]    config.yaml [dim](update_check: true — this store's "
+            "readers are told when a newer docir ships)[/]"
+        )
     console.print(
-        "[dim]commit docs/ and docs-schema.yaml under the store; the index is gitignored.[/]"
+        "[dim]commit docs/, docs-schema.yaml and config.yaml under the store; "
+        "the index is gitignored.[/]"
     )
     console.print(
         "[dim]next:[/] docir agent install  [dim]— teach this repo's agent to drive docir[/]"
@@ -598,6 +604,7 @@ def render_upgrade(
     findings: Sequence[Mapping[str, object]],
     upgraded_from: str | None = None,
     gitignore_added: Sequence[str] = (),
+    config_added: Sequence[str] = (),
 ) -> None:
     """Render the outcome of ``docir self upgrade``, step by step.
 
@@ -645,6 +652,15 @@ def render_upgrade(
         # this fires once per store per release that adds an entry, and the
         # reader's next move is `git status` on the paths it names.
         console.print(f"[cyan]gitignore[/] now ignores {', '.join(gitignore_added)}")
+    if config_added:
+        # Named for the same reason, and one more: this file is *committed*, so
+        # the reader's next move is a commit and the whole team inherits what it
+        # says. A setting that appeared silently in a shared file would be found
+        # in a diff review by somebody who did not run the command.
+        console.print(
+            f"[cyan]config[/]    config.yaml now sets {', '.join(config_added)} "
+            "[dim]— committed, so it covers everyone who clones this repo[/]"
+        )
     _render_upgrade_findings(findings)
 
 

@@ -29,6 +29,16 @@ will stop doing, with the date. Backs `docir self status`, the package step of
   wire the service for one process
 - `ReleaseService.status(refresh=False) -> ReleaseStatus` — installed against
   newest known; a file read unless `refresh`
+- `ReleaseService.announce() -> str | None` — the ambient notice's line, or
+  `None`. A file read *and a write*: it records what it said, so one release is
+  announced at most once per store per day. `status` is the unthrottled answer.
+- `notice_for(status) -> str | None` — the line itself, pure. `None` where
+  nothing newer is published, where nothing has been checked, or where
+  `status.method` is in `SILENT_METHODS`. Where there is an `upgrade_command` it
+  names `docir self upgrade` **and when to run it**; where there is none it
+  carries the installation's own `explanation` instead.
+- `SILENT_METHODS` — the installation kinds that are never told to upgrade:
+  today, `project`.
 - `ReleaseService.upgrade_package() -> UpgradeOutcome` — run the installer where
   there is one; otherwise report why not
 - `is_newer(candidate, than=...) -> bool` — PEP 440 comparison, the one place
@@ -47,7 +57,17 @@ will stop doing, with the date. Backs `docir self status`, the package step of
 - **The network is opt-in and daily.** `status()` reads the cache; only
   `refresh=True` may fetch, and it skips the fetch when the cache was already
   written today. Every network failure collapses to `None`.
-- Nothing here decides *when* to check: the caller does (`DOCIR_UPDATE_CHECK`).
+- **Nothing here reaches the network on a reader's behalf.** `announce()` and
+  `notice_for` are a file read and a pure function; only a `refresh=True`
+  `status()` fetches, and only the daemon calls it that way.
+- **An installation that cannot act on the notice is not given one.** A
+  `project` install is docir as a dependency of the tree being worked in — which
+  includes docir's own repository, on the day it publishes the release the
+  notice would name.
+- **Announcing is idempotent within a day.** Two commands on one day print one
+  notice; a new `latest`, or a new day, prints again.
+- Nothing here decides *whether* to check: the caller does (`Settings.update_check`
+  — `DOCIR_UPDATE_CHECK`, `CI`, and the store's `config.yaml`).
 
 ## Events published
 - none (no event bus; see adr-d3e3616400bf)
@@ -57,8 +77,9 @@ will stop doing, with the date. Backs `docir self status`, the package step of
 
 ## Owns
 - data: one small JSON file in the store (`release-check.json`) holding the last
-  answer and the date it was fetched. No index/database state; it does not
-  participate in the shared unit-of-work.
+  answer, the date it was fetched, and the version/date last announced to a
+  reader. No index/database state; it does not participate in the shared
+  unit-of-work. It is gitignored: both facts are this machine's and dated.
 
 ## Depends on
 - modules: none

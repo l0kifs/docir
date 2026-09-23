@@ -1,4 +1,4 @@
-<!-- docir:v0.28.0 — generated file, do not edit by hand; refresh with `docir agent update` after upgrading docir -->
+<!-- docir:v0.29.0 — generated file, do not edit by hand; refresh with `docir agent update` after upgrading docir -->
 # When the answers look wrong
 
 Reads can quietly answer from the wrong state, and every such condition looks
@@ -136,8 +136,22 @@ schema, and `docir doctor` names it directly; the entry above says what to do.
 - `docir self status` — what is installed, how, and whether a newer release exists. A file
   read: it reports the answer the daemon last cached, and an absent `latest` means *nobody
   has checked*, not "up to date". `--refresh` asks PyPI now (docir's only network call, and
-  it is skipped if the answer is already from today). Set `DOCIR_UPDATE_CHECK=1` to have the
-  daemon keep it fresh and every command say on stderr when a newer docir is out.
+  it is skipped if the answer is already from today).
+- **A newer docir announces itself, once.** A store created by `docir init` carries
+  `update_check: true` in its `config.yaml`, so the daemon refreshes the answer daily and a
+  command prints one line on stderr — over MCP it arrives in the server's instructions at the
+  handshake instead. You will see it at most once a day per release.
+
+  **Act on it between tasks, never inside one.** `docir self upgrade` installs the new
+  package, replaces the running process, respawns the daemon and rebuilds the index; a task
+  that continues across that runs its remaining steps on a build nothing has verified, and in
+  CI it makes the job depend on the day it ran. Finish what you are doing, then run it — and
+  read the `check` findings it prints, because a release that moves the schema leaves work.
+
+  The notice is deliberately silent where it would be useless: a docir installed from a
+  checkout or pinned by a project lockfile is upgraded in that project, not by this command,
+  and it is told nothing. If you suspect you are behind and saw no notice, ask directly with
+  `docir self status --refresh`.
 
 ## When docir itself is the defect
 

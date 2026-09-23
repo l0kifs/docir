@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-09-23
+
+### Added
+
+- **A newer docir announces itself, to the agent, once** (adr-bea870d0b666). The release check
+  existed and was off behind `DOCIR_UPDATE_CHECK=1`, which is a variable in one person's shell;
+  the reader it is for is an agent, and it never saw it. `docir init` now writes a committed
+  `config.yaml` into the store carrying `update_check: true`, so creating a store is the act
+  that opts in and everyone who clones the repo inherits the answer. `docir self upgrade` tops
+  the file up the way it tops up `.gitignore` — appending, never rewriting, so a store that set
+  it to `false` keeps that.
+
+  It is **a new file rather than a key in an existing one**, because a store is read by whatever
+  docir each teammate installed and a build that has never heard of `config.yaml` cannot fail on
+  it (adr-ab4598c6f707). `DOCIR_UPDATE_CHECK` still decides for one shell, in both directions,
+  and a run with `CI` set never checks: an agent that follows an upgrade instruction inside a
+  job makes that job's docir version depend on the day it ran.
+
+  Over MCP it arrives in the server's **instructions**, at the handshake — the one place an
+  agent with no stderr will read it, at the one cadence that does not spend the context budget
+  body-less skeletons exist to protect. `--json` is unchanged: `query`, `search` and `context`
+  emit a bare array, and an envelope around them would break every consumer to deliver a
+  courtesy.
+
+### Fixed
+
+- **The upgrade notice no longer names a command that declines to run.** It said
+  `run docir self upgrade` to every installation, and the package step of that command refuses
+  for two of the six kinds docir distinguishes — an ephemeral `uvx` run, and a `project`
+  install, which is what an editable checkout and every lockfile-managed project detect as. A
+  `project` install is now told nothing at all (docir's own repository, on the day it publishes
+  the release, was the clearest case), and an installation with no upgrade command carries its
+  own explanation instead — `uvx docir@latest`, or the lockfile.
+
+- **The notice says when to act, and says it once.** `docir self upgrade` replaces the running
+  process, respawns the daemon and rebuilds the index, so the line now says to run it between
+  tasks rather than during one. It is announced at most once per release per day per store,
+  recorded beside the fetched answer in `release-check.json`; `docir self status` stays the
+  unthrottled answer for a reader who is asking rather than being told.
+
 ### Added
 
 - **`docir_doctor` gives an MCP client the environment it is running in.** Every other tool is
@@ -2843,7 +2883,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.28.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.29.0...HEAD
+[0.29.0]: https://github.com/l0kifs/docir/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/l0kifs/docir/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/l0kifs/docir/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/l0kifs/docir/compare/v0.25.0...v0.26.0

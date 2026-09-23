@@ -270,6 +270,29 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
   docir check --fix      # re-issues all but one, renames the file to match
   docir delete <id>
   ```
+- **Before you open a PR on a store using sequential ids, check against the base.**
+  Two branches cut from one base each allocate the next free id; both are valid
+  alone and neither can see the other, so the collision only appears when the
+  second one merges — when renumbering has stopped being your own cheap edit:
+
+  ```bash
+  git fetch origin main
+  docir check --against origin/main --strict    # exits 1 on a collision
+  ```
+
+  `branch-id-collision` names your id, your file and theirs. **There is no
+  renumber command** — an id is a document's only address — so the repair is to
+  bring the base in and let `--fix` do it, on your branch rather than on `main`:
+
+  ```bash
+  git merge origin/main     # or rebase
+  docir check --fix         # renumbers yours; theirs was committed first
+  docir check --against origin/main --strict   # now exits 0
+  ```
+
+  `unreadable-ref` means the ref was not there to read (usually unfetched); it
+  is an error, not a pass, because a gate silent for that reason looks exactly
+  like a clean branch.
 - **Read what `--fix` says about a duplicate-id repair.** The *established* file keeps the id —
   decided by which git added first, else the older `created`, else the filename — and the
   action names which decided. A message ending `filename order` means nothing separated them,

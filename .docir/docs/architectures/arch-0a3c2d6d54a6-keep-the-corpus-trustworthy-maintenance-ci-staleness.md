@@ -63,12 +63,12 @@ review stale docs → re-verify → (repair?)
 | 1 | BranchesMerged | ACT-006 | `git merge` | tests/modules/documents/test_merge_safety.py |
 | 2 | IndexRebuilt | ACT-002 | `docir reindex [--changed]` | maintenance_service.py:183 (`reindex`) → index_rebuilder.py |
 | 3 | StructureChecked | ACT-003 | `docir check [--strict]` | maintenance_service.py:204 (`check`) |
-| 4 | DuplicateIdDetected | system | file scan, not index | maintenance_service.py:491 (`_find_duplicate_ids`) |
+| 4 | DuplicateIdDetected | system | file scan, not index | maintenance_service.py:579 (`_find_duplicate_ids`) |
 | 5 | StaleFlagged | system | past `review_days` since `verified`, else `revoked`, else `created` — never `updated` | checks/verification_rules.py:52 (`_find_stale`) |
 | 6 | DocumentReVerified | ACT-007 | `docir update <id> --verified` | document_patch.py:134 (`_apply_verification`) |
-| 7 | AdvisoryLinted | ACT-002 | `docir lint --deep` | maintenance_service.py:527 (`lint_deep`) |
+| 7 | AdvisoryLinted | ACT-002 | `docir lint --deep` | maintenance_service.py:615 (`lint_deep`) |
 | 8 | EmbeddingsRebuilt | ACT-002 | `docir embed --flush`, or any full `docir reindex` | maintenance_service.py:195 (`flush_embeddings`) |
-| 9 | UnmatchedCodeFlagged | system | a governed `code:` glob matches nothing the repository tracks | checks/verification_rules.py:89 (`_find_unmatched_code`), maintenance_service.py:437 (`_resolve_code`) |
+| 9 | UnmatchedCodeFlagged | system | a governed `code:` glob matches nothing the repository tracks | checks/verification_rules.py:89 (`_find_unmatched_code`), maintenance_service.py:445 (`_resolve_code`) |
 | 9a | UnwatchedCodeFlagged | system | a governed `code:` glob resolves and no digest is watching it, so no edit to it is ever reported | checks/verification_rules.py:137 (`_find_unwatched_code`) |
 
 ### Why event 0 is numbered from zero

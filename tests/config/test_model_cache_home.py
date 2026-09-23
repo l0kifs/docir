@@ -33,13 +33,34 @@ def test_it_is_user_level_and_not_the_store(monkeypatch, tmp_path: Path) -> None
     assert cache != project.home / "models"
 
 
-def test_it_is_not_under_the_temp_directory(monkeypatch, tmp_path: Path) -> None:
+def test_it_is_not_under_the_temp_directory(monkeypatch) -> None:
+    """The defect itself, and the one test here that must not use ``tmp_path``.
+
+    `tmp_path` *is* under the temp directory — that is what it is for — so a
+    fake home built from it puts the answer inside the very directory this
+    asserts it stays out of. On Linux that fails outright, whatever
+    `model_cache_home` returns; on macOS it passed for a reason unrelated to
+    the property asserted, because `gettempdir()` reports ``/var/folders/…``
+    where `tmp_path` reports the symlink-resolved ``/private/var/folders/…``
+    and `in .parents` compares components rather than filesystem identity.
+    Green where it was written and impossible where it ran
+    (issue-64e4ff192ebb).
+
+    So the home is built from the filesystem root instead, and both sides are
+    resolved. The first assertion is the fixture's own precondition: without it
+    a later "simplification" back to `tmp_path` restores the blind spot on the
+    one platform that would not notice.
+    """
     import tempfile
 
-    monkeypatch.delenv(MODEL_CACHE_ENV, raising=False)
-    monkeypatch.setattr(Path, "home", classmethod(lambda _cls: tmp_path / "user"))
+    temp = Path(tempfile.gettempdir()).resolve()
+    outside = Path(temp.anchor) / "docir-home-outside-any-temp-dir"
+    assert temp not in outside.parents, "the fake home must itself sit outside the temp dir"
 
-    assert Path(tempfile.gettempdir()) not in model_cache_home().parents
+    monkeypatch.delenv(MODEL_CACHE_ENV, raising=False)
+    monkeypatch.setattr(Path, "home", classmethod(lambda _cls: outside))
+
+    assert temp not in model_cache_home().resolve().parents
 
 
 def test_an_explicit_choice_wins(monkeypatch, tmp_path: Path) -> None:

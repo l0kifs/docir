@@ -105,17 +105,45 @@ def build_server(settings: Settings) -> FastMCP:
         # first call instead of the store error it was made to carry.
         store_error = exc
     if store_error is not None:
+        # `diagnose` is supplied here too, deliberately: explaining why a
+        # store will not open is the one thing doctor is *for*, so it is the
+        # tool that must keep working when every other one cannot.
         return build_mcp_server(
             _UnavailableExecutor(store_error),
             describe_schema=lambda: _raise(store_error),
+            diagnose=lambda: _diagnose(settings, str(store_error)),
             version=__version__,
             unavailable=str(store_error),
         )
     return build_mcp_server(
         executor,
         describe_schema=lambda: describe_schema(load_schema(settings.schema_path)),
+        diagnose=lambda: _diagnose(settings, "", executor),
         version=__version__,
     )
+
+
+def _diagnose(
+    settings: Settings, store_error: str, executor: RequestExecutor | None = None
+) -> dict[str, object]:
+    """The doctor payload for the process serving these tools.
+
+    The store half goes through the executor like every other tool, so the
+    report describes the daemon actually answering rather than a second
+    container built beside it. With no executor there is no store to ask, and
+    the reason it could not be opened is the answer.
+    """
+    from docir.entry_points import doctor
+
+    def fetch() -> tuple[object, str]:
+        if executor is None:
+            return None, store_error
+        response = executor.execute(Request(command="store_status", payload={}))
+        if response.ok:
+            return response.data, ""
+        return None, str((response.error or {}).get("message", "store_status failed"))
+
+    return doctor.as_payload(doctor.build_report(settings, __version__, fetch))
 
 
 def _raise(error: DocirError) -> dict[str, object]:

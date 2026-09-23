@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 from docir import __version__
-from docir.config.settings import DEFAULT_REQUEST_TIMEOUT, Settings
+from docir.config.settings import DEFAULT_REQUEST_TIMEOUT, EMBED_THREADS_ENV, Settings
 from docir.entry_points.composition import Container, InProcessExecutor, build_container
 from docir.entry_points.daemon import lifecycle, socket_executor
 from docir.entry_points.daemon.socket_executor import SocketExecutor
@@ -514,6 +514,54 @@ class TestTheSchemaTheDaemonLoaded:
         # The build never moved, so the replacement is the schema and nothing
         # else — the two reasons have to stay separable to be reportable.
         assert lifecycle.serves_current_code(settings)
+
+    def test_a_changed_thread_cap_stops_matching(self, settings: Settings, monkeypatch) -> None:
+        """The third staleness input (GitHub #23).
+
+        The daemon resolves the cap once, when it builds its embedder, so
+        without this the variable changed nothing until the daemon idled out —
+        while `doctor`, which reads the *client's* environment, reported the new
+        value the whole time. That is the trap the setting exists to remove.
+        """
+        settings.ensure_directories()
+        self._schema(settings, "types: []\n")
+        monkeypatch.delenv(EMBED_THREADS_ENV, raising=False)
+        lifecycle.write_pid(settings, lifecycle.schema_digest(settings))
+        assert lifecycle.serves_current_embed_threads(settings)
+
+        monkeypatch.setenv(EMBED_THREADS_ENV, "2")
+        assert not lifecycle.serves_current_embed_threads(settings)
+        # Neither the build nor the schema moved, so the replacement is the cap
+        # and nothing else — the reasons have to stay separable to be reportable.
+        assert lifecycle.serves_current_code(settings)
+        assert lifecycle.serves_current_schema(settings)
+
+    def test_the_same_cap_keeps_matching(self, settings: Settings, monkeypatch) -> None:
+        # The half that makes the test above mean something: a predicate that
+        # always said "stale" would pass it and respawn the daemon every command.
+        settings.ensure_directories()
+        self._schema(settings, "types: []\n")
+        monkeypatch.setenv(EMBED_THREADS_ENV, "4")
+        lifecycle.write_pid(settings, lifecycle.schema_digest(settings))
+
+        assert lifecycle.serves_current_embed_threads(settings)
+
+    def test_an_unusable_cap_reads_as_unset_on_both_sides(
+        self, settings: Settings, monkeypatch
+    ) -> None:
+        """A typo must not respawn the daemon on every command.
+
+        `embed_threads` maps an unusable value to `None`, and the recorded side
+        went through the same function — so the two agree and the daemon is
+        left alone, rather than being stopped and rebuilt once per invocation.
+        """
+        settings.ensure_directories()
+        self._schema(settings, "types: []\n")
+        monkeypatch.delenv(EMBED_THREADS_ENV, raising=False)
+        lifecycle.write_pid(settings, lifecycle.schema_digest(settings))
+
+        monkeypatch.setenv(EMBED_THREADS_ENV, "not-a-number")
+        assert lifecycle.serves_current_embed_threads(settings)
 
     def test_a_pid_file_written_before_the_digest_never_matches(self, settings: Settings) -> None:
         # Unknown, so replace: the same reading an unstamped build gets, and the

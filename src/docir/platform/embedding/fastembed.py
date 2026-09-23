@@ -36,9 +36,16 @@ class _TextEmbedding(Protocol):
 class FastEmbedEmbedder(Embedder):
     """Wraps ``fastembed.TextEmbedding`` behind the :class:`Embedder` port."""
 
-    def __init__(self, model_name: str = _DEFAULT_MODEL, *, cache_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        model_name: str = _DEFAULT_MODEL,
+        *,
+        cache_dir: Path | None = None,
+        threads: int | None = None,
+    ) -> None:
         self._model_name = model_name
         self._cache_dir = cache_dir
+        self._threads = threads
         self._model: _TextEmbedding | None = None
 
     def _ensure_model(self) -> _TextEmbedding:
@@ -59,9 +66,18 @@ class FastEmbedEmbedder(Embedder):
             # (issue-c5c089bcc1b2). `None` still means "whatever fastembed
             # decides", which is what a caller building this directly gets.
             cache_dir = str(self._cache_dir) if self._cache_dir is not None else None
+            # `threads` reaches ONNX as both `intra_op_num_threads` and
+            # `inter_op_num_threads`, so it caps every path that runs the model:
+            # the warm-up, a reindex, and each query `context` embeds. `None` is
+            # fastembed's own behaviour, which is every core — fine on a build
+            # machine, and the complaint on a laptop (GitHub #23).
             self._model = cast(
                 _TextEmbedding,
-                TextEmbedding(model_name=self._model_name, cache_dir=cache_dir),
+                TextEmbedding(
+                    model_name=self._model_name,
+                    cache_dir=cache_dir,
+                    threads=self._threads,
+                ),
             )
         return self._model
 

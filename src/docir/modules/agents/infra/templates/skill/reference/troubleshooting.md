@@ -54,6 +54,9 @@ Each finding carries a `kind`, a `severity` and the command that closes it:
   all. This is the sandbox case, and nothing is broken: every command still answers, in process,
   paying the model's cold start. → set `TMPDIR` to a writable directory, or `DOCIR_NO_DAEMON=1`
   to stop trying and silence the per-command notice.
+- `embedding.threads` is not a finding but is the line to read when docir is loading the
+  machine: `null` means uncapped, which is fastembed's default of every core.
+  → `DOCIR_EMBED_THREADS`, which SKILL.md covers — what to set it to, and when.
 - `peer-unavailable` — a store in `stores.yaml` that every federated read is silently skipping.
 - `global-fallback` / `shadowed-store` — writes are about to land in a store other than the one
   you think. → `docir init`

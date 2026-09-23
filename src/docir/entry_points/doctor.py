@@ -36,15 +36,17 @@ from __future__ import annotations
 import importlib.util
 import os
 import time
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import asdict, dataclass
 from datetime import date
 from pathlib import Path
 
 from docir.config.settings import (
     NO_DAEMON_ENV,
     Settings,
+    embed_threads,
     enclosing_project_home,
+    model_cache_home,
 )
 from docir.entry_points.composition import (
     EMBEDDER_ENV,
@@ -70,6 +72,7 @@ from docir.modules.release.api import (
     ReleaseStatus,
     announcements,
     build_release_service,
+    describe_deprecations,
 )
 from docir.platform.clock import SystemClock
 from docir.platform.errors import DocirError
@@ -428,6 +431,132 @@ def diagnose(
         probe=probe,
         findings=tuple(findings),
     )
+
+
+def build_report(
+    settings: Settings,
+    version: str,
+    fetch_store: Callable[[], tuple[object, str]],
+    *,
+    probe: bool = False,
+) -> DoctorReport:
+    """Compose a whole report: snapshot, then the store, then the findings.
+
+    Here rather than in each caller, because there are two of them and the
+    order is load-bearing: ``snapshot`` must run **before** anything is
+    dispatched, since dispatching replaces a daemon serving other code and
+    builds a missing index — both facts gone by the time the first reply
+    returns.
+
+    ``fetch_store`` is injected rather than called directly for the reason
+    ``describe_schema`` is injected into the MCP server: it is the caller's
+    transport, and this module stays a pure mapping from facts to findings.
+    It returns the ``store_status`` payload and the reason there is none.
+    """
+    environment = snapshot(settings, version)
+    store, store_error = fetch_store()
+    probed = probe_embedder(environment.embed_model) if probe else None
+    return diagnose(environment, store_reply(store), store_error=store_error, probe=probed)
+
+
+def store_reply(payload: object) -> dict[str, object] | None:
+    """``store_status``'s reply as a mapping, or ``None`` when there is none.
+
+    ``None`` is the store-unreachable signal :func:`diagnose` turns into a
+    finding, so a reply that is not a mapping has to read the same way — a
+    payload nobody can interpret is not a store that answered. It lives beside
+    the composition rather than in either caller, because both transports have
+    to make that same reading of the same silence.
+    """
+    if not isinstance(payload, dict):
+        return None
+    return {str(key): value for key, value in payload.items()}
+
+
+def as_payload(report: DoctorReport) -> dict[str, object]:
+    """The diagnosis as one payload, findings included.
+
+    Sections and findings travel together rather than as two commands' output,
+    because a finding is only actionable beside the fact that produced it: "12
+    documents have no current vector" means one thing under the real model and
+    another under a leftover DOCIR_EMBEDDER, and the embedding section is where
+    the caller reads which.
+    """
+    environment = report.environment
+    release = environment.release
+    payload: dict[str, object] = {
+        "ok": not report.errors,
+        "installation": {
+            "version": environment.version,
+            "method": release.method,
+            "latest": release.latest,
+            "update_available": release.update_available,
+            "fastembed_installed": environment.fastembed_installed,
+        },
+        "store": {
+            "home": str(environment.home),
+            "home_origin": environment.home_origin,
+            "schema": str(environment.schema_path),
+            "schema_loads": not environment.schema_error,
+            "index_present": environment.index_present,
+            "shadowed_home": _opt_path(environment.shadowed_home),
+            "description": environment.store_description,
+            **(report.store or {}),
+        },
+        "embedding": {
+            "model": environment.embedder_id,
+            "configured": environment.embed_model,
+            "env": environment.embedder_env,
+            # Where the 64 MB download lives. Reported because "why did this
+            # command take sixteen seconds" and "where did the disk go" are the
+            # same question, and nothing else answers either (adr-78090be868ec).
+            "cache": str(model_cache_home()),
+            # How many CPU threads the model may use. `null` is fastembed's own
+            # behaviour — every core — which is what makes a laptop unusable
+            # during a reindex, and this is where somebody asking "why is this
+            # eating my CPU" looks (GitHub #23).
+            "threads": embed_threads(),
+        },
+        "daemon": {
+            "running": environment.daemon.running,
+            "pid": environment.daemon.pid,
+            "socket": environment.daemon.socket_path,
+            "serving": environment.daemon.version,
+            "stale_code": environment.daemon.stale_code,
+            "stale_schema": environment.daemon.stale_schema,
+            "disabled_by_env": environment.daemon_env_disabled,
+            "watching": environment.watch,
+        },
+        # How this store and this build relate, as facts rather than findings:
+        # the two numbers a teammate compares against their own docir, and every
+        # surface this build has announced it will stop accepting. Dated, so
+        # "is this urgent" is answerable without asking anybody
+        # (adr-6d4d43d44075).
+        "compat": {
+            "store_format": {
+                "declared": environment.store_format_declared,
+                "required": environment.store_format_required,
+                "supported": STORE_FORMAT,
+            },
+            "deprecations": describe_deprecations(environment.today),
+        },
+        "peers": [
+            {
+                "home": str(peer.home),
+                "unavailable": peer.unavailable,
+                "description": peer.description,
+            }
+            for peer in environment.peers
+        ],
+        "findings": [asdict(finding) for finding in report.findings],
+    }
+    if report.probe is not None:
+        payload["probe"] = asdict(report.probe)
+    return payload
+
+
+def _opt_path(path: Path | None) -> str | None:
+    return None if path is None else str(path)
 
 
 def _deprecation_findings(environment: Environment) -> list[DoctorFinding]:

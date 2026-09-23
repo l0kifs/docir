@@ -9,6 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`docir_doctor` gives an MCP client the environment it is running in.** Every other tool is
+  one dispatcher command, and `doctor` is not a command and could not be one: it snapshots the
+  environment *before* anything dispatches, because dispatching is what replaces a stale daemon
+  and builds a missing index. So it is the second exception to one-tool-per-command, on the same
+  argument as `docir_schema` — a thing an agent needs that is not a command.
+
+  Until now an MCP-only agent could not see the daemon, the peers a read was silently skipping,
+  the model actually in force, or the new thread cap. The composition and the payload shape both
+  moved into `entry_points/doctor.py` and are shared with the CLI, so the two transports cannot
+  come to describe the same machine differently.
+
+- **`DOCIR_EMBED_THREADS` caps how many cores the embedding model may take** (GitHub #23).
+  fastembed's default is every core, which is right on a build machine and is what makes a
+  laptop unusable while docir is warming the model, reindexing, or embedding a `context` query
+  — the three paths the reporter named. The value reaches ONNX as both `intra_op_num_threads`
+  and `inter_op_num_threads`, so one number covers all three.
+
+  An **environment variable and deliberately not a schema key**: a store is a committed
+  artifact read by whoever clones it, so a core count inside it would impose one laptop's
+  hardware on the whole team — the same argument that keeps the model itself out of the store.
+
+  Unset changes nothing, so no existing machine gets slower by upgrading. `docir doctor` reports
+  the cap under `embedding.threads` (absent when uncapped), which is where somebody asking why
+  docir is eating their CPU looks. A value that is not a positive integer is ignored rather than
+  raised: this is read while every container is built, `doctor` included, and a typo in a shell
+  profile must not stop the command you run to diagnose the problem.
+
+  **The daemon reads it once, at spawn.** Run `docir daemon stop` after changing it, or the new
+  value silently does not apply.
+
+### Added
+
 - **`docir check --against <ref>` asks about id collisions before the merge** (GitHub #22). Two
   branches cut from one base each allocate the next free sequential id; both are correct alone
   and neither can see the other, so the collision only surfaced once both documents were in one

@@ -180,6 +180,7 @@ class TestMcp:
         return build_mcp_server(
             InProcessExecutor(container.dispatcher),
             describe_schema=lambda: describe_schema(load_schema(settings.schema_path)),
+            diagnose=lambda: {"ok": True, "findings": []},
             version="0.0.0-test",
         )
 
@@ -261,6 +262,7 @@ class TestTheRoundTripIsRefusedRatherThanDuplicated:
         server = build_mcp_server(
             InProcessExecutor(container.dispatcher),
             describe_schema=lambda: describe_schema(load_schema(settings.schema_path)),
+            diagnose=lambda: {"ok": True, "findings": []},
             version="0.0.0-test",
         )
         doc = container.dispatcher.dispatch(
@@ -389,6 +391,7 @@ class TestRemoveSection:
         server = build_mcp_server(
             InProcessExecutor(container.dispatcher),
             describe_schema=lambda: describe_schema(load_schema(settings.schema_path)),
+            diagnose=lambda: {"ok": True, "findings": []},
             version="0.0.0-test",
         )
         doc = container.dispatcher.dispatch(
@@ -423,6 +426,7 @@ class TestRemoveSection:
         server = build_mcp_server(
             InProcessExecutor(container.dispatcher),
             describe_schema=lambda: describe_schema(load_schema(settings.schema_path)),
+            diagnose=lambda: {"ok": True, "findings": []},
             version="0.0.0-test",
         )
         doc = container.dispatcher.dispatch(

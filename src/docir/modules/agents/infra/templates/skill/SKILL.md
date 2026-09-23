@@ -183,6 +183,20 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
 - **`docir update <id> --verified` raises that finding to `code-changed`.** It
   re-takes the fingerprints as *you* read them, which is the stronger of the two
   claims — stamp it only when you did that reading.
+- **If docir is loading the machine, cap the model with `DOCIR_EMBED_THREADS`.**
+  The embedding model takes every core by default — noticeable on a laptop,
+  because the warm-up, `reindex` and every `context` / `search` all run it.
+  Reach for it when the person says docir is slow or their machine is hot, or
+  before reindexing a large corpus. Measured here, **4 is usually free**:
+  queries cost the same at any setting and 4 threads reindex as fast as 8.
+
+  ```bash
+  DOCIR_EMBED_THREADS=4 docir reindex
+  docir doctor | jq '.embedding.threads'   # null means uncapped
+  ```
+
+  It is read where docir is launched, so over MCP no tool can set it — read it
+  with `docir_doctor` and tell the person what to export.
 - **`docir doctor | jq '.compat'` says what is about to change** (over MCP, ask
   `docir_deprecations` for the same register). It carries the
   store format numbers — compare `required` against another machine's

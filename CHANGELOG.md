@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`docir check --against <ref>` asks about id collisions before the merge** (GitHub #22). Two
+  branches cut from one base each allocate the next free sequential id; both are correct alone
+  and neither can see the other, so the collision only surfaced once both documents were in one
+  tree — which is exactly the point at which the cheap repair stops being available. Before the
+  merge a branch renumbers its own document with one `docir update`; after it, whoever merges
+  second is repairing a conflict against an id other documents may already cite.
+
+  `check` already held everything needed except the comparison, so it gained a flag rather than
+  a command, and the CI line people already run gains one word:
+
+  ```bash
+  git fetch origin main
+  docir check --against origin/main --strict
+  ```
+
+  Two findings, both `error`, and both existing only when a ref is named — so neither can fail a
+  caller that did not ask for the gate. `branch-id-collision` names your id, your file and
+  theirs, and names the repair: there is **no renumber command**, because an id is a document's
+  only address, so the fix is `git merge origin/main` then `docir check --fix`, which re-issues
+  yours since the base's file was committed first. The point is not a cheaper repair but a
+  *sooner* one — done on your branch, before `main` ever sees the collision and before anyone
+  else can cite your id. **`unreadable-ref` is an error on purpose**: a pre-merge gate that passed because it
+  could not read the base ref is indistinguishable from a clean branch, which is the
+  `empty-index` argument arriving one merge away. The usual cause is mundane — the ref was never
+  fetched — and the message says so.
+
+  Only files *absent from the ref* are compared, so a document this branch merely edited is not
+  reported; that would fire on every branch. Ids come from the files' own frontmatter via one
+  `git grep` at the ref, not from filenames, which a prefix containing `-` makes ambiguous.
+  `--against` and `--fix` are refused together rather than one being ignored: the repair is to
+  renumber here, deliberately, and `--fix` allocates from the local counter without seeing that
+  ref.
+
 ### Changed
 
 - **`docir check --fix` decides which of two colliding files keeps the id by git provenance**

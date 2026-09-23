@@ -231,6 +231,187 @@ def _git(root: Path, *args: str, when: int | None = None) -> None:
     subprocess.run(["git", "-C", str(root), *args], check=True, env=env, capture_output=True)
 
 
+@pytest.mark.skipif(shutil.which("git") is None, reason="needs git to read a base ref")
+class TestThePreMergeCheck:
+    """`check --against <ref>` asks before the merge instead of after.
+
+    The collision exists from the moment the second branch allocates — the ids
+    are on both sides — but nothing could see it until both documents were in
+    one tree. By then renumbering has stopped being that branch's own cheap edit
+    and become a conflict for whoever merged second (GitHub #22).
+    """
+
+    def _base(self, settings: Settings, tmp_path: Path) -> Dispatcher:
+        """A committed base holding `adr-0001`, and a container over it."""
+        subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, capture_output=True)
+        settings.ensure_directories()
+        container = build_container(settings, background_embeddings=False)
+        self._containers.append(container)
+        docs = container.dispatcher
+        docs.dispatch("add", {"type": "decision", "title": "Established", "description": "d"})
+        _git(tmp_path, "add", "-A", when=1_600_000_000)
+        _git(tmp_path, "commit", "-q", "-m", "base", when=1_600_000_000)
+        return docs
+
+    @pytest.fixture(autouse=True)
+    def _closing(self):
+        self._containers: list = []
+        yield
+        for container in self._containers:
+            container.close()
+
+    def _kinds(self, docs: Dispatcher, **payload) -> list[str]:
+        return [i["kind"] for i in docs.dispatch("check", payload)]
+
+    def test_an_id_the_base_already_uses_is_an_error_before_the_merge(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        docs = self._base(settings, tmp_path)
+        # This branch mints a *different* document onto the same id, exactly as
+        # a second branch cut from the same base would.
+        incoming = settings.docs_root / "decisions" / "adr-0001-incoming.md"
+        incoming.write_text(_DUP_FILE, encoding="utf-8")
+        (settings.docs_root / "decisions" / "adr-0001-established.md").unlink()
+        docs.dispatch("reindex", {})
+
+        findings = [
+            i
+            for i in docs.dispatch("check", {"against": "HEAD"})
+            if i["kind"] == "branch-id-collision"
+        ]
+
+        assert [i["doc_ids"] for i in findings] == [("adr-0001",)]
+        # Both sides named, because the repair is to renumber one of them.
+        assert "decisions/adr-0001-incoming.md" in findings[0]["message"]
+        assert "decisions/adr-0001-established.md" in findings[0]["message"]
+        assert findings[0]["severity"] == "error"
+
+    def test_a_document_the_base_already_has_is_not_a_collision(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        """The half that makes the test above mean something.
+
+        A branch that *edits* an existing document keeps its id on both sides.
+        Reporting that would fire on every branch that touches a document, which
+        is every branch.
+        """
+        docs = self._base(settings, tmp_path)
+        docs.dispatch("update", {"doc_id": "adr-0001", "description": "edited here"})
+
+        assert "branch-id-collision" not in self._kinds(docs, against="HEAD")
+
+    def test_a_new_id_the_base_does_not_use_is_not_a_collision(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        docs = self._base(settings, tmp_path)
+        docs.dispatch("add", {"type": "decision", "title": "Fresh", "description": "d"})
+
+        assert "branch-id-collision" not in self._kinds(docs, against="HEAD")
+
+    def test_the_repair_the_finding_names_actually_clears_it(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        """Follow the shipped instruction and the branch comes out clean.
+
+        The finding names `git merge <ref>` then `check --fix`, and it has to,
+        because there is no renumber command — an id is a document's only
+        address. The first draft of this message said `docir update <id>`, which
+        cannot do it; nothing caught that until somebody ran the instructions.
+
+        The merge is performed for real, not simulated by writing a file, and
+        that is load-bearing: a merge *commits* both sides, which is what lets
+        the git key separate them. Restoring the base's file without committing
+        leaves one side untracked, git can say nothing about it, and `created`
+        decides instead — an honest fallback, and not the workflow being
+        documented here.
+        """
+        docs = self._base(settings, tmp_path)
+        decisions = settings.docs_root / "decisions"
+        base_file = decisions / "adr-0001-established.md"
+        established = base_file.read_text(encoding="utf-8")
+
+        # This branch: the base's document is gone and a different one holds
+        # its id, which is what a branch cut before it and merged after looks
+        # like from here.
+        (decisions / "adr-0001-incoming.md").write_text(_DUP_FILE, encoding="utf-8")
+        base_file.unlink()
+        docs.dispatch("reindex", {})
+        _git(tmp_path, "add", "-A", when=1_700_000_000)
+        _git(tmp_path, "commit", "-q", "-m", "mine", when=1_700_000_000)
+        assert "branch-id-collision" in self._kinds(docs, against="HEAD~1")
+
+        # The repair the finding names: bring the base in, then `check --fix`.
+        base_file.write_text(established, encoding="utf-8")
+        _git(tmp_path, "add", "-A", when=1_800_000_000)
+        _git(tmp_path, "commit", "-q", "-m", "merge the base", when=1_800_000_000)
+        docs.dispatch("reindex", {})
+        repaired = docs.dispatch("repair", {})
+
+        # This branch's document moved; the base's kept the id, because the base
+        # committed it first.
+        assert [a["kind"] for a in repaired["actions"]] == ["duplicate-id"]
+        assert "adr-0001-incoming.md" in repaired["actions"][0]["message"]
+        assert base_file.exists()
+        report = docs.dispatch("check", {"against": "HEAD~2"})
+        assert "branch-id-collision" not in [i["kind"] for i in report], [
+            i["message"] for i in report if i["kind"] == "branch-id-collision"
+        ]
+
+    def test_a_ref_that_cannot_be_read_is_an_error_not_silence(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        """The `empty-index` argument, one merge away.
+
+        A pre-merge gate silent because it could not read the base ref is
+        indistinguishable from a clean branch, which is the one outcome a gate
+        must never produce.
+        """
+        docs = self._base(settings, tmp_path)
+
+        findings = [
+            i
+            for i in docs.dispatch("check", {"against": "origin/nope"})
+            if i["kind"] == "unreadable-ref"
+        ]
+
+        assert len(findings) == 1
+        assert findings[0]["severity"] == "error"
+        assert "origin/nope" in findings[0]["message"]
+
+    def test_without_the_flag_nothing_compares(self, settings: Settings, tmp_path: Path) -> None:
+        # The flag is the opt-in: no ref named, no ref read, and no finding that
+        # could red-build a branch that never asked for the gate.
+        docs = self._base(settings, tmp_path)
+        incoming = settings.docs_root / "decisions" / "adr-0001-incoming.md"
+        incoming.write_text(_DUP_FILE, encoding="utf-8")
+        (settings.docs_root / "decisions" / "adr-0001-established.md").unlink()
+        docs.dispatch("reindex", {})
+
+        kinds = self._kinds(docs)
+
+        assert "branch-id-collision" not in kinds
+        assert "unreadable-ref" not in kinds
+
+    def test_a_store_with_no_repository_says_so_rather_than_passing(
+        self, container, settings: Settings
+    ) -> None:
+        """No `.git` above this store, so there is nothing to compare against.
+
+        Silence would be the same lie as an unreadable ref.
+        """
+        docs = container.dispatcher
+        docs.dispatch("add", {"type": "decision", "title": "T", "description": "d"})
+
+        findings = [
+            i
+            for i in docs.dispatch("check", {"against": "origin/main"})
+            if i["kind"] == "unreadable-ref"
+        ]
+
+        assert len(findings) == 1
+        assert findings[0]["severity"] == "error"
+
+
 class TestWhichDuplicateKeepsTheId:
     """`check --fix` decides by git provenance first (GitHub #22).
 

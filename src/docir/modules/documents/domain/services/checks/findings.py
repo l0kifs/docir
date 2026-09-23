@@ -19,7 +19,16 @@ from dataclasses import dataclass
 #: warnings this file argues against promoting all red-build a *correct* setup;
 #: this one red-builds a setup that was never checking anything, and names the
 #: single command that fixes it.
-ERROR_KINDS: frozenset[str] = frozenset({"duplicate-id", "dangling", "malformed", "empty-index"})
+ERROR_KINDS: frozenset[str] = frozenset(
+    {
+        "duplicate-id",
+        "dangling",
+        "malformed",
+        "empty-index",
+        "branch-id-collision",
+        "unreadable-ref",
+    }
+)
 
 #: Every finding kind docir defines. A store's own check may not take one of
 #: these names: a check called `dangling` would make `--strict`'s behaviour
@@ -28,6 +37,8 @@ ERROR_KINDS: frozenset[str] = frozenset({"duplicate-id", "dangling", "malformed"
 RESERVED_FINDING_KINDS: frozenset[str] = frozenset(
     {
         "duplicate-id",
+        "branch-id-collision",
+        "unreadable-ref",
         "dangling",
         "malformed",
         "orphan",
@@ -101,6 +112,16 @@ RESERVED_FINDING_KINDS: frozenset[str] = frozenset(
 #: yesterday can fail today with no commit to point at. An error there would
 #: red-build every repo on the release that added the field, which is precisely
 #: the failure the two rules above were written to avoid.
+#: `branch-id-collision` is an error although nothing in the working tree is
+#: broken yet, and `unreadable-ref` is one although it describes no document at
+#: all. Both earn it the way `empty-index` does rather than the way
+#: `duplicate-id` does. They exist only when `--against <ref>` is passed, so
+#: they cannot red-build anything that did not opt in, and what the flag opts
+#: into is a *gate*: the whole point is to fail before the merge that would make
+#: the collision real. `unreadable-ref` is the same argument one level out — a
+#: pre-merge gate that passed because it could not read the base ref is the
+#: failure this check exists to prevent, and silence there is indistinguishable
+#: from a clean branch.
 ERROR = "error"
 WARNING = "warning"
 

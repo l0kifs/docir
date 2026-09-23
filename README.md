@@ -197,7 +197,7 @@ never watch, so CI still needs the explicit command.
 | `docir context <query>` | Ranked relevant set (skeletons) — full-text + vector, fused (`--also` to add a phrasing you could defend, `--min-score` to filter noise, `--explain` for the trace) |
 | `docir search` / `query` | Full-text search (title/description/body — **not tags**) / structured filter. Both page with `--limit`/`--offset`; `query --owner X --stale` is a review queue, `query --code <path>` the decisions governing a file, `query --expr` a JMESPath question over fields and resolved edges |
 | `docir get <id> [<id>...]` | Full documents with bodies — several in one command, and `<id>#<heading>` for just one section of one |
-| `docir check` | Structural findings — duplicate ids, dangling edges, broken `[[...]]` links, staleness (`--strict` gates CI on errors, `--fix` repairs them) |
+| `docir check` | Structural findings — duplicate ids, dangling edges, broken `[[...]]` links, staleness (`--strict` gates CI on errors, `--fix` repairs them, `--against <ref>` catches id collisions before a merge) |
 | `docir doctor` | Diagnose the *environment* — the installation, this store's index, the embedding model, the daemon, the peers (`--strict` gates a setup step on errors) |
 | `docir agent install` | Teach this repo's AI agent to drive docir (`--agent claude-writing` the writing rules, `--agent claude-feedback` upstream bug reports) |
 | `docir self upgrade` | Upgrade docir, then resync this store: reindex, refresh the agent files, report what `check` finds |
@@ -339,7 +339,15 @@ force.
 Ids are random by default (`adr-3f9a2b1c7d4e`), which two branches can never mint
 identically. `--id-style sequential` trades that for human-friendly `adr-0007` numbering,
 collision-free within one store — a merge can bring two branches that allocated the same
-number, and `docir check` reports it as `duplicate-id`.
+number, and `docir check` reports it as `duplicate-id`. Catch it **before** the merge, while
+renumbering is still one branch's own edit rather than a conflict for whoever merges second:
+
+```bash
+git fetch origin main
+docir check --against origin/main --strict   # exits 1 on a collision with the base
+```
+
+The finding names what to do about it. Nothing here has to be repaired by hand.
 
 Merging only adds types, so `disable_types:` is how you give one up — and it is what frees
 that type's `prefix` for your own to claim, which is what lets a renamed corpus keep the ids

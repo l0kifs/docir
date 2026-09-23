@@ -253,6 +253,13 @@ files and the derived index never disagree.
   need, and the highest this build reads. Here as well as in `docir doctor` because the
   reader over MCP is an agent and `doctor` has no tool; `(1, 1)` with no schema file, on the
   same rule the declaration follows (absent means every build can read it, never unknown).
+- `MaintenanceService.check(against=None)` — with a git ref, also reports ids **new on this
+  branch** that the ref already uses (`branch-id-collision`) and a ref it could not read at all
+  (`unreadable-ref`). Both are `error`, and both exist only when a ref is named, so neither can
+  fail a caller that did not ask for the gate; an unreadable ref must not be silence, because a
+  pre-merge gate that passed because it could not look is indistinguishable from a clean branch
+  (adr-df43aff8bb0d). Files present at the ref are skipped — a document edited on this branch
+  keeps its id on both sides
 - `MaintenanceService.repair() -> RepairResult` — fix the mechanically-fixable Tier 1 damage:
   re-issue duplicate ids and drop dead `related` edges. The **established** file keeps the id —
   decided by which git first added (a `FileHistory`, absent outside a repository), else the older

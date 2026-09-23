@@ -105,6 +105,15 @@ class FileHistory(ABC):
         *new*.
         """
 
+    @abstractmethod
+    def ids_at(self, ref: str) -> dict[str, str] | None:
+        """Every document id committed at ``ref``, mapped to its file path.
+
+        ``None`` is *unknown* — an unknown ref, a shallow clone, no repository,
+        no git — and never "no ids there". An empty dict is the other answer:
+        the ref resolves and holds no documents.
+        """
+
 
 class CodeMatcher(ABC):
     """Resolves a document's ``code`` globs against a working tree.

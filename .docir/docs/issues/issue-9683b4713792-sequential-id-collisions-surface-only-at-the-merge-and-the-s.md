@@ -10,8 +10,9 @@ description: Two branches off one base allocate the same next id; nothing warns 
 id: issue-9683b4713792
 owner: maintainer
 related:
+- adr-df43aff8bb0d
 - adr-39210c34551a
-status: open
+status: resolved
 tags: []
 title: Sequential id collisions surface only at the merge, and the surviving id was
   decided by filename order
@@ -64,14 +65,19 @@ Three guards in `tests/modules/documents/test_merge_safety.py`, each naming the 
 document. Verified by removing the git key: the provenance test fails, the two pinning the
 fallbacks pass either way.
 
-## Still open
+## Also resolved: the pre-merge check
 
-The **pre-merge check**, which is the more valuable half. The collision is knowable the moment
-the second branch allocates — the ids exist on both sides — and that is while renumbering is
-still cheap; after the merge, whoever merges second is repairing a conflict. `check` has
-everything it needs except a comparison against a base ref.
+[[adr-df43aff8bb0d]] — `docir check --against <ref>` reports ids new on this branch that the
+ref already uses, and refuses to be silent about a ref it could not read.
 
-Recorded as [[issue-9683b4713792]] rather than closed with the tiebreak.
+The collision is knowable the moment the second branch allocates — the ids exist on both
+sides — and that is while renumbering is still cheap; after the merge, whoever merges second is
+repairing a conflict. `check` already held everything needed except the comparison, so it
+gained a flag rather than a command.
+
+Six guards in `tests/modules/documents/test_merge_safety.py`. Verified by removing the call:
+the three asserting a finding fail, and the three asserting silence — a document the base
+already has, a genuinely new id, and no flag at all — pass either way.
 
 ## And a smaller one
 

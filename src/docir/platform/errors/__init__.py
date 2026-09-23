@@ -132,10 +132,15 @@ class DanglingReferenceError(DocirError):
 
 
 class DuplicateDocumentIdError(DocirError):
-    """A freshly allocated id already has a file on disk; the create was refused.
+    """More than one file claims an id, so a write that needs one was refused.
 
-    Means the index's id counter is behind the canonical files — the state a
-    rebuild used to leave behind before ``reindex`` restored the counter.
+    Two routes, and the second is why the name is about the *state* rather than
+    about the create path. A **create** hits it when the index's id counter is
+    behind the canonical files — what a rebuild used to leave behind before
+    ``reindex`` restored the counter. A **delete** hits it when two files
+    already claim the id, which a merge of two branches on sequential ids
+    produces: the index keeps one row per id, so every read of it names a file
+    nobody chose (adr-3cfa867c8537).
     """
 
     exit_code = 5

@@ -260,6 +260,16 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
   **strips the edge from each referencing doc**, naming them in its output — so a
   forced delete never leaves a dangling link. Prefer `archive` when the document
   is merely no longer current: it keeps the history and the graph intact.
+- **`delete` refuses an id two files claim, `--force` included**, and names the
+  files. That is what a merge of two branches on sequential ids leaves behind;
+  `--force` overrides inbound references, not ambiguity about which document you
+  meant. Repair it first, then delete:
+
+  ```bash
+  docir check | jq -r '.[] | select(.kind=="duplicate-id") | .message'
+  docir check --fix      # re-issues all but one, renames the file to match
+  docir delete <id>
+  ```
 - Body edits, safest→riskiest: `--append-section` → `--replace-section` →
   `--replace-body` (needs `--force`; fails "stale write" if the file changed on
   disk — `docir get` first). That ranking is how much each one can *destroy*,

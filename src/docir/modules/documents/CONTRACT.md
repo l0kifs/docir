@@ -88,7 +88,12 @@ files and the derived index never disagree.
 - `DocumentService.archive(id)/unarchive(id) -> DocumentView` — toggle active search
 - `DocumentService.delete(id, force) -> tuple[str, ...]` — remove file and index rows;
   blocked while referenced unless `force`, which strips the edge from each referencing
-  document in the same transaction and returns their ids (without advancing their `updated`)
+  document in the same transaction and returns their ids (without advancing their `updated`).
+  Raises `DuplicateDocumentIdError` when more than one *file* claims the id, `force` included
+  and before the unit of work opens: every step below it reads the index, which holds one row
+  per id, so the delete acted on a file nobody chose and stripped edges citing the file it was
+  not deleting (adr-3cfa867c8537). The claimants are read from `scan()` rather than the index,
+  which cannot answer the question — the second claimant is what it already discarded
 - `MaintenanceService.reindex(changed_only) -> ReindexResult` — rebuild index from files.
   `changed_only` skips re-saving unchanged files; the removal sweep runs in both modes, so
   either way the index ends up agreeing with the filesystem.

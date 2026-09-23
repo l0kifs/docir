@@ -617,6 +617,12 @@ def _register_write_tools(mcp: FastMCP, run: _Gateway) -> None:
         the edge from every referencing document in the same transaction and
         returns their ids — so a delete can never leave a dangling reference.
 
+        Also refused, `force` included, when more than one file claims the id —
+        the state a merge of two branches on sequential ids produces. `force`
+        overrides inbound references, not ambiguity about which document is
+        meant. Repair it with `docir_check_fix`, which re-issues all but one,
+        then delete.
+
         Args:
             doc_id: The document to delete.
             force: Also strip the inbound edges. Cannot be undone.

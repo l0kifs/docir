@@ -382,6 +382,17 @@ def delete(
     A forced delete also strips the edge from every document that referenced this
     one, and names them — a delete that silently rewrites other people's files
     would be worse than one that refuses.
+
+    An id that **more than one file claims** is refused whatever flags you pass,
+    naming the files. `--force` overrides inbound references, not ambiguity about
+    which document is meant — the edges it would strip cannot be told apart by
+    id. That state is what a merge of two branches on sequential ids produces;
+    `docir check` reports it as `duplicate-id` and `docir check --fix` repairs
+    it, re-issuing all but one and renaming the file to match:
+
+        docir check | jq -r '.[] | select(.kind=="duplicate-id") | .message'
+        docir check --fix
+        docir delete <id>
     """
     data = execute("delete", {"doc_id": doc_id, "force": force})
     raw = data.get("unlinked") if isinstance(data, dict) else None

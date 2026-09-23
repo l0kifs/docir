@@ -74,6 +74,20 @@ Three tiers, and mixing them is the documented overengineering trap. The recurri
   An error kind there red-builds every repo on the release that moved the rule, and nothing about
   the documents changed.
 
+- **`check --against <ref>` is the one gate that is genuinely pre-merge (adr-df43aff8bb0d).**
+  The id collision exists from the moment the second branch allocates and was only visible once
+  both documents were in one tree — the point at which renumbering stops being the branch's own
+  cheap edit. Its two findings, `branch-id-collision` and `unreadable-ref`, are **errors**, and
+  that does not contradict the rule above: they exist only when a ref is named, and naming one
+  *is* asking for a gate, so neither can red-build a caller that did not opt in. `unreadable-ref`
+  earns it the way `empty-index` does — a gate that passed because it could not look is worse
+  than no gate, and silence there looks exactly like a clean branch, which is why `ids_at`
+  returns `None` for *unknown* and `{}` for *no documents at the ref* and the two must never be
+  collapsed. Only files **absent from the ref** are compared; a document edited on this branch
+  keeps its id on both sides, and reporting that would fire on every branch. `--fix` and
+  `--against` are refused together rather than one being ignored: the repair is to renumber
+  here, and `--fix` allocates from the local counter without seeing that ref.
+
 - **`missing-required` is the one Tier 1 finding a hand-edit is not needed to produce.** Its
   siblings (`unknown-type`/`unknown-status`/`unknown-tag`/`unknown-relation-kind`) all mean a file
   was written outside the CLI; this one means the *rule* moved under documents that were valid

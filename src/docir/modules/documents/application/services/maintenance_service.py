@@ -201,7 +201,7 @@ class MaintenanceService:
         """
         return self._scheduler.flush()
 
-    def check(self) -> list[CheckIssue]:
+    def check(self, against: str | None = None) -> list[CheckIssue]:
         """Tier 1 structural checks over the graph (``docir check``).
 
         Also catches the two Tier 0 rules a hand-edit can bypass: a status the
@@ -215,6 +215,13 @@ class MaintenanceService:
         the index (which dedupes by primary key). Duplicate ids are exactly what
         a merge of two branches that both minted the same sequential id
         produces, so this is the check that guards a merge into ``main``.
+
+        ``against`` guards it **before** the merge instead of after. The
+        collision exists from the moment the second branch allocates — the ids
+        are on both sides — but nothing could see it until both documents were
+        in one tree, which is the point at which renumbering stopped being the
+        branch's own cheap edit and became a conflict for whoever merged second
+        (adr-df43aff8bb0d).
         """
         with self._uow_factory() as uow:
             documents = uow.documents.all()
@@ -230,6 +237,7 @@ class MaintenanceService:
         )
         issues.extend(self._unbuilt_index_issue())
         issues.extend(self._find_duplicate_ids())
+        issues.extend(self._find_branch_id_collisions(against))
         issues.extend(self._find_malformed())
         issues.extend(self._drift_issues())
         issues.extend(self._format_issues())
@@ -487,6 +495,86 @@ class MaintenanceService:
             CheckIssue(kind="malformed", message=reason, doc_ids=())
             for _path, reason in self._file_store.find_malformed()
         ]
+
+    def _find_branch_id_collisions(self, against: str | None) -> list[CheckIssue]:
+        """Ids this branch allocated that a base ref already uses.
+
+        Only files **new on this branch** are compared. A document present at
+        the ref keeps its id there and here, edited or not, and reporting it
+        would make the check fire on every branch that touches a document.
+        What is left is exactly the allocation question: this branch minted an
+        id, and so did the other side.
+
+        The finding names the repair, and the repair is **not** a renumber
+        command, because there is none: an id is a document's only address and
+        no write re-mints one. It is to merge the base into this branch and run
+        `check --fix`, which then sees both files and re-issues the *newer* —
+        this branch's, since the base's was committed first (adr-39210c34551a).
+        Same repair either way; doing it here is what keeps it off `main` and
+        out of the way of whoever merges next.
+
+        Two answers are errors here, and neither red-builds anything that did
+        not opt in — both exist only when a ref is named:
+
+        * a collision, because the whole point of naming a ref is to fail
+          before the merge that makes it real;
+        * **a ref that could not be read**, because a pre-merge gate silent for
+          that reason is indistinguishable from a clean branch, which is the
+          `empty-index` argument arriving on the other side of the merge.
+
+        The ids at the ref come from that side's *file contents*, and so do
+        ours — the filename begins with the id but a prefix carrying a ``-``
+        makes it ambiguous, and a hand-edited file can disagree with its own
+        name.
+        """
+        if against is None:
+            return []
+        if self._history is None:
+            return [
+                CheckIssue(
+                    kind="unreadable-ref",
+                    message=(
+                        f"cannot compare against {against!r}: this store has no repository "
+                        f"above it, so there is no history to read — run the check from a "
+                        f"project store created by `docir init` inside a checkout"
+                    ),
+                    doc_ids=(),
+                )
+            ]
+        theirs = self._history.ids_at(against)
+        if theirs is None:
+            return [
+                CheckIssue(
+                    kind="unreadable-ref",
+                    message=(
+                        f"cannot read {against!r} — unknown ref, or a clone whose history "
+                        f"does not reach it; fetch it first (`git fetch origin main`). "
+                        f"Reporting nothing here would look exactly like a clean branch"
+                    ),
+                    doc_ids=(),
+                )
+            ]
+        issues: list[CheckIssue] = []
+        for document in sorted(self._file_store.scan(), key=lambda doc: doc.id):
+            path = document.path or ""
+            if path in theirs.values():
+                continue
+            other = theirs.get(document.id)
+            if other is None:
+                continue
+            issues.append(
+                CheckIssue(
+                    kind="branch-id-collision",
+                    message=(
+                        f"{document.id!r} is new on this branch ({path}) and {against} "
+                        f"already uses it ({other}); bring the base in and repair it here "
+                        f"— `git merge {against}` then `docir check --fix`, which renumbers "
+                        f"yours because theirs was committed first"
+                    ),
+                    doc_ids=(document.id,),
+                )
+            )
+        return issues
 
     def _find_duplicate_ids(self) -> list[CheckIssue]:
         paths_by_id: dict[str, list[str]] = {}

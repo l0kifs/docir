@@ -276,8 +276,11 @@ class Dispatcher:
         result = self._maintenance.reindex(changed_only=_bool(payload, "changed_only"))
         return asdict(result)
 
-    def _check(self, _payload: Payload) -> object:
-        return [asdict(issue) for issue in self._maintenance.check()]
+    def _check(self, payload: Payload) -> object:
+        against = payload.get("against")
+        return [
+            asdict(issue) for issue in self._maintenance.check(str(against) if against else None)
+        ]
 
     def _schema_drift(self, _payload: Payload) -> object:
         return {"drift": self._maintenance.schema_drift()}

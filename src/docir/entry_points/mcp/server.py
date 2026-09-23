@@ -674,7 +674,7 @@ def _register_maintenance_tools(mcp: FastMCP, run: _Gateway) -> None:
     # -- maintenance --------------------------------------------------------
 
     @mcp.tool(annotations=_READ_ONLY)
-    def docir_check() -> list[dict[str, Any]]:
+    def docir_check(against: str | None = None) -> list[dict[str, Any]]:
         """Structural findings over the corpus. Read the severity.
 
         `error` means the corpus is broken — a duplicate id hiding a document,
@@ -704,14 +704,33 @@ def _register_maintenance_tools(mcp: FastMCP, run: _Gateway) -> None:
         against what a reader actually saw. Neither is repairable: a repair has
         nothing to read with.
 
+        `against` names a git ref and turns this into a **pre-merge** gate.
+        Two branches cut from one base each allocate the next free sequential
+        id; both are correct alone and neither can see the other, so the
+        collision only surfaces when the second merges — after renumbering has
+        stopped being that branch's own cheap edit. Passing `against="origin/main"`
+        asks while it is still cheap, and adds two error findings that exist only
+        then: `branch-id-collision` (your id, your file, theirs) and
+        `unreadable-ref` (the ref could not be read — an error on purpose, since
+        a gate silent for that reason looks exactly like a clean branch).
+
+        There is no renumber tool — an id is a document's only address — so the
+        repair for a collision is to merge the base into this branch and call
+        `docir_check_fix`, which then sees both files and re-issues this
+        branch's, the base's having been committed first.
+
         `code-unwatched` is what a store looks like before either can fire: the
         glob exists on disk and no digest is watching it, so no edit to it will
         ever be reported. That is the state of a glob declared before the code
         it governs was written, and of one written by a build that minted no
         baseline. `docir_check_fix` files the baseline; watching starts at the
         next change, not at the one already missed.
+
+        Args:
+            against: A git ref to compare allocations against, e.g.
+                `"origin/main"`. Omit for the ordinary local check.
         """
-        return run.many("check", {})
+        return run.many("check", {"against": against} if against else {})
 
     @mcp.tool(annotations=_READ_ONLY)
     def docir_deprecations() -> dict[str, Any]:

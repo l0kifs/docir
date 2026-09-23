@@ -68,6 +68,14 @@ def check(
         bool,
         typer.Option("--strict-all", help="Exit nonzero on ANY finding, warnings included."),
     ] = False,
+    against: Annotated[
+        str | None,
+        typer.Option(
+            "--against",
+            metavar="REF",
+            help="Also report ids new on this branch that this git ref already uses.",
+        ),
+    ] = None,
     fix: Annotated[
         bool,
         typer.Option(
@@ -104,6 +112,31 @@ def check(
     One warning reports good news: `unblocked` names a live document whose every
     `depends_on` target has closed, so the work is ready to start. Nothing else
     reads that edge — without this it stays true and unnoticed.
+
+    `--against <ref>` turns this into a **pre-merge** gate. Two branches cut from
+    one base each allocate the next free sequential id; both are correct on their
+    own and neither can see the other, so the collision only surfaces when the
+    second one merges — by which point renumbering is a conflict for whoever
+    merged second rather than that branch's own cheap edit. Naming the base ref
+    asks the question while it is still cheap:
+
+        git fetch origin main
+        docir check --against origin/main --strict     # exits 1 on a collision
+
+    Two error findings come from it, and only from it. `branch-id-collision`
+    names your id, your file and theirs; there is no renumber command, because
+    an id is a document's only address, so the repair is to bring the base in
+    and let `--fix` re-issue yours — theirs was committed first, so theirs keeps
+    the number:
+
+        git merge origin/main
+        docir check --fix
+        docir check --against origin/main --strict     # now exits 0
+
+    `unreadable-ref` means the ref could not be read at all — an unknown ref, or
+    a clone whose history does not reach it — and it is an error on purpose: a
+    pre-merge gate that passed because it could not look is indistinguishable
+    from a clean branch.
 
     One warning is about a *silence*. `code-unwatched` names a `code:` glob that
     exists on disk and that no digest is watching, so no edit to it will ever be
@@ -150,6 +183,15 @@ def check(
     other flag here.
     """
     state = get_state()
+    if fix and against:
+        # Refused rather than ignored: the repair for a collision with another
+        # ref is to renumber *here*, deliberately, and `--fix` re-issuing ids
+        # locally could mint straight into the same ref again. Silently dropping
+        # one of two flags somebody passed is the worse answer.
+        raise typer.BadParameter(
+            "use --against or --fix, not both: a collision with another ref is "
+            "renumbered here on purpose, and --fix cannot see that ref"
+        )
     if fix:
         with rendering.progress("repairing the corpus"):
             result = execute("repair", {})
@@ -160,7 +202,7 @@ def check(
         else:
             rendering.render_repair(emit.as_list(payload.get("actions")), issues)
     else:
-        data = execute("check", {})
+        data = execute("check", {"against": against} if against else {})
         issues = emit.as_list(data)
         if use_json(state):
             rendering.emit_json(data, trim=state.trim)

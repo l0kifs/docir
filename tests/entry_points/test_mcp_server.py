@@ -24,7 +24,7 @@ from fastmcp import Client
 from fastmcp.exceptions import ToolError
 
 from conftest import FixedClock
-from docir.config.settings import Settings
+from docir.config.settings import EMBED_THREADS_ENV, Settings
 from docir.entry_points.composition import Container, InProcessExecutor
 from docir.entry_points.dispatch import Dispatcher
 from docir.entry_points.federation import FEDERATED_COMMANDS
@@ -73,6 +73,7 @@ def server(container: Container, settings: Settings):
     return build_mcp_server(
         InProcessExecutor(container.dispatcher),
         describe_schema=lambda: describe_schema(load_schema(settings.schema_path)),
+        diagnose=lambda: {"ok": True, "findings": []},
         version="0.0.0-test",
     )
 
@@ -157,6 +158,7 @@ def test_read_tools_are_annotated_read_only(server) -> None:
         "docir_query",
         "docir_get",
         "docir_schema",
+        "docir_doctor",
         "docir_bench",
         "docir_tag_list",
         "docir_check",
@@ -166,6 +168,75 @@ def test_read_tools_are_annotated_read_only(server) -> None:
         "docir_lint",
     }
     assert hinted("destructiveHint") == {"docir_delete", "docir_tag_remove"}
+
+
+class TestTheEnvironmentIsAskableOverTheWire:
+    """`docir_doctor`: the process serving these tools, described (GitHub #23).
+
+    `doctor` is not a dispatcher command and could not be one — it snapshots the
+    environment *before* anything dispatches, because dispatching is what
+    replaces a stale daemon and builds a missing index. So it is the second
+    exception to one-tool-per-command, on the same argument as `docir_schema`:
+    a thing an agent needs that is not a command.
+
+    Until this existed an MCP-only agent could not see the environment it was
+    running in at all — not the daemon, not the peers a read was skipping, not
+    the model actually in force.
+    """
+
+    def _server(self, settings: Settings, container: Container, executor=None):
+        from docir.entry_points import doctor as doctor_report
+
+        def fetch() -> tuple[object, str]:
+            # The dispatcher already returns the payload as a mapping, which is
+            # what the real MCP path receives over the executor.
+            return container.dispatcher.dispatch("store_status", {}), ""
+
+        return build_mcp_server(
+            InProcessExecutor(container.dispatcher),
+            describe_schema=lambda: describe_schema(load_schema(settings.schema_path)),
+            diagnose=lambda: doctor_report.as_payload(
+                doctor_report.build_report(settings, "0.0.0-test", fetch)
+            ),
+            version="0.0.0-test",
+        )
+
+    def test_it_returns_the_same_sections_the_cli_prints(
+        self, settings: Settings, container: Container
+    ) -> None:
+        """One payload shape, not two.
+
+        Both transports go through `doctor.as_payload`, so a reader cannot get a
+        different answer depending on which one asked — the drift the
+        one-implementation rule exists to prevent.
+        """
+        report = call(self._server(settings, container), "docir_doctor", {})
+
+        assert {"ok", "installation", "store", "embedding", "daemon", "compat"} <= set(report)
+        assert isinstance(report["ok"], bool)
+        # `findings` is absent rather than empty on a healthy store, because
+        # every result here is trimmed like the CLI's piped JSON. The docstring
+        # says so, because an agent that keyed on it would raise instead.
+        assert "findings" not in report or isinstance(report["findings"], list)
+
+    def test_it_reports_the_thread_cap_the_server_runs_with(
+        self, settings: Settings, container: Container, monkeypatch
+    ) -> None:
+        """The field #23 is about, on the transport that could not read it.
+
+        An MCP agent cannot *set* this — the variable is read where the server
+        was launched — but telling the person what to set requires being able to
+        see that it is unset.
+        """
+        monkeypatch.setenv(EMBED_THREADS_ENV, "3")
+
+        report = call(self._server(settings, container), "docir_doctor", {})
+
+        assert report["embedding"]["threads"] == 3
+
+    def test_it_is_read_only(self, settings: Settings, container: Container) -> None:
+        tools = list_tools(self._server(settings, container))
+        assert tools["docir_doctor"].annotations.readOnlyHint is True
 
 
 def test_server_instructions_state_the_two_rules(server) -> None:
@@ -373,6 +444,7 @@ def test_a_transport_failure_is_a_tool_error_too(settings: Settings) -> None:
     dead = build_mcp_server(
         DeadExecutor(),
         describe_schema=lambda: describe_schema(load_schema(settings.schema_path)),
+        diagnose=lambda: {"ok": True, "findings": []},
         version="0.0.0-test",
     )
     with pytest.raises(ToolError, match="would not start"):
@@ -708,7 +780,7 @@ class TestAStoreThatWillNotOpen:
         # The surface is unchanged — every tool, by name, not a count. The
         # reader has to be able to tell "this store cannot be opened" from
         # "docir does not do that here", and a missing tool says the second.
-        assert listed == sorted({*COMMAND_TOOLS.values(), "docir_schema"})
+        assert listed == sorted({*COMMAND_TOOLS.values(), "docir_schema", "docir_doctor"})
         for message in (reading, writing):
             assert "must define a string 'prefix'" in message
 

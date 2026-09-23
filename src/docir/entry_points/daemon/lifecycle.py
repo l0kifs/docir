@@ -19,7 +19,7 @@ from functools import cache
 from pathlib import Path
 
 from docir import __version__
-from docir.config.settings import NO_DAEMON_ENV, Settings
+from docir.config.settings import NO_DAEMON_ENV, Settings, embed_threads
 from docir.platform.errors import DaemonError
 from docir.platform.transport.client import DaemonClient
 
@@ -90,6 +90,14 @@ class PidRecord:
     pid: int
     stamp: CodeStamp | None
     schema_digest: str | None = None
+    #: The embedding thread cap the daemon was spawned with. A third input on
+    #: the same argument as the other two: the daemon resolves it once, when it
+    #: builds its embedder, and every request it answers afterwards runs the
+    #: model that way. Without it here, setting `DOCIR_EMBED_THREADS` changed
+    #: nothing until the daemon idled out, while `doctor` — which reads the
+    #: *client's* environment — reported the new value the whole time. That is
+    #: the trap the setting exists to remove, not one to add.
+    embed_threads: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,6 +166,7 @@ def read_pid_record(settings: Settings) -> PidRecord | None:
         )
     except (KeyError, TypeError, ValueError):
         return _unstamped_record(raw)
+    recorded_threads = data.get("embed_threads")
     recorded_schema = data.get("schema_digest")
     return PidRecord(
         pid=pid,
@@ -166,6 +175,7 @@ def read_pid_record(settings: Settings) -> PidRecord | None:
         # matches a store that has one -- the same reading an unknown build gets
         # below, and the same safe direction: replace it.
         schema_digest=str(recorded_schema) if isinstance(recorded_schema, str) else None,
+        embed_threads=recorded_threads if isinstance(recorded_threads, int) else None,
     )
 
 
@@ -205,6 +215,7 @@ def write_pid(settings: Settings, schema_digest_at_load: str | None) -> None:
                 "version": stamp.version,
                 "source_mtime_ns": stamp.source_mtime_ns,
                 "schema_digest": schema_digest_at_load,
+                "embed_threads": embed_threads(),
             }
         ),
         encoding="utf-8",
@@ -246,6 +257,17 @@ def serves_current_schema(settings: Settings) -> bool:
     """Whether the recorded daemon loaded the schema this store now declares."""
     record = read_pid_record(settings)
     return record is not None and record.schema_digest == schema_digest(settings)
+
+
+def serves_current_embed_threads(settings: Settings) -> bool:
+    """Whether the recorded daemon runs the model with the cap now in force.
+
+    ``settings`` is unused and taken anyway, so this reads like its two
+    siblings at the one call site that composes all three; the cap is a
+    property of the environment rather than of the store.
+    """
+    record = read_pid_record(settings)
+    return record is not None and record.embed_threads == embed_threads()
 
 
 def wait_until_ready(settings: Settings, timeout: float = _READY_TIMEOUT) -> bool:
@@ -294,7 +316,11 @@ def ensure_running(settings: Settings) -> None:
     included *refusing a write* the file now permits.
     """
     if is_running(settings):
-        if serves_current_code(settings) and serves_current_schema(settings):
+        if (
+            serves_current_code(settings)
+            and serves_current_schema(settings)
+            and serves_current_embed_threads(settings)
+        ):
             return
         stop(settings)
     else:

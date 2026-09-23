@@ -50,6 +50,16 @@ PROJECT_STORE_DIRNAME = ".docir"
 #: workflow came to re-download the model on every run.
 MODEL_CACHE_ENV = "FASTEMBED_CACHE_PATH"
 
+#: How many CPU threads the ONNX embedding model may use. docir's own variable
+#: rather than one of fastembed's, because fastembed takes this as a constructor
+#: argument and has no variable for it.
+#:
+#: **Per-machine, so an environment variable and never a schema key.** A store is
+#: a committed artifact read by whoever clones it, so a core count inside it
+#: would impose one laptop's hardware on the whole team — the same argument that
+#: keeps the model out of the store (adr-78090be868ec), one field over.
+EMBED_THREADS_ENV = "DOCIR_EMBED_THREADS"
+
 
 def model_cache_home() -> Path:
     """Where the embedding model is downloaded and kept.
@@ -78,6 +88,31 @@ def model_cache_home() -> Path:
     if override:
         return Path(override).expanduser()
     return Path.home() / PROJECT_STORE_DIRNAME / "models"
+
+
+def embed_threads() -> int | None:
+    """How many threads the embedding model may use, or ``None`` for its default.
+
+    ``None`` means *unset*, and unset means fastembed's own behaviour: ONNX
+    takes every core it can see. That is a fine default on a build machine and a
+    poor one on a laptop, where warming the model, a reindex and every `context`
+    query all saturate the CPU (GitHub #23). The variable is the cap, and it
+    reaches ONNX as both ``intra_op_num_threads`` and ``inter_op_num_threads``.
+
+    A value that is not a positive integer is ignored rather than raising. This
+    is read while a container is built, on every command including the ones run
+    to diagnose the problem, and a typo in a shell profile that made `docir
+    doctor` refuse to run would be the worst possible failure here — `doctor`
+    reports the effective value instead, which is where somebody looks.
+    """
+    raw = os.environ.get(EMBED_THREADS_ENV, "").strip()
+    if not raw:
+        return None
+    try:
+        threads = int(raw)
+    except ValueError:
+        return None
+    return threads if threads > 0 else None
 
 
 def discover_project_home(start: Path | None = None) -> Path | None:

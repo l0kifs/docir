@@ -10,7 +10,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from docir.config.settings import MODEL_CACHE_ENV, Settings, model_cache_home
+import pytest
+
+from docir.config.settings import (
+    EMBED_THREADS_ENV,
+    MODEL_CACHE_ENV,
+    Settings,
+    embed_threads,
+    model_cache_home,
+)
 from docir.platform.embedding.fastembed import FastEmbedEmbedder
 
 
@@ -145,3 +153,89 @@ def test_the_composition_root_wires_it(monkeypatch, tmp_path: Path) -> None:
 
     assert isinstance(embedder, FastEmbedEmbedder)
     assert embedder._cache_dir == tmp_path / "user" / ".docir" / "models"
+
+
+class TestTheThreadCap:
+    """How many cores the model may take (GitHub #23).
+
+    Unset means fastembed's own behaviour, which is every core: fine on a build
+    machine, and the reported complaint on a laptop, where warming the model, a
+    reindex and each `context` query all saturate the CPU.
+
+    An environment variable and never a schema key: a store is a committed
+    artifact read by whoever clones it, so a core count inside it would impose
+    one laptop's hardware on the whole team — the argument that keeps the model
+    itself out of the store, one field over.
+    """
+
+    def test_unset_means_fastembeds_own_default(self, monkeypatch) -> None:
+        monkeypatch.delenv(EMBED_THREADS_ENV, raising=False)
+        assert embed_threads() is None
+
+    def test_a_positive_count_is_the_cap(self, monkeypatch) -> None:
+        monkeypatch.setenv(EMBED_THREADS_ENV, "4")
+        assert embed_threads() == 4
+
+    @pytest.mark.parametrize("value", ["0", "-2", "abc", "   ", "2.5"])
+    def test_an_unusable_value_is_ignored_rather_than_raised(self, monkeypatch, value: str) -> None:
+        """Read while every container is built, `docir doctor` included.
+
+        A typo in a shell profile that made the command somebody runs *to
+        diagnose the problem* refuse to start would be the worst failure this
+        could have. `doctor` reports the effective value instead, which is
+        where they look.
+        """
+        monkeypatch.setenv(EMBED_THREADS_ENV, value)
+        assert embed_threads() is None
+
+
+class TestTheCapReachesTheModel:
+    """The half that makes the setting mean anything.
+
+    `threads` is a constructor argument, and fastembed turns it into ONNX's
+    `intra_op_num_threads` and `inter_op_num_threads` — so it caps the warm-up,
+    the reindex and every query, which is the whole of what #23 reports.
+    """
+
+    def _record(self, monkeypatch) -> dict:
+        import fastembed
+
+        seen: dict = {}
+
+        class _Fake:
+            def __init__(self, **kwargs) -> None:
+                seen.update(kwargs)
+
+            def embed(self, documents):
+                return [[0.0, 1.0] for _ in documents]
+
+        monkeypatch.setattr(fastembed, "TextEmbedding", _Fake)
+        return seen
+
+    def test_the_cap_is_passed_as_a_constructor_argument(self, monkeypatch) -> None:
+        seen = self._record(monkeypatch)
+
+        FastEmbedEmbedder("a/model", threads=3).embed("x")
+
+        assert seen["threads"] == 3
+
+    def test_no_cap_still_means_whatever_fastembed_decides(self, monkeypatch) -> None:
+        seen = self._record(monkeypatch)
+
+        FastEmbedEmbedder("a/model").embed("x")
+
+        assert seen["threads"] is None
+
+    def test_the_composition_root_wires_the_variable(self, monkeypatch, tmp_path: Path) -> None:
+        """The seam that makes the rest true for a real command."""
+        from docir.entry_points.composition import build_embedder
+
+        monkeypatch.delenv("DOCIR_EMBEDDER", raising=False)
+        monkeypatch.delenv(MODEL_CACHE_ENV, raising=False)
+        monkeypatch.setenv(EMBED_THREADS_ENV, "2")
+        monkeypatch.setattr(Path, "home", classmethod(lambda _cls: tmp_path / "user"))
+
+        embedder = build_embedder("BAAI/bge-small-en-v1.5")
+
+        assert isinstance(embedder, FastEmbedEmbedder)
+        assert embedder._threads == 2

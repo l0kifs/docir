@@ -108,6 +108,7 @@ def build_mcp_server(
     executor: RequestExecutor,
     *,
     describe_schema: Callable[[], dict[str, object]],
+    diagnose: Callable[[], dict[str, object]],
     version: str,
     unavailable: str = "",
 ) -> FastMCP:
@@ -118,6 +119,13 @@ def build_mcp_server(
     store owns, not an index query), and passing it in keeps this module a pure
     client of :class:`RequestExecutor`.
 
+    ``diagnose`` is injected for the reason ``describe_schema`` is: the report
+    describes the *process this server runs in* — its environment, its daemon,
+    its thread cap — which is not a dispatcher command and never could be, since
+    dispatching is what replaces a stale daemon and builds a missing index. The
+    composition lives in ``entry_points/doctor.py`` and is shared with the CLI,
+    so the two transports cannot come to describe the same machine differently.
+
     ``unavailable`` is the reason the store would not open, when it would not.
     It goes into the server's *instructions* rather than being left for the
     first failing call, because instructions are read at the handshake: an agent
@@ -127,7 +135,7 @@ def build_mcp_server(
     mcp: FastMCP = FastMCP(name="docir", instructions=_instructions(unavailable), version=version)
     run = _Gateway(executor)
 
-    _register_read_tools(mcp, run, describe_schema=describe_schema)
+    _register_read_tools(mcp, run, describe_schema=describe_schema, diagnose=diagnose)
     _register_write_tools(mcp, run)
     _register_tag_tools(mcp, run)
     _register_maintenance_tools(mcp, run)
@@ -157,6 +165,7 @@ def _register_read_tools(
     run: _Gateway,
     *,
     describe_schema: Callable[[], dict[str, object]],
+    diagnose: Callable[[], dict[str, object]],
 ) -> None:
     """The tools that only read: ranking, filtering, fetching, and the schema.
 
@@ -402,6 +411,33 @@ def _register_read_tools(
         status or relation kind it does not list is refused, not corrected.
         """
         return cast(dict[str, Any], trim(describe_schema()))
+
+    @mcp.tool(annotations=_READ_ONLY)
+    def docir_doctor() -> dict[str, Any]:
+        """Is this docir installation healthy, and what is it running with?
+
+        The environment behind every other tool here, in one call: the version,
+        the store and whether it loads, the embedding model actually in force,
+        the daemon, and the peers a read would silently skip.
+
+        Read it when an answer looks wrong rather than absent — a read that
+        contradicts the files, semantic ranking behaving like word matching, a
+        peer whose documents never appear. Each is a finding beside the fact
+        that produced it, which is what makes it actionable.
+
+        Read `ok` first. `findings` is **absent** on a healthy install rather
+        than empty, because every result here is trimmed like the CLI's piped
+        JSON, so keying on it raises. An `error` finding means docir cannot work
+        correctly here; a `warning` means it works less well than you think.
+
+        `embedding.threads` is the cap on the model's CPU use, and `null` means
+        every core — the answer to "why is docir eating my machine". Nothing
+        here can change it: `DOCIR_EMBED_THREADS` is read where this server was
+        launched, so tell the person what to export.
+
+        The corpus is `docir_check`'s question, not this one.
+        """
+        return cast(dict[str, Any], trim(diagnose()))
 
     @mcp.tool(annotations=_READ_ONLY)
     def docir_tag_list(limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:

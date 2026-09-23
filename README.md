@@ -245,7 +245,9 @@ project-local `.docir/` found by walking up from the CWD → the global `~/.doci
 `docir init` keeps docs with the code: `.docir/docs/` and `docs-schema.yaml` are
 **committed**, the derived index is **gitignored**. The embedding model is the one thing
 that lives outside a store — `~/.docir/models`, one copy per machine, overridable with
-`FASTEMBED_CACHE_PATH`; `docir doctor` reports the path it is using. The daemon keeps the embedding model
+`FASTEMBED_CACHE_PATH`; `docir doctor` reports the path it is using. The model takes every core
+it can see by default, which a laptop notices during a reindex — `DOCIR_EMBED_THREADS=2` caps
+it, and `docir doctor` shows the cap in force. The daemon keeps the embedding model
 warm and serializes writes; `--no-daemon` runs any command in-process instead, and where
 the daemon cannot be started at all — a read-only sandbox, say — docir says so on stderr
 and runs in-process anyway rather than failing.

@@ -7,7 +7,7 @@ and ``bench`` scores this store's own retrieval.
 
 from __future__ import annotations
 
-from dataclasses import asdict
+import contextlib
 from pathlib import Path
 from typing import Annotated
 
@@ -15,12 +15,10 @@ import typer
 import yaml
 
 from docir import __version__
-from docir.config.settings import model_cache_home
 from docir.entry_points import doctor as doctor_report
 from docir.entry_points.cli import emit, rendering
 from docir.entry_points.cli.runner import execute, get_state, run_local, try_execute, use_json
-from docir.modules.documents.api import DEFAULT_CONTEXT_EXPAND, STORE_FORMAT
-from docir.modules.release.api import describe_deprecations
+from docir.modules.documents.api import DEFAULT_CONTEXT_EXPAND
 from docir.platform.errors import ValidationError
 
 
@@ -242,6 +240,22 @@ def doctor(
     works less well than you think. --strict exits 1 on errors only, which is
     what makes it usable in a setup script or CI.
 
+    The `embedding` section is where "why is docir eating my CPU" is answered.
+    `threads` is the cap in force, and absent means uncapped — fastembed's own
+    behaviour, which is every core, and what a laptop notices while the model
+    warms, a reindex runs or a `context` query is embedded:
+
+        DOCIR_EMBED_THREADS=2 docir reindex
+        docir doctor | jq '.embedding'
+        {"model": "fastembed:BAAI/bge-small-en-v1.5",
+         "cache": "~/.docir/models", "threads": 2}
+
+    Changing it replaces a running daemon, which resolves the model once at
+    spawn — so the cap takes effect on the next command rather than needing
+    `docir daemon stop`. This section reports the *environment you are running
+    in*, like every other field here, which is the snapshot taken before the
+    command dispatches.
+
     The `compat` section is facts rather than findings — how this store and this
     build relate, and what this build is going to stop doing:
 
@@ -269,24 +283,25 @@ def doctor(
     The corpus is `docir check`'s question, not this one.
     """
     state = get_state()
-    # Before anything is dispatched: `ensure_running` replaces a daemon serving
-    # other code and a container build creates a missing index, so both facts
-    # are gone by the time the first request returns.
-    environment = run_local(lambda: doctor_report.snapshot(state.settings, __version__))
-    store, store_error = try_execute("store_status", {})
-    if probe:
-        # The one thing doctor does that is not instant: --probe's whole job is
-        # to load the model, which downloads it on a cold cache.
-        with rendering.progress("loading the embedding model (may download ~67MB)"):
-            probed = run_local(lambda: doctor_report.probe_embedder(environment.embed_model))
-    else:
-        probed = None
-    report = doctor_report.diagnose(
-        environment,
-        _store_reply(store),
-        store_error=store_error,
-        probe=probed,
+    # The ordering rule (snapshot before anything dispatches) lives in
+    # `build_report`, shared with the MCP tool so the two transports cannot come
+    # to disagree about the same machine. The spinner is this caller's, because
+    # only a TTY has one: `--probe` is the one thing doctor does that is not
+    # instant, since its whole job is to load the model.
+    progress = (
+        rendering.progress("loading the embedding model (may download ~67MB)")
+        if probe
+        else contextlib.nullcontext()
     )
+    with progress:
+        report = run_local(
+            lambda: doctor_report.build_report(
+                state.settings,
+                __version__,
+                lambda: try_execute("store_status", {}),
+                probe=probe,
+            )
+        )
     _emit_doctor(report)
     if strict and report.errors:
         raise typer.Exit(code=1)
@@ -392,102 +407,13 @@ def _read_fixture(path: Path) -> list[object]:
 
 
 def _emit_doctor(report: doctor_report.DoctorReport) -> None:
-    """Emit the diagnosis as one payload, findings included.
-
-    Sections and findings travel together rather than as two commands' output,
-    because a finding is only actionable beside the fact that produced it: "12
-    documents have no current vector" means one thing under the real model and
-    another under a leftover DOCIR_EMBEDDER, and the embedding section is where
-    the caller reads which.
-    """
-    environment = report.environment
-    release = environment.release
-    payload: dict[str, object] = {
-        "ok": not report.errors,
-        "installation": {
-            "version": environment.version,
-            "method": release.method,
-            "latest": release.latest,
-            "update_available": release.update_available,
-            "fastembed_installed": environment.fastembed_installed,
-        },
-        "store": {
-            "home": str(environment.home),
-            "home_origin": environment.home_origin,
-            "schema": str(environment.schema_path),
-            "schema_loads": not environment.schema_error,
-            "index_present": environment.index_present,
-            "shadowed_home": _opt_str_path(environment.shadowed_home),
-            "description": environment.store_description,
-            **(report.store or {}),
-        },
-        "embedding": {
-            "model": environment.embedder_id,
-            "configured": environment.embed_model,
-            "env": environment.embedder_env,
-            # Where the 64 MB download lives. Reported because "why did this
-            # command take sixteen seconds" and "where did the disk go" are the
-            # same question, and nothing else answers either (adr-78090be868ec).
-            "cache": str(model_cache_home()),
-        },
-        "daemon": {
-            "running": environment.daemon.running,
-            "pid": environment.daemon.pid,
-            "socket": environment.daemon.socket_path,
-            "serving": environment.daemon.version,
-            "stale_code": environment.daemon.stale_code,
-            "stale_schema": environment.daemon.stale_schema,
-            "disabled_by_env": environment.daemon_env_disabled,
-            "watching": environment.watch,
-        },
-        # How this store and this build relate, as facts rather than findings:
-        # the two numbers a teammate compares against their own docir, and every
-        # surface this build has announced it will stop accepting. Dated, so
-        # "is this urgent" is answerable without asking anybody
-        # (adr-6d4d43d44075).
-        "compat": {
-            "store_format": {
-                "declared": environment.store_format_declared,
-                "required": environment.store_format_required,
-                "supported": STORE_FORMAT,
-            },
-            "deprecations": describe_deprecations(environment.today),
-        },
-        "peers": [
-            {
-                "home": str(peer.home),
-                "unavailable": peer.unavailable,
-                "description": peer.description,
-            }
-            for peer in environment.peers
-        ],
-        "findings": [asdict(finding) for finding in report.findings],
-    }
-    if report.probe is not None:
-        payload["probe"] = asdict(report.probe)
+    """Render the shared payload, as a table or as JSON."""
+    payload = doctor_report.as_payload(report)
     state = get_state()
     if use_json(state):
         rendering.emit_json(payload, trim=state.trim)
     else:
         rendering.render_doctor(payload)
-
-
-def _store_reply(payload: object) -> dict[str, object] | None:
-    """``store_status``'s reply as a mapping, or ``None`` when there is none.
-
-    ``None`` is the store-unreachable signal doctor turns into a finding, so a
-    reply that is not a mapping has to read the same way — a payload nobody can
-    interpret is not a store that answered. Distinct from :func:`emit.as_mapping`,
-    which coerces a missing reply to ``{}`` because its callers are rendering a
-    result they already know arrived.
-    """
-    if not isinstance(payload, dict):
-        return None
-    return {str(key): value for key, value in payload.items()}
-
-
-def _opt_str_path(path: Path | None) -> str | None:
-    return None if path is None else str(path)
 
 
 def register(app: typer.Typer) -> None:

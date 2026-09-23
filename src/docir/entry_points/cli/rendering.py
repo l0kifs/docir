@@ -777,6 +777,12 @@ def _doctor_embedding(embedding: Mapping[str, object], probe: object) -> str:
     line = str(embedding.get("model", "?"))
     if embedding.get("env"):
         line += f"  [yellow](forced by DOCIR_EMBEDDER={embedding.get('env')})[/]"
+    threads = embedding.get("threads")
+    # Only when capped. Printing "all cores" on every healthy machine would be
+    # noise; printing the cap is the line that explains a slower reindex to the
+    # person who set it and then forgot.
+    if isinstance(threads, int):
+        line += f"  [dim]({threads} thread{'s' if threads != 1 else ''})[/]"
     if isinstance(probe, Mapping):
         seconds = _as_float(probe.get("seconds"))
         line += (

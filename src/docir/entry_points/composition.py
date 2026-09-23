@@ -17,7 +17,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from docir import __version__
-from docir.config.settings import Settings, enclosing_project_home, model_cache_home
+from docir.config.settings import (
+    Settings,
+    embed_threads,
+    enclosing_project_home,
+    model_cache_home,
+)
 from docir.entry_points.dispatch import Dispatcher
 from docir.entry_points.federation import FederatedDispatcher, Reader
 from docir.modules.agents.api import InstalledFile, UpdateRequest, build_agent_service
@@ -194,7 +199,11 @@ def build_embedder(model_name: str | None = None) -> Embedder:
         return DeterministicEmbedder()
     from docir.platform.embedding.fastembed import FastEmbedEmbedder
 
-    return FastEmbedEmbedder(model_name or DEFAULT_EMBED_MODEL, cache_dir=model_cache_home())
+    return FastEmbedEmbedder(
+        model_name or DEFAULT_EMBED_MODEL,
+        cache_dir=model_cache_home(),
+        threads=embed_threads(),
+    )
 
 
 def active_embedder_id(model_name: str | None = None) -> str:

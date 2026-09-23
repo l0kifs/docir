@@ -696,8 +696,14 @@ def _register_maintenance_tools(mcp: FastMCP, run: _Gateway) -> None:
         code and either fix it or stamp `docir_update(verified=True)` — which
         also upgrades the finding to `code-changed`, the same comparison
         against what a reader actually saw. Neither is repairable: a repair has
-        nothing to read with. A store whose globs predate this evidence reports
-        neither until `docir_check_fix` files a baseline for them.
+        nothing to read with.
+
+        `code-unwatched` is what a store looks like before either can fire: the
+        glob exists on disk and no digest is watching it, so no edit to it will
+        ever be reported. That is the state of a glob declared before the code
+        it governs was written, and of one written by a build that minted no
+        baseline. `docir_check_fix` files the baseline; watching starts at the
+        next change, not at the one already missed.
         """
         return run.many("check", {})
 

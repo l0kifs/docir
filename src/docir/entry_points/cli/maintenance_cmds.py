@@ -73,8 +73,8 @@ def check(
         typer.Option(
             "--fix",
             help="Repair what can be repaired (duplicate ids, dead edges) and file the "
-            "evidence nothing else can: code baselines, and the store format the schema "
-            "needs.",
+            "evidence nothing else can: the code baselines `code-unwatched` names, and "
+            "the store format the schema needs.",
         ),
     ] = False,
 ) -> None:
@@ -104,6 +104,15 @@ def check(
     One warning reports good news: `unblocked` names a live document whose every
     `depends_on` target has closed, so the work is ready to start. Nothing else
     reads that edge — without this it stays true and unnoticed.
+
+    One warning is about a *silence*. `code-unwatched` names a `code:` glob that
+    exists on disk and that no digest is watching, so no edit to it will ever be
+    reported — the state a document lands in when its glob was declared before
+    the code it governs was written. `--fix` is the repair, and watching starts
+    at the next change rather than recovering the one you missed:
+
+        docir check | jq -r '.[] | select(.kind=="code-unwatched") | .message'
+        docir check --fix
 
     Pass --strict to gate a pre-merge / CI job: it exits 1 on errors only, which
     is what catches the duplicate ids and dangling references a branch merge

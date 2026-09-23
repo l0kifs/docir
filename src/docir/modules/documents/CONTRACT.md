@@ -161,6 +161,15 @@ files and the derived index never disagree.
   two partition the patterns — a pattern carrying a verified digest is `code-changed`'s alone —
   so one moved file is named once. A warning on the same argument, needing it more, since this
   one fires on every governed document.
+  And `code-unwatched` — a glob that resolves against the tree and carries *neither* digest, so
+  both comparisons above skip it and no edit to that code is ever reported. It needs the
+  `CodeMatcher`'s match answer only, never a fingerprint, so it costs nothing beyond
+  `unmatched-code`'s walk; the two partition the patterns in the other direction — a glob that
+  names nothing is `unmatched-code`'s alone. Unlike its three siblings it **is** repairable
+  without a judgement, and `repair()` already carries the repair: a baseline records what the
+  tree held, never that somebody read it. A warning, because the document is intact and the only
+  fault is its own history — a glob declared before the code it governs, or written by a build
+  that minted no baseline (GitHub #25).
 - `MaintenanceService.schema_drift() -> [str]` — the same difference as plain lines, for the
   opt-in `DOCIR_SCHEMA_NOTICE` stderr notice and the `docir_schema_drift` MCP tool. Empty when
   nothing moved *or* when the store has no baseline: absent means unknown, not unchanged.

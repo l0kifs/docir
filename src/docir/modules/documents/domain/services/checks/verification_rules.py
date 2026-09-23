@@ -32,14 +32,17 @@ class VerificationChecks:
     ) -> list[CheckIssue]:
         """Every verification finding, in the order ``check`` reports them.
 
-        Each of the first three is skipped when its input is ``None`` — the
-        permissive-when-absent convention this whole group follows.
+        Every one but the last is skipped when its input is ``None`` — the
+        permissive-when-absent convention this whole group follows. A global
+        store has no tree to resolve a repo-relative pattern against, so all
+        four code findings go silent together rather than one of them guessing.
         """
         issues: list[CheckIssue] = []
         if today is not None:
             issues.extend(self._find_stale(documents, today))
         if code_matches is not None:
             issues.extend(self._find_unmatched_code(documents, code_matches))
+            issues.extend(self._find_unwatched_code(documents, code_matches))
         if code_digests is not None:
             issues.extend(self._find_changed_code(documents, code_digests))
             issues.extend(self._find_drifted_code(documents, code_digests))
@@ -131,6 +134,72 @@ class VerificationChecks:
             )
         return issues
 
+    def _find_unwatched_code(
+        self, documents: list[Document], code_matches: Mapping[str, bool]
+    ) -> list[CheckIssue]:
+        """Flag a glob that resolves and that no digest is watching.
+
+        The blind spot the other three cannot report. `code-changed` and
+        `code-drifted` both compare a recorded digest against the tree, and both
+        treat *no recorded digest* as unknown and say nothing — which is right,
+        because a comparison against nothing is not a change. `unmatched-code`
+        covers the other half, a glob that names nothing. Between them sits a
+        glob that names something real and carries neither digest: it is in no
+        finding's scope, and no edit to the code it governs will ever be
+        reported (GitHub #25).
+
+        It is reachable two ways and both are ordinary. A glob declared while
+        its path was absent — a decision written before the code, which the
+        write path deliberately accepts — mints nothing, because there is
+        nothing to hash; the file then arrives and `unmatched-code` stops
+        firing, taking the last signal with it. And a glob declared by a build
+        that minted no baseline at all keeps watching nothing until somebody
+        verifies the document. Neither re-arms on its own: `mint_baseline` fills
+        a missing entry, but only on a *write*, and `check` never writes.
+
+        Reported only for patterns `code_matches` says resolve **now**. A glob
+        naming nothing is `unmatched-code`'s to report, with the sharper
+        sentence to say about it, and naming one problem twice is the noise that
+        teaches a reader to skim. Absent from the map is unknown and silent, as
+        everywhere else here — the default is `False` rather than
+        :meth:`_find_unmatched_code`'s `True` because the two want silence from
+        opposite answers.
+
+        Unlike its siblings this one **is** repairable without a judgement, and
+        `check --fix` already carries the repair: a baseline says *this is what
+        the tree held when we started watching*, never *somebody read this*, so
+        minting one crosses none of the lines `verified_code` is fenced by. What
+        it cannot recover is the drift that already happened — watching starts
+        at the next change, which is why the finding names `--fix` rather than
+        being applied silently.
+        """
+        issues: list[CheckIssue] = []
+        for doc in documents:
+            if doc.archived or not doc.code:
+                continue
+            unwatched = [
+                pattern
+                for pattern in doc.code
+                if code_matches.get(pattern, False)
+                and pattern not in doc.verified_code
+                and pattern not in doc.code_baseline
+            ]
+            if not unwatched:
+                continue
+            joined = ", ".join(repr(pattern) for pattern in unwatched)
+            issues.append(
+                CheckIssue(
+                    kind="code-unwatched",
+                    message=(
+                        f"{doc.id!r} governs {joined}, which exists but has no recorded "
+                        f"digest, so no change to it will ever be reported; start "
+                        f"watching it with `docir check --fix`"
+                    ),
+                    doc_ids=(doc.id,),
+                )
+            )
+        return issues
+
     def _find_changed_code(
         self, documents: list[Document], code_digests: Mapping[str, str]
     ) -> list[CheckIssue]:
@@ -171,7 +240,10 @@ class VerificationChecks:
         `unmatched-code` finding covers that, and reporting both would name one
         problem twice). A pattern with no recorded digest was never verified.
         And a document with no digests at all has never been verified with a
-        matcher present.
+        matcher present. Silence about an absence is not silence about the
+        *document*: a glob carrying neither digest while it resolves is
+        :meth:`_find_unwatched_code`'s, which is what stops the third of those
+        from being a permanent blind spot.
         """
         issues: list[CheckIssue] = []
         for doc in documents:

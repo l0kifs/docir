@@ -153,8 +153,10 @@ opts out, at a measured cost to recall:
   as they stop being the ones the document was pointed at — no review step to reach first.
   `docir update <id> --verified` raises the watch to `code-changed`: the same comparison,
   the stronger claim, because a person has now held the two against each other. Both stay
-  warnings — code landing ahead of its prose is ordinary, not damage. An existing store
-  starts watching after one `docir check --fix`.
+  warnings — code landing ahead of its prose is ordinary, not damage. A glob that names code
+  which does not exist yet has nothing to fingerprint, so it watches nothing: `docir check`
+  reports that as `code-unwatched` once the file arrives, and `docir check --fix` starts the
+  watch. An existing store starts watching after the same one command.
 - **Only embeddings are deferred.** A content change flags the vector dirty and returns;
   the file, metadata, full-text index and relations are all current when the command
   returns. Force a flush with `--wait-embeddings`, `docir embed --flush`, or a full

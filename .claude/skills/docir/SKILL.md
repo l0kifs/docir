@@ -166,7 +166,21 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
   when a build writes `bin/` or `target/` beside the sources. Write the glob
   over the source tree and leave the exclusions to `.gitignore`: a `!`-prefixed
   entry is **refused on write**, because these are `pathlib` globs where `!` is
-  an ordinary character and would have excluded nothing.
+  an ordinary character and would have excluded nothing. A glob that names
+  **nothing but** ignored files is kept, not dropped — a vendored clone or a
+  mirrored upstream is ignored precisely because it is not this repository's
+  source, and governing it is still a deliberate statement.
+- **`code-unwatched` means nothing is watching a glob that exists.** A pattern
+  declared before the code it governs was written has nothing to fingerprint,
+  so it records no baseline — and when the file finally arrives, nothing says
+  so and no later edit does either. `docir check` names the glob and
+  `docir check --fix` starts watching it. Watching begins at the next change,
+  so run it when you add a glob for code that is not there yet:
+
+  ```bash
+  docir check | jq -r '.[] | select(.kind=="code-unwatched") | .message'
+  docir check --fix
+  ```
 - **`docir update <id> --verified` raises that finding to `code-changed`.** It
   re-takes the fingerprints as *you* read them, which is the stronger of the two
   claims — stamp it only when you did that reading.

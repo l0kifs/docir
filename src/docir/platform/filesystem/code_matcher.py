@@ -9,6 +9,7 @@ the matcher is optional at the seam rather than defaulting to "matches nothing".
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable
 from pathlib import Path
 
 from docir.platform.filesystem.gitignore import GitignoreIndex
@@ -62,13 +63,14 @@ class RepositoryCodeMatcher(CodeMatcher):
         the command that exists to be run over hand-edited files: crashing on
         one would take the other findings down with it.
 
-        Ignored paths do not count, for the same reason they are not hashed: a
-        glob that reaches nothing but build output governs nothing anyone wrote,
-        and saying so is what `unmatched-code` is for. The short-circuit
-        survives — it now stops at the first match that is *code*.
+        Ignored paths are dropped only while the pattern reaches something
+        else — the second pass below, and the rule :meth:`_files_under` states
+        in full.
         """
         try:
-            return any(not self._skipped(path) for path in self._root.glob(pattern))
+            if any(not self._skipped(path) for path in self._root.glob(pattern)):
+                return True
+            return any(not self._generated(path) for path in self._root.glob(pattern))
         except (ValueError, NotImplementedError, IndexError, OSError):
             return False
 
@@ -128,16 +130,61 @@ class RepositoryCodeMatcher(CodeMatcher):
         A dict rather than a list because the walk reaches the same file
         through every enclosing directory a recursive glob yields, and a file
         counted twice hashes differently from the same tree counted once.
+
+        **Ignored files are dropped only while the pattern reaches something
+        else** (adr-c87e444975e8). `.gitignore` answers "is this the
+        repository's source", and that is the right question for the files a
+        *broad* glob sweeps up beside the ones it was aimed at: `src/**` reaching
+        `src/bin/` is issue-ec3819b1f13c, and dropping the build output there is
+        what stops one compile drifting every glob at once. It is the wrong
+        question for a glob that reaches **nothing but** ignored files. Nobody
+        sweeps a vendored clone up by accident — a path written into `code:` by
+        hand is a statement that this document is governed by it, whatever git's
+        opinion of whether it belongs in this repository's history, and a
+        read-only mirror checked out into an ignored directory is the ordinary
+        way to hold one. Taking the ignore rule literally there cost 288 of 288
+        governed documents their invalidation at once (GitHub #24), and an empty
+        queue is indistinguishable from a clean one.
+
+        So: one pass that drops them, and — only if it found nothing at all — a
+        second that keeps them. The common case pays exactly what it paid
+        before, including not descending into an ignored subtree; the second
+        walk runs only for a pattern that used to resolve to nothing, which is
+        the case that was silent.
+
+        The hardcoded floor is absolute in both passes. A glob reaching nothing
+        but `__pycache__` governs nothing anyone wrote, and re-admitting it on
+        the second pass would hash bytecode again — issue-68df009b4e43 through
+        the door this method just opened.
+        """
+        tracked = self._collect(pattern, self._skipped)
+        return tracked or self._collect(pattern, self._generated)
+
+    def _collect(self, pattern: str, skip: Callable[[Path], bool]) -> dict[str, Path]:
+        """The files ``pattern`` reaches, less the ones ``skip`` refuses.
+
+        The predicate is a parameter rather than a flag because it is also the
+        pruning rule for the walk: a directory ``skip`` refuses is not descended
+        into, so the pass that drops ignored files never enters an ignored
+        subtree.
         """
         found: dict[str, Path] = {}
         for path in self._root.glob(pattern):
-            if self._skipped(path):
+            if skip(path):
                 continue
             candidates = (path,) if path.is_file() else path.rglob("*")
             for candidate in candidates:
-                if candidate.is_file() and not self._skipped(candidate):
+                if candidate.is_file() and not skip(candidate):
                     found[candidate.relative_to(self._root).as_posix()] = candidate
         return found
+
+    def _generated(self, path: Path) -> bool:
+        """Whether ``path`` sits under a directory that rewrites itself.
+
+        The floor, and it holds whatever the repository says — including on the
+        pass that stops consulting `.gitignore`.
+        """
+        return any(part in _SKIPPED_DIRS for part in path.relative_to(self._root).parts)
 
     def _skipped(self, path: Path) -> bool:
         """Whether ``path`` is generated rather than written.
@@ -146,6 +193,4 @@ class RepositoryCodeMatcher(CodeMatcher):
         floor is a set lookup per path part, while the ignore files cost a parse
         the first time a directory is asked about.
         """
-        if any(part in _SKIPPED_DIRS for part in path.relative_to(self._root).parts):
-            return True
-        return self._ignored.ignores(path)
+        return self._generated(path) or self._ignored.ignores(path)

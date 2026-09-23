@@ -48,7 +48,10 @@ Read paths exist to save the caller's context, which is why they return less tha
   `!` — patterns that can never match — but *accepts* one that matches nothing today, because a
   decision is routinely written before the code it decides. The `!` is the one that looks like it
   works: these are `pathlib` globs, so it excludes nothing and the subtree stays in; what replaces
-  it is that the forward matcher skips whatever `.gitignore` excludes (adr-1d1eddbb6fbd).
+  it is that the forward matcher skips whatever `.gitignore` excludes (adr-1d1eddbb6fbd) —
+  but only inside a glob that reaches something else, since a glob naming nothing but
+  ignored files is a deliberate statement about a vendored or mirrored path
+  (adr-c87e444975e8).
   `docir check` then reports `unmatched-code` as a
   warning, and only when `Settings.code_root` finds a `.git` above the store: a global
   `~/.docir` has no tree to resolve a repo-relative pattern against, and an unresolved pattern

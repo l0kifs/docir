@@ -54,7 +54,7 @@ Three tiers, and mixing them is the documented overengineering trap. The recurri
   behind index stays `docir doctor`'s `index-behind-files` warning. The comparison lives in
   `index_is_empty`, shared by `check` and `doctor`, so the two cannot disagree about whether
   a store is readable.
-  Everything else (`orphan`, `cycle`, `layering`, `stale`, `unblocked`, `unmatched-code`, `tag-key-format`,
+  Everything else (`orphan`, `cycle`, `layering`, `stale`, `unblocked`, `unmatched-code`, `code-unwatched`, `tag-key-format`,
   the three `unknown-type`/`unknown-status`/`unknown-tag`, plus `unknown-relation-kind`,
   `missing-required` and `schema-drift`) is
   a `warning` about shape or age. This is load-bearing: `orphan` fires for every document with no relations — the

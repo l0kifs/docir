@@ -254,7 +254,10 @@ files and the derived index never disagree.
   reader over MCP is an agent and `doctor` has no tool; `(1, 1)` with no schema file, on the
   same rule the declaration follows (absent means every build can read it, never unknown).
 - `MaintenanceService.repair() -> RepairResult` — fix the mechanically-fixable Tier 1 damage:
-  re-issue duplicate ids (oldest file keeps the id) and drop dead `related` edges. `malformed`,
+  re-issue duplicate ids and drop dead `related` edges. The **established** file keeps the id —
+  decided by which git first added (a `FileHistory`, absent outside a repository), else the older
+  `created`, else the filename — and the action names which decided, because a filename tiebreak
+  is a statement that nothing separated them (adr-39210c34551a). `malformed`,
   `unknown-type` and `unmatched-code` each need somebody to read something and decide — what the
   file was meant to say, what the schema should declare, whether the glob is stale or the
   document is — and come back in `RepairResult.remaining`. Does not advance

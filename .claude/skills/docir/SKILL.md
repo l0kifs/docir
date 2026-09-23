@@ -271,6 +271,10 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
   docir check --fix      # re-issues all but one, renames the file to match
   docir delete <id>
   ```
+- **Read what `--fix` says about a duplicate-id repair.** The *established* file keeps the id —
+  decided by which git added first, else the older `created`, else the filename — and the
+  action names which decided. A message ending `filename order` means nothing separated them,
+  so check the survivor is the document other documents actually cite before moving on.
 - Body edits, safest→riskiest: `--append-section` → `--replace-section` →
   `--replace-body` (needs `--force`; fails "stale write" if the file changed on
   disk — `docir get` first). That ranking is how much each one can *destroy*,

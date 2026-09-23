@@ -55,11 +55,23 @@ def _cache_says(settings: Settings, version: str) -> None:
     )
 
 
-def _query(monkeypatch, *, opted_in: bool | None = True):
+def _query(monkeypatch, *, opted_in: bool | None = True, ci: bool = False):
+    """Run one command with both inputs to the decision pinned.
+
+    ``CI`` is set explicitly on every call, never inherited. GitHub Actions
+    exports ``CI=true``, so a test that reads the ambient value asserts one thing
+    on a laptop and another on a build server — which is exactly what happened to
+    the commit that added this file: green here, red there, on the one test whose
+    opt-in came from the store rather than the environment.
+    """
     if opted_in is not None:
         monkeypatch.setenv("DOCIR_UPDATE_CHECK", "1" if opted_in else "0")
     else:
         monkeypatch.delenv("DOCIR_UPDATE_CHECK", raising=False)
+    if ci:
+        monkeypatch.setenv("CI", "true")
+    else:
+        monkeypatch.delenv("CI", raising=False)
     result = runner.invoke(app, ["--no-daemon", "query", "--limit", "1"])
     assert result.exit_code == 0, result.output
     return result
@@ -194,14 +206,12 @@ class TestWhoDecidesWhetherItRuns:
         _installed_as(monkeypatch, OWNED)
         _cache_says(settings, "99.0.0")
         settings.store_config_path.write_text("update_check: true\n", encoding="utf-8")
-        monkeypatch.setenv("CI", "true")
-        assert "available" not in _query(monkeypatch, opted_in=None).stderr
+        assert "available" not in _query(monkeypatch, opted_in=None, ci=True).stderr
 
     def test_an_explicit_opt_in_beats_ci(self, monkeypatch, settings: Settings) -> None:
         _installed_as(monkeypatch, OWNED)
         _cache_says(settings, "99.0.0")
-        monkeypatch.setenv("CI", "true")
-        assert "docir 99.0.0 is available" in _query(monkeypatch).stderr
+        assert "docir 99.0.0 is available" in _query(monkeypatch, ci=True).stderr
 
     def test_a_malformed_store_config_costs_the_notice_and_not_the_command(
         self, monkeypatch, settings: Settings

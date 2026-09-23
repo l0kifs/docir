@@ -33,7 +33,12 @@ from docir.modules.documents.domain.services.store_format import (
 from docir.modules.indexing.api import DrainResult, EmbeddingScheduler
 from docir.platform.clock import Clock
 from docir.platform.embedding import Embedder
-from docir.platform.filesystem.ports import CodeMatcher, DocumentFileStore, TagFileStore
+from docir.platform.filesystem.ports import (
+    CodeMatcher,
+    DocumentFileStore,
+    FileHistory,
+    TagFileStore,
+)
 from docir.platform.filesystem.schema_store import YamlSchemaFileStore
 from docir.platform.persistence.unit_of_work import UnitOfWork
 
@@ -135,6 +140,7 @@ class MaintenanceService:
         clock: Clock,
         version: str,
         code_matcher: CodeMatcher | None = None,
+        history: FileHistory | None = None,
         schema_file_store: YamlSchemaFileStore | None = None,
     ) -> None:
         self._uow_factory = uow_factory
@@ -152,6 +158,7 @@ class MaintenanceService:
         #: nothing to resolve a ``code`` glob against, and the finding is
         #: skipped rather than reported against a tree that does not exist.
         self._code_matcher = code_matcher
+        self._history = history
         #: The schema *file*, where :attr:`_schema` is the resolved result of
         #: merging it with the package's. Only the file records a format floor,
         #: and only the file can be told to record one. ``None`` leaves both the
@@ -164,7 +171,13 @@ class MaintenanceService:
             uow_factory, file_store, tag_file_store, scheduler, schema, version
         )
         self._repairer = StoreRepairer(
-            uow_factory, file_store, schema, self._rebuilder, code_matcher, schema_file_store
+            uow_factory,
+            file_store,
+            schema,
+            self._rebuilder,
+            code_matcher,
+            schema_file_store,
+            history,
         )
 
     def reindex(self, *, changed_only: bool = False) -> ReindexResult:

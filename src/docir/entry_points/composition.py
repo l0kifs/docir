@@ -41,6 +41,7 @@ from docir.platform.embedding.catalogue import DEFAULT_EMBED_MODEL, VERIFIED_EMB
 from docir.platform.embedding.deterministic import DeterministicEmbedder
 from docir.platform.errors import DocirError, SchemaError
 from docir.platform.filesystem.code_matcher import RepositoryCodeMatcher
+from docir.platform.filesystem.git_history import GitFileHistory
 from docir.platform.filesystem.markdown_store import MarkdownDocumentFileStore
 from docir.platform.filesystem.schema_store import YamlSchemaFileStore
 from docir.platform.filesystem.tag_store import YamlTagFileStore
@@ -252,6 +253,10 @@ def build_container(
     # pattern in a global store as missing.
     code_root = settings.code_root
     code_matcher = None if code_root is None else RepositoryCodeMatcher(code_root)
+    # Same condition, different question: which of two colliding files arrived
+    # later. Only `check --fix` reads it, and only when a collision exists, so a
+    # store outside a repository simply falls through to its next tiebreak.
+    history = None if code_root is None else GitFileHistory(settings.docs_root)
 
     document_service = DocumentService(
         uow_factory,
@@ -274,6 +279,7 @@ def build_container(
         clock,
         __version__,
         code_matcher,
+        history,
         YamlSchemaFileStore(settings.schema_path),
     )
     dispatcher = Dispatcher(document_service, tag_service, maintenance_service, clock)

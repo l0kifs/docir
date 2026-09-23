@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
+from pathlib import Path
 
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.tags.domain.entities.tag import Tag
@@ -80,6 +81,29 @@ class DocumentFileStore(ABC):
         foreign files that ``scan`` skipped.
         """
         return []
+
+
+class FileHistory(ABC):
+    """Answers when a file first entered the repository's history.
+
+    A port of its own for the reason :class:`CodeMatcher` is one: the answer
+    comes from the *repository*, which is the store's parent, and a store with
+    no repository above it has none. The composition root then supplies no
+    history at all, and the caller falls through to its next tiebreak rather
+    than treating every file as equally new.
+    """
+
+    @abstractmethod
+    def added_at(self, path: Path) -> int | None:
+        """Unix time of the earliest commit that added ``path``.
+
+        ``path`` is relative to the history's own root, so a caller hands over
+        the same repo-relative string a :class:`Document` carries rather than
+        re-deriving an absolute one.
+
+        ``None`` is *unknown* — untracked, a shallow clone, no git — never
+        *new*.
+        """
 
 
 class CodeMatcher(ABC):

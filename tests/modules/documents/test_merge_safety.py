@@ -6,8 +6,12 @@
 
 from __future__ import annotations
 
+import os
 import re
+import shutil
+import subprocess
 from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 
@@ -210,6 +214,124 @@ def test_check_detects_dangling_reference(
     seeded.dispatch("reindex", {})
     issues = seeded.dispatch("check", {})
     assert any(i["kind"] == "dangling" for i in issues)
+
+
+def _git(root: Path, *args: str, when: int | None = None) -> None:
+    """Run one git command in ``root`` with identity and time pinned.
+
+    The time is pinned rather than left to the wall clock because the property
+    under test is *ordering*, and two commits made in the same test run land in
+    the same second.
+    """
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com"}
+    env["GIT_COMMITTER_NAME"] = env["GIT_AUTHOR_NAME"]
+    env["GIT_COMMITTER_EMAIL"] = env["GIT_AUTHOR_EMAIL"]
+    if when is not None:
+        env["GIT_AUTHOR_DATE"] = env["GIT_COMMITTER_DATE"] = f"{when} +0000"
+    subprocess.run(["git", "-C", str(root), *args], check=True, env=env, capture_output=True)
+
+
+class TestWhichDuplicateKeepsTheId:
+    """`check --fix` decides by git provenance first (GitHub #22).
+
+    The established document keeps the id because an existing `related` edge
+    naming it was written against *some* document and cannot say which, so the
+    one more readers have already cited is the one to leave alone.
+
+    `created` was the documented intent and degrades exactly when it is needed:
+    it is a `date`, so two branches cut from one base and merged inside a day
+    are indistinguishable by it — which is the shape of nearly every real
+    collision, and why the reporter saw "first by filename keeps the id".
+
+    Every case here names the incoming file `aaa-...` and the established one
+    `zzz-...`, so a filename tiebreak hands the id to the *wrong* document. That
+    is what makes the assertions discriminate: any key that really looks at
+    provenance has to overrule the alphabet.
+    """
+
+    def _survivor(self, docs: Dispatcher) -> tuple[str, str]:
+        """The file that kept the id, and the message that said so."""
+        actions = [a for a in docs.dispatch("repair", {})["actions"] if a["kind"] == "duplicate-id"]
+        assert len(actions) == 1, actions
+        message = actions[0]["message"]
+        keeper = message.split("); ", 1)[1].split(" keeps the id", 1)[0]
+        return keeper, message
+
+    @pytest.mark.skipif(shutil.which("git") is None, reason="needs git to record provenance")
+    def test_git_provenance_overrules_the_alphabet(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        """The established file keeps the id although its name sorts last.
+
+        Both `created` dates are the fixture clock's, so nothing but git can
+        separate them — which is the collision's real shape, and exactly where
+        the old key fell through to the alphabet.
+        """
+        subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, capture_output=True)
+        settings.ensure_directories()
+        container = build_container(settings, background_embeddings=False)
+        try:
+            docs = container.dispatcher
+            docs.dispatch(
+                "add", {"type": "decision", "title": "Zzz established", "description": "d"}
+            )
+            _git(tmp_path, "add", "-A", when=1_600_000_000)
+            _git(tmp_path, "commit", "-q", "-m", "established", when=1_600_000_000)
+
+            incoming = settings.docs_root / "decisions" / "adr-0001-aaa-incoming.md"
+            incoming.write_text(_DUP_FILE, encoding="utf-8")
+            _git(tmp_path, "add", "-A", when=1_700_000_000)
+            _git(tmp_path, "commit", "-q", "-m", "incoming", when=1_700_000_000)
+            docs.dispatch("reindex", {})
+
+            keeper, message = self._survivor(docs)
+
+            assert keeper == "decisions/adr-0001-zzz-established.md"
+            assert "first added to git" in message
+        finally:
+            container.close()
+
+    def test_without_git_the_older_created_still_decides(
+        self, container, settings: Settings
+    ) -> None:
+        """The documented intent, unchanged wherever it can still separate them.
+
+        No repository above this store, so there is no history to read and the
+        second key has to carry it — as it did before this change.
+        """
+        docs = container.dispatcher
+        docs.dispatch("add", {"type": "decision", "title": "Zzz established", "description": "d"})
+        incoming = settings.docs_root / "decisions" / "adr-0001-aaa-incoming.md"
+        later = _DUP_FILE.replace("created: '2026-07-07'", "created: '2026-08-08'")
+        incoming.write_text(later, encoding="utf-8")
+        docs.dispatch("reindex", {})
+
+        keeper, message = self._survivor(docs)
+
+        assert keeper == "decisions/adr-0001-zzz-established.md"
+        assert "oldest `created`" in message
+
+    def test_a_filename_tiebreak_says_it_could_not_tell(
+        self, container, settings: Settings
+    ) -> None:
+        """The case that used to be a silent coin flip.
+
+        Nothing separates the two, so the alphabet decides — as it always did.
+        What is new is that the repair says so, because a filename tiebreak is a
+        statement that docir could not tell, and only the operator knows whether
+        the survivor is the document their readers cited.
+        """
+        docs = container.dispatcher
+        docs.dispatch("add", {"type": "decision", "title": "Zzz established", "description": "d"})
+        incoming = settings.docs_root / "decisions" / "adr-0001-aaa-incoming.md"
+        incoming.write_text(_DUP_FILE, encoding="utf-8")
+        docs.dispatch("reindex", {})
+
+        keeper, message = self._survivor(docs)
+
+        assert keeper == "decisions/adr-0001-aaa-incoming.md"
+        assert "filename order" in message
+        assert "check this is the one your readers cited" in message
 
 
 class TestDeleteRefusesAnAmbiguousId:

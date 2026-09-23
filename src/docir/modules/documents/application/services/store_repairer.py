@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from docir.modules.documents.application.services.code_evidence import mint_baseline
 from docir.modules.documents.application.services.document_saving import save_with_mentions
@@ -25,7 +26,7 @@ from docir.modules.documents.domain.services.store_format import (
     declared_store_format,
     required_store_format,
 )
-from docir.platform.filesystem.ports import CodeMatcher, DocumentFileStore
+from docir.platform.filesystem.ports import CodeMatcher, DocumentFileStore, FileHistory
 from docir.platform.filesystem.schema_store import YamlSchemaFileStore
 from docir.platform.persistence.unit_of_work import UnitOfWork
 
@@ -58,6 +59,7 @@ class StoreRepairer:
         rebuilder: IndexRebuilder,
         code_matcher: CodeMatcher | None = None,
         schema_file_store: YamlSchemaFileStore | None = None,
+        history: FileHistory | None = None,
     ) -> None:
         self._uow_factory = uow_factory
         self._file_store = file_store
@@ -67,6 +69,9 @@ class StoreRepairer:
         # global store has no repository above it, so there is no tree to
         # fingerprint and nothing to start watching.
         self._code_matcher = code_matcher
+        # Optional on the same argument, and absent more often: a store outside
+        # a repository, a shallow clone, a machine with no git.
+        self._history = history
         self._schema_file_store = schema_file_store
         self._prefixes = schema.prefixes()
 
@@ -192,7 +197,32 @@ class StoreRepairer:
         return actions
 
     def _repair_duplicate_ids(self) -> list[RepairAction]:
-        """Re-issue every file after the first that claims a given id."""
+        """Re-issue every file but the established one claiming a given id.
+
+        The established one keeps it because an existing `related` edge naming
+        the id was written against *some* document and cannot say which, so the
+        document more readers have already cited is the one to leave alone.
+
+        Three keys, tried in order, and the message names which decided
+        (adr-39210c34551a):
+
+        * **When git first added the file.** The only key that actually answers
+          the question — after a merge, the file that has been on the branch for
+          weeks has an older add commit than the one that arrived minutes ago.
+        * **``created``.** The documented intent, and it degrades exactly when it
+          is needed: `created` is a `date`, so two branches cut from one base and
+          merged inside a day are indistinguishable by it — which is the shape of
+          nearly every real collision (GitHub #22).
+        * **The filename.** Deterministic and meaningless, kept only so the
+          repair always terminates. It used to decide silently whenever the dates
+          tied, so the established document kept its number or lost it according
+          to its title's first letter.
+
+        `None` from the history is *unknown* and never *new*: an untracked file, a
+        shallow clone, a store with no repository, a machine without git. All of
+        them fall through to the next key rather than being sorted as if they had
+        been added at the epoch.
+        """
         by_id: dict[str, list[Document]] = {}
         for document in self._file_store.scan():
             by_id.setdefault(document.id, []).append(document)
@@ -203,11 +233,10 @@ class StoreRepairer:
             for doc_id, documents in sorted(by_id.items()):
                 if len(documents) < 2:
                     continue
-                # The oldest file keeps the id: any existing `related` edge naming
-                # it was written against that document, and an edge cannot say
-                # which of the two it meant.
-                documents.sort(key=lambda doc: (doc.created, doc.path or ""))
-                for duplicate in documents[1:]:
+                keeper, decided_by = self._established(documents)
+                for duplicate in documents:
+                    if duplicate is keeper:
+                        continue
                     new_id = str(generator.next_id(duplicate.type))
                     old_path = duplicate.path
                     reissued = duplicate.with_updates(id=new_id, path=None)
@@ -219,13 +248,44 @@ class StoreRepairer:
                             kind="duplicate-id",
                             message=(
                                 f"re-issued {doc_id!r} as {new_id!r} "
-                                f"({old_path} -> {new_path}); {documents[0].path} keeps the id"
+                                f"({old_path} -> {new_path}); {keeper.path} keeps the id "
+                                f"({decided_by})"
                             ),
                             doc_ids=(doc_id, new_id),
                         )
                     )
             uow.commit()  # persist the counter advances the re-issue consumed
         return actions
+
+    def _established(self, documents: list[Document]) -> tuple[Document, str]:
+        """Which of the colliding files keeps the id, and what decided it.
+
+        The reason is returned rather than logged because it is the difference
+        between a repair somebody can check and a coin flip they cannot see: a
+        filename tiebreak is a *statement that docir could not tell*, and the
+        operator is the only one who knows whether the survivor is the document
+        their readers cited.
+        """
+        added = {id(doc): self._added_at(doc) for doc in documents}
+        known = [doc for doc in documents if added[id(doc)] is not None]
+        if len({added[id(doc)] for doc in known}) > 1:
+            keeper = min(known, key=lambda doc: (added[id(doc)], doc.path or ""))
+            return keeper, "first added to git"
+        by_created = sorted(documents, key=lambda doc: doc.created)
+        if by_created[0].created != by_created[1].created:
+            return by_created[0], "oldest `created`"
+        keeper = min(documents, key=lambda doc: doc.path or "")
+        return (
+            keeper,
+            "filename order — nothing else separated them; "
+            "check this is the one your readers cited",
+        )
+
+    def _added_at(self, document: Document) -> int | None:
+        """When git first added this document's file, if anything can say."""
+        if self._history is None or not document.path:
+            return None
+        return self._history.added_at(Path(document.path))
 
     def _repair_dangling(self) -> list[RepairAction]:
         """Drop `related` edges whose target does not exist."""

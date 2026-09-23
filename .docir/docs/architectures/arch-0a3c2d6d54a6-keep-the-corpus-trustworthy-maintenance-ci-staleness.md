@@ -39,7 +39,7 @@ tags:
 - persistence
 title: Keep the corpus trustworthy (maintenance, CI, staleness)
 type: architecture
-updated: '2026-09-22'
+updated: '2026-09-23'
 verified_code:
   .github/workflows/ci.yml: a4b0e9a8fdd6
   src/docir/modules/documents/application/services/document_patch.py: 5b7b85ac62c7
@@ -61,14 +61,14 @@ review stale docs → re-verify → (repair?)
 |---|-------|-------|---------|----------|
 | 0 | GoverningDecisionsListed | ACT-003 | `docir query --code <changed files>` on a pull request | .github/workflows/ci.yml:146 |
 | 1 | BranchesMerged | ACT-006 | `git merge` | tests/modules/documents/test_merge_safety.py |
-| 2 | IndexRebuilt | ACT-002 | `docir reindex [--changed]` | maintenance_service.py:170 (`reindex`) → index_rebuilder.py |
-| 3 | StructureChecked | ACT-003 | `docir check [--strict]` | maintenance_service.py:191 (`check`) |
-| 4 | DuplicateIdDetected | system | file scan, not index | maintenance_service.py:478 (`_find_duplicate_ids`) |
+| 2 | IndexRebuilt | ACT-002 | `docir reindex [--changed]` | maintenance_service.py:183 (`reindex`) → index_rebuilder.py |
+| 3 | StructureChecked | ACT-003 | `docir check [--strict]` | maintenance_service.py:204 (`check`) |
+| 4 | DuplicateIdDetected | system | file scan, not index | maintenance_service.py:491 (`_find_duplicate_ids`) |
 | 5 | StaleFlagged | system | past `review_days` since `verified`, else `revoked`, else `created` — never `updated` | checks/verification_rules.py:52 (`_find_stale`) |
 | 6 | DocumentReVerified | ACT-007 | `docir update <id> --verified` | document_patch.py:134 (`_apply_verification`) |
-| 7 | AdvisoryLinted | ACT-002 | `docir lint --deep` | maintenance_service.py:514 (`lint_deep`) |
-| 8 | EmbeddingsRebuilt | ACT-002 | `docir embed --flush`, or any full `docir reindex` | maintenance_service.py:182 (`flush_embeddings`) |
-| 9 | UnmatchedCodeFlagged | system | a governed `code:` glob matches nothing the repository tracks | checks/verification_rules.py:89 (`_find_unmatched_code`), maintenance_service.py:424 (`_resolve_code`) |
+| 7 | AdvisoryLinted | ACT-002 | `docir lint --deep` | maintenance_service.py:527 (`lint_deep`) |
+| 8 | EmbeddingsRebuilt | ACT-002 | `docir embed --flush`, or any full `docir reindex` | maintenance_service.py:195 (`flush_embeddings`) |
+| 9 | UnmatchedCodeFlagged | system | a governed `code:` glob matches nothing the repository tracks | checks/verification_rules.py:89 (`_find_unmatched_code`), maintenance_service.py:437 (`_resolve_code`) |
 | 9a | UnwatchedCodeFlagged | system | a governed `code:` glob resolves and no digest is watching it, so no edit to it is ever reported | checks/verification_rules.py:137 (`_find_unwatched_code`) |
 
 ### Why event 0 is numbered from zero

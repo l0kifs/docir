@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`docir check --fix` decides which of two colliding files keeps the id by git provenance**
+  (GitHub #22). The reported symptom was "`--fix` picks the surviving id by filename order";
+  the rule was one step further back, and that is what needed fixing. `created` was already the
+  primary key and works — measured on three probes, a document created *later* loses the id
+  even when its filename sorts first. But `created` is a **`date`**, so it never separates two
+  branches cut from one base and merged inside a day, which is the shape of nearly every real
+  collision. The documented key silently degraded to filename order exactly where it was needed,
+  and after a merge that is a coin flip on titles' first letters: whether the document that has
+  been on `main` for weeks keeps its number, or the one that arrived five minutes ago.
+
+  Three keys now, in order: **when git first added the file**, then `created`, then the
+  filename. The repair message names which of the three decided, and a filename tiebreak says so
+  outright — it means nothing separated them, and only the operator knows whether the survivor
+  is the document their readers cited.
+
+  This is docir's **first `subprocess` call to `git`**, and a deliberate exception to the
+  precedent set when the matcher parsed `.gitignore` rather than calling `git check-ignore`.
+  That precedent is about *per-machine* answers; committed history is the same for everyone who
+  has it, and it is the only record of which file arrived later — nothing inside the store holds
+  that. Bounded accordingly: a five-second timeout, every failure mapped to "unknown", and the
+  call made only when a collision exists. Unknown is **never** "new", so an untracked file, a
+  shallow clone, a store outside a repository and a machine without git all fall through to the
+  next key and behave exactly as before.
+
+  The **pre-merge check** — the more valuable half of that issue — is not built. The collision
+  is knowable the moment the second branch allocates, while renumbering is still cheap; `check`
+  has everything it needs except a comparison against a base ref.
+
 ### Fixed
 
 - **`docir delete` refuses an id more than one file claims** (GitHub #27). Against the state

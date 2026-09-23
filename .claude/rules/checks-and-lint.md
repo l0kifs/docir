@@ -84,9 +84,21 @@ Three tiers, and mixing them is the documented overengineering trap. The recurri
 
 - **`docir check --fix` (`MaintenanceService.repair`) is the only sanctioned recovery path.**
   Detection without repair forced the user into hand-editing markdown — the one thing thesis #2
-  forbids. It repairs exactly what needs no guess: duplicate ids (re-issued; the *oldest* file
-  keeps the id, because existing edges were written against it and an edge cannot say which
-  document it meant) and dangling edges (dropped). `malformed`/`unknown-type` are deliberately
+  forbids. It repairs exactly what needs no guess: duplicate ids (re-issued; the
+  *established* file keeps the id, because existing edges were written against it and an edge
+  cannot say which document it meant) and dangling edges (dropped).
+  **Which file is "established" is decided by git first (adr-39210c34551a)** — the only key
+  that actually answers it, and docir's one `subprocess` call to git, a deliberate exception
+  to adr-1d1eddbb6fbd's precedent, which is about *per-machine* answers where committed
+  history is shared. `created` is the fallback and was the documented intent; it is a `date`,
+  so it never separates two branches cut from one base and merged inside a day, which is the
+  shape of nearly every real collision (GitHub #22). The filename is last, and now *says* it
+  decided: a filename tiebreak means nothing separated them, and only the operator knows
+  whether the survivor is the one their readers cited. `None` from the history is unknown and
+  never new — untracked, a shallow clone, no repository, no git — so each falls through rather
+  than sorting as if added at the epoch. `--fix` must not gain the ability to *decline*: the
+  `delete` refusal (adr-3cfa867c8537) names it as the repair, and a refusal pointing at a
+  refusal leaves the caller nowhere. `malformed`/`unknown-type` are deliberately
   left unrepaired and returned in `RepairResult.remaining` — each needs somebody to read the
   file and decide what it should say, and a repair has nothing to read *with*. It reindexes first — id allocation
   consults the index for a free number — and does **not** advance `updated`, since a mechanical

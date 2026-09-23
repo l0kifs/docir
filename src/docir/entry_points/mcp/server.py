@@ -777,9 +777,15 @@ def _register_maintenance_tools(mcp: FastMCP, run: _Gateway) -> None:
     def docir_check_fix() -> dict[str, Any]:
         """Repair what needs no guess, and start watching what nothing watched.
 
-        Re-issues the newer of two files sharing an id (the older keeps it —
-        existing edges were written against it) and drops edges pointing at
-        nothing. Malformed files and unknown types are left alone and reported
+        Re-issues the newer of two files sharing an id and drops edges pointing
+        at nothing. The **established** file keeps the id, because existing
+        edges were written against it and an edge cannot say which of the two it
+        meant: decided by which git added first, else the older `created`, else
+        the filename. The action's message names which of the three decided, and
+        a filename tiebreak says so outright — that one means nothing separated
+        them, so check the survivor is the document your readers cited.
+
+        Malformed files and unknown types are left alone and reported
         under `remaining` — each needs somebody to read it and decide. Does not
         advance any `updated` date: a mechanical repair is not a human
         re-verification.

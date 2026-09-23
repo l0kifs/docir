@@ -212,6 +212,126 @@ def test_check_detects_dangling_reference(
     assert any(i["kind"] == "dangling" for i in issues)
 
 
+class TestDeleteRefusesAnAmbiguousId:
+    """`delete` on an id two files claim refuses, `--force` included (GitHub #27).
+
+    Every step of the delete reads the index, which holds one row per id — the
+    last file in sorted path order, because `reindex` upserts as it walks. So
+    the command acted on a file nobody chose, stripped the edge from documents
+    citing the file it was *not* deleting, and left the survivor with no index
+    row: invisible to `get`, `query` and `context`, while `check --strict`
+    exited 0 because the duplicate scan then found one file.
+
+    None of that is findable afterwards. `related: []` is a valid state and the
+    index half heals on the next `reindex`, so these tests are the only place
+    the behaviour is pinned.
+    """
+
+    def _collided(self, docs: Dispatcher, settings: Settings) -> tuple[str, str]:
+        """Two files claiming `adr-0001`, and a third document citing it."""
+        original = docs.dispatch(
+            "add", {"type": "decision", "title": "Established", "description": "d"}
+        )
+        citer = docs.dispatch(
+            "add",
+            {
+                "type": "decision",
+                "title": "Citer",
+                "description": "d",
+                "related": [str(original["id"])],
+            },
+        )
+        # Sorts *before* the established file, so the index resolves the id to
+        # the established one and the delete would act on that: the survivor is
+        # the copy, and the citer's edge points at neither in particular.
+        dup = settings.docs_root / "decisions" / "adr-0001-aaa-copy.md"
+        dup.write_text(_DUP_FILE, encoding="utf-8")
+        docs.dispatch("reindex", {})
+        return str(original["id"]), str(citer["id"])
+
+    def test_it_refuses_and_names_every_file_that_claims_the_id(
+        self, container, settings: Settings
+    ) -> None:
+        docs = container.dispatcher
+        doc_id, _ = self._collided(docs, settings)
+
+        with pytest.raises(DuplicateDocumentIdError) as excinfo:
+            docs.dispatch("delete", {"doc_id": doc_id})
+
+        message = str(excinfo.value)
+        # Which files, not just how many — the repair is a choice between them,
+        # and a count cannot be acted on.
+        assert "decisions/adr-0001-aaa-copy.md" in message
+        assert "decisions/adr-0001-established.md" in message
+        assert "check --fix" in message
+
+    def test_force_does_not_override_it(self, container, settings: Settings) -> None:
+        """`--force` overrides incoming references, not which document is meant.
+
+        This is the whole decision: the flag exists to say "strip the edges
+        anyway", and the edges it would strip here cannot be told apart by id.
+        """
+        docs = container.dispatcher
+        doc_id, _ = self._collided(docs, settings)
+
+        with pytest.raises(DuplicateDocumentIdError):
+            docs.dispatch("delete", {"doc_id": doc_id, "force": True})
+
+    def test_nothing_is_deleted_rewritten_or_dropped_from_the_index(
+        self, container, settings: Settings
+    ) -> None:
+        """The three defects, asserted as state rather than as an exception.
+
+        A refusal that had already written something would still pass the two
+        tests above.
+        """
+        docs = container.dispatcher
+        doc_id, citer_id = self._collided(docs, settings)
+        decisions = settings.docs_root / "decisions"
+        before = sorted(path.name for path in decisions.glob("*.md"))
+
+        with pytest.raises(DuplicateDocumentIdError):
+            docs.dispatch("delete", {"doc_id": doc_id, "force": True})
+
+        assert sorted(path.name for path in decisions.glob("*.md")) == before
+        assert [ref["target"] for ref in docs.dispatch("get", {"doc_id": citer_id})["related"]] == [
+            doc_id
+        ]
+        assert docs.dispatch("get", {"doc_id": doc_id})["id"] == doc_id
+        assert any(i["kind"] == "duplicate-id" for i in docs.dispatch("check", {}))
+
+    def test_an_ordinary_delete_is_untouched(self, container) -> None:
+        """The half that makes the rest mean something.
+
+        A guard that refused every delete would pass all three tests above.
+        """
+        docs = container.dispatcher
+        view = docs.dispatch("add", {"type": "decision", "title": "Alone", "description": "d"})
+        doc_id = str(view["id"])
+
+        assert docs.dispatch("delete", {"doc_id": doc_id}) == {"deleted": doc_id, "unlinked": []}
+
+    def test_a_forced_delete_still_strips_edges_when_the_id_is_unambiguous(self, container) -> None:
+        # The behaviour adr-3cfa867c8537 deliberately keeps: --force still
+        # overrides incoming references, which is what it was built for.
+        docs = container.dispatcher
+        target = docs.dispatch("add", {"type": "decision", "title": "Target", "description": "d"})
+        citer = docs.dispatch(
+            "add",
+            {
+                "type": "decision",
+                "title": "Citer",
+                "description": "d",
+                "related": [str(target["id"])],
+            },
+        )
+
+        result = docs.dispatch("delete", {"doc_id": str(target["id"]), "force": True})
+
+        assert result["unlinked"] == [str(citer["id"])]
+        assert not docs.dispatch("get", {"doc_id": str(citer["id"])})["related"]
+
+
 class TestAdoptingAnExistingId:
     """`add --id` preserves a numbered corpus (guards issue-20933967697b).
 

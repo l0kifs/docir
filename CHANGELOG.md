@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`docir delete` refuses an id more than one file claims** (GitHub #27). Against the state
+  `check` already reports as `duplicate-id` — what a merge of two branches on `--id-style
+  sequential` produces, or a copied file — `delete` did three things and each was silent. Every
+  step of it reads the index, and the index holds one row per id (`reindex` walks the files in
+  sorted path order and upserts, so the last one wins), so it **acted on whichever file sorts
+  last** without saying there was a choice; `--force` **stripped the edge from documents citing
+  the file it was not deleting**, rewriting their frontmatter to drop an edge whose target was
+  still on disk; and removing the only index row left **the surviving file invisible** to `get`,
+  `query` and `context` while `check --strict` exited 0, because the duplicate scan then found
+  one file. A merge gate green on a store holding a document nobody can read.
+
+  `--force` overrides *incoming references*; it does not override *ambiguity about which
+  document is meant*, because the edges it strips cannot be told apart by id. The refusal names
+  every file that claims the id and the repair (`docir check --fix`), counts the claimants from
+  the files rather than the index — which cannot answer the question, since the second claimant
+  is what it already discarded — and runs before the unit of work opens, so nothing is read or
+  written on the way to it.
+
+  Prevention only, and deliberately. Measured on a damaged store: `doctor` reports
+  `index-behind-files` right afterwards, and one `reindex` clears even that — so CI, which runs
+  `reindex` before it looks, and the daemon's watcher both heal the index before anything
+  reports it. The stripped edge survives all of them as an ordinary `related: []`. **If you have
+  run `docir delete --force` on a duplicated id, `git log -p` on the citing document is the only
+  recovery**, and it is exact: the files are canonical, so the history holds what the index
+  cannot.
+
 ### Added
 
 - **`docir check` reports a `code:` glob nothing is watching** (GitHub #25). A glob declared

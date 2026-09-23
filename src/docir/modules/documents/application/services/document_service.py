@@ -369,7 +369,40 @@ class DocumentService:
         moved the tag side here). Staleness records when somebody last vouched
         for the content, and having a link removed from underneath you is not
         that. A fourth mechanical rewrite does not set `updated` either.
+
+        **An id more than one file claims is refused, `--force` included**
+        (adr-3cfa867c8537). Everything above reads the *index*, which holds one
+        row per id — the last file in sorted path order, since `reindex` upserts
+        as it walks. So a delete against a duplicated id picked a file nobody
+        chose, stripped the edge from documents citing the file it was **not**
+        deleting, and left the survivor with no index row at all: invisible to
+        `get`, `query` and `context`, while `check --strict` exited 0 because
+        the duplicate scan now found one file. `--force` overrides *incoming
+        references*; it must not also override ambiguity about which document is
+        meant, because the edges it strips cannot be told apart by id.
+
+        The refusal comes first, before the unit of work opens, so nothing is
+        read or written on the way to it. It costs one `scan()` per delete —
+        measured on this repository's 247 documents at **40 ms warm, 210 ms
+        cold**, against a warm write of about 1 ms. That is a large multiple and
+        a small number, and both readings matter: it is paid because `delete` is
+        rare, destructive and unrecoverable, and it is the reason the same guard
+        is **not** on `update`, which an agent runs dozens of times a session to
+        reach a state `check` already reports as an error with no data at stake.
+
+        The cheap pre-check was considered and has a hole: comparing the file
+        count against the index row count misses a duplicate whenever the index
+        is stale in the opposite direction by the same amount. A file that does
+        not parse is not a claimant here for the same reason it is none to the
+        index: `malformed` is the finding that names it.
+
+        This is prevention and only prevention. A stripped edge is a valid
+        `related: []` afterwards, indistinguishable from a document nobody
+        linked, and the index half heals itself on the next `reindex` — so
+        nothing can find the damage after the fact, and `git log -p` on the
+        citing document is the only recovery.
         """
+        self._refuse_ambiguous_id(doc_id)
         with self._uow_factory() as uow:
             document = self._require(uow, doc_id)
             incoming = uow.documents.incoming(doc_id)
@@ -395,6 +428,25 @@ class DocumentService:
             uow.embeddings.remove(doc_id)
             uow.commit()
         return tuple(sorted(incoming))
+
+    def _refuse_ambiguous_id(self, doc_id: str) -> None:
+        """Refuse when more than one file on disk claims ``doc_id``.
+
+        Reads the files rather than the index deliberately: the index cannot
+        answer this question — it holds one row per id by construction, so the
+        second claimant is exactly what it has already discarded.
+        """
+        claimants = sorted(
+            document.path or "?" for document in self._file_store.scan() if document.id == doc_id
+        )
+        if len(claimants) < 2:
+            return
+        joined = ", ".join(claimants)
+        raise DuplicateDocumentIdError(
+            f"cannot delete {doc_id!r}: {len(claimants)} files claim it ({joined}); "
+            f"resolve the duplicate first with `docir check --fix`, which re-issues "
+            f"all but one and renames the file to match"
+        )
 
     # -- read path ----------------------------------------------------------
 

@@ -71,6 +71,17 @@ The CLI is the only write path, so every rule these paths break is one nothing e
   Consequence for tests: `delete --force` can no longer manufacture a dangling
   edge, so the `drop_file_of` fixture builds one the way it really arises — remove the
   target's file as a merge would, then `reindex`.
+  **What `--force` does not override is which document is meant (adr-3cfa867c8537).**
+  An id more than one *file* claims is refused before the unit of work opens, flags
+  included, naming the files. Everything in `delete` reads the index, which holds one row
+  per id — the last file in sorted path order, since `reindex` upserts as it walks — so the
+  command acted on a file nobody chose, stripped the edge from documents citing the file it
+  was **not** deleting, and left the survivor with no index row: invisible to every read
+  while `check --strict` exited 0, because the duplicate scan then found one file
+  (GitHub #27). Prevention is the whole fix: `related: []` is a valid state afterwards and
+  the index half heals on the next `reindex`, so nothing can find the damage after the
+  fact. The claimants are counted from `scan()`, not the index, which cannot answer the
+  question — the second claimant is exactly what it discarded.
 
 - **`update --type` retypes a document, and every rule about it is load-bearing
   (adr-f8cce745d0d5).** **The id is never re-minted**, prefix included: it is the corpus's

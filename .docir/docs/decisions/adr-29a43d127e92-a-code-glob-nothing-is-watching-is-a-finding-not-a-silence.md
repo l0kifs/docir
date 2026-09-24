@@ -13,11 +13,12 @@ related:
 - kind: refines
   to: adr-49bb8cc48938
 - adr-c87e444975e8
+- issue-6e4ccac453ed
 status: proposed
 tags: []
 title: A code glob nothing is watching is a finding, not a silence
 type: decision
-updated: '2026-09-22'
+updated: '2026-09-24'
 ---
 
 ## Decision

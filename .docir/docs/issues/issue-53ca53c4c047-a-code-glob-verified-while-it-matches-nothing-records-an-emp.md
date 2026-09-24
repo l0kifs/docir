@@ -11,6 +11,7 @@ owner: maintainer
 related:
 - adr-29a43d127e92
 - issue-0d4741c85e7f
+- issue-6e4ccac453ed
 status: resolved
 tags:
 - cli
@@ -18,7 +19,7 @@ tags:
 title: A code glob verified while it matches nothing records an empty baseline that
   never re-arms
 type: issue
-updated: '2026-09-22'
+updated: '2026-09-24'
 ---
 
 ## What is wrong

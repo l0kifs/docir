@@ -16,11 +16,12 @@ description: Why drift is measured from a baseline the write mints, why that is 
 id: adr-49bb8cc48938
 owner: maintainer
 related:
+- adr-bd7c4f3c5764
 - kind: refines
   to: adr-d9e6d5ccd0b4
-- adr-bd7c4f3c5764
 - arch-0a3c2d6d54a6
 - issue-6e4ccac453ed
+- issue-53ca53c4c047
 status: accepted
 tags:
 - cli
@@ -28,7 +29,7 @@ tags:
 - integrity
 title: A code glob is watched from the write that declares it
 type: decision
-updated: '2026-09-22'
+updated: '2026-09-24'
 verified: '2026-09-22'
 verified_code:
   src/docir/modules/documents/application/services/code_evidence.py: 793cdf7277e9

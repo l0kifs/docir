@@ -18,6 +18,7 @@ related:
 - adr-31aa7aa60d11
 - adr-ab9c454b760c
 - issue-b24e14474820
+- issue-77dd42e3a03a
 status: accepted
 tags:
 - cli
@@ -25,7 +26,7 @@ tags:
 - persistence
 title: A rebuild is the only way to recompute vectors
 type: decision
-updated: '2026-09-22'
+updated: '2026-09-24'
 verified: '2026-09-22'
 verified_code:
   src/docir/entry_points/cli/maintenance_cmds.py: 63e44c8f25ea

@@ -11,6 +11,7 @@ owner: maintainer
 related:
 - kind: refines
   to: adr-fb938175f72a
+- run-45b267a709b4
 status: accepted
 tags:
 - architecture
@@ -18,7 +19,7 @@ tags:
 - retrieval
 title: Federated rows carry the store's own description
 type: decision
-updated: '2026-09-18'
+updated: '2026-09-24'
 verified: '2026-09-18'
 verified_code:
   src/docir/entry_points/federation.py: e41979b7fb31

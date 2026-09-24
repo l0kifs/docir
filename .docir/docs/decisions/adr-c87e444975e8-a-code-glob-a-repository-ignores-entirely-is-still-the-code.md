@@ -12,11 +12,12 @@ owner: maintainer
 related:
 - kind: refines
   to: adr-1d1eddbb6fbd
+- issue-ec3819b1f13c
 status: proposed
 tags: []
 title: A code glob a repository ignores entirely is still the code it governs
 type: decision
-updated: '2026-09-22'
+updated: '2026-09-24'
 ---
 
 ## Decision

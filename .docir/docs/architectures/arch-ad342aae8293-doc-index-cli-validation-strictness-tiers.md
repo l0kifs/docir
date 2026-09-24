@@ -4,7 +4,7 @@ code:
 - src/docir/modules/documents/domain/services/similarity_lint.py
 - src/docir/modules/documents/domain/services/validation.py
 code_baseline:
-  src/docir/modules/documents/domain/services/checks/**: b28b2d4f6708
+  src/docir/modules/documents/domain/services/checks/**: 7649a3761cd9
   src/docir/modules/documents/domain/services/similarity_lint.py: 497f909c8dc4
   src/docir/modules/documents/domain/services/validation.py: aa4794b0dcdd
 created: '2026-08-15'
@@ -14,17 +14,21 @@ id: arch-ad342aae8293
 related:
 - kind: refines
   to: arch-1cfb1b212237
-revoked: '2026-09-24'
+- adr-d2ae4604a01e
+- adr-bc45b0bb1023
+- adr-39210c34551a
 status: active
 tags:
 - architecture
 title: Doc-Index CLI — validation strictness tiers
 type: architecture
 updated: '2026-09-24'
+verified: '2026-09-24'
 verified_code:
-  src/docir/modules/documents/domain/services/checks/**: b28b2d4f6708
+  src/docir/modules/documents/domain/services/checks/**: 7649a3761cd9
   src/docir/modules/documents/domain/services/similarity_lint.py: 497f909c8dc4
   src/docir/modules/documents/domain/services/validation.py: aa4794b0dcdd
+verified_content: 44006e009b37
 ---
 
 ## Validation strictness tiers
@@ -46,13 +50,18 @@ checks that are cheap and essentially free of false positives:
 - Invalid `status` value (not in the type's enum)
 - Invalid status transition (`--override` forces one and warns, naming the rule
   it broke; it cannot set a status the type does not declare)
-- A `related` id that does not exist in the index
+- A `related` id that does not exist in the index, or an edge from a document
+  to itself
 - A relation `kind` not in the `relation_types` registry, or one the source
   type's `allowed_relations` whitelist forbids for that target type
 - A `tags` key not in the tag registry
 - A `code` glob that can never match — absolute, containing `..`, backslash
-  separated, or empty. A pattern that matches *nothing today* is accepted: a
+  separated, empty, or opening with `!` (a literal here, not an exclusion). A
+  pattern that matches *nothing today* is accepted: a
   decision is routinely written before the code it decides
+- A body over its type's `max_body_chars` that the write makes longer, unless
+  the type sets `max_body_chars_enforce: false` ([[adr-bc45b0bb1023]]). No type
+  ships a ceiling
 - Malformed frontmatter (not valid YAML, wrong types)
 
 ## Tier 1 — structural findings (non-blocking, via `docir check`)
@@ -61,10 +70,11 @@ Graph-level issues, run on demand or in CI, never inline in an agent's write
 call — an agent mid-task should not be blocked by a "possible problem".
 
 **Findings carry a severity, and this is the load-bearing part.** `ERROR_KINDS`
-is `duplicate-id` / `dangling` / `malformed`: the corpus is *broken*. Everything
-else is a `warning` about shape or age. `docir check --strict` exits 1 on errors
-only and is the pre-merge gate; `--strict-all` makes every finding fatal for
-anyone who wants that.
+is `duplicate-id` / `dangling` / `malformed`, where the corpus is *broken*, plus
+`empty-index`, where `check` could not look, and the two findings only
+`--against <ref>` produces. Everything else is a `warning` about shape or age.
+`docir check --strict` exits 1 on errors only and is the pre-merge gate;
+`--strict-all` makes every finding fatal for anyone who wants that.
 
 The distinction is not cosmetic. `orphan` used to fire for every document with
 no `related:` edges — the default state of a new one, and of any document linked
@@ -91,10 +101,13 @@ being added to `ERROR_KINDS` or not.
 | `code-drifted` | warning | the files a `code:` glob matched when the document declared it have moved, and nobody has verified it since |
 | `verification-outdated` | warning | the title/description/body a `--verified` covered are not the ones on disk |
 | `empty-index` | error | the index holds nothing while `docs/` holds files — every read answers nothing |
+| `branch-id-collision` | error | only with `--against <ref>`: an id this branch allocated that the ref already uses |
+| `unreadable-ref` | error | only with `--against <ref>`: the ref could not be read, so nothing was compared |
 | `store-format-undeclared` | warning | the file's contents need a higher `store_format:` floor than it records |
 | `layering` | warning | a higher-level type *depends on* a lower one |
-| `stale` | warning | past the type's `review_days`, measured from `verified` else `updated` |
+| `stale` | warning | past the type's `review_days`, measured from `verified`, else `revoked`, else `created` — never `updated`, which an edit moves |
 | `code-changed` | warning | the code a document governs differs from what it was when somebody last verified it |
+| `code-unwatched` | warning | a `code` glob that matches files and carries neither digest, so no edit to them is reported |
 | `unmatched-code` | warning | a `code` glob that no longer names anything (only when the store sits in a repository) |
 | `unknown-type` / `unknown-status` / `unknown-tag` / `unknown-relation-kind` | warning | the file was written outside the CLI, or a profile was disabled under it |
 | `missing-required` | warning | the *rule* moved under a document that was valid when written |
@@ -104,7 +117,8 @@ being added to `ERROR_KINDS` or not.
 | `repeated-entry` | warning | a file lists one tag, glob or edge twice; every read already holds each once, so `--fix` drops the repeat |
 | `tag-key-format` | warning | a registry key that is not a usable tag |
 
-The last group must not be promoted to errors: the schema they measure against
+The `unknown-*`, `missing-required` and `schema-drift` rows must not be promoted
+to errors: the schema they measure against
 ships in the *package*, so a corpus that passed yesterday can fail today with no
 commit to point at, and nothing about the documents changed.
 
@@ -137,10 +151,26 @@ simply not dependencies, so linking a decision to the issue that motivated it is
 normal and silent. Treating every edge as a dependency made the most natural
 pairing in the quickstart a permanent warning.
 
-**`docir check --fix` repairs what needs no guess**: duplicate ids are re-issued
-(the *oldest* file keeps the id, because existing edges were written against it
-and an edge cannot say which document it meant), dangling edges are dropped,
-and a tag, glob or edge a file lists twice is dropped from the file.
+## Store-defined checks
+
+A store states its own Tier 1 rules under `checks:` in `docs-schema.yaml`: a
+JMESPath `expr` each document is tested against, and the `message` a match
+reports ([[adr-d2ae4604a01e]]). docir ships none. `check` reports each as a
+warning, so `--strict` stays green and `--strict-all` makes them fatal. A rule
+may not take a name docir's own findings use — the loader refuses it, because a
+store's check called `dangling` would make `--strict` depend on whose schema is
+loaded.
+
+## What `docir check --fix` repairs
+
+Only what needs no guess. Duplicate ids are re-issued, and the *established*
+file keeps the id — decided by git history first ([[adr-39210c34551a]]) —
+because existing edges were written against it and an edge cannot say which
+document it meant. Dangling edges are dropped, and a tag, glob or edge a file
+lists twice is dropped from the file. Two more actions file evidence rather than
+repair damage: a `code_baseline` for each glob `code-unwatched` names, and the
+`store_format:` line `store-format-undeclared` asks for.
+
 It reindexes first, and does **not** advance `updated` — a mechanical repair is
 not a re-verification. `malformed`, `unknown-type`, `unmatched-code` and
 `code-changed` are deliberately left alone and returned unrepaired: each needs
@@ -162,6 +192,9 @@ Heuristic, never CI-blocking, run only when a human chooses to:
   format), so a Tier 1 warning would fire only on correct usage. Ignoring code spans does
   not rescue it — 20 of the 47 sit outside code anyway, and 56 *resolved* mentions live
   only inside code spans (adr-e86c5040d626)
+- Oversized sections, ambiguous headings and unqualified section references — how
+  well a body's `##` sections can be retrieved and addressed
+- Broken `--expr` examples — an `--expr` a body documents that will not compile
 
 ## Why this split
 
@@ -180,7 +213,8 @@ upgrading docir can add a type, make a field `required:`, or change a prefix in
 a store whose schema file nobody touched — with nothing in `git diff` to review.
 
 The index therefore records two facts about how it was last built, each in its
-own one-row table, and `docir reindex` is the only writer of both:
+own one-row table, and a rebuild is the only writer of both — `docir reindex`,
+or the bootstrap that builds the index of a store that has none:
 
 | Table | Records | Reported by `check` as |
 |---|---|---|
@@ -203,10 +237,11 @@ reads the same way, since `reindex` overwrites it. `stale-index-build`
 likewise fires on **inequality**, not "older than" — a downgrade needs the
 same rebuild.
 
-### reindex is the only writer.
+### A rebuild is the only writer.
 
-It is already the "make derived state agree
-with the sources" verb. A separate `accept` command would be a ritual whose
+`reindex` is already the "make derived state agree
+with the sources" verb, and the bootstrap is the same rebuild with the vectors
+deferred. A separate `accept` command would be a ritual whose
 only effect is silencing a report.
 
 ### One renderer.

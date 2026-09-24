@@ -261,7 +261,8 @@ files and the derived index never disagree.
   (adr-df43aff8bb0d). Files present at the ref are skipped — a document edited on this branch
   keeps its id on both sides
 - `MaintenanceService.repair() -> RepairResult` — fix the mechanically-fixable Tier 1 damage:
-  re-issue duplicate ids and drop dead `related` edges. The **established** file keeps the id —
+  re-issue duplicate ids, drop dead `related` edges, and rewrite a file that lists one tag, glob
+  or identical edge twice (`repeated-entry`) without the repeat every read already drops. The **established** file keeps the id —
   decided by which git first added (a `FileHistory`, absent outside a repository), else the older
   `created`, else the filename — and the action names which decided, because a filename tiebreak
   is a statement that nothing separated them (adr-39210c34551a). `malformed`,

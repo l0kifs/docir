@@ -19,7 +19,8 @@ index, the daemon, the model, the installation — see
   the type's review cadence), **`unknown-type`** / **`unknown-status`** / **`unknown-tag`** /
   **`unknown-relation-kind`** (a type, status, tag or relation kind the schema does not know —
   all four mean a file was edited outside the CLI), **`unresolved-link`** (a `[[...]]` in a body
-  naming no document), **`missing-required`**, **`schema-drift`**
+  naming no document), **`repeated-entry`** (a file listing one tag, glob or edge twice — read
+  once, and `--fix` drops the repeat), **`missing-required`**, **`schema-drift`**
   and **`stale-index-build`**. Run before finishing; the ones worth a recovery are spelled out
   below.
 - **Recovering from `orphan`** — two exits, and `SKILL.md` says which to reach for:
@@ -69,9 +70,11 @@ index, the daemon, the model, the installation — see
   when a read contradicts the files, and once after cloning a repo. Every finding it can
   report, and the command that closes each, is in `reference/troubleshooting.md`.
 - `docir check --fix` — repair what needs no guess: re-issue duplicate ids (the oldest file
-  keeps the id, so existing links stay valid) and drop `related` edges pointing at nothing. It
-  reports every change, then lists what it could not fix. `malformed` and `unknown-type` are
-  left alone — those need you to decide what the file or the schema should say. **This is the
+  keeps the id, so existing links stay valid), drop `related` edges pointing at nothing, and
+  drop a tag, glob or edge a file lists twice — which a merge of two branches that each added
+  it produces. It leaves `updated` alone, reports every change, then lists what it could not
+  fix. `malformed` and `unknown-type` are left alone — those need you to decide what the file
+  or the schema should say. **This is the
   supported way to recover; do not hand-edit markdown to fix these.**
 - **Recovering from `schema-drift`** — the schema moved under the corpus since the index was
   built, usually an upgrade: the types, statuses and cadences come from the installed docir as
@@ -203,7 +206,7 @@ hand-edited corpus, this is the contract:
 **After any hand-edit: `docir reindex` then `docir check`.** Watch `documents_skipped`
 in the reindex output (above). `check` then catches `unknown-tag`, `unknown-status`,
 `unknown-type`, `unknown-relation-kind`, `missing-required`, `dangling`,
-`unresolved-link` and `duplicate-id`.
+`unresolved-link`, `repeated-entry` and `duplicate-id`.
 
 It cannot catch everything: a plausible-but-wrong `verified` date, or edited
 `created`/`updated`, are indistinguishable from real ones. Those are the fields

@@ -37,7 +37,7 @@ UnitOfWorkFactory = Callable[[], UnitOfWork]
 class RepairAction:
     """One repair that was applied, in the caller's terms."""
 
-    # The finding kind repaired — `duplicate-id`, `dangling`,
+    # The finding kind repaired — `duplicate-id`, `repeated-entry`, `dangling`,
     # `store-format-undeclared`, `code-unwatched`. The last one is named
     # `code-baseline` rather than after its finding, and deliberately: the
     # action files evidence, where the other three undo damage, and it is what
@@ -49,7 +49,7 @@ class RepairAction:
 
 
 class StoreRepairer:
-    """Applies the two repairs that need no judgement, and reports what it did."""
+    """Applies the repairs that need no judgement, and reports what it did."""
 
     def __init__(
         self,
@@ -93,6 +93,7 @@ class StoreRepairer:
         actions = self._repair_duplicate_ids()
         if actions:
             self._rebuilder.reindex(changed_only=True)
+        actions.extend(self._repair_repeated_entries())
         actions.extend(self._repair_dangling())
         actions.extend(self._mint_code_baselines())
         actions.extend(self._record_store_format())
@@ -101,7 +102,7 @@ class StoreRepairer:
     def _record_store_format(self) -> list[RepairAction]:
         """Write the format floor the schema file's contents already need.
 
-        The fourth repair, and the second that mends nothing here: this store
+        The fifth repair, and the second that mends nothing here: this store
         reads perfectly on this build, and the line exists for a docir that
         predates its schema — a teammate's, or one reading this repository as a
         peer (issue-c30895cc62a3).
@@ -286,6 +287,29 @@ class StoreRepairer:
         if self._history is None or not document.path:
             return None
         return self._history.added_at(Path(document.path))
+
+    def _repair_repeated_entries(self) -> list[RepairAction]:
+        """Rewrite each file that names a tag, glob or edge twice, without the repeat.
+
+        Needs no guess: the entries are identical, and the document read from
+        the file already holds each once, so writing it back makes the file say
+        what every read answers. The index already agrees and is left alone, and
+        so is ``updated`` — dropping a repeat is not a review. Runs after the
+        duplicate-id pass, which rewrites the files it re-issues, and reads the
+        file by path, so a repeat inside one of two files sharing an id is
+        written back to that file and not the other.
+        """
+        actions: list[RepairAction] = []
+        for found in self._file_store.find_repeated_entries():
+            self._file_store.write(self._file_store.read(found.path))
+            actions.append(
+                RepairAction(
+                    kind="repeated-entry",
+                    message=f"dropped the repeated {found.describe()} from {found.path}",
+                    doc_ids=(found.doc_id,),
+                )
+            )
+        return actions
 
     def _repair_dangling(self) -> list[RepairAction]:
         """Drop `related` edges whose target does not exist."""

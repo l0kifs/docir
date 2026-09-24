@@ -56,7 +56,7 @@ Three tiers, and mixing them is the documented overengineering trap. The recurri
   a store is readable.
   Everything else (`orphan`, `cycle`, `layering`, `stale`, `unblocked`, `unmatched-code`, `code-unwatched`, `tag-key-format`,
   the three `unknown-type`/`unknown-status`/`unknown-tag`, plus `unknown-relation-kind`,
-  `missing-required` and `schema-drift`) is
+  `missing-required`, `schema-drift` and `repeated-entry`) is
   a `warning` about shape or age. This is load-bearing: `orphan` fires for every document with no relations — the
   default state of a new one — so a fail-on-any-finding gate went red on a healthy corpus, and the
   only way to keep CI green was to drop the gate, which also dropped duplicate-id detection.
@@ -100,7 +100,11 @@ Three tiers, and mixing them is the documented overengineering trap. The recurri
   Detection without repair forced the user into hand-editing markdown — the one thing thesis #2
   forbids. It repairs exactly what needs no guess: duplicate ids (re-issued; the
   *established* file keeps the id, because existing edges were written against it and an edge
-  cannot say which document it meant) and dangling edges (dropped).
+  cannot say which document it meant), dangling edges (dropped), and a tag, glob or identical
+  edge a file lists twice (`repeated-entry`, dropped). That last one is the cheapest to justify:
+  `Document` already holds each entry once, so every read answers without the repeat and the
+  rewrite only makes the file agree with them. It is a warning because nothing is lost, and it
+  is the one finding read from raw frontmatter — the file is the only place a repeat survives.
   **Which file is "established" is decided by git first (adr-39210c34551a)** — the only key
   that actually answers it, and docir's one `subprocess` call to git, a deliberate exception
   to adr-1d1eddbb6fbd's precedent, which is about *per-machine* answers where committed

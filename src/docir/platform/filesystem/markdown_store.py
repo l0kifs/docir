@@ -25,7 +25,7 @@ from docir.platform.errors import (
     ValidationError,
 )
 from docir.platform.filesystem import markdown_format
-from docir.platform.filesystem.ports import DocumentFileStore
+from docir.platform.filesystem.ports import DocumentFileStore, RepeatedEntries
 from docir.platform.naming.slug import slugify
 
 
@@ -109,12 +109,9 @@ class MarkdownDocumentFileStore(DocumentFileStore):
         # Bulk, best-effort: a single hand-edited/foreign file that does not
         # parse is skipped rather than aborting the whole scan (reindex, the
         # duplicate-id check). ``find_malformed`` surfaces those files instead.
-        if not self._root.exists():
-            return
-        for full_path in sorted(self._root.rglob("*.md")):
-            rel = str(full_path.relative_to(self._root))
+        for rel, text in self._sources():
             try:
-                yield markdown_format.parse(full_path.read_text(encoding="utf-8"), rel)
+                yield markdown_format.parse(text, rel)
             except ValidationError:
                 continue
 
@@ -127,15 +124,31 @@ class MarkdownDocumentFileStore(DocumentFileStore):
     def find_malformed(self) -> list[tuple[str, str]]:
         """Return ``(path, reason)`` for every ``.md`` file that fails to parse."""
         malformed: list[tuple[str, str]] = []
-        if not self._root.exists():
-            return malformed
-        for full_path in sorted(self._root.rglob("*.md")):
-            rel = str(full_path.relative_to(self._root))
+        for rel, text in self._sources():
             try:
-                markdown_format.parse(full_path.read_text(encoding="utf-8"), rel)
+                markdown_format.parse(text, rel)
             except ValidationError as exc:
                 malformed.append((rel, str(exc)))
         return malformed
+
+    def find_repeated_entries(self) -> list[RepeatedEntries]:
+        found: list[RepeatedEntries] = []
+        for rel, text in self._sources():
+            try:
+                document = markdown_format.parse(text, rel)
+            except ValidationError:
+                continue
+            repeats = markdown_format.repeated_entries(text)
+            if repeats:
+                found.append(RepeatedEntries(rel, document.id, repeats))
+        return found
+
+    def _sources(self) -> Iterator[tuple[str, str]]:
+        """Every ``.md`` file under the root, as ``(relative path, text)``, sorted."""
+        if not self._root.exists():
+            return
+        for full_path in sorted(self._root.rglob("*.md")):
+            yield str(full_path.relative_to(self._root)), full_path.read_text(encoding="utf-8")
 
     def _existing_path_for_id(self, document: Document) -> str | None:
         """The relative path of a file already claiming this id, if any.

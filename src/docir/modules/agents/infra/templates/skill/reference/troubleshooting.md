@@ -34,7 +34,11 @@ Each finding carries a `kind`, a `severity` and the command that closes it:
   **error**, because every read answers nothing. `docir check` reports it too, since its
   structural checks read that empty graph. → `docir reindex`
 - `index-behind-files` — the index holds fewer documents than `docs/` does. A warning: usually
-  one file that will not parse, which `docir check` names as `malformed`.
+  one file that will not parse, which `docir check` names as `malformed`. On 0.29.0 and older
+  it is also a file listing one tag twice, which `check` does not name: `docir reindex` fails
+  with `UNIQUE constraint failed: document_tags` and the traceback's parameters give the id.
+  Delete the repeated `tags:` line in that file, or upgrade — later builds read it once,
+  report it as `repeated-entry`, and `docir check --fix` removes it.
 - `stale-index-build` — the index was built by a docir that is no longer installed.
   → `docir self upgrade` (below)
 - `index-from-newer-build` — a newer docir opened this store and migrated the index past

@@ -164,6 +164,8 @@ enough to stop a wrong edit and never enough to argue with.
   `reindex` restores the counter, and two backstops refuse a create onto a taken id.
 - The `disk_diverged` guard covers `--replace-body` only — every other edit composes with an
   out-of-band change, so widening it would fail writes that lose nothing.
+- A `Document` holds each tag, glob and identical edge **once**; a file repeating one otherwise
+  disagrees with its index for good.
 - **Only a content edit may move `updated`.** A mechanical rewrite must not, or it launders the
   review clock; `TagService` has no `Clock` for exactly that reason.
 - A forced delete strips the edge from every referencing document in the same transaction, and

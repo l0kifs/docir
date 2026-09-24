@@ -868,6 +868,10 @@ def _register_maintenance_tools(mcp: FastMCP, run: _Gateway) -> None:
         failing on a key it does not recognise. Written textually, so the file's
         comments survive, and only ever raised.
 
+        It drops a tag, glob or identical edge that a file lists twice
+        (`repeated-entry`) — docir already reads each once, so the rewrite
+        loses nothing and makes the file say what every read answers.
+
         And it files a `code_baseline` for every `code:` glob that carries
         none — the documents a store written by an older docir left watching
         nothing — and returns one action per document naming the globs it put

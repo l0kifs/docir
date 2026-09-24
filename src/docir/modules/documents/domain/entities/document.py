@@ -59,9 +59,9 @@ class Document:
     #: verified before this field existed reports nothing.
     verified_content: str = ""
     #: Repo-relative globs naming the code this document governs
-    #: (issue-90aea6d1b891). Held as written, in the author's order: the
-    #: patterns are matched against a working tree that is not this module's to
-    #: read, so the entity carries them and judges nothing about them.
+    #: (issue-90aea6d1b891). Held as written, in the author's order and each
+    #: once: the patterns are matched against a working tree that is not this
+    #: module's to read, so the entity carries them and judges nothing about them.
     code: tuple[str, ...] = ()
     #: Per-pattern digest of what each ``code`` glob matched at the moment the
     #: document was last verified — the evidence half of staleness. ``verified``
@@ -101,6 +101,25 @@ class Document:
     #: the warning without recording what they concluded. Empty means *not
     #: exempt*, which is the default state of every document.
     isolated: str = ""
+
+    def __post_init__(self) -> None:
+        """Hold each tag, glob and edge once, in the order first given.
+
+        They are sets written in an order, and the index stores them as sets —
+        but a file can repeat one: a hand edit, a merge of two branches that
+        each added it, a list sent over MCP (issue-413546da5db7). A repeated tag
+        failed the tag index's primary key on every `reindex`; a repeated glob
+        or edge made the file hash differently from its own index copy, so
+        `--replace-body` refused it as changed on disk, for good. Dropping the
+        repeat here, where every reader and writer builds the document, is what
+        makes the file, the index and :meth:`content_hash` agree.
+
+        Only an identical edge is a repeat. Two kinds to one target are two
+        claims, and which one the author meant is not this entity's to decide.
+        """
+        self.tags = tuple(dict.fromkeys(self.tags))
+        self.code = tuple(dict.fromkeys(self.code))
+        self.related = tuple(dict.fromkeys(self.related))
 
     def embedding_text(self) -> str:
         """The text embedded for semantic search: title + description + body.

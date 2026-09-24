@@ -237,6 +237,7 @@ class MaintenanceService:
         )
         issues.extend(self._unbuilt_index_issue())
         issues.extend(self._find_duplicate_ids())
+        issues.extend(self._find_repeated_entries())
         issues.extend(self._find_branch_id_collisions(against))
         issues.extend(self._find_malformed())
         issues.extend(self._drift_issues())
@@ -496,6 +497,26 @@ class MaintenanceService:
             for _path, reason in self._file_store.find_malformed()
         ]
 
+    def _find_repeated_entries(self) -> list[CheckIssue]:
+        """Files naming one tag, glob or edge twice, which every read holds once.
+
+        A warning: nothing is lost, and the document reads, indexes and takes
+        every edit (issue-413546da5db7). What it reports is a file that says
+        something other than what docir answers from it, and `--fix` makes the
+        two agree without a guess, since the entries are identical.
+        """
+        return [
+            CheckIssue(
+                kind="repeated-entry",
+                message=(
+                    f"{found.path} names {found.describe()} more than once — docir reads "
+                    f"each once; `docir check --fix` drops the repeat from the file"
+                ),
+                doc_ids=(found.doc_id,),
+            )
+            for found in self._file_store.find_repeated_entries()
+        ]
+
     def _find_branch_id_collisions(self, against: str | None) -> list[CheckIssue]:
         """Ids this branch allocated that a base ref already uses.
 
@@ -596,12 +617,14 @@ class MaintenanceService:
     def repair(self) -> RepairResult:
         """Fix the mechanically-fixable Tier 1 damage (``docir check --fix``).
 
-        Two kinds are repairable without guessing at intent:
+        Three kinds are repairable without guessing at intent:
 
         * ``duplicate-id`` — two files claim one id, so one of them is invisible
           to every read path. The oldest keeps the id (it is the one existing
           links were written against); the rest are re-issued and their files
           renamed.
+        * ``repeated-entry`` — a file lists one tag, glob or edge twice, which
+          every read already holds once, so the file is written without it.
         * ``dangling`` — an edge resolves to nothing, so it is dropped.
 
         ``malformed`` and ``unknown-type`` are deliberately *not* touched: the

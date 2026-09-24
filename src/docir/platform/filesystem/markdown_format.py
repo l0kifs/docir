@@ -14,6 +14,7 @@ paths emit the first while the file format writes the second.
 
 from __future__ import annotations
 
+from collections import Counter
 from datetime import date, datetime
 
 import frontmatter
@@ -105,6 +106,29 @@ def parse(text: str, path: str) -> Document:
     except yaml.YAMLError as exc:
         raise ValidationError(f"malformed frontmatter in {path}: {exc}") from exc
     return _to_document(post.metadata, post.content, path)
+
+
+def repeated_entries(text: str) -> dict[str, tuple[str, ...]]:
+    """The entries each list field names more than once, in first-seen order.
+
+    Read from the text because nothing else still holds them: the
+    :class:`Document` built from the same file keeps each entry once. An edge
+    is compared by what it says, so a bare `adr-1` and `{to: adr-1}` are one
+    edge named twice, while two kinds to one target are two edges. Call it only
+    on text :func:`parse` accepts.
+    """
+    metadata = frontmatter.loads(text).metadata
+    lists = {
+        "tags": _as_str_tuple(metadata.get("tags")),
+        "code": _as_str_tuple(metadata.get("code")),
+        "related": tuple(ref.to_token() for ref in _as_related_tuple(metadata.get("related"))),
+    }
+    return {field: repeats for field, values in lists.items() if (repeats := _named_twice(values))}
+
+
+def _named_twice(values: tuple[str, ...]) -> tuple[str, ...]:
+    counts = Counter(values)
+    return tuple(value for value, count in counts.items() if count > 1)
 
 
 def _to_document(metadata: dict[str, object], body: str, path: str) -> Document:

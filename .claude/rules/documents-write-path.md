@@ -43,6 +43,12 @@ The CLI is the only write path, so every rule these paths break is one nothing e
   serializes requests; `--no-daemon` parallel writers have a small unguarded window).
   The variable is `disk_diverged`, not `stale` — in this codebase `stale` means a document
   past its review cadence, a different concept on a different clock.
+  **The guard is only honest while the file and the index can agree**, which is why
+  `Document.__post_init__` drops a repeated tag, glob or identical edge (issue-413546da5db7).
+  The index stores each as a set; a file repeating one hashed differently from its own index
+  copy, so `--replace-body` refused it as diverged for good — refetching re-read the same
+  disagreement — and a repeated tag failed the tag index's primary key on every `reindex`.
+  Two kinds to one target are not a repeat and stay; which one was meant is a judgement.
 
 - **Only a content edit may move `updated`.** The reason is no longer staleness: since
   adr-fad49eaa4648 the review clock does not read `updated` at all, and the rule stands on its

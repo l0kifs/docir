@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A file that lists one tag, glob or edge twice is read once** (issue-413546da5db7). A
+  repeated tag — from a hand edit, a merge, or a list sent over MCP — failed the write after
+  the file was on disk and then every `docir reindex`, with a raw `IntegrityError` that
+  `docir check` could not name. A repeated glob or identical edge made the file hash
+  differently from its index copy, so `update --replace-body` refused the document as changed
+  on disk, permanently. A document now drops the repeat wherever it is built, so an affected
+  file reindexes, takes the edit, and loses the repeat on its next write. `docir check` names
+  such a file as `repeated-entry` (a warning), and `docir check --fix` rewrites it without the
+  repeat and without moving `updated`. Two kinds to one target are two claims and are kept.
+
 - **`docir self upgrade` no longer calls a stalled upgrade "already the newest build"**
   (issue-f0b537bde01a). Every installer docir drives can exit 0 having changed nothing — a
   `uv tool` receipt pinned to an exact version, a pip held back by a constraint file — and

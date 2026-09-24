@@ -14,18 +14,17 @@ id: arch-ad342aae8293
 related:
 - kind: refines
   to: arch-1cfb1b212237
+revoked: '2026-09-24'
 status: active
 tags:
 - architecture
 title: Doc-Index CLI — validation strictness tiers
 type: architecture
-updated: '2026-09-22'
-verified: '2026-09-22'
+updated: '2026-09-24'
 verified_code:
   src/docir/modules/documents/domain/services/checks/**: b28b2d4f6708
   src/docir/modules/documents/domain/services/similarity_lint.py: 497f909c8dc4
   src/docir/modules/documents/domain/services/validation.py: aa4794b0dcdd
-verified_content: c6b05428ce31
 ---
 
 ## Validation strictness tiers
@@ -102,6 +101,7 @@ being added to `ERROR_KINDS` or not.
 | `schema-drift` | warning | the resolved schema differs from the one the index was built against |
 | `stale-index-build` | warning | a different docir built this index |
 | `unresolved-link` | warning | a `[[...]]` in a body naming no document — the prose half of `dangling` |
+| `repeated-entry` | warning | a file lists one tag, glob or edge twice; every read already holds each once, so `--fix` drops the repeat |
 | `tag-key-format` | warning | a registry key that is not a usable tag |
 
 The last group must not be promoted to errors: the schema they measure against
@@ -139,7 +139,8 @@ pairing in the quickstart a permanent warning.
 
 **`docir check --fix` repairs what needs no guess**: duplicate ids are re-issued
 (the *oldest* file keeps the id, because existing edges were written against it
-and an edge cannot say which document it meant) and dangling edges are dropped.
+and an edge cannot say which document it meant), dangling edges are dropped,
+and a tag, glob or edge a file lists twice is dropped from the file.
 It reindexes first, and does **not** advance `updated` — a mechanical repair is
 not a re-verification. `malformed`, `unknown-type`, `unmatched-code` and
 `code-changed` are deliberately left alone and returned unrepaired: each needs

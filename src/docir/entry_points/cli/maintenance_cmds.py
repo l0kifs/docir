@@ -78,7 +78,8 @@ def check(
         bool,
         typer.Option(
             "--fix",
-            help="Repair what can be repaired (duplicate ids, dead edges) and file the "
+            help="Repair what can be repaired (duplicate ids, dead edges, a tag, glob or "
+            "edge a file lists twice) and file the "
             "evidence nothing else can: the code baselines `code-unwatched` names, and "
             "the store format the schema needs.",
         ),
@@ -143,6 +144,16 @@ def check(
     at the next change rather than recovering the one you missed:
 
         docir check | jq -r '.[] | select(.kind=="code-unwatched") | .message'
+        docir check --fix
+
+    `repeated-entry` names a file whose `tags`, `code` or `related` lists one
+    entry twice — what a merge of two branches that each added it leaves. docir
+    reads each once, so nothing is lost; the file just says something other than
+    every read. An edge counts by what it says: `adr-1` and `{to: adr-1}` repeat,
+    two kinds to one target do not. `--fix` drops the repeat and leaves `updated`
+    alone:
+
+        docir check | jq -r '.[] | select(.kind=="repeated-entry") | .message'
         docir check --fix
 
     Pass --strict to gate a pre-merge / CI job: it exits 1 on errors only, which

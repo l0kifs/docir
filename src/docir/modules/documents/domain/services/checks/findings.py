@@ -41,6 +41,7 @@ RESERVED_FINDING_KINDS: frozenset[str] = frozenset(
         "unreadable-ref",
         "dangling",
         "malformed",
+        "repeated-entry",
         "orphan",
         "cycle",
         "layering",
@@ -70,7 +71,7 @@ RESERVED_FINDING_KINDS: frozenset[str] = frozenset(
 #: `code-unwatched`, `code-changed`, `code-drifted`, `verification-outdated`,
 #: `missing-required`,
 #: `unknown-relation-kind`, `schema-drift`, `store-format-undeclared`,
-#: `stale-index-build`, `unblocked`)
+#: `stale-index-build`, `unblocked`, `repeated-entry`)
 #: describes shape or classification, not
 #: damage. `orphan` in particular fires for any document with no relations — the
 #: default state of a new one — so treating these as build failures made the gate

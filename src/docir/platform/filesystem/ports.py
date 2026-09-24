@@ -8,11 +8,32 @@ use cases stay ignorant of paths, YAML, and frontmatter encoding.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.tags.domain.entities.tag import Tag
+
+
+@dataclass(frozen=True, slots=True)
+class RepeatedEntries:
+    """A file whose frontmatter names one tag, glob or edge more than once.
+
+    Only the file can say so: a :class:`Document` holds each entry once
+    (issue-413546da5db7), so the repeat is invisible to every read and survives
+    in the file until something rewrites it.
+    """
+
+    path: str
+    doc_id: str
+    #: ``tags`` / ``code`` / ``related`` -> the entries named more than once,
+    #: edges in their compact ``<id>`` / ``<id>:<kind>`` form.
+    repeats: Mapping[str, tuple[str, ...]]
+
+    def describe(self) -> str:
+        """``tags: x; code: a/**`` — what is repeated, for a message."""
+        return "; ".join(f"{field}: {', '.join(values)}" for field, values in self.repeats.items())
 
 
 class DocumentFileStore(ABC):
@@ -79,6 +100,14 @@ class DocumentFileStore(ABC):
 
         Defaults to none; a real store overrides this to report hand-edited or
         foreign files that ``scan`` skipped.
+        """
+        return []
+
+    def find_repeated_entries(self) -> list[RepeatedEntries]:
+        """Every file whose ``tags``, ``code`` or ``related`` names an entry twice.
+
+        Defaults to none; a real store overrides this. Files that do not parse
+        are :meth:`find_malformed`'s to report, and are skipped here.
         """
         return []
 

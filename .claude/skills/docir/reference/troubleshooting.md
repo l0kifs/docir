@@ -73,8 +73,8 @@ what reports dangling edges, duplicate ids and staleness.
 
 A store is a committed artifact, so the docir reading it is not always the one
 that wrote it. Most of that skew is harmless — an older build ignores a
-frontmatter field or a schema key it does not know. Two shapes are not, and both
-look like a broken repository rather than an old binary.
+frontmatter field or a schema key it does not know. The shapes below are not,
+and each looks like a broken repository rather than an old binary.
 
 **`error: type '<name>' must define a string 'prefix'`, on every command.** The
 store uses a schema *overlay* — a `types:` block that deliberately omits
@@ -108,6 +108,13 @@ docir self upgrade    # where docir owns its environment
 Inside a repository that pins docir (a lockfile, a checkout), run the project's
 own build instead — `uv run docir ...` — rather than a globally installed one,
 which is how this mismatch usually arises.
+
+**`schema 'id_style' must be one of: sequential, random (got 'chronological')`,
+or `declares store format 3; this docir understands up to 2`, on every
+command.** The store mints time-ordered ids, which a build that only reads
+store format 2 cannot load. **Do not change `id_style` back** to get your
+command through — that changes how everybody else mints ids. Upgrade the
+binary, as above.
 
 **`index-from-newer-build`** is the same story for the index rather than the
 schema, and `docir doctor` names it directly; the entry above says what to do.

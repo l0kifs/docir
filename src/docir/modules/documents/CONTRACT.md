@@ -277,9 +277,12 @@ files and the derived index never disagree.
   the comments that file exists to carry survive, and is only ever raised: a declaration above
   what the contents need was written deliberately and is left alone.
 - `render_schema_yaml(profiles, id_style) -> str` — a `docs-schema.yaml` body selecting
-  `profiles` and a schema-wide `id_style` (`ID_STYLES`: `sequential` | `random`). A type
-  without its own `id_style` inherits the schema-wide one; absent both, `DEFAULT_ID_STYLE`
-  (`sequential`) applies, so an existing schema keeps minting the ids it always did.
+  `profiles` and a schema-wide `id_style` (`ID_STYLES`: `sequential` | `random` |
+  `chronological`). A type without its own `id_style` inherits the schema-wide one; absent
+  both, `DEFAULT_ID_STYLE` (`sequential`) applies, so an existing schema keeps minting the ids
+  it always did. `chronological` mints a `random`-shaped 12-hex token whose first eight chars
+  are the creation second from the injected `Clock`, so ids sort by creation time; it needs
+  store format 3, and the rendered body then opens with `store_format: 3`.
   (defaults to `software`), written by `docir init [--profiles ...]`
 
 ## Public constants
@@ -301,7 +304,8 @@ narrowed to one.) A `related` entry is a typed edge
 `UpdateDocumentRequest` also carries `set_owner`, `mark_verified` (stamp the
 review clock) and `clear_verified` (withdraw the stamp, refused when none is
 standing). The two verification flags are refused together.
-`MaintenanceService` requires a `Clock` (staleness needs "today").
+`MaintenanceService` requires a `Clock` (staleness needs "today", and a `duplicate-id`
+repair re-mints a `chronological` id at "now").
 
 `stale` is computed from `Document.stale_reference_date()` — `verified`, else `revoked`, else
 `created`, and never `updated` (adr-fad49eaa4648, adr-f4e6ade4afd0). Only `mark_verified` moves an

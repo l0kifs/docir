@@ -30,6 +30,9 @@ The CLI is the only write path, so every rule these paths break is one nothing e
   scans the *files* directly (`MaintenanceService._find_duplicate_ids`), because two files sharing an
   id are invisible in the index (it dedupes by primary key). That scan is the merge-into-`main`
   guard; `docir check --strict` exits 1 for CI.
+  A `chronological` type (adr-0bb509bd3a19) draws no counter either: its id leads with the
+  second read from the **injected `Clock`** in `IdGenerator` — never a clock built inline —
+  and a `duplicate-id` re-issue keeps the old id's second so the file does not move.
 
 - **The stale-write guard covers `--replace-body` only, and that is the rule, not an
   oversight.** `update` computes `disk_diverged` (index `content_hash` vs the file's) and

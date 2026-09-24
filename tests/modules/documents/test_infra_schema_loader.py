@@ -96,6 +96,12 @@ def test_parse_schema_id_style() -> None:
     assert schema.get("x").id_style == "random"
 
 
+def test_parse_schema_chronological_id_style_reaches_profile_types() -> None:
+    schema = parse_schema({"profiles": ["software"], "id_style": "chronological"})
+    assert schema.get("decision").id_style == "chronological"
+    assert schema.get("issue").id_style == "chronological"
+
+
 def test_parse_schema_rejects_bad_id_style() -> None:
     with pytest.raises(SchemaError):
         parse_schema(
@@ -932,6 +938,26 @@ types:
 """
         )
         assert required_store_format(whole) == 1
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "profiles: [software]\nid_style: chronological\n",
+            "profiles: [software]\ntypes:\n  issue:\n    id_style: chronological\n",
+            # Inline-only, no profiles: not an overlay, but still unreadable
+            # before the style existed.
+            "types:\n  x:\n    prefix: x\n    statuses: {a: []}\n    default_status: a\n"
+            "    id_style: chronological\n",
+        ],
+        ids=["schema-wide", "overlay", "inline-type"],
+    )
+    def test_a_store_minting_chronological_ids_needs_the_third_format(self, text: str) -> None:
+        assert required_store_format(yaml.safe_load(text)) == 3
+
+    def test_the_other_id_styles_need_no_floor(self) -> None:
+        for style in ("random", "sequential"):
+            raw = yaml.safe_load(f"{self.PLAIN}id_style: {style}\n")
+            assert required_store_format(raw) == 1
 
     def test_an_absent_declaration_reads_as_the_oldest_format(self) -> None:
         # Not unknown, unlike every other absence in docir: a file written

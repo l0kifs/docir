@@ -78,6 +78,22 @@ class TestInit:
         )
         assert json.loads(added.stdout)["id"] == "adr-0001"
 
+    def test_id_style_chronological_records_its_floor(self, tmp_path: Path) -> None:
+        assert run("init", str(tmp_path), "--id-style", "chronological").exit_code == 0
+        schema = (tmp_path / ".docir" / "docs-schema.yaml").read_text(encoding="utf-8")
+        # Written by init, where `check --fix` would put it: a build that reads
+        # only format 2 then refuses by number instead of on the id_style key.
+        assert schema.startswith("store_format: 3\n")
+        assert "id_style: chronological" in schema
+
+        home = str(tmp_path / ".docir")
+        added = run(
+            "--home", home, "add", "--type", "decision", "--title", "T", "--description", "d"
+        )
+        assert re.fullmatch(r"adr-[0-9a-f]{12}", json.loads(added.stdout)["id"])
+        issues = json.loads(run("--home", home, "check").stdout)
+        assert not [i for i in issues if i["kind"] == "store-format-undeclared"]
+
     def test_unknown_id_style_exits_3(self, tmp_path: Path) -> None:
         assert run("init", str(tmp_path), "--id-style", "uuid").exit_code == 3
 

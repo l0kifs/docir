@@ -148,6 +148,9 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
 ```
 
 - Prefer `--stdin` for multi-line markdown bodies (no shell-escaping).
+- Give a list flag **one comma-separated value** — `--tags auth,api`. Repeating
+  the flag works on builds after 0.29.0; 0.29.0 and older keep only the last
+  value and say nothing, so the comma form is the one that is right everywhere.
 - **Before `add`, ask whether the corpus already says it.** Run `docir context`
   over the description you are about to file. A document saying the same thing
   in different words is invisible to `docir search` — which matches words — and

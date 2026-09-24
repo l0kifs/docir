@@ -23,10 +23,16 @@ def add(
     description: Annotated[
         str, typer.Option("--description", help="One-line summary, shown in every skeleton.")
     ],
-    tags: Annotated[str | None, typer.Option("--tags", help="Comma-separated.")] = None,
+    tags: Annotated[
+        list[str] | None,
+        typer.Option("--tags", help="Comma-separated, or repeat the flag."),
+    ] = None,
     related: Annotated[
-        str | None,
-        typer.Option("--related", help="Comma-separated <id> or <id>:<kind> typed edges."),
+        list[str] | None,
+        typer.Option(
+            "--related",
+            help="Comma-separated <id> or <id>:<kind> typed edges, or repeat the flag.",
+        ),
     ] = None,
     status: Annotated[
         str | None,
@@ -34,11 +40,12 @@ def add(
     ] = None,
     owner: Annotated[str | None, typer.Option("--owner", help="Steward for staleness.")] = None,
     code: Annotated[
-        str | None,
+        list[str] | None,
         typer.Option(
             "--code",
-            help="Comma-separated repo-relative globs this document governs. Whatever the "
-            "repository's .gitignore excludes is skipped, so a glob over a source tree "
+            help="Comma-separated repo-relative globs this document governs, or repeat "
+            "the flag. Whatever the repository's .gitignore excludes is skipped, so a "
+            "glob over a source tree "
             "does not drift when a build writes beside it; a '!' exclusion is refused, "
             'because these are pathlib globs where "!" is a literal. '
             'Example: --code "src/auth/**,src/api/routes.py"',
@@ -146,14 +153,19 @@ def update(
         str | None, typer.Option("--set-description", help="Replace the one-line summary.")
     ] = None,
     set_tags: Annotated[
-        str | None,
+        list[str] | None,
         typer.Option(
-            "--set-tags", help='Replace the tags, comma-separated (pass "" to clear them).'
+            "--set-tags",
+            help='Replace the tags, comma-separated or repeated (pass "" to clear them).',
         ),
     ] = None,
     set_related: Annotated[
-        str | None,
-        typer.Option("--set-related", help="Comma-separated <id> or <id>:<kind> typed edges."),
+        list[str] | None,
+        typer.Option(
+            "--set-related",
+            help="Replace the typed edges: comma-separated <id> or <id>:<kind>, or repeat "
+            "the flag.",
+        ),
     ] = None,
     set_owner: Annotated[str | None, typer.Option("--set-owner", help="Staleness steward.")] = None,
     set_isolated: Annotated[
@@ -167,10 +179,10 @@ def update(
         ),
     ] = None,
     set_code: Annotated[
-        str | None,
+        list[str] | None,
         typer.Option(
             "--set-code",
-            help="Comma-separated repo-relative globs this document governs "
+            help="Comma-separated or repeated repo-relative globs this document governs "
             '(pass "" to clear them). A glob this adds is watched from now; one '
             "it keeps holds the baseline it already had, so re-declaring a "
             "pattern never clears a drift nobody has read. Ignored files are "

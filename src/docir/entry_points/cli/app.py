@@ -120,9 +120,10 @@ def init(
         typer.Argument(help="Project directory to initialize (default: the current one)."),
     ] = None,
     profiles: Annotated[
-        str | None,
+        list[str] | None,
         typer.Option(
-            "--profiles", help=f"Comma-separated schema profiles ({', '.join(PROFILE_NAMES)})."
+            "--profiles",
+            help=f"Schema profiles ({', '.join(PROFILE_NAMES)}), comma-separated or repeated.",
         ),
     ] = None,
     id_style: Annotated[

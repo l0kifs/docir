@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A repeated list flag keeps every value** (issue-2bb30af6216d). `docir add --code "a/**"
+  --code "b/**"` wrote `code: [b/**]` and said nothing, and `--tags x --tags y` was read as
+  `y`: the seven write-side list flags — `add --tags/--related/--code`, `update
+  --set-tags/--set-related/--set-code` and `init --profiles` — were single-valued, while every
+  read-side list flag (`query --tag`, `context --also`) repeats. They repeat now, each
+  occurrence is still comma-split, so `--code a/** --code b/**,c/**` is three globs in order.
+  A value given twice is kept once — `--tags x,x` no longer crashes the write after the file is
+  on disk. A wrapper that relied on a later flag overriding an earlier one now gets both.
+
 - **A file that lists one tag, glob or edge twice is read once** (issue-413546da5db7). A
   repeated tag — from a hand edit, a merge, or a list sent over MCP — failed the write after
   the file was on disk and then every `docir reindex`, with a raw `IntegrityError` that

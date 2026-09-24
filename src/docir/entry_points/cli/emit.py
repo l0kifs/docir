@@ -15,10 +15,23 @@ from docir.entry_points.cli import rendering
 from docir.entry_points.cli.runner import get_state, use_json
 
 
-def split_csv(value: str | None) -> tuple[str, ...]:
-    if not value:
-        return ()
-    return tuple(item.strip() for item in value.split(",") if item.strip())
+def split_csv(values: list[str] | None) -> tuple[str, ...]:
+    """Every item a list flag was given, in order, whichever form carried it.
+
+    `--code "a/**,b/**"` and `--code a/** --code b/**` are the same request.
+    The flags were single-valued once, so the repeated form kept only its last
+    value and said nothing — while `query --tag x --tag y` taught that a flag
+    repeats. Taking ``list[str]`` rather than ``str`` is the guard: a list flag
+    declared single-valued again cannot be passed here without failing
+    `ty check`.
+
+    A repeat is dropped, first occurrence kept: every list these flags carry is
+    a set written in an order. A document drops one again for itself, whatever
+    sent it; `init --profiles` has nothing behind it that would, and would
+    commit the repeat into the schema file.
+    """
+    items = (item.strip() for value in values or () for item in value.split(","))
+    return tuple(dict.fromkeys(item for item in items if item))
 
 
 def wants_inactive(include_inactive: bool, include_resolved: bool) -> bool:

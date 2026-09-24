@@ -27,6 +27,7 @@ from docir.modules.release.infra.adapters import (
     JsonFileReleaseCache,
     PyPIReleaseIndex,
     SubprocessRunner,
+    SubprocessVersionProbe,
 )
 from docir.modules.release.infra.probe import gather_evidence
 from docir.platform.clock import Clock, SystemClock
@@ -48,6 +49,7 @@ def build_release_service(
         cache=JsonFileReleaseCache(cache_path),
         clock=clock or SystemClock(),
         version=version,
+        probe=SubprocessVersionProbe(),
     )
 
 

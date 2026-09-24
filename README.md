@@ -380,6 +380,12 @@ makes, it sends no document content, and it is off for anyone who never created 
 docir inside a checkout, or pinned by your lockfile, is upgraded in that project and is
 never told to upgrade itself, so it stays silent — `docir self status` is how you ask.
 
+When an upgrade leaves the version where it was despite exiting cleanly,
+your package manager held it back — a version pin recorded at install time is the usual
+reason. The installer's own output is printed underneath and normally names the command that
+releases it; run that, then `docir self upgrade --no-package`. The store half runs either
+way, so nothing is left half-done.
+
 When they do not — or when a read simply contradicts what you can see in the files —
 `docir doctor` also carries a `compat` section: the store format numbers to compare against
 another machine's docir, and each surface scheduled for removal with the day it goes — so "is

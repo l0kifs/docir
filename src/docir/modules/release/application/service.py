@@ -14,7 +14,12 @@ returns the reason instead of a command — see :mod:`..domain.installation`.
 
 from __future__ import annotations
 
-from docir.modules.release.application.ports import ProcessRunner, ReleaseCache, ReleaseIndex
+from docir.modules.release.application.ports import (
+    ProcessRunner,
+    ReleaseCache,
+    ReleaseIndex,
+    VersionProbe,
+)
 from docir.modules.release.domain.installation import PACKAGE, Installation
 from docir.modules.release.domain.notice import notice_for
 from docir.modules.release.domain.results import ReleaseStatus, UpgradeOutcome
@@ -32,6 +37,7 @@ class ReleaseService:
         cache: ReleaseCache,
         clock: Clock,
         version: str,
+        probe: VersionProbe | None = None,
     ) -> None:
         self._installation = installation
         self._runner = runner
@@ -39,6 +45,9 @@ class ReleaseService:
         self._cache = cache
         self._clock = clock
         self._version = version
+        # Optional so every existing caller and fake keeps working; the default
+        # reports *unknown*, which is the answer that changes no behaviour.
+        self._probe = probe or _UnknownVersion()
 
     def status(self, *, refresh: bool = False) -> ReleaseStatus:
         """The installed version against the newest known one.
@@ -99,11 +108,16 @@ class ReleaseService:
                 ran=False, ok=True, command=(), message=self._installation.explanation
             )
         status, output = self._runner.run(command)
+        # Asked only after a *successful* run: a failed installer's version is
+        # not a question anybody has, and the probe costs an interpreter start.
+        after = self._probe.installed_version() if status == 0 else None
         return UpgradeOutcome(
             ran=True,
             ok=status == 0,
             command=command,
             message=output.strip() or f"`{' '.join(command)}` exited {status}",
+            installed_before=self._version,
+            installed_after=after,
         )
 
     # -- internals ----------------------------------------------------------
@@ -118,3 +132,15 @@ class ReleaseService:
         checked_on = self._clock.today().isoformat()
         self._cache.write(latest, checked_on)
         return latest, checked_on
+
+
+class _UnknownVersion(VersionProbe):
+    """The default probe: it cannot tell, and says so.
+
+    Present so that adding the port did not change what any existing caller
+    does. ``None`` flows into ``UpgradeOutcome.version_moved`` as *unknown*, and
+    unknown is the value every caller already falls through on.
+    """
+
+    def installed_version(self) -> str | None:
+        return None

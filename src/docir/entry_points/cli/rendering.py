@@ -23,6 +23,7 @@ from rich.table import Table
 from docir import __version__
 from docir.entry_points.payload import trim as trim_payload
 from docir.modules.agents.api import FEEDBACK_AGENT
+from docir.modules.release.api import is_newer
 
 console = Console()
 error_console = Console(stderr=True)
@@ -157,6 +158,33 @@ def render_warning(message: str) -> None:
     deprecation notice mixed into it would corrupt the payload.
     """
     error_console.print(f"[yellow]warning:[/] {message}")
+
+
+def render_stalled_upgrade(
+    *, installed: str, latest: str | None, command: Sequence[str], said: str
+) -> None:
+    """The installer ran, exited 0, and the version did not move.
+
+    Three lines, and each one answers a different question a reader has. *What
+    happened* — with the version being missed, when it is known. *What the
+    installer said* — quoted and indented, because it is somebody else's words
+    and is where the cause actually is. *What to do* — an instruction that holds
+    whatever the cause, for the installers that say nothing useful: a pip held
+    back by a constraint file exits 0 and explains nothing.
+
+    Stderr like every other warning, so `--json` output is untouched.
+    """
+    missing = f" — {latest} is published" if is_newer(latest, than=installed) else ""
+    render_warning(f"the installer ran and docir is still {installed}{missing}")
+    if said:
+        error_console.print(f"[dim]`{' '.join(command)}` said:[/]")
+        for line in said.splitlines():
+            error_console.print(f"  [dim]{line}[/]")
+    render_warning(
+        "do what it says above; if it named nothing you can act on, `docir self status` "
+        "says how this docir was installed — upgrade it that way, then "
+        "`docir self upgrade --no-package` to resync this store."
+    )
 
 
 def _render_traces(views: Sequence[Mapping[str, object]]) -> None:

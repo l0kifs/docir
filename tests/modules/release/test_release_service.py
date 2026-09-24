@@ -7,10 +7,15 @@ from datetime import date
 
 import pytest
 
-from docir.modules.release.application.ports import ProcessRunner, ReleaseCache, ReleaseIndex
+from docir.modules.release.application.ports import (
+    ProcessRunner,
+    ReleaseCache,
+    ReleaseIndex,
+    VersionProbe,
+)
 from docir.modules.release.application.service import ReleaseService
 from docir.modules.release.domain.installation import Installation
-from docir.modules.release.domain.results import is_newer
+from docir.modules.release.domain.results import UpgradeOutcome, is_newer
 from docir.platform.clock import Clock
 
 
@@ -166,3 +171,92 @@ class TestTheInstallerRunsOnlyWhereItMay:
 )
 def test_version_ordering(candidate: str | None, installed: str, expected: bool) -> None:
     assert is_newer(candidate, than=installed) is expected
+
+
+class _Holds(VersionProbe):
+    def __init__(self, version: str | None) -> None:
+        self._version = version
+
+    def installed_version(self) -> str | None:
+        return self._version
+
+
+class TestExitingZeroIsNotTheSameAsChangingSomething:
+    """`version_moved` is three-valued, and the third value is the load-bearing one.
+
+    Every installer docir drives can exit 0 having done nothing — a `uv tool`
+    receipt pinned to an exact version, a pip held back by a constraint file,
+    both measured. Reading the exit code as "upgraded" is what made docir
+    re-execute into the same build and call it the newest one.
+    """
+
+    def _outcome(self, holds: str | None, *, status: int = 0):
+        return _service(
+            UPGRADABLE, runner=RecordingRunner(status=status), version="0.11.0"
+        ).upgrade_package()
+
+    def test_a_probe_that_cannot_tell_answers_unknown(self) -> None:
+        # Not False. The caller falls through to what it did before on unknown,
+        # and would strand a working upgrade if this said "did not move".
+        outcome = UpgradeOutcome(
+            ran=True, ok=True, command=("uv",), message="", installed_before="0.11.0"
+        )
+        assert outcome.installed_after is None
+        assert outcome.version_moved is None
+
+    def test_the_same_version_afterwards_is_a_stall(self) -> None:
+        outcome = UpgradeOutcome(
+            ran=True,
+            ok=True,
+            command=("uv",),
+            message="Nothing to upgrade",
+            installed_before="0.11.0",
+            installed_after="0.11.0",
+        )
+        assert outcome.version_moved is False
+
+    def test_a_different_version_afterwards_moved(self) -> None:
+        outcome = UpgradeOutcome(
+            ran=True,
+            ok=True,
+            command=("uv",),
+            message="",
+            installed_before="0.11.0",
+            installed_after="0.12.0",
+        )
+        assert outcome.version_moved is True
+
+    def test_an_installer_that_never_ran_answers_unknown(self) -> None:
+        outcome = _service(FROZEN).upgrade_package()
+        assert outcome.ran is False
+        assert outcome.version_moved is None
+
+    def test_the_service_reads_the_environment_after_a_successful_run(self) -> None:
+        service = ReleaseService(
+            installation=UPGRADABLE,
+            runner=RecordingRunner(),
+            index=FakeIndex("0.12.0"),
+            cache=FakeCache(),
+            clock=_FixedClock(TODAY),
+            version="0.11.0",
+            probe=_Holds("0.11.0"),
+        )
+        outcome = service.upgrade_package()
+        assert (outcome.installed_before, outcome.installed_after) == ("0.11.0", "0.11.0")
+        assert outcome.version_moved is False
+
+    def test_a_failed_installer_is_not_probed(self) -> None:
+        # The probe costs an interpreter start, and "which version does a failed
+        # install leave" is not a question anybody has.
+        service = ReleaseService(
+            installation=UPGRADABLE,
+            runner=RecordingRunner(status=1, output="boom"),
+            index=FakeIndex("0.12.0"),
+            cache=FakeCache(),
+            clock=_FixedClock(TODAY),
+            version="0.11.0",
+            probe=_Holds("0.99.0"),
+        )
+        outcome = service.upgrade_package()
+        assert outcome.ok is False
+        assert outcome.installed_after is None

@@ -53,6 +53,24 @@ This is the one place docir acts on its own process, so the ordering rules are t
   interpreter exit. MCP puts it in the server's **`instructions`**, which a client reads once on
   connect; no tool result can hold it, because three of them answer with a bare JSON array.
 
+- **An installer that exits 0 is not an installer that upgraded anything
+  (issue-f0b537bde01a).** `upgrade_package` reads the environment's version back through the
+  `VersionProbe` port after a successful run, and `UpgradeOutcome.version_moved` is
+  three-valued — `None` is *could not tell* and must fall through to the re-exec, or a working
+  upgrade gets stranded. On `False` there is nothing to hand off to, so the CLI does **not**
+  re-exec; it says the version did not move, quotes the installer verbatim, and adds the one
+  instruction that holds whatever the cause. The store half still runs and the exit code stays
+  0: the package not moving is not a reason to leave the index on the old build.
+
+  **Do not diagnose the cause and do not repair the installation.** The installers already
+  explain themselves — `uv tool upgrade` on a pinned receipt prints the pin and the command
+  that clears it — and anything docir re-derived would be a worse copy of the text it is
+  standing in front of. Rewriting a recorded requirement is worse still: a pin is a *user's*
+  instruction, not installer bookkeeping, the receipt does not record why, and
+  `uv tool install docir@latest --force` is wrong for four of the five shapes a receipt holds
+  (editable, git, plain, pinned). The module's founding rule applies unchanged — a wrong guess
+  is worse than no guess.
+
 - **Whether it runs at all is decided in `config/settings.py`, beside the home rule**, for
   the reason both home decisions live there. Precedence: `DOCIR_UPDATE_CHECK` (either
   direction) → `CI` set, which forces it off → the store's `config.yaml`. The store file is

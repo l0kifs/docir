@@ -153,6 +153,20 @@ schema, and `docir doctor` names it directly; the entry above says what to do.
   and it is told nothing. If you suspect you are behind and saw no notice, ask directly with
   `docir self status --refresh`.
 
+- **When `docir self upgrade` reports that the installer ran and the version did not move**,
+  the package manager held it back. It is not a failure and the store half still ran; the
+  package simply did not change.
+
+  docir prints the installer's own words directly underneath, and for most holds that text
+  names the command that releases it — a `uv tool` install pinned to an exact version prints
+  the `uv tool install docir@latest` form to reinstall with. Run whatever it names, then
+  `docir self upgrade --no-package` to bring the store to the build you now have.
+
+  Some installers explain nothing: a pip held back by a constraint file exits 0 silently. Then
+  read `docir self status` — `method` says how this docir arrived and `upgrade_command` says
+  what docir would run — and resolve it there. Never work around it by editing files docir
+  owns or by pinning the store to an older shape; report it instead.
+
 ## When docir itself is the defect
 
 Some failures survive `doctor`, `reindex` and an upgrade because they are docir's,

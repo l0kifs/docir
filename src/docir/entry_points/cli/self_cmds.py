@@ -22,7 +22,12 @@ from docir.entry_points.cli.runner import (
 )
 from docir.entry_points.composition import UpgradeResult, active_embedder_id, upgrade_store
 from docir.modules.documents.api import load_schema
-from docir.modules.release.api import ReleaseStatus, build_release_service
+from docir.modules.release.api import (
+    ReleaseService,
+    ReleaseStatus,
+    UpgradeOutcome,
+    build_release_service,
+)
 
 self_app = typer.Typer(help="Maintain the docir installation itself.", no_args_is_help=True)
 
@@ -110,6 +115,14 @@ def self_upgrade(
     otherwise be the old build's work, starting with the stamp saying which
     version built the index. Pass --no-package to skip the install and only
     resync the store.
+
+    An installer that exits 0 has not necessarily changed anything, so the
+    version is read back afterwards. When it did not move, the command says so,
+    quotes what the installer printed — which is where the cause is, and often
+    the exact command that clears it — and carries on with the store half rather
+    than failing. A `uv tool` install pinned to an exact version is the common
+    case; `docir self status` names the method when the installer explains
+    nothing.
 
     The rebuild runs in full only when the index carries a different version's
     build stamp. Against a store this build already indexed there is nothing for a
@@ -201,7 +214,42 @@ def _upgrade_the_package_then_restart() -> None:
             {"message": f"`{' '.join(outcome.command)}` failed: {outcome.message}"}
         )
         raise typer.Exit(code=1)
+    if outcome.version_moved is False:
+        # Exit 0 and nothing moved. Not a failure — the store still wants
+        # resyncing — and not an upgrade either, so there is nothing to hand
+        # off to: re-executing here would replace this process with an
+        # identical one and lose what the installer said on the way.
+        _report_a_stalled_upgrade(outcome, service)
+        return
     _restart_as_the_new_build()
+
+
+def _report_a_stalled_upgrade(outcome: UpgradeOutcome, service: ReleaseService) -> None:
+    """Say that the installer ran and changed nothing, and hand over its words.
+
+    docir does **not** diagnose why. The installers it drives already know —
+    `uv tool upgrade` on a pinned receipt prints the pin *and* the command that
+    clears it — and every cause docir re-derived would be a worse copy of what
+    it is standing in front of. So this relays, and adds the one instruction
+    that is true whatever the cause.
+
+    The output is printed only here, never on a successful upgrade: a
+    `pip install --upgrade` that works prints dozens of lines, and burying the
+    report under them is the argument `_render_upgrade_findings` already makes.
+
+    This is also the one moment a network call is worth the wait. The line is
+    most useful when it can name the version being missed, and a machine that
+    never opted into the release check has nothing cached — so the refresh
+    happens here, on a command that has just run an installer, and nowhere else.
+    """
+    with rendering.progress("asking PyPI for the newest release"):
+        latest = run_local(lambda: service.status(refresh=True)).latest
+    rendering.render_stalled_upgrade(
+        installed=outcome.installed_before,
+        latest=latest,
+        command=outcome.command,
+        said=outcome.message,
+    )
 
 
 def _restart_as_the_new_build() -> None:

@@ -40,13 +40,17 @@ will stop doing, with the date. Backs `docir self status`, the package step of
 - `SILENT_METHODS` — the installation kinds that are never told to upgrade:
   today, `project`.
 - `ReleaseService.upgrade_package() -> UpgradeOutcome` — run the installer where
-  there is one; otherwise report why not
+  there is one; otherwise report why not. After a successful run it **reads the
+  version the environment now holds** and reports it, because exiting 0 and
+  changing something are different facts.
 - `is_newer(candidate, than=...) -> bool` — PEP 440 comparison, the one place
   version ordering is decided
 
 `ReleaseStatus` carries `installed`, `latest`, `checked_on`, `method`,
 `upgrade_command`, `explanation`, and the derived `update_available`.
-`UpgradeOutcome` carries `ran`, `ok`, `command`, `message`.
+`UpgradeOutcome` carries `ran`, `ok`, `command`, `message`, `installed_before`,
+`installed_after` and the derived `version_moved` — three-valued like
+`latest`, where `None` is *could not tell* and is never "it moved".
 
 ## Behavioural guarantees
 - **An installer runs only where docir owns its environment** (uv tool, pipx, a
@@ -54,6 +58,12 @@ will stop doing, with the date. Backs `docir self status`, the package step of
   `uvx` run and an unrecognised layout all return an empty command and a reason.
 - **`latest` is three-valued.** `None` means *unknown* — never checked, or the
   check failed — never "up to date".
+- **An installer exiting 0 is not an installer that changed anything.** Every
+  one docir drives can succeed and move nothing: a `uv tool` receipt pinning an
+  exact version, a pip held back by a constraint file. `upgrade_package` reports
+  what the environment holds afterwards and leaves the caller to say so; it does
+  not diagnose the cause, because the installer already printed it and any
+  re-derivation here would be a worse copy.
 - **The network is opt-in and daily.** `status()` reads the cache; only
   `refresh=True` may fetch, and it skips the fetch when the cache was already
   written today. Every network failure collapses to `None`.

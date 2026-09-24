@@ -1,8 +1,10 @@
-"""The three things the release use cases need from the outside world.
+"""The four things the release use cases need from the outside world.
 
-All three are trivial to fake, which is the point: the service decides *whether*
+All four are trivial to fake, which is the point: the service decides *whether*
 to run an installer and *whether* to reach the network, and a test must be able
-to assert those decisions without doing either.
+to assert those decisions without doing either. :class:`VersionProbe` is the
+fourth and the newest — an installer that exits 0 is not an installer that
+changed anything, and nothing used to check.
 """
 
 from __future__ import annotations
@@ -55,3 +57,18 @@ class ReleaseCache(ABC):
     @abstractmethod
     def record_announcement(self, version: str, on: str) -> None:
         """Record that ``version`` was announced on ``on``."""
+
+
+class VersionProbe(ABC):
+    """Reads the version the *environment* holds, after an installer has run."""
+
+    @abstractmethod
+    def installed_version(self) -> str | None:
+        """The docir version installed now, or ``None`` when it cannot be read.
+
+        Deliberately not ``docir.__version__``: that is this process's version,
+        fixed when the interpreter started, and the question is what the
+        installer just left on disk. ``None`` means *cannot tell* and is the
+        conservative answer — a caller that cannot confirm the version stood
+        still must not claim it did.
+        """

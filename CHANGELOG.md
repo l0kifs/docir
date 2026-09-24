@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`docir self upgrade` no longer calls a stalled upgrade "already the newest build"**
+  (issue-f0b537bde01a). Every installer docir drives can exit 0 having changed nothing — a
+  `uv tool` receipt pinned to an exact version, a pip held back by a constraint file — and
+  docir read the exit code as success, re-executed into the same build and reported it as
+  current, while `docir self status` said a newer release was available.
+
+  The version is now read back from the environment after the installer finishes. When it did
+  not move, docir says so with the release being missed, **quotes what the installer printed**
+  — which is where the cause is, and for uv is the exact command that clears the pin — and
+  adds one instruction that holds when the installer explains nothing. It does not diagnose
+  the cause and does not rewrite the installation: a pin is a declaration somebody made, and
+  the receipt does not record why. The store half still runs, so the command remains a
+  successful resync.
+
 ## [0.29.0] - 2026-09-23
 
 ### Added

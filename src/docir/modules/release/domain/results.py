@@ -32,7 +32,14 @@ class ReleaseStatus:
 
 @dataclass(frozen=True, slots=True)
 class UpgradeOutcome:
-    """What the package step of ``docir self upgrade`` did, if anything."""
+    """What the package step of ``docir self upgrade`` did, if anything.
+
+    ``ok`` and ``version_moved`` are different questions, and conflating them is
+    the defect this dataclass grew a field to close: every installer docir runs
+    can exit 0 having changed nothing — a `uv tool` whose receipt pins an exact
+    version, a pip held back by a constraint file — and docir used to read that
+    exit code as "upgraded" and report the new build as already the newest.
+    """
 
     #: Whether an installer was actually run.
     ran: bool
@@ -40,6 +47,23 @@ class UpgradeOutcome:
     ok: bool
     command: tuple[str, ...]
     message: str
+    #: The version this process is running — what the installer was asked to move.
+    installed_before: str = ""
+    #: What the environment holds now, read after the installer finished.
+    #: ``None`` means the probe could not tell, which is never "it moved".
+    installed_after: str | None = None
+
+    @property
+    def version_moved(self) -> bool | None:
+        """Whether the installer actually changed the installed version.
+
+        Three-valued for the reason ``ReleaseStatus.latest`` is: ``None`` is
+        *unknown*, and a caller that cannot tell must fall through to the
+        behaviour it had before rather than assert either answer.
+        """
+        if not self.ran or self.installed_after is None:
+            return None
+        return self.installed_after != self.installed_before
 
 
 def is_newer(candidate: str | None, *, than: str) -> bool:

@@ -10,12 +10,18 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import urllib.error
 import urllib.request
 from collections.abc import Sequence
 from pathlib import Path
 
-from docir.modules.release.application.ports import ProcessRunner, ReleaseCache, ReleaseIndex
+from docir.modules.release.application.ports import (
+    ProcessRunner,
+    ReleaseCache,
+    ReleaseIndex,
+    VersionProbe,
+)
 
 #: Seconds to wait on PyPI. Short on purpose: this runs beside a command the
 #: user is waiting for, and a slow answer to "is there a newer version" is worth
@@ -25,6 +31,15 @@ _TIMEOUT = 3.0
 #: Installers download, resolve and build; a minute is generous but finite, and
 #: an installer wedged forever behind a prompt would hang the CLI.
 _INSTALL_TIMEOUT = 300.0
+
+#: Starting an interpreter and reading one dist-info. Short: this runs after an
+#: installer has already finished, on a command somebody is waiting for.
+_PROBE_TIMEOUT = 30.0
+
+#: Printed by the probe's subprocess. ``importlib.metadata`` rather than
+#: importing docir: the package is what was installed, and importing it would
+#: also pay for every module docir loads at import time.
+_VERSION_SNIPPET = "import importlib.metadata as m; print(m.version('docir'))"
 
 
 class SubprocessRunner(ProcessRunner):
@@ -121,3 +136,34 @@ class JsonFileReleaseCache(ReleaseCache):
         document.update(fields)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._path.write_text(json.dumps(document), encoding="utf-8")
+
+
+class SubprocessVersionProbe(VersionProbe):
+    """Asks a fresh interpreter what the environment now holds.
+
+    A subprocess and not an import: ``importlib.metadata`` caches what it read
+    when this process started, so asking in-process returns the version the
+    installer replaced rather than the one it installed. A new interpreter reads
+    the dist-info on disk, which is the fact.
+
+    Every failure is ``None``. This runs to decide how to *word a report*, and a
+    probe that raised would turn an upgrade that worked into a command that
+    crashed after it.
+    """
+
+    def __init__(self, executable: str | None = None) -> None:
+        self._executable = executable or sys.executable
+
+    def installed_version(self) -> str | None:
+        try:
+            completed = subprocess.run(
+                [self._executable, "-c", _VERSION_SNIPPET],
+                capture_output=True,
+                text=True,
+                timeout=_PROBE_TIMEOUT,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        version = completed.stdout.strip()
+        return version if completed.returncode == 0 and version else None

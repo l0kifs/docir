@@ -48,9 +48,13 @@ REQUIRABLE_FIELDS: frozenset[str] = frozenset(f.name for f in fields(Document)) 
 #: index (``adr-0007``): human-friendly, and unique only within one store, so two
 #: git branches can each mint the same number. ``random`` mints a hex token
 #: (``adr-3f9a2b1c7d4e``): unique across independent clones with no shared state.
+#: ``chronological`` mints a token of the same shape whose first eight hex chars
+#: are the creation second (``adr-6ab51e1481ab``), so a type's files sort by
+#: creation time; it needs store format 3 (adr-0bb509bd3a19).
 SEQUENTIAL_ID_STYLE = "sequential"
 RANDOM_ID_STYLE = "random"
-ID_STYLES: tuple[str, ...] = (SEQUENTIAL_ID_STYLE, RANDOM_ID_STYLE)
+CHRONOLOGICAL_ID_STYLE = "chronological"
+ID_STYLES: tuple[str, ...] = (SEQUENTIAL_ID_STYLE, RANDOM_ID_STYLE, CHRONOLOGICAL_ID_STYLE)
 
 #: The style a type falls back to when neither it nor the schema says otherwise.
 #: Stays ``sequential`` so an existing ``docs-schema.yaml`` keeps minting the ids
@@ -76,8 +80,9 @@ class TypeSchema:
     # (e.g. ``issue``: resolved). Widened back in with ``--include-resolved``.
     inactive_statuses: tuple[str, ...] = ()
     # How ids are allocated: ``sequential`` (human-friendly ``adr-0007``, safe
-    # only within one shared index) or ``random`` (collision-resistant across
-    # independent clones/branches). See DocId and ID_STYLES.
+    # only within one shared index), ``random`` (collision-resistant across
+    # independent clones/branches) or ``chronological`` (as ``random``, but
+    # sorting by creation time). See DocId and ID_STYLES.
     id_style: str = DEFAULT_ID_STYLE
     # Per-type relation whitelist: ``kind -> allowed target types`` (an empty
     # target list means "any type"). An *empty* mapping means the type is

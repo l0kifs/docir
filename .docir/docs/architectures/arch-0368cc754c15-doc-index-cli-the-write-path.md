@@ -14,18 +14,17 @@ id: arch-0368cc754c15
 related:
 - kind: refines
   to: arch-1cfb1b212237
+revoked: '2026-09-24'
 status: active
 tags:
 - architecture
 title: Doc-Index CLI — the write path
 type: architecture
-updated: '2026-09-18'
-verified: '2026-09-18'
+updated: '2026-09-24'
 verified_code:
   src/docir/modules/documents/application/services/document_patch.py: 5b7b85ac62c7
   src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
   src/docir/modules/documents/application/services/id_generator.py: 294508e5ace0
-verified_content: d4f6ade820b7
 ---
 
 ## Write path
@@ -49,7 +48,9 @@ docir add --type decision --title "Refresh token rotation" \
 Steps performed by the CLI:
 
 1. Generate `id` from the type's prefix and its `id_style`. A `random` type mints a
-   collision-resistant suffix and retries if the index already holds it; a `sequential`
+   collision-resistant suffix and retries if the index already holds it; a
+   `chronological` type mints the same shape led by the creation second from the
+   injected clock (adr-0bb509bd3a19), so its ids sort by age; a `sequential`
    type draws the next number from the database counter (`id_sequences`) in **one**
    atomic upsert — not by scanning files, and not by a read-modify-write in Python,
    which let concurrent `--no-daemon` processes all read the same value.

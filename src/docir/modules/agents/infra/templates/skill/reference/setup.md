@@ -113,3 +113,19 @@ but two branches each have their own index and can mint the same number, which
 `docir check` reports as `duplicate-id` after the merge. Set `id_style` at the top
 of `docs-schema.yaml` for the whole schema, or per type to override it.
 
+`id_style: chronological` (or `docir init --id-style chronological`) mints the
+same 12-hex shape, but its first eight chars are the creation second
+(`adr-6ab51e1481ab`), so `ls .docir/docs/decisions/` lists documents oldest
+first. Only four chars stay random, so two branches clash only by minting in
+the same second with the same tail — rare by hand, possible for bulk scripted
+adds, and reported as `duplicate-id`. It raises the store format to 3: `init`
+writes `store_format: 3` itself, and after switching an existing schema by hand
+run `docir check --fix`, which records it. **Every teammate, and every repository reading this store as
+a peer, needs a docir that reads format 3 before the store switches** — an older
+build refuses every command (the messages are in
+[troubleshooting](troubleshooting.md#a-store-written-by-a-newer-docir)). The ids
+themselves are ordinary hex tokens every build reads, so a team that cannot
+upgrade can agree to switch the store back to `random` — a store-wide decision,
+never one person's way past the refusal. Ids minted before a switch keep their
+random order; only the new ones sort.
+

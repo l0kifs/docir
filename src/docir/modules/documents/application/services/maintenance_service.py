@@ -175,6 +175,7 @@ class MaintenanceService:
             file_store,
             schema,
             self._rebuilder,
+            clock,
             code_matcher,
             schema_file_store,
             history,

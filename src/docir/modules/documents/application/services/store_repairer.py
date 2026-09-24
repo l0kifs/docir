@@ -26,6 +26,9 @@ from docir.modules.documents.domain.services.store_format import (
     declared_store_format,
     required_store_format,
 )
+from docir.modules.documents.domain.value_objects.identifiers import DocId
+from docir.platform.clock import Clock
+from docir.platform.errors import ValidationError
 from docir.platform.filesystem.ports import CodeMatcher, DocumentFileStore, FileHistory
 from docir.platform.filesystem.schema_store import YamlSchemaFileStore
 from docir.platform.persistence.unit_of_work import UnitOfWork
@@ -57,6 +60,7 @@ class StoreRepairer:
         file_store: DocumentFileStore,
         schema: Schema,
         rebuilder: IndexRebuilder,
+        clock: Clock,
         code_matcher: CodeMatcher | None = None,
         schema_file_store: YamlSchemaFileStore | None = None,
         history: FileHistory | None = None,
@@ -65,6 +69,7 @@ class StoreRepairer:
         self._file_store = file_store
         self._schema = schema
         self._rebuilder = rebuilder
+        self._clock = clock
         # Optional at the seam for the reason it is optional everywhere else: a
         # global store has no repository above it, so there is no tree to
         # fingerprint and nothing to start watching.
@@ -229,7 +234,7 @@ class StoreRepairer:
 
         actions: list[RepairAction] = []
         with self._uow_factory() as uow:
-            generator = IdGenerator(self._schema, uow.documents)
+            generator = IdGenerator(self._schema, uow.documents, self._clock)
             for doc_id, documents in sorted(by_id.items()):
                 if len(documents) < 2:
                     continue
@@ -237,7 +242,7 @@ class StoreRepairer:
                 for duplicate in documents:
                     if duplicate is keeper:
                         continue
-                    new_id = str(generator.next_id(duplicate.type))
+                    new_id = str(generator.next_id(duplicate.type, replacing=_parsed(doc_id)))
                     old_path = duplicate.path
                     reissued = duplicate.with_updates(id=new_id, path=None)
                     new_path = self._file_store.write(reissued, create=True)
@@ -319,3 +324,10 @@ class StoreRepairer:
                 )
             uow.commit()
         return actions
+
+
+def _parsed(doc_id: str) -> DocId | None:
+    try:
+        return DocId(doc_id)
+    except ValidationError:
+        return None

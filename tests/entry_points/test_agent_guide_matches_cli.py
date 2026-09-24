@@ -546,6 +546,9 @@ _EXAMPLE_IDS: dict[str, str] = {
     "adr-3f9a2b1c7d4e": "the id the docs use to show the random format",
     "adr-0a1b2c3d4e5f": "a second one, in the bench fixture's shape",
     "tp-3f9a2b1c7d4e": "the same shape under the schema docs' example type `tp`",
+    # The chronological shape: eight hex chars of creation second, four random.
+    "adr-6ab51e1481ab": "the id the docs use to show the chronological format",
+    "tp-6ab51e1481ab": "the same shape under the schema docs' example type `tp`",
     # The sequential shape. This store mints `random`, so a four-digit suffix
     # is visibly an example — which is exactly why the docstrings reach for it.
     "adr-0001": "sequential-style example",

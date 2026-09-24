@@ -902,7 +902,7 @@ class DocumentService:
         counter above anything on disk, so the next allocation lands past it.
         """
         if request.doc_id is None:
-            return IdGenerator(self._schema, uow.documents).next_id(request.type)
+            return IdGenerator(self._schema, uow.documents, self._clock).next_id(request.type)
         adopted = DocId(request.doc_id)
         expected = self._schema.get(request.type).prefix
         if adopted.prefix != expected:

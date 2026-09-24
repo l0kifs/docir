@@ -302,6 +302,7 @@ extend it without mutating the base.
 ```bash
 docir init --profiles software,qa   # pick profiles up front
 docir init --id-style sequential    # readable adr-0007 instead of the default random
+docir init --id-style chronological # random-shaped ids that sort by creation time
 docir schema show                   # the merged result — what validation enforces
 docir schema validate               # check an edit before it reaches a write
 ```
@@ -340,9 +341,12 @@ them, so nothing is ever compared across models. `docir self status` reports the
 force.
 
 Ids are random by default (`adr-3f9a2b1c7d4e`), which two branches can never mint
-identically. `--id-style sequential` trades that for human-friendly `adr-0007` numbering,
-collision-free within one store — a merge can bring two branches that allocated the same
-number, and `docir check` reports it as `duplicate-id`. Catch it **before** the merge, while
+identically. `--id-style chronological` leads the token with the creation second
+(`adr-6ab51e1481ab`), so a type's files list oldest first. Its tail is only four random
+hex chars, weaker than `random` when two branches bulk-add in the same second. It writes `store_format: 3`, which every docir up to 0.29.0 refuses outright,
+so the whole team upgrades before a store switches. `--id-style sequential` trades collision-resistance
+for human-friendly `adr-0007` numbering, collision-free within one store — a merge can bring
+two branches that allocated the same number, and `docir check` reports it as `duplicate-id`. Catch it **before** the merge, while
 renumbering is still one branch's own edit rather than a conflict for whoever merges second:
 
 ```bash

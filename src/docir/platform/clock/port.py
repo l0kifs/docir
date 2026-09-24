@@ -13,12 +13,20 @@ the skew.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from datetime import date
+from datetime import UTC, date, datetime, time
 
 
 class Clock(ABC):
-    """Supplies the current calendar date."""
+    """Supplies the current calendar date, and the current instant."""
 
     @abstractmethod
     def today(self) -> date:
         """Return today's date."""
+
+    def now(self) -> datetime:
+        """Return the current instant, timezone-aware in UTC.
+
+        A clock that only knows the date answers the start of that UTC day, so a
+        date-frozen test clock still yields a deterministic instant.
+        """
+        return datetime.combine(self.today(), time.min, tzinfo=UTC)

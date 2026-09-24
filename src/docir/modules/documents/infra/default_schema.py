@@ -17,7 +17,10 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+import yaml
+
 from docir.modules.documents.domain.schema import DEFAULT_ID_STYLE, ID_STYLES
+from docir.modules.documents.domain.services.store_format import required_store_format
 from docir.platform.errors import SchemaError
 
 # Re-exported so the module's public ``api`` can surface them without reaching
@@ -147,6 +150,9 @@ _SCHEMA_FOOTER = """
 #                              within one shared index. Use `random` if people
 #                              author docs on concurrent branches; it mints
 #                              collision-resistant ids like tp-3f9a2b1c7d4e.
+#                              `chronological` mints the same shape led by the
+#                              creation time (tp-6ab51e1481ab), so files sort
+#                              by age; it needs `store_format: 3`.
 #   allowed_relations   map  - `kind: [allowed target types]` whitelist ([] as
 #                              the target list means "any type"). CAREFUL: an
 #                              empty/absent mapping is permissive (any kind, any
@@ -258,6 +264,13 @@ _ID_STYLE_NOTE = {
         "# Use `random` if several people author docs on concurrent branches.\n"
         "# Per-type `id_style:` overrides this.\n"
     ),
+    "chronological": (
+        "# Ids are hex tokens led by the creation second (adr-6ab51e1481ab), so a\n"
+        "# type's files sort oldest first by name; only the last four chars are\n"
+        "# random, so bulk adds on two branches in one second can clash. Only a\n"
+        "# docir that reads store format 3 can open this store; `random` mints the\n"
+        "# same shape unordered. Per-type `id_style:` overrides this.\n"
+    ),
 }
 
 
@@ -267,18 +280,22 @@ def render_schema_yaml(profiles: Sequence[str] = (), id_style: str = DEFAULT_ID_
     Falls back to the default ``software`` profile when none are named. Both
     generated lines are assembled here rather than substituted into a template,
     so ``docir init`` cannot write a different profile set or id style than it
-    reports.
+    reports. An id style that needs a store format floor gets its
+    ``store_format:`` line on top, where ``check --fix`` would write it, so a
+    fresh store is never reported as ``store-format-undeclared``.
     """
     if id_style not in ID_STYLES:
         raise SchemaError(f"unknown id_style {id_style!r}; available: {', '.join(ID_STYLES)}")
     names = tuple(profiles) or _FALLBACK_PROFILES
-    return (
+    body = (
         f"{_SCHEMA_HEADER}"
         f"profiles: [{', '.join(names)}]\n\n"
         f"{_ID_STYLE_NOTE[id_style]}"
         f"id_style: {id_style}\n"
         f"{_SCHEMA_FOOTER}"
     )
+    floor = required_store_format(yaml.safe_load(body))
+    return f"store_format: {floor}\n{body}" if floor > 1 else body
 
 
 #: The bundled default schema body, written when a store has no schema file of

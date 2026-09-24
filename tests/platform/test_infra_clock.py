@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
-from docir.platform.clock import SystemClock
+from docir.platform.clock import Clock, SystemClock
 
 
 def test_today_is_the_utc_date() -> None:
@@ -17,3 +17,17 @@ def test_today_is_the_utc_date() -> None:
     `date.today()`, which is the local value the fix moved away from.
     """
     assert SystemClock().today() == datetime.now(UTC).date()
+
+
+def test_system_clock_now_is_aware_utc() -> None:
+    now = SystemClock().now()
+    assert now.tzinfo is UTC
+    assert abs((datetime.now(UTC) - now).total_seconds()) < 5
+
+
+def test_a_date_only_clock_answers_the_start_of_its_utc_day() -> None:
+    class _DateClock(Clock):
+        def today(self) -> date:
+            return date(2026, 7, 7)
+
+    assert _DateClock().now() == datetime(2026, 7, 7, tzinfo=UTC)

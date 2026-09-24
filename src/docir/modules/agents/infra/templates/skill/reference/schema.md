@@ -44,7 +44,7 @@ on the next command rather than surviving until a write. That check runs on
 
 Optional: `required` (extra frontmatter fields), `inactive_statuses` (hidden from
 default reads), `level` (int; see below), `review_days` (staleness cadence; 0 =
-never stale), `id_style` (`sequential` | `random`), `allowed_relations`,
+never stale), `id_style` (`sequential` | `random` | `chronological`), `allowed_relations`,
 `max_body_chars` (see below).
 
 `level` only bites on **dependency** edges: a `depends_on` or `refines` edge from

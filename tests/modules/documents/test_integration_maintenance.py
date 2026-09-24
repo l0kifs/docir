@@ -1564,6 +1564,23 @@ class TestTheStoreDeclaresTheDocirItNeeds:
         finally:
             container.close()
 
+    def test_a_chronological_id_style_needs_the_third_format(self, settings: Settings) -> None:
+        # Hand-edited to the new style, with no floor: 0.29.0 and earlier would
+        # refuse this store on `id_style must be one of`, naming a key.
+        container = self._store(settings, "profiles: [software]\nid_style: chronological\n")
+        try:
+            docs = container.dispatcher
+            findings = self._findings(docs)
+            assert len(findings) == 1
+            assert "store format 3" in findings[0]["message"]
+            assert "`id_style: chronological`" in findings[0]["message"]
+            docs.dispatch("repair", {})
+            written = settings.schema_path.read_text(encoding="utf-8")
+            assert written.startswith("store_format: 3\n")
+            assert not self._findings(docs)
+        finally:
+            container.close()
+
     def test_fix_never_lowers_a_floor_somebody_declared(self, settings: Settings) -> None:
         # Written ahead of a change they are about to make. A repair that
         # lowered it would remove a protection in order to tidy a number.

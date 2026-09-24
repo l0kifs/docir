@@ -13,6 +13,8 @@ file stays the loader's job; deciding what the parsed mapping means is this.
 
 from __future__ import annotations
 
+from docir.modules.documents.domain.schema import CHRONOLOGICAL_ID_STYLE
+
 #: The keys a type block must carry to stand on its own. A block missing any of
 #: them cannot be a declaration, which is what makes it readable as an overlay.
 REQUIRED_TYPE_KEYS: tuple[str, ...] = ("prefix", "statuses", "default_status")
@@ -27,9 +29,10 @@ REQUIRED_TYPE_KEYS: tuple[str, ...] = ("prefix", "statuses", "default_status")
 #: change is being written, and would lock the build writing it out of its own
 #: store.
 #:
-#: 2 is the type overlay (adr-6aa2e2f5f403). 1 is every store a published docir
-#: can read, which is why an absent declaration means 1 rather than unknown.
-STORE_FORMAT = 2
+#: 3 is ``id_style: chronological`` (adr-0bb509bd3a19). 2 is the type overlay
+#: (adr-6aa2e2f5f403). 1 is every store a published docir can read, which is why
+#: an absent declaration means 1 rather than unknown.
+STORE_FORMAT = 3
 
 #: What each format above the first was introduced by, in the words the finding
 #: uses. Read by the *newer* build to say why a floor is needed; an older one
@@ -37,6 +40,7 @@ STORE_FORMAT = 2
 #: the number.
 FORMAT_FEATURES: dict[int, str] = {
     2: "a partial `types:` block, which overlays a type the package ships",
+    3: "`id_style: chronological`, which mints time-ordered ids",
 }
 
 
@@ -69,17 +73,25 @@ def required_store_format(raw: object) -> int:
     floor a human has to remember is a floor that records the release after the
     one that needed it, so nothing here asks anyone to remember.
 
-    One construct needs a floor today. A partial ``types:`` block is a load
-    error on every published docir, so a store carrying one is unreadable by
-    them — all of it, since the schema resolves before anything opens.
+    Two constructs need a floor today, and the highest one used wins. A
+    partial ``types:`` block and ``id_style: chronological`` (top-level or on
+    any type) are each a load error on every docir that predates them, so a
+    store carrying one is unreadable by those builds — all of it, since the
+    schema resolves before anything opens.
     """
-    if not isinstance(raw, dict) or "profiles" not in raw:
+    if not isinstance(raw, dict):
         return 1
     types_raw = raw.get("types")
-    if not isinstance(types_raw, dict):
-        return 1
-    overlays = any(
-        isinstance(spec, dict) and not all(key in spec for key in REQUIRED_TYPE_KEYS)
-        for spec in types_raw.values()
+    specs = (
+        [spec for spec in types_raw.values() if isinstance(spec, dict)]
+        if isinstance(types_raw, dict)
+        else []
+    )
+    if raw.get("id_style") == CHRONOLOGICAL_ID_STYLE or any(
+        spec.get("id_style") == CHRONOLOGICAL_ID_STYLE for spec in specs
+    ):
+        return 3
+    overlays = "profiles" in raw and any(
+        not all(key in spec for key in REQUIRED_TYPE_KEYS) for spec in specs
     )
     return 2 if overlays else 1

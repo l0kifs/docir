@@ -18,4 +18,7 @@ class SystemClock(Clock):
     """
 
     def today(self) -> date:
-        return datetime.now(UTC).date()
+        return self.now().date()
+
+    def now(self) -> datetime:
+        return datetime.now(UTC)

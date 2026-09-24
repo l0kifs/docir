@@ -132,6 +132,8 @@ def init(
             help=(
                 f"How ids are minted ({', '.join(ID_STYLES)}). "
                 "random (default) is collision-free across branches; "
+                "chronological sorts by creation time and collides only on the "
+                "same second and 16-bit tail (needs store format 3); "
                 "sequential mints readable numbers like adr-0007."
             ),
         ),
@@ -161,6 +163,21 @@ def init(
     Ids default to the collision-resistant `random` style, because a repo store
     is shared: two branches using `sequential` can each mint adr-0007 and only
     find out at merge. Pass --id-style sequential for readable numbers.
+
+    --id-style chronological mints the same 12-hex shape, but the first eight
+    chars are the creation second, so `ls docs/decisions/` lists documents
+    oldest first. Only the last four are random: two branches clash only by
+    minting in the same second with the same 16-bit tail — unlikely by hand,
+    possible for bulk scripted adds, and `docir check` names it `duplicate-id`:
+
+        docir init --id-style chronological
+        docir add --type decision --title "Use Postgres" --description "..."
+        # -> {"id": "adr-6ab51e1481ab", ...}
+
+    It writes `store_format: 3` at the top of docs-schema.yaml. Every docir up
+    to 0.29.0 refuses the whole store — 0.27.0 and later by that number, older
+    builds on the `id_style` value — so every teammate and every repo reading
+    this store as a peer must upgrade before a store switches to it.
 
     The store goes in DIRECTORY/.docir. The global --home names a store path
     directly, so `docir --home /srv/docs init` puts it exactly there; passing

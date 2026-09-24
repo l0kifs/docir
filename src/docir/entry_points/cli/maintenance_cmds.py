@@ -261,7 +261,7 @@ def doctor(
 
         docir doctor | jq '.compat'
         {
-          "store_format": {"declared": 2, "required": 2, "supported": 2},
+          "store_format": {"declared": 2, "required": 2, "supported": 3},
           "deprecations": [{"subject": "--include-resolved",
                             "replacement": "--include-inactive",
                             "sunset": "2027-03-01", "overdue": false}]

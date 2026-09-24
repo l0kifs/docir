@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`id_style: chronological` — ids that sort by creation time** (adr-0bb509bd3a19). A
+  `random` id is collision-resistant across branches and its twelve hex chars are noise, so a
+  type's directory sorted by name comes out in no order; `sequential` sorts and collides at
+  the merge. The new style keeps the random shape — twelve lowercase hex chars — and makes the
+  first eight the creation second in fixed width, the last four random (`adr-6ab51e1481ab`),
+  so `ls .docir/docs/decisions/` lists documents oldest first. Only the tail is random, so
+  it is weaker than `random` against bulk scripted adds on two branches in the same second
+  (a clash is reported as `duplicate-id`, and `check --fix` re-issues it keeping its second).
+  Select it schema-wide, per type, or with `docir init --id-style chronological`; neither
+  default moves.
+
+  **A store that switches needs a newer docir everywhere it is read.** The style raises the
+  store format to 3, which `init` writes as `store_format: 3` (and `docir check --fix`
+  records for a schema switched by hand). Measured against 0.29.0: every command on such a
+  store exits 3 with `declares store format 3; this docir understands up to 2`; a build
+  before 0.27.0 stops on `schema 'id_style' must be one of: sequential, random`. Upgrade
+  every teammate, and every repository reading the store as a peer, before switching. The
+  ids themselves are ordinary hex tokens: the same store switched back to `random` reads,
+  searches and passes `check --strict` and `doctor --strict` on 0.29.0.
+
+  A chronological suffix can be all digits (`682511900123`); it never feeds the sequential
+  counter, which `reindex` and `add --id` raise only for a type configured `sequential`.
+  Ids minted before a switch keep their random order.
+
 ### Fixed
 
 - **`docir self upgrade` no longer calls a stalled upgrade "already the newest build"**

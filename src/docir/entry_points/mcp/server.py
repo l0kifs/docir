@@ -882,6 +882,29 @@ def _register_maintenance_tools(mcp: FastMCP, run: _Gateway) -> None:
         """Advisory heuristics: near-duplicate documents, scope creep.
 
         Tier 2 — suggestions, never rules. Nothing here blocks a write.
+
+        `duplicate` names two documents whose whole-document vectors sit at or
+        above 0.90 cosine: the same document written twice, which
+        `docir_search` cannot find because the copies share no phrasing. A pair
+        already joined by a `related` edge is never reported, so every finding
+        is one nobody has explained yet. Read both with `docir_get`, then link
+        them with `docir_update` — `set_related` *replaces* the edge list, so
+        pass the edges the read showed you along with the new one. A delete is
+        rarely the answer, and an edge is also how a false positive is retired.
+
+        0.90 is the copy-paste bar, not the paraphrase bar: one decision
+        written twice in independent words measures around 0.83 and is not
+        reported. Catch those before writing, with `docir_context` on the
+        description you are about to file, judged on `similarity`.
+
+        Duplication is detected; disagreement is not. Nothing compares two
+        claims, so record a contradiction yourself as a `contradicts` edge —
+        symmetric and a successor kind, so one edge makes `docir_context` and
+        `docir_get` surface each document from the other afterwards.
+
+        The rest are shape: `scope-creep`, `oversized-section`,
+        `ambiguous-heading`, `unqualified-section-ref`, `unresolved-mention`
+        and `broken-expression`.
         """
         return run.many("lint", {})
 

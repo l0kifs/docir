@@ -149,6 +149,14 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
 ```
 
 - Prefer `--stdin` for multi-line markdown bodies (no shell-escaping).
+- **Before `add`, ask whether the corpus already says it.** Run `docir context`
+  over the description you are about to file. A document saying the same thing
+  in different words is invisible to `docir search` — which matches words — and
+  from then on every read of that subject is split between the two. Judge the
+  answer on `similarity`: above ~0.7, read that document before writing, and
+  the honest write is often `docir update` on it, or a new document plus an edge
+  saying how the two relate. The pairs already in the corpus are reported by
+  `docir lint --deep` (`duplicate`); `reference/maintenance.md` has the recovery.
 - `--code` records the code a document governs, as repo-relative globs. Set it
   when you know which files a decision is about; only the shape is checked on
   write, so a pattern may name code that does not exist yet. It rides on every
@@ -346,6 +354,26 @@ Each `related` entry is a **typed edge**: a target id plus a relation *kind*.
 - Prefer a typed edge over prose when a real relationship exists — traversal is
   exact and cheap. Model "A replaces B" as `A --supersedes--> B` (not only a
   status change on B).
+- **`--set-related` replaces the whole list; there is no add-one flag.** Read
+  the document first — `docir get <id>` shows `related` — and pass its existing
+  edges alongside the new one, or they are dropped with no warning.
+- **`contradicts` is how a disagreement survives being noticed.** docir reports
+  duplication (`docir lint --deep`) and never reports disagreement: nothing
+  compares two claims, so two documents that cannot both be true are found only
+  by reading them. Record it rather than remembering it —
+  `docir update <id> --set-related <other-id>:contradicts`. The kind is
+  symmetric *and* a successor, so that one edge makes `docir context` pull each
+  document in from the other — backwards, the way `supersedes` works — and
+  `docir get` names it, for every reader after you. When one is simply the newer
+  answer, `supersedes` plus a status change on the older is the truer edge.
+- **The contradiction register is a query, not a report.** Nothing pushes these
+  at you; ask when you want the list — what disagrees, and what is disagreed
+  with:
+
+  ```bash
+  docir query --expr "length(related[?kind=='contradicts']) > \`0\`"
+  docir query --expr "length(related_by[?kind=='contradicts']) > \`0\`"
+  ```
 
 ## Tags (must exist before use)
 

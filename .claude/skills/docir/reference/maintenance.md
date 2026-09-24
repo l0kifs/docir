@@ -80,7 +80,36 @@ index, the daemon, the model, the installation — see
   `unknown-type`, `unknown-status` and `missing-required` findings beside it — then `docir
   reindex`, which is what records the new baseline. Set `DOCIR_SCHEMA_NOTICE=1` to have every
   command print the drift on stderr instead of waiting for a `check`.
-- `docir lint --deep` — Tier 2 advisories: duplicate content, oversized documents,
+- **Recovering from `duplicate`** — two documents whose whole-document vectors sit at or
+  above **0.90 cosine**: the same document written twice, which `docir search` cannot find
+  because the copies share no phrasing. It is the one advisory worth running on a schedule —
+  after importing markdown, before adding to a corpus you did not write, and periodically on
+  one several people write to:
+
+  ```bash
+  docir lint --deep | jq -r '.[] | select(.kind=="duplicate") | .message'
+  docir get adr-3f9a2b1c7d4e adr-0a1b2c3d4e5f      # read both before deciding
+  ```
+
+  A pair already joined by a `related` edge is never reported — the author has said how they
+  relate — so every finding is one nobody has explained yet, and an edge is also how you
+  dismiss a false positive. Three honest exits, and a delete is rarely one of them:
+
+  ```bash
+  docir update adr-3f9a2b1c7d4e --set-related "arch-0002:refines,adr-0a1b2c3d4e5f"
+  docir update adr-3f9a2b1c7d4e --set-related "adr-0a1b2c3d4e5f:supersedes"
+  docir update adr-0a1b2c3d4e5f --status superseded    # ...and say so on the old one
+  docir archive adr-0a1b2c3d4e5f                        # folded into the other one
+  ```
+
+  The first line carries an edge the document already had: `--set-related` replaces the list,
+  and `docir get` is where you read what to carry (`SKILL.md`).
+
+  **0.90 catches a copied document, not a rewritten one.** One decision filed twice in
+  independent words measures around 0.83 — under the bar, and never reported. Nothing in this
+  file reaches those, and nothing reaches a disagreement either; both are caught at write
+  time, which `SKILL.md` covers.
+- `docir lint --deep` — Tier 2 advisories: duplicate content (above), oversized documents,
   **oversized sections** (a section the chunker has to split, so part of it is text no
   heading can address), **ambiguous headings** (used twice in one document, so a section
   read reaches only the first), and **unqualified section references** (prose naming a

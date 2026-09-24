@@ -312,7 +312,46 @@ def lint(
         bool, typer.Option("--deep", help="Actually run the checks; without it lint does nothing.")
     ] = False,
 ) -> None:
-    """Tier 2 advisory checks (content similarity, scope creep)."""
+    """Tier 2 advisory heuristics — suggestions, never rules.
+
+    Nothing here blocks a write or moves an exit code, which is why `--deep` is
+    required: every finding is a judgement somebody has to make.
+
+    `duplicate` is the one no other command can answer. It names two documents
+    whose whole-document vectors sit at or above **0.90 cosine** — the same
+    document written twice, which `docir search` cannot find because the two
+    copies share no phrasing. A pair already joined by a `related` edge is never
+    reported: the author has said how they relate, so the only findings left are
+    the unnoticed ones.
+
+        docir lint --deep | jq -r '.[] | select(.kind=="duplicate") | .message'
+        docir get adr-3f9a2b1c7d4e adr-0a1b2c3d4e5f
+
+    Read both, then pick an exit — an edge, not a delete. `--set-related`
+    *replaces* the edge list, so carry the edges `docir get` just showed you:
+
+        docir update adr-3f9a2b1c7d4e --set-related "arch-0002:refines,adr-0a1b2c3d4e5f"
+        docir update adr-0a1b2c3d4e5f --status superseded
+
+    Linking is also how a false positive is dismissed, since the check stops
+    asking about a pair somebody has explained.
+
+    **0.90 is the copy-paste bar, not the paraphrase bar.** Two documents
+    recording one decision in independent words measured 0.83 here and are not
+    reported. The check that catches those runs *before* the write: `docir
+    context "<the description you are about to file>"`, judged on `similarity`.
+
+    docir finds duplication and never finds disagreement — nothing compares two
+    claims. Record one yourself with `--set-related <id>:contradicts`; it is
+    symmetric and a successor kind, so one edge makes `docir context` and
+    `docir get` surface each document from the other from then on.
+
+    The rest are shape: `scope-creep` and `oversized-section` (a document or
+    section too big to retrieve well), `ambiguous-heading` (one heading twice,
+    so a section read reaches only the first), `unqualified-section-ref`,
+    `unresolved-mention`, and `broken-expression` (a `--expr` documented in a
+    body that would not run).
+    """
     if not deep:
         rendering.render_message("[dim]pass --deep to run advisory linting[/]")
         raise typer.Exit(code=0)

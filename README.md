@@ -198,6 +198,7 @@ never watch, so CI still needs the explicit command.
 | `docir search` / `query` | Full-text search (title/description/body — **not tags**) / structured filter. Both page with `--limit`/`--offset`; `query --owner X --stale` is a review queue, `query --code <path>` the decisions governing a file, `query --expr` a JMESPath question over fields and resolved edges |
 | `docir get <id> [<id>...]` | Full documents with bodies — several in one command, and `<id>#<heading>` for just one section of one |
 | `docir check` | Structural findings — duplicate ids, dangling edges, broken `[[...]]` links, staleness (`--strict` gates CI on errors, `--fix` repairs them, `--against <ref>` catches id collisions before a merge) |
+| `docir lint --deep` | Advisory heuristics, never a gate — the one that earns the run is `duplicate`: two *unlinked* documents whose vectors sit above 0.90, the same document written twice in words full-text search cannot connect |
 | `docir doctor` | Diagnose the *environment* — the installation, this store's index, the embedding model, the daemon, the peers (`--strict` gates a setup step on errors) |
 | `docir agent install` | Teach this repo's AI agent to drive docir (`--agent claude-writing` the writing rules, `--agent claude-feedback` upstream bug reports) |
 | `docir self upgrade` | Upgrade docir, then resync this store: reindex, refresh the agent files, report what `check` finds |

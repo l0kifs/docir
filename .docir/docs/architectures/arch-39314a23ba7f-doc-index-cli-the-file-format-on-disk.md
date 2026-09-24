@@ -14,18 +14,17 @@ id: arch-39314a23ba7f
 related:
 - kind: refines
   to: arch-1cfb1b212237
+revoked: '2026-09-24'
 status: active
 tags:
 - architecture
 title: Doc-Index CLI — the file format on disk
 type: architecture
-updated: '2026-09-22'
-verified: '2026-09-22'
+updated: '2026-09-24'
 verified_code:
   src/docir/modules/documents/domain/entities/document.py: 69cfc0a97a7b
   src/docir/platform/filesystem/markdown_format.py: 7a4aeec0c12e
   src/docir/platform/filesystem/tag_store.py: 3bb1c0ba5e69
-verified_content: 3bfa0338890d
 ---
 
 ## File format
@@ -62,7 +61,7 @@ field names the command that sets it; none is written by hand.
 
 | Field | Required | Set by | Description |
 |---|---|---|---|
-| `id` | yes | `docir add` (auto-generated) | `<type-prefix>-<suffix>`, never chosen manually. The suffix depends on the type's `id_style`: `random` (`adr-3f9a2b1c7d4e`) is what `docir init` writes by default, because two branches of one repo each have their own index and would otherwise both mint `adr-0007`; `sequential` (`adr-0007`) is opt-in via `docir init --id-style sequential` for readable numbers within a single store. `--id` adopts an existing id, for migrating a corpus whose numbers are already cited |
+| `id` | yes | `docir add` (auto-generated) | `<type-prefix>-<suffix>`, never chosen manually. The suffix depends on the type's `id_style`: `random` (`adr-3f9a2b1c7d4e`) is what `docir init` writes by default, because two branches of one repo each have their own index and would otherwise both mint `adr-0007`; `chronological` (`adr-6ab51e1481ab`) is the same shape led by eight hex chars of creation second, so filenames sort by age, and needs store format 3 (adr-0bb509bd3a19); `sequential` (`adr-0007`) is opt-in via `docir init --id-style sequential` for readable numbers within a single store. `--id` adopts an existing id, for migrating a corpus whose numbers are already cited |
 | `title` | yes | `docir add`, `docir update --set-title` | Canonical document title. Frontmatter-only source of truth; the CLI never enforces or generates a body heading from it |
 | `description` | yes | `docir add`, `docir update --set-description` | One- or two-sentence summary of the document, written by the agent at creation and kept current on meaningful edits. Feeds search quality — indexed in FTS and included in the embedded text — and shown in `docir query`/`docir context` result listings so the agent can judge relevance without fetching the full body |
 

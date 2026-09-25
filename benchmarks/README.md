@@ -580,6 +580,53 @@ ten subjects and eight aspects, so a query term matches a large fraction of the 
 where a real repository's vocabulary is more spread out. The 25- and 100-document columns
 are the ones close to a real docs tree, and they are the ones to quote.
 
+## What a real agent holds in context, with docir and with grep (`agent_tokens.py`)
+
+```bash
+uv run python benchmarks/agent_tokens.py --sizes 93,175           # prints the plan
+uv run python benchmarks/agent_tokens.py --sizes 93,175 --yes     # ~80 sessions, ~$3.85
+```
+
+`tokens.py`'s grep side is a model: every matching path, then the five best files. This runs
+the real thing. Claude Code (Sonnet 5) answers `example_fixture.yaml`'s questions once with only
+Grep, Glob and Read over the markdown and once with only the docir CLI, on this repository's
+own store today and as it stood in git history. It reports the context the agent held when
+it answered, minus a probe that asks the same arm only to reply "OK".
+
+**Median tokens held (net), 2 runs per question. 2026-09-25, `claude-sonnet-5`.**
+
+| store (docs) | questions | grep | docir | grep / docir |
+|---|---:|---:|---:|---:|
+| 93 (66f7c3b, 30 Jul) | 3 | 7 675 | 1 912 | 4.0× |
+| 175 (cea67b3, 25 Aug) | 3 | 9 698 | 1 938 | 5.0× |
+| 259 (today) | 3 | 13 030 | 2 054 | 6.3× |
+| 175 | 8 | 9 610 | 1 872 | 5.1× |
+| 259 | 8 | 11 321 | 1 893 | 6.0× |
+
+The first three rows are the only questions whose documents all exist at 93 (E03, E06, E07).
+Recall@5 was 1.00 for both arms in every row. Mean spend per question: grep $0.065–0.079,
+docir $0.021–0.033. The rows were measured with this script's prompts and flags before it
+moved here; a smoke rerun of E06 on the same day matched the docir side within 1%.
+
+### 1. The observed gap is 6×, not the modelled 22×
+
+On the same 259 documents `tokens.py`'s model says 22×. A real agent greps narrowly and
+opens about three files, not five, and never pays for a full path listing. Quote this table
+for "what does an agent pay", and `tokens.py` for the shape at sizes no real store has.
+
+### 2. docir is flat and grep grows, from real stores
+
+docir's held context moves 1 912 → 2 054 across a 2.8× store, because `context` returns at
+most five skeletons and the agent reads one section. The grep agent's grows 70%. Three sizes
+and three questions are a direction, not a slope; do not extrapolate to 2 000.
+
+### 3. Both find the answer; the difference is what finding it costs
+
+The grep agent found every judged document in the sweep, so this is not a recall claim. The one
+grep miss seen since, in the smoke rerun, found the right file and then wrote its id with
+the wrong prefix (`adr-` for `arch-`) — the scorer counts ids as written, as a `docir get`
+would.
+
 ## What this does not tell you
 
 - **Single-annotator ground truth.** The judgments in `tasks.yaml` were written by the
@@ -596,9 +643,9 @@ are the ones close to a real docs tree, and they are the ones to quote.
   not impossible for it — which is why `search` scores 0.80 there rather than 0.
 - **Nothing here measures whether retrieved context changed what an agent did.** That is
   the outcome the product actually exists for, and it needs a different instrument.
-- **The grep baseline is modelled, not run.** No agent was observed; `tokens.py` prices
-  `rg -l` plus five file reads in Python. A real session also pays for the turns in
-  between, which nothing here counts.
+- **`tokens.py`'s grep baseline is modelled, not run.** It prices `rg -l` plus five file
+  reads in Python. `agent_tokens.py` runs the real session, on one model and eight
+  questions written by the corpus's author.
 - **The latency numbers are one laptop, unloaded.** They are a shape — flat here, linear
   there — not a service-level objective. A busy machine moves every row: an early run of
   the 500-document column landed 2× high across the board and had to be re-measured.

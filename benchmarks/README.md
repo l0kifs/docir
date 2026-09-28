@@ -736,8 +736,10 @@ so a rerun of the `skill` arm measures the shipped guide — and is the check on
 The audit leaves code drift out because the copy cannot see it. The copy sits outside any
 git repository, so `check` resolves no `code:` glob and its drift findings go silent: 23
 findings on the copy, 18 of them `code-unverified`, where the store in place reports 107
-`code-*` findings, 88 of them drift. An audit of the real repository would hand the docir
-arm about five times the `check` output, with no flag to narrow it to the kinds asked about.
+`code-*` findings, 88 of them drift. `check` now says so with one `code-unchecked` warning
+(issue-8951b5a70e9d), which the audit does not score. An audit of the real repository would
+hand the docir arm about five times the `check` output, with no flag to narrow it to the kinds
+asked about.
 
 ## What this does not tell you
 

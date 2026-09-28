@@ -779,6 +779,11 @@ def _register_maintenance_tools(mcp: FastMCP, run: _Gateway) -> None:
         baseline. `docir_check_fix` files the baseline; watching starts at the
         next change, not at the one already missed.
 
+        `code-unchecked` means none of the code findings could look: no git
+        repository encloses the store, so their silence is not a clean result.
+        It carries no ids — no document is wrong; read the store inside its
+        repository instead of a copy.
+
         Args:
             against: A git ref to compare allocations against, e.g.
                 `"origin/main"`. Omit for the ordinary local check.

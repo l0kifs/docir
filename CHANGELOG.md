@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`docir check` says when it could not check the code** (issue-8951b5a70e9d). With no git
+  repository above the store there is no tree to resolve a `code:` glob against, so
+  `unmatched-code`, `code-unwatched`, `code-changed` and `code-drifted` all went silent — and
+  an empty code section read exactly like a tree where nothing moved. A store whose documents
+  declare `code:` now gets one `code-unchecked` warning saying so, with no `doc_ids`, since no
+  document is wrong. A store that declares no code, like the ordinary global one, says nothing.
+
 ### Changed
 
 - **The installed skill loads for checking the docs, and says `docir check`'s findings are the

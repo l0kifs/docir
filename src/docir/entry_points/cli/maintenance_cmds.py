@@ -90,9 +90,16 @@ def check(
     Findings carry a severity. `error` means the corpus is broken — a duplicate
     id hiding a document, an edge pointing at nothing, a file that will not
     parse. `warning` describes shape or age: orphans, cycles, layering, staleness,
-    unknown types, and a `code` glob that no longer matches anything (checked
-    only when the store sits in a repository — there is nothing to resolve a
-    pattern against otherwise).
+    unknown types, and a `code` glob that no longer matches anything.
+
+    The `code` findings need the repository the store sits in: with none above
+    it there is no tree to resolve a glob against, and all four go silent. Silence
+    there is not a clean result, so `check` says it could not look — one
+    `code-unchecked` warning, only when some document declares `code:`:
+
+        docir check | jq -r '.[] | select(.kind=="code-unchecked") | .message'
+
+    Check the store where it lives inside its repository instead of a copy.
 
     One warning is about no document at all. `store-format-undeclared` means
     `docs-schema.yaml` uses something a docir older than it cannot parse — and a

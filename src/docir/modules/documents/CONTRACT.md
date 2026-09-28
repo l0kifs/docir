@@ -151,7 +151,11 @@ files and the derived index never disagree.
   All warnings: the document stays readable and its edges resolve. Also `unmatched-code` — a
   governed glob that matches nothing — when the service was given a `CodeMatcher`; without one
   (no repository above the store) the finding is skipped rather than reported against a tree
-  that does not exist. And `code-changed` — a governed glob whose files differ from what they
+  that does not exist, and so are the three below. That silence is reported instead: one
+  `code-unchecked` warning with no `doc_ids`, raised only when an unarchived document declares
+  `code:`, so the plain global store says nothing (issue-8951b5a70e9d). A warning where
+  `empty-index` is an error — every other finding is still a verdict, and a store read outside
+  its repository is a correct setup. And `code-changed` — a governed glob whose files differ from what they
   were when somebody last ran `update --verified` — the evidence half of staleness, where
   `stale` is the calendar half. Only patterns carrying a recorded digest are fingerprinted, and
   only for unarchived documents: absent means unverified, never unchanged. A warning and not

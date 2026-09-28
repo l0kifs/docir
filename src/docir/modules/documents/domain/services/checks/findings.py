@@ -51,6 +51,7 @@ RESERVED_FINDING_KINDS: frozenset[str] = frozenset(
         "code-unwatched",
         "code-changed",
         "code-drifted",
+        "code-unchecked",
         "verification-outdated",
         "tag-key-format",
         "unknown-type",
@@ -68,7 +69,8 @@ RESERVED_FINDING_KINDS: frozenset[str] = frozenset(
 
 #: Everything else (`orphan`, `cycle`, `layering`, `stale`, `unknown-type`,
 #: `unknown-status`, `unknown-tag`, `tag-key-format`, `unmatched-code`,
-#: `code-unwatched`, `code-changed`, `code-drifted`, `verification-outdated`,
+#: `code-unwatched`, `code-changed`, `code-drifted`, `code-unchecked`,
+#: `verification-outdated`,
 #: `missing-required`,
 #: `unknown-relation-kind`, `schema-drift`, `store-format-undeclared`,
 #: `stale-index-build`, `unblocked`, `repeated-entry`)
@@ -101,6 +103,12 @@ RESERVED_FINDING_KINDS: frozenset[str] = frozenset(
 #: first commit of every document written before its baseline could be minted —
 #: a glob declared where there was no tree to read, or on a build that minted
 #: none — which is a correct corpus failing for its own history.
+#:
+#: `code-unchecked` says the code findings could not look — no repository
+#: encloses the store — and is a warning where `empty-index`, the other finding
+#: of that shape, is an error. `empty-index` means no verdict at all; here every
+#: other finding still is one, and a store read outside its repository (a copy,
+#: a peer, the global store) is a correct setup an error would red-build for good.
 #:
 #: `store-format-undeclared` is a warning because the store it describes is
 #: intact: every read answers, every edge resolves, and the only thing missing is

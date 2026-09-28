@@ -45,12 +45,12 @@ Use docir whenever this repo manages design docs with it (a `docir` command, a
   `unknown-*` and `code-*` kinds — to every file, so for those kinds its
   findings are the answer: report them, do not re-derive them with grep or a
   script. A `dangling` finding names two ids: the document with the broken
-  link, then the target that does not exist. Two limits. Outside the store's
-  git repository it cannot see code drift and says nothing about it, so
-  silence there is not a clean result. And no finding says a document's
-  content is still true — reading it against the code and `--verified` are for
-  that. A finding that looks wrong is a suspected docir defect: tell the user
-  rather than re-auditing around it.
+  link, then the target that does not exist. `code-unchecked` means the code
+  findings could not look — no repository encloses the store — so say the code
+  went unchecked rather than that nothing moved. And no finding says a
+  document's content is still true — reading it against the code and
+  `--verified` are for that. A finding that looks wrong is a suspected docir
+  defect: tell the user rather than re-auditing around it.
 
 A human working in the repo *may* edit the files by hand; you may not.
 `reference/maintenance.md` holds the per-field contract and what to run after.

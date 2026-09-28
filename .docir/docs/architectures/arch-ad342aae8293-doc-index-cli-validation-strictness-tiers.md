@@ -4,7 +4,7 @@ code:
 - src/docir/modules/documents/domain/services/similarity_lint.py
 - src/docir/modules/documents/domain/services/validation.py
 code_baseline:
-  src/docir/modules/documents/domain/services/checks/**: 7649a3761cd9
+  src/docir/modules/documents/domain/services/checks/**: d36db60d9a69
   src/docir/modules/documents/domain/services/similarity_lint.py: 497f909c8dc4
   src/docir/modules/documents/domain/services/validation.py: aa4794b0dcdd
 created: '2026-08-15'
@@ -22,13 +22,13 @@ tags:
 - architecture
 title: Doc-Index CLI — validation strictness tiers
 type: architecture
-updated: '2026-09-24'
-verified: '2026-09-24'
+updated: '2026-09-28'
+verified: '2026-09-28'
 verified_code:
-  src/docir/modules/documents/domain/services/checks/**: 7649a3761cd9
+  src/docir/modules/documents/domain/services/checks/**: d36db60d9a69
   src/docir/modules/documents/domain/services/similarity_lint.py: 497f909c8dc4
   src/docir/modules/documents/domain/services/validation.py: aa4794b0dcdd
-verified_content: 44006e009b37
+verified_content: ba1b9865f70e
 ---
 
 ## Validation strictness tiers
@@ -109,6 +109,7 @@ being added to `ERROR_KINDS` or not.
 | `code-changed` | warning | the code a document governs differs from what it was when somebody last verified it |
 | `code-unwatched` | warning | a `code` glob that matches files and carries neither digest, so no edit to them is reported |
 | `unmatched-code` | warning | a `code` glob that no longer names anything (only when the store sits in a repository) |
+| `code-unchecked` | warning | no repository encloses the store, so the four `code` findings above could not look; raised only when a document declares `code:`, with no ids |
 | `unknown-type` / `unknown-status` / `unknown-tag` / `unknown-relation-kind` | warning | the file was written outside the CLI, or a profile was disabled under it |
 | `missing-required` | warning | the *rule* moved under a document that was valid when written |
 | `schema-drift` | warning | the resolved schema differs from the one the index was built against |

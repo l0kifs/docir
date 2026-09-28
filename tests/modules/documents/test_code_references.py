@@ -1043,6 +1043,83 @@ class TestTheUnwatchedGlob:
             container.close()
 
 
+class TestTheUncheckedCode:
+    """Outside a repository the code findings are silent, and `check` says so
+    (issue-8951b5a70e9d) — an empty code section otherwise reads as a tree where
+    nothing moved."""
+
+    @staticmethod
+    def _unchecked(docs: Dispatcher) -> list[dict]:
+        return [i for i in docs.dispatch("check", {}) if i["kind"] == "code-unchecked"]
+
+    def test_a_store_with_no_repository_says_its_code_went_unchecked(
+        self, settings: Settings
+    ) -> None:
+        settings.ensure_directories()
+        container = build_container(settings, background_embeddings=False)
+        try:
+            docs = container.dispatcher
+            for title, code in (("A", ["src/**", "lib/x.py"]), ("B", ["src/**"]), ("C", [])):
+                docs.dispatch(
+                    "add", {"type": "decision", "title": title, "description": "d", "code": code}
+                )
+            findings = docs.dispatch("check", {})
+            [unchecked] = [i for i in findings if i["kind"] == "code-unchecked"]
+            # Counted once per pattern and once per governing document: two
+            # documents sharing `src/**` are two documents and one glob.
+            assert "the 2 `code:` glob(s) 2 document(s) declare" in unchecked["message"]
+            # A warning, since the store is intact; and no ids, since no document
+            # is wrong — a reader acting on them would fix the wrong thing.
+            assert unchecked["severity"] == "warning"
+            assert unchecked["doc_ids"] == ()
+            # The silence it reports is real: none of the four fired.
+            silenced = {"unmatched-code", "code-unwatched", "code-changed", "code-drifted"}
+            assert not [i for i in findings if i["kind"] in silenced]
+        finally:
+            container.close()
+
+    def test_a_store_that_declares_no_code_says_nothing(self, settings: Settings) -> None:
+        # The ordinary global store: nothing to resolve, so nothing went unresolved.
+        settings.ensure_directories()
+        container = build_container(settings, background_embeddings=False)
+        try:
+            docs = container.dispatcher
+            docs.dispatch("add", {"type": "decision", "title": "T", "description": "d"})
+            assert not self._unchecked(docs)
+        finally:
+            container.close()
+
+    def test_a_store_inside_a_repository_says_nothing(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            docs.dispatch(
+                "add",
+                {"type": "decision", "title": "T", "description": "d", "code": ["src/**"]},
+            )
+            assert not self._unchecked(docs)
+        finally:
+            container.close()
+
+    def test_an_archived_document_does_not_raise_it(self, settings: Settings) -> None:
+        # Every code finding skips an archived document, so its globs were never
+        # going to be resolved and their silence hides nothing.
+        settings.ensure_directories()
+        container = build_container(settings, background_embeddings=False)
+        try:
+            docs = container.dispatcher
+            view = docs.dispatch(
+                "add",
+                {"type": "decision", "title": "T", "description": "d", "code": ["src/**"]},
+            )
+            docs.dispatch("archive", {"doc_id": view["id"]})
+            assert not self._unchecked(docs)
+        finally:
+            container.close()
+
+
 class TestQueryByPath:
     """`query --code <path>` — which documents govern this file (step 3)."""
 

@@ -99,7 +99,10 @@ Staleness is the one trust signal the product offers, so the rules protect the c
   reason it parses the files rather than asking `git check-ignore`, which answers with all
   three. **Absent means unverified**, never unchanged, in
   all three places it can be absent (no digest recorded, pattern unresolvable, no matcher at
-  all), so a global store and a never-verified document report nothing. With **no matcher the
+  all), so a global store and a never-verified document report no drift. The no-matcher case
+  says so once instead of saying nothing: `code-unchecked`, a warning with no ids, raised only
+  when an unarchived document declares `code:` (issue-8951b5a70e9d) — an empty code section
+  otherwise reads as a tree where nothing moved. With **no matcher the
   digests are dropped, not carried forward**: a digest from an older review under a fresh
   `verified` date is the one combination that misreports. It is a **warning and must not be
   promoted** — a branch that edits code before its docs is the ordinary shape of a change, so

@@ -156,7 +156,10 @@ opts out, at a measured cost to recall:
   warnings — code landing ahead of its prose is ordinary, not damage. A glob that names code
   which does not exist yet has nothing to fingerprint, so it watches nothing: `docir check`
   reports that as `code-unwatched` once the file arrives, and `docir check --fix` starts the
-  watch. An existing store starts watching after the same one command.
+  watch. An existing store starts watching after the same one command. The globs resolve
+  against the repository the store sits in; a store read anywhere else — a copy, the global
+  store — has no tree to read, and `docir check` says so with one `code-unchecked` warning
+  rather than an empty code section that looks like nothing moved.
 - **Only embeddings are deferred.** A content change flags the vector dirty and returns;
   the file, metadata, full-text index and relations are all current when the command
   returns. Force a flush with `--wait-embeddings`, `docir embed --flush`, or a full

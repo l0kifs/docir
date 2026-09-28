@@ -54,7 +54,12 @@ Three tiers, and mixing them is the documented overengineering trap. The recurri
   behind index stays `docir doctor`'s `index-behind-files` warning. The comparison lives in
   `index_is_empty`, shared by `check` and `doctor`, so the two cannot disagree about whether
   a store is readable.
-  Everything else (`orphan`, `cycle`, `layering`, `stale`, `unblocked`, `unmatched-code`, `code-unwatched`, `tag-key-format`,
+  **`code-unchecked` makes the same "could not look" report for the code findings and stays a
+  warning** (issue-8951b5a70e9d): with no repository above the store all four code findings go
+  silent, but every other finding is still a verdict, and a store read outside its repository
+  (a copy, a peer, the global store) is correct — an error would red-build it for good. It
+  fires only when an unarchived document declares `code:`, and carries no ids.
+  Everything else (`orphan`, `cycle`, `layering`, `stale`, `unblocked`, `unmatched-code`, `code-unwatched`, `code-unchecked`, `tag-key-format`,
   the three `unknown-type`/`unknown-status`/`unknown-tag`, plus `unknown-relation-kind`,
   `missing-required`, `schema-drift` and `repeated-entry`) is
   a `warning` about shape or age. This is load-bearing: `orphan` fires for every document with no relations — the

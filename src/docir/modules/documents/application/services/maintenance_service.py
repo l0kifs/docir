@@ -236,6 +236,7 @@ class MaintenanceService:
             code_digests=self._resolve_code_digests(documents),
         )
         issues.extend(self._unbuilt_index_issue())
+        issues.extend(self._unresolved_code_issue(documents))
         issues.extend(self._find_duplicate_ids())
         issues.extend(self._find_repeated_entries())
         issues.extend(self._find_branch_id_collisions(against))
@@ -275,6 +276,45 @@ class MaintenanceService:
                     f"the index holds nothing while docs/ holds {on_disk} file(s), so every "
                     "structural check below read an empty graph — run `docir reindex` first "
                     "(the index is derived and gitignored, so a fresh clone has none)"
+                ),
+                doc_ids=(),
+            )
+        ]
+
+    def _unresolved_code_issue(self, documents: list[Document]) -> list[CheckIssue]:
+        """The finding that says the code half of this check could not look.
+
+        With no repository above the store there is no tree to resolve a
+        ``code:`` glob against, so ``unmatched-code``, ``code-unwatched``,
+        ``code-changed`` and ``code-drifted`` all go silent together — right on
+        their own terms, since reporting every pattern as missing would invent
+        an answer nobody computed. But an empty code section then reads exactly
+        like a tree where nothing moved (issue-8951b5a70e9d): the verdict
+        ``empty-index`` refuses to fake for the graph, one family smaller.
+
+        A **warning**, where ``empty-index`` is an error: every other finding
+        above is a real verdict, and a store read outside its repository — a
+        copy, a peer, the global store — is a correct setup that an error would
+        red-build for good. Silent when nothing declares ``code:``, so the
+        ordinary global store says nothing. No ``doc_ids``: no document is
+        wrong, and a reader acting on the ids would fix the wrong thing.
+        """
+        if self._code_matcher is not None:
+            return []
+        governed = [doc for doc in documents if doc.code and not doc.archived]
+        if not governed:
+            return []
+        patterns = {pattern for doc in governed for pattern in doc.code}
+        return [
+            CheckIssue(
+                kind="code-unchecked",
+                message=(
+                    f"no git repository encloses the store, so the {len(patterns)} `code:` "
+                    f"glob(s) {len(governed)} document(s) declare were resolved against "
+                    "nothing: `unmatched-code`, `code-unwatched`, `code-changed` and "
+                    "`code-drifted` are silent here, which is not the same as nothing having "
+                    "moved — check the store where it sits inside the repository its globs "
+                    "are written against"
                 ),
                 doc_ids=(),
             )

@@ -232,3 +232,4 @@ examples/.workspace/
 # Kept in the repo so they survive a reboot and sit beside what they describe.
 /LAUNCH-PLAN.md
 /LAUNCH-DRAFTS.md
+/.claude/rules/managed/proposal-check.md

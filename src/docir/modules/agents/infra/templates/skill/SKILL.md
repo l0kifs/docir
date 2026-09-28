@@ -1,6 +1,6 @@
 ---
 name: docir
-description: Use docir to read and write this project's git-backed design docs — decisions/ADRs, issues, architecture notes — instead of editing markdown by hand. Trigger whenever the repo uses docir (a `docir` command is available, a `.docir/` store exists in the repo or `~/.docir`, or docs carry docir frontmatter) and you are about to implement a feature (pull relevant decisions first), record or resolve a decision/issue/ADR, search project knowledge, or restructure/migrate existing markdown docs into docir. Covers the read path (`docir context/get/search/query`) and the write path (`docir init/add/update/archive`) — every doc write MUST go through the CLI.
+description: Use docir to read and write this project's git-backed design docs — decisions/ADRs, issues, architecture notes — instead of editing markdown by hand. Trigger whenever the repo uses docir (a `docir` command is available, a `.docir/` store exists in the repo or `~/.docir`, or docs carry docir frontmatter) and you are about to implement a feature (pull relevant decisions first), record or resolve a decision/issue/ADR, search project knowledge, check or audit the docs (broken links, duplicate ids, cycles, overdue reviews, files that do not parse), or restructure/migrate existing markdown docs into docir. Covers the read path (`docir context/get/search/query`), checking (`docir check`) and the write path (`docir init/add/update/archive`) — every doc write MUST go through the CLI.
 ---
 
 # docir — Agent Guide
@@ -40,6 +40,17 @@ Use docir whenever this repo manages design docs with it (a `docir` command, a
 - When **recording** a new decision/ADR or issue you discovered.
 - When **resolving or updating** an existing doc.
 - When **searching** project knowledge.
+- When **checking** the docs: run `docir check`. It applies each of its rules —
+  `dangling`, `duplicate-id`, `cycle`, `stale`, `malformed`, `orphan`, the
+  `unknown-*` and `code-*` kinds — to every file, so for those kinds its
+  findings are the answer: report them, do not re-derive them with grep or a
+  script. A `dangling` finding names two ids: the document with the broken
+  link, then the target that does not exist. Two limits. Outside the store's
+  git repository it cannot see code drift and says nothing about it, so
+  silence there is not a clean result. And no finding says a document's
+  content is still true — reading it against the code and `--verified` are for
+  that. A finding that looks wrong is a suspected docir defect: tell the user
+  rather than re-auditing around it.
 
 A human working in the repo *may* edit the files by hand; you may not.
 `reference/maintenance.md` holds the per-field contract and what to run after.

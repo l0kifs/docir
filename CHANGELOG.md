@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The installed skill loads for checking the docs, and says `docir check`'s findings are the
+  answer.** An agent asked to audit a store ran `docir check` and then re-derived every
+  finding with grep and Python scripts, which cost as much as auditing without docir. The
+  skill's description now names checking, and a "When to use" entry says `check` applies each
+  rule to every file, which of a `dangling` finding's two ids is the document, and what a
+  clean `check` does not mean. Measured on this repository's store with five planted defects
+  (`benchmarks/agent_tokens.py`): every run correct, at 2.4–2.8× below an agent without
+  docir. Run `docir agent update` to take it.
+
 ### Fixed
 
 - **A repeated list flag keeps every value** (issue-2bb30af6216d). `docir add --code "a/**"

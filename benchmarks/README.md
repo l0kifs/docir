@@ -580,18 +580,40 @@ ten subjects and eight aspects, so a query term matches a large fraction of the 
 where a real repository's vocabulary is more spread out. The 25- and 100-document columns
 are the ones close to a real docs tree, and they are the ones to quote.
 
-## What a real agent holds in context, with docir and with grep (`agent_tokens.py`)
+## What a real agent spends, with docir and without (`agent_tokens.py`)
 
 ```bash
-uv run python benchmarks/agent_tokens.py --sizes 93,175           # prints the plan
-uv run python benchmarks/agent_tokens.py --sizes 93,175 --yes     # ~80 sessions, ~$3.85
+uv run python benchmarks/agent_tokens.py --sizes 93,175                   # prints the plan
+uv run python benchmarks/agent_tokens.py --sizes 93,175 --yes             # 109 sessions, ~$7.63
+uv run python benchmarks/agent_tokens.py --sizes 93,175 --suite search --yes   # 82, ~$3.85
 ```
 
 `tokens.py`'s grep side is a model: every matching path, then the five best files. This runs
-the real thing. Claude Code (Sonnet 5) answers `example_fixture.yaml`'s questions once with only
-Grep, Glob and Read over the markdown and once with only the docir CLI, on this repository's
-own store today and as it stood in git history. It reports the context the agent held when
-it answered, minus a probe that asks the same arm only to reply "OK".
+the real thing, on this repository's own store today and as it stood in git history, as two
+jobs:
+
+- **search** — Claude Code (Sonnet 5) answers `example_fixture.yaml`'s questions once with
+  only Grep, Glob and Read over the markdown and once with only the docir CLI.
+- **audit** — it audits a copy of each store with five defects planted: a `related:` id no
+  document carries, a file duplicated into another type's directory, a `depends_on` cycle, a
+  `verified` date past the cadence, and a title whose unquoted colon breaks the YAML. The
+  baseline arm gets Grep, Glob, Read **and Bash**, since checking every file against five
+  rules is what a real agent writes a script for. docir is off its PATH and refused by
+  permission, and an attempt is counted in `leak`. The docir arm gets the same tools and
+  docir, so the audit compares an agent without docir to the same agent with it — once told
+  in its prompt that `check`'s findings are the answer, and once (`skill`) with docir's
+  packaged skill installed instead. The answer
+  key is `docir check` on the planted copy, and the run stops if check misses a planted
+  defect: a key that missed one would score a blind arm perfect. Both arms get the same
+  rules, cadences included.
+
+Per arm and store it reports `held` (context at the answer, minus a probe that asks the
+same arm only to reply "OK"), `tokens` (every token processed across all turns, cache reads
+included), `turns`, `tools` (tool calls), `secs` (wall clock), `$/run`, `recall`, `fp` (ids
+the audit named that the key does not), `ok` (runs that named every expected document and,
+in the audit, nothing else) and `$/ok`, spend per correct run — the headline, because a
+cheap wrong answer is not a saving. `secs` is measured with `--jobs` sessions sharing one
+account, so rate limiting lands in it.
 
 **Median tokens held (net), 2 runs per question. 2026-09-25, `claude-sonnet-5`.**
 
@@ -627,6 +649,96 @@ grep miss seen since, in the smoke rerun, found the right file and then wrote it
 the wrong prefix (`adr-` for `arch-`) — the scorer counts ids as written, as a `docir get`
 would.
 
+### 4. Search: tool calls, wall clock and cost
+
+**Every answerable question, 2 runs each. 2026-09-28, `claude-sonnet-5`.** Medians; `$/run`
+is a mean. Recall was 1.00 and every run correct on both arms, so `$/ok` equals `$/run`.
+
+| docs (questions) | tokens, grep / docir | tool calls | secs | $/run |
+|---|---|---|---|---|
+| 93 (3) | 72 100 / 37 105 (1.9×) | 5.0 / 1.5 | 14 / 7 | 0.068 / 0.028 |
+| 175 (8) | 71 280 / 29 876 (2.4×) | 4.5 / 1.0 | 13 / 7 | 0.072 / 0.022 |
+| 259 (8) | 51 311 / 29 860 (1.7×) | 4.0 / 1.0 | 10 / 7 | 0.066 / 0.028 |
+
+Held context reproduced the 2026-09-25 table within noise (4.7×, 5.6×, 5.4×). Tokens
+processed move less than tokens held, because every turn re-reads the system prompt and
+tool definitions, which both arms pay; cost lands between, 2.4–3.2×. docir answers in one
+call and 7 seconds at every size, and no docir run used anything but `docir` (38 of 38).
+
+### 5. The audit: 7–11× cheaper, once the agent is told `check` is the answer
+
+**2 runs per arm and store. 2026-09-28, `claude-sonnet-5`.** Both arms have Grep, Glob, Read
+and Bash; the docir arm also has docir, and its prompt says `check` applies exactly the
+audited rules to every file, so its findings need no second pass by hand. All 12 runs found
+the six documents, named nothing else and leaked nothing, so `$/ok` equals `$/run`.
+Medians; `$/run` is a mean.
+
+| docs | tokens, shell / docir | tool calls | secs | $/run |
+|---|---|---|---|---|
+| 93 | 269 724 / 44 610 (6.0×) | 7.5 / 1.5 | 62 / 15 | 0.227 / 0.033 |
+| 175 | 457 718 / 34 542 (13.3×) | 15.0 / 1.0 | 76 / 10 | 0.239 / 0.023 |
+| 259 | 713 770 / 68 206 (10.5×) | 18.5 / 2.5 | 119 / 20 | 0.376 / 0.049 |
+
+Every shell run wrote a Python frontmatter parser, ran it and read the suspects, and costs
+more as the store grows. Every docir run ran `docir check` and at most glanced at one or
+two files it named.
+
+**That one sentence in the prompt is the whole result.** `$/run` for each run, same day,
+same planted stores; ✗ marks a run that named a wrong document:
+
+| arm | 93 | 175 | 259 |
+|---|---|---|---|
+| docir only (pre-approved `docir`) | 0.041 · 0.060 | 0.194 · 0.604 | 0.079 · 0.937 |
+| docir + the shell | 0.217 · 0.176 | 0.230 · 0.252 | 0.259 · 0.199 |
+| docir + the shell, told `check` is the answer | 0.040 · 0.026 | 0.022 · 0.023 | 0.048 · 0.051 |
+| docir + the shell + the skill, told there instead | 0.379 · 0.183 | 0.256 · 0.129 | 0.198 · 0.318 |
+| … and the skill triggers on checking | 0.096 · 0.094 | 0.089 ✗ · 0.095 | 0.111 · 0.218 |
+| … and names a `dangling` finding's two ids | 0.101 · 0.093 · 0.082 · 0.099 | 0.085 · 0.099 · 0.095 · 0.083 | 0.110 · 0.122 · 0.108 · 0.204 |
+| the shell alone | 0.287 · 0.168 | 0.241 · 0.237 | 0.424 · 0.329 |
+
+Pre-approved only `docir`, the arm could still run a read-only command and was refused
+everything else: half its runs trusted `check`, and half re-verified through the gaps, the
+two longest spending 9 and 12 calls on refusals. Given the shell, every run re-verified —
+`check` first, then grep, shell loops and up to five Python scripts — and docir saved
+nothing below 259 documents. Told that `check` is the answer, no run re-verified. This
+store is docir's own, and its issues describe past bugs in `check`, which one fenced run
+gave as its reason to distrust it; the sentence outweighed that.
+
+**Through the packaged skill it takes two changes, and a skill load.** The fourth row is the
+skill as its description stands, with a paragraph added: `check`'s findings are the answer
+for the kinds it reports, silence about code outside the git repository is not a clean
+result, and no finding says a document is still true. The agent loaded the skill in one run
+of six — the description triggers on implementing, recording, resolving, searching and
+migrating, not on checking — and that run re-verified everything anyway, 20 calls for
+$0.38. The fifth row adds "check or audit the docs" to the description and moves the
+paragraph into "When to use", naming `check`'s kinds. The skill loaded in six runs of six,
+and five took `check` at its word in three calls. It stays above the prompt line for a fixed
+reason: the skill puts about 11k tokens in context, about $0.06 a run.
+
+The gate set before the run — a 259-document median at most half the unguided arm's, $0.115
+— read $0.165, because one of the two runs re-read the files. And one run at 175 named the
+missing target of the dangling edge, `adr-ba611d1a87e6`, as the broken document: `check`
+puts both ids in a `dangling` finding's `doc_ids`, and an agent that trusts the list
+without reading the message can pick the wrong one.
+
+The sixth row adds one sentence saying which of a `dangling` finding's two ids is the
+document, and runs four times a store. All 12 runs loaded the skill and named exactly the
+six documents; 11 answered in two to four calls, and one in four at 259 still re-read files
+($0.204). Medians $0.096, $0.090 and $0.116 — against the $0.115 gate, a miss of a tenth of
+a cent inside a spread of $0.108–0.204.
+
+**It shipped on the owner's call, past a gate it missed.** The gate was a stand-in for "the
+skill delivers the saving" and was set before anyone knew the skill load costs about $0.06
+a run; the owner accepted the $0.001 miss on 2026-09-28 on the strength of 12 correct runs
+at 2.4–2.8× below the shell arm. The sixth row's text is what the packaged skill now says,
+so a rerun of the `skill` arm measures the shipped guide — and is the check on this call.
+
+The audit leaves code drift out because the copy cannot see it. The copy sits outside any
+git repository, so `check` resolves no `code:` glob and its drift findings go silent: 23
+findings on the copy, 18 of them `code-unverified`, where the store in place reports 107
+`code-*` findings, 88 of them drift. An audit of the real repository would hand the docir
+arm about five times the `check` output, with no flag to narrow it to the kinds asked about.
+
 ## What this does not tell you
 
 - **Single-annotator ground truth.** The judgments in `tasks.yaml` were written by the
@@ -643,6 +755,11 @@ would.
   not impossible for it — which is why `search` scores 0.80 there rather than 0.
 - **Nothing here measures whether retrieved context changed what an agent did.** That is
   the outcome the product actually exists for, and it needs a different instrument.
+- **The audit's answer key is docir's own `check`.** It plants one defect of each of five
+  kinds and hands both arms the rules, so it measures what finding known kinds costs. A
+  defect `check` has no rule for is invisible to the key, and a real store's defects arrive
+  unlabelled, several at a time. The docir arm is told to trust `check`, so a bug in `check`
+  would pass that arm and this key together, and nothing here would show it.
 - **`tokens.py`'s grep baseline is modelled, not run.** It prices `rg -l` plus five file
   reads in Python. `agent_tokens.py` runs the real session, on one model and eight
   questions written by the corpus's author.

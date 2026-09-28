@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-09-28
+
 ### Added
 
 - **`docir check` says when it could not check the code** (issue-8951b5a70e9d). With no git
@@ -26,6 +28,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   clean `check` does not mean. Measured on this repository's store with five planted defects
   (`benchmarks/agent_tokens.py`): every run correct, at 2.4–2.8× below an agent without
   docir. Run `docir agent update` to take it.
+
+- **The `duplicate` finding says what to do with it, and a disagreement has somewhere to go.**
+  `docir lint --deep` could already name two unlinked documents above 0.90 cosine — the same
+  document written twice, in words `docir search` cannot connect — and no surface told an agent
+  to run it, what the finding means, or that the answer is an edge rather than a delete. The
+  skill, the `lint` docstring, the MCP tool and the README now do. The skill also tells an agent
+  to run `docir context` over a description before `docir add`, and to record a disagreement it
+  finds by reading as a `contradicts` edge; the register of those is a `docir query --expr`
+  over the edges, not a report. Run `docir agent update` to take it.
 
 ### Fixed
 
@@ -61,6 +72,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the cause and does not rewrite the installation: a pin is a declaration somebody made, and
   the receipt does not record why. The store half still runs, so the command remains a
   successful resync.
+
+### Measured and rejected
+
+- **A `lint --deep` finding for two documents that contradict each other**
+  (adr-3c5eb1ff3800). The embedder scores subject, not stance: on this corpus a claim and its
+  own negation score 0.771–0.983, the three recorded `contradicts` pairs score 0.726–0.744,
+  and a threshold low enough to reach them admits 16,063 unlinked pairs. Keying on shared
+  `code:` files instead gives 127 candidates among accepted decisions, the largest of them
+  correct. Disagreement is found by a reader and recorded as an edge.
 
 ## [0.29.0] - 2026-09-23
 
@@ -2931,7 +2951,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.29.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.30.0...HEAD
+[0.30.0]: https://github.com/l0kifs/docir/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/l0kifs/docir/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/l0kifs/docir/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/l0kifs/docir/compare/v0.26.0...v0.27.0

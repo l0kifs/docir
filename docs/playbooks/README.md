@@ -7,6 +7,7 @@ The index below is generated from each playbook's `**When:**` line by that skill
 `scripts/sync_index.py`. Never edit it by hand.
 
 <!-- index:start -->
+- [Check a release candidate against the release people already have](check-release-compat.md) — you are cutting a release, and the newest published build must read a store the candidate wrote, and the other way round (adr-ab4598c6f707).
 - [Exercise a feature whose behaviour depends on the install kind](exercise-an-install-kind-feature.md) — a change reads `Installation.method` and you must see it work against this repo's real store, which a checkout cannot show you.
 - [Inspect what an agent benchmark session did](inspect-agent-benchmark-session.md) — a `benchmarks/agent_tokens.py` row surprises you — too costly, too many calls, a false positive — and you need to see what the session ran.
 - [Patch a sentence in a docir document](patch-docir-text.md) — a docir document is wrong in one place and the fix is `--replace-section` or `--replace-body`, which take the whole text back.

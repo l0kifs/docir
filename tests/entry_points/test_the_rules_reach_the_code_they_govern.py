@@ -28,17 +28,55 @@ from __future__ import annotations
 
 import pathlib
 import re
+import shutil
+import subprocess
 
 import pytest
 import yaml
 
 _REPO = pathlib.Path(__file__).resolve().parents[2]
-_RULES = _REPO / ".claude" / "rules"
+_RULES_DIR = pathlib.Path(".claude") / "rules"
+_RULES = _REPO / _RULES_DIR
 
 #: Frontmatter is the whole contract: no `---` block, no `paths:`, and the rule
 #: loads at launch like CLAUDE.md itself — the cost the split exists to avoid,
 #: paid silently by a file that looks scoped.
 _FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.S)
+
+
+def _ignored_rule_files(root: pathlib.Path) -> set[pathlib.Path]:
+    """Rule files under ``root`` that git ignores and does not track.
+
+    A rule installed per machine — `.claude/rules/managed/proposal-check.md` is
+    one — is gitignored on purpose: it is not this repository's rule, CLAUDE.md
+    does not link it, and no clone has it. Sweeping it failed this file on the one
+    machine carrying it while CI stayed green. A *tracked* file a pattern matches
+    is kept, because a clone has it; so is a new rule not committed yet, because
+    catching it before the commit is the point. Outside a work tree nothing is
+    excluded.
+    """
+    if shutil.which("git") is None:
+        return set()
+    listed = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "ls-files",
+            "--others",
+            "--ignored",
+            "--exclude-standard",
+            "-z",
+            "--",
+            str(_RULES_DIR),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if listed.returncode != 0:
+        return set()
+    return {root / entry for entry in listed.stdout.split("\0") if entry.endswith(".md")}
 
 
 def _rule_files() -> list[pathlib.Path]:
@@ -47,7 +85,8 @@ def _rule_files() -> list[pathlib.Path]:
         "per invariant, so an absent directory is most of this repo's working "
         "instructions gone, not a tidy-up"
     )
-    return sorted(_RULES.rglob("*.md"))
+    ignored = _ignored_rule_files(_REPO)
+    return sorted(rule for rule in _RULES.rglob("*.md") if rule not in ignored)
 
 
 RULE_FILES = _rule_files()
@@ -105,6 +144,26 @@ def test_the_sweep_found_the_rules() -> None:
     """A guard on the guard: an empty list would pass every case below."""
     assert len(RULE_FILES) > 10, f"only {len(RULE_FILES)} rule files found — is the path right?"
     assert len(RULE_PATTERNS) > 30, f"only {len(RULE_PATTERNS)} patterns read from them"
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="needs git to decide what is ignored")
+def test_the_sweep_skips_only_what_no_clone_has(tmp_path: pathlib.Path) -> None:
+    """Exactly the ignored, untracked rule leaves the sweep — never a real one.
+
+    Asserting the set rather than a count: an exclusion that grew to swallow a
+    tracked or a not-yet-committed rule would silence the checks below for it.
+    """
+    rules = tmp_path / _RULES_DIR
+    (rules / "managed").mkdir(parents=True)
+    (tmp_path / ".gitignore").write_text("/.claude/rules/managed/\n/.claude/rules/forced.md\n")
+    for name in ("committed.md", "new.md", "forced.md", "managed/local.md"):
+        (rules / name).write_text("---\npaths: ['x']\n---\n")
+    git = ["git", "-C", str(tmp_path)]
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run([*git, "add", ".gitignore", str(_RULES_DIR / "committed.md")], check=True)
+    subprocess.run([*git, "add", "-f", str(_RULES_DIR / "forced.md")], check=True)
+
+    assert _ignored_rule_files(tmp_path) == {rules / "managed" / "local.md"}
 
 
 def test_the_matcher_expands_a_trailing_globstar() -> None:

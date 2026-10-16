@@ -598,7 +598,11 @@ def _register_write_tools(mcp: FastMCP, run: _Gateway) -> None:
                 nobody ever verified does. The way back from a stamp asserting a
                 review nobody did. Refused together with `verified`, and refused
                 when no verification is standing.
-            append_section: Heading to append `body` under.
+            append_section: Heading to append `body` under. An existing one is
+                extended — prose before its first sub-heading, text opening with
+                a sub-heading after its last — and never written twice; a missing
+                one becomes a new section at the end. `body` carrying a heading
+                at that section's level or above is refused.
             replace_section: Heading whose section `body` replaces.
             remove_section: Heading to delete, with the text under it. Passing
                 `body` alongside it is refused, not ignored. The way out of a

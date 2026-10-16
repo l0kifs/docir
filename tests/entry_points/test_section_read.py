@@ -450,3 +450,89 @@ class TestRemoveSection:
         assert "## Consequences" not in body
         assert "runbook step" not in body
         assert "## Decision" in body
+
+
+def _mcp_update(container: Container, settings: Settings, args: dict[str, Any]) -> Any:
+    """One `docir_update` call through the MCP server, then the document as stored."""
+    server = build_mcp_server(
+        InProcessExecutor(container.dispatcher),
+        describe_schema=lambda: describe_schema(load_schema(settings.schema_path)),
+        diagnose=lambda: {"ok": True, "findings": []},
+        version="0.0.0-test",
+    )
+
+    async def _session() -> Any:
+        async with Client(server) as client:
+            await client.call_tool("docir_update", args)
+            return (await client.call_tool("docir_get", {"doc_id": args["doc_id"]})).data
+
+    return asyncio.run(_session())
+
+
+def _body(doc_id: str) -> str:
+    return json.loads(runner.invoke(app, ["--no-daemon", "get", doc_id]).stdout)["body"]
+
+
+class TestAppendSectionExtendsAnExistingHeading:
+    """`--append-section X` on a body with `## X` wrote a second one (GitHub #37).
+
+    Every further call added another, all exited 0, and `check` said nothing —
+    while every section operation resolves to the first occurrence, so the
+    appended text was out of reach of `--section` and `--replace-section`.
+    """
+
+    def test_the_cli_appends_under_it_and_writes_no_second_heading(self, doc_id: str) -> None:
+        for line in ("Appended line.", "Appended again."):
+            result = runner.invoke(
+                app,
+                ["--no-daemon", "update", doc_id, "--append-section", "Context", "--body", line],
+            )
+            assert result.exit_code == 0, result.output
+        body = _body(doc_id)
+        assert body.count("## Context") == 1
+        section = json.loads(
+            runner.invoke(app, ["--no-daemon", "get", doc_id, "--section", "Context"]).stdout
+        )["body"]
+        assert section.endswith("Appended line.\n\nAppended again.\n")
+        assert body.index("Appended again.") < body.index("## Decision")
+
+    def test_prose_stays_out_of_the_last_subsection(self, doc_id: str) -> None:
+        result = runner.invoke(
+            app,
+            ["--no-daemon", "update", doc_id, "--append-section", "Decision", "--body", "Agreed."],
+        )
+        assert result.exit_code == 0, result.output
+        rollback = json.loads(
+            runner.invoke(app, ["--no-daemon", "get", doc_id, "--section", "Rollback"]).stdout
+        )["body"]
+        assert "Agreed." not in rollback
+        body = _body(doc_id)
+        assert body.index("thirty-day overlap window.") < body.index("Agreed.")
+        assert body.index("Agreed.") < body.index("### Rollback")
+
+    def test_a_heading_that_would_close_the_section_is_refused(self, doc_id: str) -> None:
+        result = runner.invoke(
+            app,
+            [
+                "--no-daemon",
+                "update",
+                doc_id,
+                "--append-section",
+                "Decision",
+                "--body",
+                "note\n\n## Follow-up\n\nlater",
+            ],
+        )
+        assert result.exit_code != 0
+        combined = result.output + str(result.stderr or "")
+        assert "Follow-up" in combined
+        assert "Follow-up" not in _body(doc_id)
+
+    def test_the_mcp_tool_appends_under_it_too(
+        self, container: Container, settings: Settings, doc_id: str
+    ) -> None:
+        stored = _mcp_update(
+            container, settings, {"doc_id": doc_id, "append_section": "Context", "body": "Via MCP."}
+        )
+        assert stored["body"].count("## Context") == 1
+        assert stored["body"].index("Via MCP.") < stored["body"].index("## Decision")

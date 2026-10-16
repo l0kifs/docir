@@ -998,6 +998,97 @@ class TestRemoveSection:
         assert remove_section(body, "A") == "## C\n\nc\n"
 
 
+class TestAppendExtendsAnExistingSection:
+    """`--append-section X` on a body that has `## X` wrote a second `## X` (GitHub #37).
+
+    Each call added another, `check` said nothing, and every section operation
+    resolves a heading to its first occurrence — so the appended text sat under
+    a heading no `--section`, `--replace-section` or append could reach. The
+    help had always said "under this heading".
+    """
+
+    _BODY = "## Context\n\nOriginal context text.\n\n## Outcome\n\nOriginal outcome.\n"
+
+    def test_the_text_lands_under_the_existing_heading(self) -> None:
+        result = append_section(self._BODY, "Context", "Appended line.")
+        assert result == (
+            "## Context\n\nOriginal context text.\n\nAppended line.\n\n"
+            "## Outcome\n\nOriginal outcome.\n"
+        )
+
+    def test_repeated_appends_keep_one_heading_in_order(self) -> None:
+        once = append_section(self._BODY, "Context", "first")
+        twice = append_section(once, "Context", "second")
+        assert twice.count("## Context") == 1
+        assert extract_section(twice, "Context") == (
+            "## Context\n\nOriginal context text.\n\nfirst\n\nsecond\n"
+        )
+
+    def test_the_match_is_case_insensitive_like_every_section_operation(self) -> None:
+        result = append_section(self._BODY, "context", "x")
+        assert result.lower().count("## context") == 1
+        assert "x" in extract_section(result, "Context")
+
+    def test_the_last_section_is_extended_at_the_end(self) -> None:
+        result = append_section(self._BODY, "Outcome", "More.")
+        assert result.endswith("## Outcome\n\nOriginal outcome.\n\nMore.\n")
+
+    def test_an_empty_section_takes_the_text(self) -> None:
+        result = append_section("## A\n\n## B\n\nb\n", "A", "now filled")
+        assert result == "## A\n\nnow filled\n\n## B\n\nb\n"
+
+    def test_prose_goes_before_the_first_subsection_not_into_the_last(self) -> None:
+        # After `### A1` the text would read — and `get --section A1` would
+        # return it — as part of A1, and `--replace-section A1` would erase it.
+        body = "## A\n\nown text\n\n### A1\n\nnested\n\n## B\n\nb\n"
+        result = append_section(body, "A", "more of A")
+        assert result == "## A\n\nown text\n\nmore of A\n\n### A1\n\nnested\n\n## B\n\nb\n"
+        assert "more of A" not in extract_section(result, "A1")
+
+    def test_text_opening_with_a_subheading_is_a_new_last_subsection(self) -> None:
+        body = "## Notes\n\nintro\n\n### First\n\none\n\n## Other\n\ntail\n"
+        result = append_section(body, "Notes", "### Second\n\ntwo")
+        assert result == (
+            "## Notes\n\nintro\n\n### First\n\none\n\n### Second\n\ntwo\n\n## Other\n\ntail\n"
+        )
+
+    def test_a_deeper_heading_is_extended_within_its_own_span(self) -> None:
+        body = "## A\n\n### A1\n\nnested\n\n### A2\n\nsecond\n"
+        result = append_section(body, "A1", "more nested")
+        assert extract_section(result, "A1") == "### A1\n\nnested\n\nmore nested\n"
+        assert extract_section(result, "A2") == "### A2\n\nsecond\n"
+
+    @pytest.mark.parametrize("closing", ["## Sibling", "# Top"])
+    def test_a_heading_that_would_end_the_section_is_refused(self, closing: str) -> None:
+        # Before `### A1` it would pull A1 under itself; after it, the opening
+        # prose would join A1. Neither leaves the text under the heading named.
+        body = "## A\n\nown\n\n### A1\n\nnested\n"
+        with pytest.raises(ValidationError) as raised:
+            append_section(body, "A", f"note\n\n{closing}\n\nmore")
+        message = str(raised.value)
+        assert repr(closing.lstrip("# ")) in message
+        assert "own section" in message
+
+    def test_a_same_level_heading_in_a_fence_is_ordinary_content(self) -> None:
+        result = append_section(self._BODY, "Context", "```md\n## Outcome\n```")
+        assert result.count("## Outcome") == 2  # the quoted one and the real one
+        assert extract_section(result, "Outcome") == "## Outcome\n\nOriginal outcome.\n"
+
+    def test_a_repeated_heading_extends_the_first(self) -> None:
+        body = "## Notes\n\none\n\n## Notes\n\ntwo\n"
+        result = append_section(body, "Notes", "added")
+        assert result == "## Notes\n\none\n\nadded\n\n## Notes\n\ntwo\n"
+
+    def test_the_round_trip_guard_still_applies(self) -> None:
+        with pytest.raises(ValidationError, match="opens with the heading"):
+            append_section(self._BODY, "Context", "## Context\n\nagain")
+
+    def test_a_missing_heading_still_writes_a_new_section_at_the_end(self) -> None:
+        # Unchanged behaviour, including text that carries its own sibling.
+        result = append_section(self._BODY, "Resolution", "Fixed.\n\n## Follow-up\n\nNone.")
+        assert result.endswith("## Resolution\n\nFixed.\n\n## Follow-up\n\nNone.\n")
+
+
 def _ceiling_schema(limit: int | None, *, enforce: bool = True) -> Schema:
     """A one-type schema differing only in its body-size limit."""
     return Schema(

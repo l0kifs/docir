@@ -14,18 +14,17 @@ id: arch-0368cc754c15
 related:
 - kind: refines
   to: arch-1cfb1b212237
+revoked: '2026-10-16'
 status: active
 tags:
 - architecture
 title: Doc-Index CLI — the write path
 type: architecture
-updated: '2026-09-18'
-verified: '2026-09-18'
+updated: '2026-10-16'
 verified_code:
   src/docir/modules/documents/application/services/document_patch.py: 5b7b85ac62c7
   src/docir/modules/documents/application/services/document_service.py: d9af2a92a8ba
   src/docir/modules/documents/application/services/id_generator.py: 294508e5ace0
-verified_content: d4f6ade820b7
 ---
 
 ## Write path
@@ -79,14 +78,19 @@ Two distinct operations, kept separate rather than merged into one:
   frontmatter fields, body untouched. `--set-title "..."` /
   `--set-description "..."` update those fields the same way.
 - **Body update** (higher-risk) — four supported modes, at most one per call:
-  - `--append-section "Resolution" --body "Fixed in PR #42"` — appends a
-    new heading/section at the end without touching existing content.
+  - `--append-section "Resolution" --body "Fixed in PR #42"` — adds the text
+    under `## Resolution` if the body has it, and appends that heading as a new
+    section at the end if not, without touching existing content. It never
+    writes a heading the body already has (GitHub #37): prose lands at the end
+    of that heading's own text, before its sub-headings, and text opening with a
+    sub-heading becomes its last sub-section. Text carrying a heading at the
+    section's level or above is refused, since it would end the section partway.
     **Default, safest path** — fits patterns like "issue closed → note how".
   - `--replace-section "<heading>" --body "..."` — replaces content under
     a specific existing heading.
   - `--remove-section "<heading>"` — deletes a heading and the text under
     it. Takes no `--body`. The repair verb: `--replace-section` keeps the
-    heading line by contract and `--append-section` adds a sibling, so
+    heading line by contract and `--append-section` extends the first, so
     without this a body carrying one heading twice could only be fixed by
     `--replace-body --force` (issue-9d4db5cd5f29).
   - `--replace-body --force` — full body replacement. Requires an explicit

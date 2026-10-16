@@ -214,7 +214,10 @@ def update(
     ] = False,
     append_section: Annotated[
         str | None,
-        typer.Option("--append-section", help="Append the body text under this heading."),
+        typer.Option(
+            "--append-section",
+            help="Append the body text under this heading; a new section at the end if absent.",
+        ),
     ] = None,
     replace_section: Annotated[
         str | None,
@@ -269,16 +272,26 @@ def update(
     Retyping works even when the current type is one the schema no longer
     declares, which is how a corpus leaves a type that `disable_types:` removed.
 
-    A body edit takes at most one mode. --append-section and --replace-section
-    both write the heading line themselves, so --body carries only the text that
-    goes *under* it: pasting back what `get --section` returned — which does
+    A body edit takes at most one mode.
+
+    --append-section adds to the heading it names when the body has it, and
+    writes a new section at the end when it does not — never a second copy of
+    the heading. Prose goes at the end of that heading's own text, before any
+    sub-heading of its; text opening with a sub-heading becomes its last
+    sub-section. Text carrying a heading at the section's own level or above is
+    refused, since it would end the section partway through:
+
+        docir update adr-3f9a2b1c7d4e --append-section "Context" --body "One more constraint."
+
+    Both writing modes supply the heading line, so --body carries only the text
+    that goes *under* it: pasting back what `get --section` returned — which does
     include the heading — is refused rather than writing the heading twice.
 
     --remove-section deletes a heading and everything under it, and takes no
     --body — passing one is refused, since "delete this text" is not what it
     does. It is the way out of a body that already spells one heading twice,
     which --replace-section cannot undo (it keeps the first heading line by
-    contract) and --append-section only adds to:
+    contract) and --append-section only extends the first of:
 
         docir update adr-3f9a2b1c7d4e --remove-section "Notes"
 

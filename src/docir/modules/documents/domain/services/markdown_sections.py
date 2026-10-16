@@ -1,10 +1,11 @@
 """Section helpers for the body-edit modes and the section read path.
 
 These operate purely on markdown text — no I/O — so the section-manipulation
-rules (append at end, replace under a heading, read one back) are unit-testable
-in isolation. :func:`extract_section` and :func:`replace_section` share one
-notion of where a section ends, which is what keeps ``get --section X`` and
-``update --replace-section X`` talking about the same span of the file.
+rules (append under a heading, replace under a heading, read one back) are
+unit-testable in isolation. :func:`extract_section`, :func:`replace_section`
+and :func:`append_section` share one notion of where a section ends, which is
+what keeps ``get --section X`` and the write modes talking about the same span
+of the file.
 
 That span is located with :func:`~.markdown_headings.scan_headings`, the same
 scanner :mod:`chunking` splits on — so a heading quoted inside a fenced block is
@@ -20,7 +21,7 @@ and why :func:`remove_section` exists to undo the ones already written
 
 from __future__ import annotations
 
-from docir.modules.documents.domain.services.markdown_headings import scan_headings
+from docir.modules.documents.domain.services.markdown_headings import Heading, scan_headings
 from docir.platform.errors import ValidationError
 
 
@@ -54,9 +55,9 @@ def _reject_repeated_heading(heading: str, content: str, *, flag: str, keeps: st
     ``get --section X`` returns it, both write modes supply it. So the obvious
     round trip — read a section, edit it, write it back — spelled the heading
     twice, and the result was unaddressable: ``replace_section`` matches the
-    first occurrence and keeps its line, ``append_section`` adds a sibling, so
-    before ``remove_section`` the only way out was ``--replace-body --force``
-    (issue-9d4db5cd5f29).
+    first occurrence and keeps its line, and ``append_section`` then added a
+    sibling (GitHub #37), so before ``remove_section`` the only way out was
+    ``--replace-body --force`` (issue-9d4db5cd5f29).
 
     Deliberately narrow: only a heading on the *first* line, and only when it
     repeats the heading being written. Text that mentions the heading further
@@ -78,18 +79,67 @@ def _reject_repeated_heading(heading: str, content: str, *, flag: str, keeps: st
 
 
 def append_section(body: str, heading: str, content: str, *, level: int = 2) -> str:
-    """Append a new ``level``-deep heading and content at the end of the body.
+    """Add ``content`` under ``heading``: inside it if it exists, as a new section if not.
 
-    The default, safest body edit: existing content is never touched.
+    The default, safest body edit: no existing line is changed or moved out of
+    the section it was in. A heading the body lacks is written ``level`` deep at
+    the end. A heading it has — the first match, as everywhere here — is
+    extended rather than written again: writing a second one left a heading no
+    section operation could address past the first (GitHub #37).
+
+    Where the text lands inside it follows from what a section's own text is.
+    Prose goes at the end of the heading's *own* text, before its first
+    sub-heading: after the last sub-section it would read, and ``get --section``
+    would return it, as part of that sub-section instead. Text opening with a
+    heading is a new sub-section, so it goes after the last one.
+
+    Text carrying a heading at the section's level or above is refused when the
+    section exists: that heading would end the section partway through the text,
+    leaving the rest outside the heading it was appended under — and, before an
+    existing sub-section, pulling that sub-section under it.
     """
     _reject_own_markers(heading)
-    _reject_repeated_heading(heading, content, flag="--append-section", keeps="writes it for you")
-    prefix = "#" * level
-    section = f"{prefix} {heading}\n\n{content.strip()}\n"
-    base = body.rstrip()
-    if base:
-        return f"{base}\n\n{section}"
-    return section
+    _reject_repeated_heading(
+        heading, content, flag="--append-section", keeps="writes it or extends the one there"
+    )
+    found = _find_heading(body, heading)
+    if found is None:
+        prefix = "#" * level
+        section = f"{prefix} {heading}\n\n{content.strip()}\n"
+        base = body.rstrip()
+        if base:
+            return f"{base}\n\n{section}"
+        return section
+
+    text = content.strip()
+    inner = scan_headings(text)
+    closing = next((h for h in inner if h.level <= found.level), None)
+    if closing is not None:
+        raise ValidationError(
+            f"the text passed to --append-section {heading!r} contains the heading "
+            f"{closing.text!r} at the same or a higher level, which would end {heading!r} "
+            f"partway through it: append {closing.text!r} as its own section with a "
+            f"second --append-section call"
+        )
+    lines = body.splitlines()
+    end_idx = _section_end(body, lines, found.line, found.level)
+    insert_at = end_idx
+    if not inner or inner[0].line != 0:
+        insert_at = next(
+            (h.line for h in scan_headings(body) if found.line < h.line < end_idx), end_idx
+        )
+    head = lines[:insert_at]
+    while head and not head[-1].strip():
+        head.pop()
+    tail = lines[insert_at:]
+    new_lines = [*head, "", text, *(["", *tail] if tail else [])]
+    return "\n".join(new_lines).rstrip() + "\n"
+
+
+def _find_heading(body: str, heading: str) -> Heading | None:
+    """The first heading whose text matches ``heading`` case-insensitively."""
+    target = heading.strip().lower()
+    return next((found for found in scan_headings(body) if found.text.lower() == target), None)
 
 
 def _locate_section(body: str, heading: str) -> tuple[list[str], int, int]:
@@ -103,11 +153,9 @@ def _locate_section(body: str, heading: str) -> tuple[list[str], int, int]:
     ``## Resolution`` sees ``'Resolution'`` in the list and needs no second
     round trip to work out why.
     """
-    lines = body.splitlines()
-    target = heading.strip().lower()
-    for found in scan_headings(body):
-        if found.text.lower() == target:
-            return lines, found.line, found.level
+    found = _find_heading(body, heading)
+    if found is not None:
+        return body.splitlines(), found.line, found.level
 
     available = section_headings(body)
     listed = ", ".join(repr(name) for name in available) if available else "none"
@@ -156,7 +204,7 @@ def remove_section(body: str, heading: str) -> str:
 
     The repair verb, and the reason a duplicated heading is no longer a one-way
     door. ``replace_section`` keeps the heading line by contract and
-    ``append_section`` adds a sibling, so every other route to a body carrying
+    ``append_section`` extends the first, so every other route to a body carrying
     one heading twice ran through ``--replace-body --force``: the safest edits
     reached a state only the riskiest one could leave (issue-9d4db5cd5f29).
 

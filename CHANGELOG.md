@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`--append-section` on a heading the body already has adds under it** (issue-a5515fc8bdc3,
+  GitHub #37). It wrote a second `## <heading>` at the end on every call, exit 0, and since
+  every section operation resolves to the first occurrence the appended text was out of
+  reach of `--section` and `--replace-section`. The existing heading is now extended and
+  never written again: prose goes at the end of its own text, before any sub-heading of its,
+  and text opening with a sub-heading becomes its last sub-section. Text carrying a heading
+  at the section's level or above is refused — append that heading as its own section. A
+  heading the body lacks still becomes a new section at the end. A document that already
+  carries a duplicate is listed by `docir lint --deep` (`ambiguous-heading`) and repaired
+  with `--remove-section`.
+
 ## [0.30.0] - 2026-09-28
 
 ### Added

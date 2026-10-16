@@ -231,8 +231,9 @@ rather than failing the read.
 
 **Editing a body.** Bodies are edited one section at a time — `--append-section`,
 `--replace-section` and `--remove-section` all take a heading — with `--replace-body --force`
-reserved for a wholesale rewrite. The two writing modes emit the `##` line themselves, so
-`--body` is the prose beneath it and nothing more; handing one a section exactly as
+reserved for a wholesale rewrite. Appending to a section that exists extends it rather than
+writing its heading a second time. The writing modes supply the `##` line themselves,
+so `--body` is the prose beneath it and nothing more; handing one a section exactly as
 `docir get --section` printed it errors rather than doubling its heading.
 
 **Publishing.** `docir build --out site/` renders the store as a self-contained static site.

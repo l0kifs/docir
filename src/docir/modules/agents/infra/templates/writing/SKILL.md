@@ -62,8 +62,8 @@ work out which — while the stale half keeps being retrieved, because the index
 does not know it was superseded.
 
 - `--replace-section` is the edit for something that changed.
-  `--append-section` adds a section the document was *missing*: reach for it
-  when there is a new subject, not a new day.
+  `--append-section` adds a section the document was *missing*, or text a
+  section was missing: reach for it when there is a new subject, not a new day.
 - A **terminal state** is not a log entry. An issue's `Resolution` — what closed
   it — is part of what an issue is for, and so is a decision's `Consequences`.
   What is not: `Follow-up (2026-07-26)`, `Delta pass`, `Third round`,

@@ -341,6 +341,14 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
   outdated paragraph left in the body still ranks, and still gets read.
 - Name a section by its **text alone** — `"Resolution"`, not `"## Resolution"`.
   The `##` is written for you, and every section flag matches on the text.
+- **`--append-section` on a heading the body already has adds to it** — the
+  heading is not written again. Prose lands at the end of that heading's own
+  text, before any sub-heading of its; text opening with a sub-heading becomes
+  its last sub-section. A heading the body lacks becomes a new section at the
+  end. Text carrying a heading at the section's own level or above is refused
+  — append that one as its own section. Builds up to 0.30.0 wrote a second
+  `## <heading>` instead, which `docir lint --deep` reports as
+  `ambiguous-heading`.
 - **`--body` is what goes *under* the heading, never the heading itself.**
   `docir get <id> --section "Notes"` returns the heading line too, so editing
   that and passing it straight back would write `## Notes` twice; docir refuses
@@ -349,7 +357,7 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
   takes no `--body` — passing one errors, because it would read as "delete this
   text" and do something else. Reach for it when a document carries a heading twice
   — `--replace-section` keeps the first heading line by contract and cannot undo
-  one, `--append-section` only adds another. A repeated heading resolves to the
+  one, `--append-section` only extends the first. A repeated heading resolves to the
   first, so removing the second of two is the same command run twice.
   `docir lint --deep` reports which documents have one (`ambiguous-heading`).
 - When a body edit changes what the doc is about, update `--set-description`

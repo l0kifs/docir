@@ -20,8 +20,12 @@ files and the derived index never disagree.
   against the type being *entered*. A status the new type does not declare is refused rather
   than reset, and the source type is never looked up — so a retype is the way out of a type
   `disable_types:` has removed. A retype is not a status transition and not a content change.
-  At most one body edit mode per call. `append_section` and `replace_section` write the heading
-  line themselves, so their text is refused when it *opens* with that same heading — the shape
+  At most one body edit mode per call. `append_section` extends a heading the body
+  already has (first match) instead of writing it again — prose before its first sub-heading,
+  text opening with a sub-heading after its last — refuses text carrying a heading at the
+  section's level or above, and writes a new section at the end only when the heading is
+  absent (GitHub #37). Both writing modes supply the heading line, so their text is refused
+  when it *opens* with that same heading — the shape
   `get(section=)` hands back, and the round trip that used to spell a heading twice with no way
   back but `replace_body` (issue-9d4db5cd5f29). `remove_section` is that way back: it deletes a
   heading and everything under it, refuses a `body` passed alongside it rather than ignoring one,

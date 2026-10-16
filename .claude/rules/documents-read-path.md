@@ -34,8 +34,16 @@ Read paths exist to save the caller's context, which is why they return less tha
   heading, `--replace-section` and `--append-section` write their own. Handing the read's
   output straight to the write therefore spelled the heading twice, and nothing could take the
   second one out — `replace_section` matches the first occurrence and keeps its line,
-  `append_section` adds a sibling, so the exit was `--replace-body --force`
-  (issue-9d4db5cd5f29). Text *opening* with the heading it is written under is now refused at
+  `append_section` then added a sibling, so the exit was `--replace-body --force`
+  (issue-9d4db5cd5f29).
+  **`--append-section` on a heading that exists extends it and writes no heading line**
+  (GitHub #37) — writing a second one on every call was the bulk source of those repeats.
+  Prose lands at the end of the heading's *own* text, before its first sub-heading,
+  because after the last sub-section `--section` attributes it to that sub-section and
+  `--replace-section` of it would erase it; text opening with a sub-heading is a new last
+  sub-section. A same-or-shallower heading inside the appended text is refused: wherever
+  it went it would either pull an existing sub-section under itself or end the section
+  partway. Naming a heading the body lacks still appends `## <heading>` last, as before. Text *opening* with the heading it is written under is now refused at
   Tier 0, narrowly: a sub-heading first, the heading named further down and the heading quoted
   in a fence are all ordinary content, and all three are pinned. `--remove-section` deletes a
   heading and its span — first-match like everything else here, no `#`-marker guard (a body

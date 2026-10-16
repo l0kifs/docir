@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.1] - 2026-10-16
+
 ### Fixed
 
 - **`--append-section` on a heading the body already has adds under it** (issue-a5515fc8bdc3,
@@ -2971,7 +2973,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.30.0...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.30.1...HEAD
+[0.30.1]: https://github.com/l0kifs/docir/compare/v0.30.0...v0.30.1
 [0.30.0]: https://github.com/l0kifs/docir/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/l0kifs/docir/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/l0kifs/docir/compare/v0.27.0...v0.28.0

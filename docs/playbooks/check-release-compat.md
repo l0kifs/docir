@@ -3,7 +3,7 @@
 **When:** you are cutting a release, and the newest published build must read a store the candidate wrote, and the other way round (adr-ab4598c6f707).
 **Instead of:** typing the `uvx --from docir==<released>` lines by hand — zsh does not word-split `$O`, the scratch store refuses unregistered tags, and each fix costs a rerun.
 **Status:** verified
-**Last verified:** 2026-09-28
+**Last verified:** 2026-10-16
 
 ## Do
 1. After the version bump and `uv sync` (so `.venv/bin/docir` is the candidate), take the
@@ -20,6 +20,9 @@ the older build does not know (or `stale-index-build` on this store) is expected
 Pointing it at a version that cannot install (`0.0.1`) prints 12 `REFUSED` and exits 1.
 
 ## Pitfalls
+- Pin the release to the commit CI passed with `gh release create v<v> --target "$(git rev-parse <sha>)"`:
+  a short SHA is refused as `HTTP 422 ... tag_name is not a valid tag`, which names the tag, not
+  the target, and creates nothing.
 - After publishing, `https://pypi.org/pypi/docir/<v>/json` answers at once; `uvx` still said
   "no version of docir==<v>" for minutes after 0.30.0's green publish run. Probe the index with
   `curl --compressed` or `uvx -v`: it varies on `Accept-Encoding`, and the uncompressed copy a

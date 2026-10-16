@@ -19,8 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and text opening with a sub-heading becomes its last sub-section. Text carrying a heading
   at the section's level or above is refused — append that heading as its own section. A
   heading the body lacks still becomes a new section at the end. A document that already
-  carries a duplicate is listed by `docir lint --deep` (`ambiguous-heading`) and repaired
-  with `--remove-section`.
+  carries a duplicate is listed by `docir lint --deep` (`ambiguous-heading`); merge the two
+  copies from `docir get` with `--replace-body --force`, since `--remove-section` deletes the
+  first copy, which is the one holding the original text.
 
 - **`docir update` refuses a body no edit mode would write** (issue-f47b4c69367b, GitHub
   #36). `--body`, `--body-file` or `--stdin` without `--append-section`, `--replace-section`

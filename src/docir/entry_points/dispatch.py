@@ -115,33 +115,21 @@ class Dispatcher:
         return asdict(self._documents.add(request))
 
     def _update(self, payload: Payload) -> object:
-        """Edit a document, refusing the one flag combination that reads backwards.
-
-        ``--remove-section X --body "..."`` reads like "delete this text from X"
-        and would delete the whole section instead, ignoring the text. Every
-        other mode consumes what the caller passed, so silence here is the odd
-        one out (issue-9d4db5cd5f29). The check lives at the dispatcher, beside
-        the one ``_get`` makes, because the transports both fold ``body`` into a
-        mode and neither can be the place a wire rule is decided.
-
-        Only when nothing else would consume the text: naming a writing mode too
-        is a different mistake with its own error ("only one body edit mode"),
-        and answering it with this one would blame the wrong argument.
-        """
+        """Edit a document, refusing body text that no edit mode would write."""
+        append_section = _opt_pair(payload, "append_section")
+        replace_section = _opt_pair(payload, "replace_section")
         remove_section = _opt_str(payload, "remove_section")
-        writes_text = any(
-            payload.get(mode) is not None
-            for mode in ("append_section", "replace_section", "replace_body")
-        )
-        if (
-            remove_section is not None
-            and not writes_text
-            and (_opt_str(payload, "body") or "").strip()
-        ):
-            raise ValidationError(
-                "--remove-section takes no body text: it deletes the heading and everything "
-                "under it. Use --replace-section to rewrite a section instead"
+        replace_body = _opt_str(payload, "replace_body")
+        consumed = [
+            text
+            for text in (
+                append_section[1] if append_section else None,
+                replace_section[1] if replace_section else None,
+                replace_body,
             )
+            if text is not None
+        ]
+        _refuse_unconsumed_body(_opt_str(payload, "body") or "", consumed, remove_section)
         request = UpdateDocumentRequest(
             doc_id=_str(payload, "doc_id"),
             status=_opt_str(payload, "status"),
@@ -155,10 +143,10 @@ class Dispatcher:
             set_isolated=_opt_str(payload, "set_isolated"),
             mark_verified=_bool(payload, "mark_verified"),
             clear_verified=_bool(payload, "clear_verified"),
-            append_section=_opt_pair(payload, "append_section"),
-            replace_section=_opt_pair(payload, "replace_section"),
+            append_section=append_section,
+            replace_section=replace_section,
             remove_section=remove_section,
-            replace_body=_opt_str(payload, "replace_body"),
+            replace_body=replace_body,
             force=_bool(payload, "force"),
             allow_transition_override=_bool(payload, "allow_transition_override"),
             wait_embeddings=_bool(payload, "wait_embeddings"),
@@ -341,6 +329,42 @@ class Dispatcher:
         # `embedded` keeps meaning documents — it always did, and a client
         # reading it must not silently start getting a 4x larger number.
         return {"embedded": drained.documents, "vectors": drained.vectors}
+
+
+def _refuse_unconsumed_body(body: str, consumed: list[str], remove_section: str | None) -> None:
+    """Refuse body text that no edit mode in the call would write.
+
+    ``update --body "..."`` with no mode, or with a metadata flag only, printed
+    the unchanged document and exited 0, so a caller could not tell the edit
+    had not landed (GitHub #36). ``--remove-section X --body "..."`` is the same
+    silence in a worse shape: it reads like "delete this text from X" and
+    deletes the whole section instead (issue-9d4db5cd5f29). The check lives at
+    the dispatcher, beside the one ``_get`` makes, because each transport folds
+    ``body`` into a mode its own way and neither can be the place a wire rule is
+    decided — over MCP, ``body`` beside ``replace_body`` is a third shape of it.
+
+    Only when nothing consumes the text: naming two writing modes is a different
+    mistake with its own error ("only one body edit mode"), and answering it
+    with this one would blame the wrong argument. Blank text writes nothing and
+    loses nothing, so it is let through.
+    """
+    modes = len(consumed) + (remove_section is not None)
+    if not body.strip() or body in consumed or modes > 1:
+        return
+    if consumed:
+        raise ValidationError(
+            "'body' is the text for append_section / replace_section, and replace_body "
+            "carries its own: this body would be dropped. Pass the new body as replace_body alone"
+        )
+    if remove_section is not None:
+        raise ValidationError(
+            "--remove-section takes no body text: it deletes the heading and everything "
+            "under it. Use --replace-section to rewrite a section instead"
+        )
+    raise ValidationError(
+        "body text was given with no body edit mode, so it would be dropped: name one — "
+        "--append-section <heading>, --replace-section <heading>, or --replace-body --force"
+    )
 
 
 # -- payload coercion helpers ----------------------------------------------

@@ -233,7 +233,10 @@ def update(
         bool, typer.Option("--replace-body", help="Overwrite the whole body. Requires --force.")
     ] = False,
     body: Annotated[
-        str | None, typer.Option("--body", help="The edit's text, as a literal string.")
+        str | None,
+        typer.Option(
+            "--body", help="The edit's text, as a literal string. Needs a body edit mode."
+        ),
     ] = None,
     body_file: Annotated[
         Path | None, typer.Option("--body-file", help="Read the edit's text from this UTF-8 file.")
@@ -272,7 +275,9 @@ def update(
     Retyping works even when the current type is one the schema no longer
     declares, which is how a corpus leaves a type that `disable_types:` removed.
 
-    A body edit takes at most one mode.
+    A body edit takes exactly one mode, and --body, --body-file and --stdin are
+    only its text: given without --append-section, --replace-section or
+    --replace-body, the text is refused rather than dropped.
 
     --append-section adds to the heading it names when the body has it, and
     writes a new section at the end when it does not — never a second copy of

@@ -234,7 +234,8 @@ rather than failing the read.
 reserved for a wholesale rewrite. Appending to a section that exists extends it rather than
 writing its heading a second time. The writing modes supply the `##` line themselves,
 so `--body` is the prose beneath it and nothing more; handing one a section exactly as
-`docir get --section` printed it errors rather than doubling its heading.
+`docir get --section` printed it errors rather than doubling its heading, and a `--body` with
+no mode to take it errors rather than being dropped.
 
 **Publishing.** `docir build --out site/` renders the store as a self-contained static site.
 `--title` names it (without it every page reads "Documentation"), `--logo` sets the mark and

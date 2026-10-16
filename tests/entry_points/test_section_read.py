@@ -536,3 +536,64 @@ class TestAppendSectionExtendsAnExistingHeading:
         )
         assert stored["body"].count("## Context") == 1
         assert stored["body"].index("Via MCP.") < stored["body"].index("## Decision")
+
+
+class TestABodyWithoutAModeIsRefused:
+    """`update <id> --body ...` with no edit mode printed the unchanged document, exit 0.
+
+    A caller could not tell the edit had not landed (GitHub #36). Every other
+    flag either does what it says or is refused; this one did neither.
+    """
+
+    @pytest.mark.parametrize("extra", [[], ["--set-title", "Renamed"]], ids=["alone", "metadata"])
+    def test_the_cli_refuses_and_names_the_modes(self, doc_id: str, extra: list[str]) -> None:
+        result = runner.invoke(
+            app, ["--no-daemon", "update", doc_id, *extra, "--body", "Replacement text."]
+        )
+        assert result.exit_code == 2, result.output
+        combined = result.output + str(result.stderr or "")
+        for mode in ("--append-section", "--replace-section", "--replace-body"):
+            assert mode in combined, f"the error does not name {mode}"
+        stored = json.loads(runner.invoke(app, ["--no-daemon", "get", doc_id]).stdout)
+        assert "Replacement text." not in stored["body"]
+        assert stored["title"] == "Provider integration", "a refused call applied part of itself"
+
+    def test_a_body_file_is_refused_the_same_way(self, doc_id: str, tmp_path) -> None:
+        source = tmp_path / "new-body.md"
+        source.write_text("Replacement text.\n", encoding="utf-8")
+        result = runner.invoke(app, ["--no-daemon", "update", doc_id, "--body-file", str(source)])
+        assert result.exit_code == 2, result.output
+
+    def test_blank_text_is_not_a_body(self, doc_id: str) -> None:
+        # A shell expansion that produced nothing loses nothing either.
+        result = runner.invoke(
+            app, ["--no-daemon", "update", doc_id, "--set-owner", "platform", "--body", "  "]
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_with_a_mode_the_same_text_writes(self, doc_id: str) -> None:
+        result = runner.invoke(
+            app,
+            ["--no-daemon", "update", doc_id, "--replace-body", "--force", "--body", "Replaced."],
+        )
+        assert result.exit_code == 0, result.output
+        assert _body(doc_id) == "Replaced."
+
+    def test_the_mcp_tool_refuses_a_body_alone(
+        self, container: Container, settings: Settings, doc_id: str
+    ) -> None:
+        with pytest.raises(ToolError, match="--replace-section"):
+            _mcp_update(container, settings, {"doc_id": doc_id, "body": "Replacement text."})
+
+    def test_the_mcp_tool_refuses_a_body_beside_replace_body(
+        self, container: Container, settings: Settings, doc_id: str
+    ) -> None:
+        # The MCP-only shape: `replace_body` carries its own text, so `body`
+        # beside it was the same silent drop.
+        with pytest.raises(ToolError, match="replace_body"):
+            _mcp_update(
+                container,
+                settings,
+                {"doc_id": doc_id, "replace_body": "new", "body": "other", "force": True},
+            )
+        assert "ten months" in _body(doc_id)

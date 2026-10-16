@@ -563,7 +563,7 @@ def _register_write_tools(mcp: FastMCP, run: _Gateway) -> None:
         the on-disk body away, so it needs `force` every time, and is refused
         outright — `force` or not — if the file has changed since it was
         indexed. Prefer `append_section` / `replace_section`; at most one body
-        edit mode per call.
+        edit mode per call, and `body` with none is refused rather than dropped.
 
         Args:
             doc_id: The document to edit.
@@ -610,10 +610,12 @@ def _register_write_tools(mcp: FastMCP, run: _Gateway) -> None:
                 `replace_section` keeps the first heading line by contract, so it
                 cannot undo one, and a repeated heading resolves to the first.
             replace_body: New markdown replacing the whole body.
-            body: The text for `append_section` / `replace_section`. Both write
-                the heading line themselves, so this is only what goes *under*
-                the heading: text opening with that same heading — what
-                `docir_get(section=)` returns — is refused.
+            body: The text for `append_section` / `replace_section`, and only
+                for them: passed alone or beside `replace_body` (which carries
+                its own text) it is refused. Both supply the heading line, so
+                this is only what goes *under* the heading: text opening with
+                that same heading — what `docir_get(section=)` returns — is
+                refused.
             force: Required by `replace_body`, and only by it. Confirms you
                 mean to discard the whole existing body.
             override: Force an illegal status transition. Last resort.

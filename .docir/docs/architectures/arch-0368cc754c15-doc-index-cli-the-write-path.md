@@ -77,7 +77,9 @@ Two distinct operations, kept separate rather than merged into one:
   `docir update issue-12 --status resolved` — patches only specific
   frontmatter fields, body untouched. `--set-title "..."` /
   `--set-description "..."` update those fields the same way.
-- **Body update** (higher-risk) — four supported modes, at most one per call:
+- **Body update** (higher-risk) — four supported modes, at most one per call.
+  `--body`, `--body-file` and `--stdin` are only a mode's text: given with no mode
+  they are refused rather than dropped (GitHub #36).
   - `--append-section "Resolution" --body "Fixed in PR #42"` — adds the text
     under `## Resolution` if the body has it, and appends that heading as a new
     section at the end if not, without touching existing content. It never

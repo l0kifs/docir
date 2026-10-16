@@ -20,7 +20,8 @@ files and the derived index never disagree.
   against the type being *entered*. A status the new type does not declare is refused rather
   than reset, and the source type is never looked up — so a retype is the way out of a type
   `disable_types:` has removed. A retype is not a status transition and not a content change.
-  At most one body edit mode per call. `append_section` extends a heading the body
+  At most one body edit mode per call, and `body` text no mode consumes is refused at the
+  dispatcher rather than dropped (GitHub #36). `append_section` extends a heading the body
   already has (first match) instead of writing it again — prose before its first sub-heading,
   text opening with a sub-heading after its last — refuses text carrying a heading at the
   section's level or above, and writes a new section at the end only when the heading is

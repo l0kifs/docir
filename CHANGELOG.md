@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   carries a duplicate is listed by `docir lint --deep` (`ambiguous-heading`) and repaired
   with `--remove-section`.
 
+- **`docir update` refuses a body no edit mode would write** (issue-f47b4c69367b, GitHub
+  #36). `--body`, `--body-file` or `--stdin` without `--append-section`, `--replace-section`
+  or `--replace-body` printed the unchanged document and exited 0, and over MCP `body`
+  beside `replace_body` was discarded the same way. All three now exit 2 naming the modes,
+  and nothing in the call is applied. Blank text is still accepted. A script that passed a
+  body on every call, mode or not, now fails where it was losing the text.
+
 ## [0.30.0] - 2026-09-28
 
 ### Added

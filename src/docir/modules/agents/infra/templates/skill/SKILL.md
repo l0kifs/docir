@@ -349,6 +349,10 @@ docir delete <id> [--force]   # --force also unlinks it from referencing docs
   — append that one as its own section. Builds up to 0.30.0 wrote a second
   `## <heading>` instead, which `docir lint --deep` reports as
   `ambiguous-heading`.
+- **A body needs a mode.** `--body`, `--body-file` and `--stdin` are only the
+  text of `--append-section`, `--replace-section` or `--replace-body`; given
+  without one they are refused, not dropped. 0.30.0 and older printed the
+  unchanged document and exited 0, so on those builds read the body back.
 - **`--body` is what goes *under* the heading, never the heading itself.**
   `docir get <id> --section "Notes"` returns the heading line too, so editing
   that and passing it straight back would write `## Notes` twice; docir refuses

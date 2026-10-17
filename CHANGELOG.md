@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.2] - 2026-10-17
+
 ### Changed
 
 - **Every command starts ~90ms sooner** (issue-9509f9fa3631). The client imported the docs
@@ -15,22 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `docir version` loads 570 modules instead of 704, and its p50 went 0.574s -> 0.486s
   (interleaved against 0.30.1's source, 25 pairs). `tests/entry_points/test_cli_import_graph.py`
   fails if any of them reaches the client again.
+
 - **`context` scores its vectors ~8x faster.** `Embedding.cosine_similarity` runs on
   `math.sumprod` instead of generator sums: over this repository's 1,947 vectors the scan went
   ~60ms -> ~7ms, a warm `context` dispatch 94ms -> 46ms, and `lint --deep` — which compares
   document vectors the same way — 2.09s -> 1.12s. No new dependency.
 
-### Measured and rejected
-
-- **numpy for the vector scan.** Building its matrix from the decoded vectors costs 13ms, which
-  leaves it slower than `sumprod` end to end. It wins only by reading the stored bytes directly,
-  which changes the repository port to save ~20ms that process start hides.
-
-### Changed
-
-- **`docir check` does half the work it did, with identical output.** A warm `check` on this
-  repository's store went ~835ms -> ~440ms, and `docir --no-daemon check` 1.83s -> 1.43s
-  (interleaved against 0.30.1's source). Each `code:` glob walked its tree once for every
+- **`docir check` does ~40% less work, with identical output.** A warm `check` on this
+  repository's store went 789ms -> 477ms, and `docir --no-daemon check` 1.91s -> 1.40s
+  (interleaved against 0.30.1's source, the `.gitignore` fix below included). Each `code:` glob walked its tree once for every
   directory level above each file — 62% of the command — and now walks each subtree once,
   pruning ignored directories as it goes, which also stops a governed directory holding a
   `node_modules` or `target/` being walked file by file. The duplicate-id, `malformed`,
@@ -44,7 +39,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an edit it kept fingerprinting `code:` globs under the old rules — no `code-drifted` where
   `--no-daemon` on the same tree reported one — until the daemon was replaced, and a
   `--verified` run through it recorded digests a fresh process disagrees with. The rules are
-  now read afresh for every command.
+  now read afresh for every command, at ~10ms of the `check` speed-up above.
+
+### Measured and rejected
+
+- **numpy for the vector scan.** Building its matrix from the decoded vectors costs 13ms, which
+  leaves it slower than `sumprod` end to end. It wins only by reading the stored bytes directly,
+  which changes the repository port to save ~20ms that process start hides.
+
+- **One `.gitignore` index per pattern, to keep the daemon's rules current.** It re-reads
+  the ignore files and re-answers every directory for each of the 248 calls a `check` makes
+  over this repository's globs: +205-251ms. One index per command costs ~10ms on top of the
+  walk-once change and is what shipped.
 
 ## [0.30.1] - 2026-10-16
 
@@ -3013,7 +3019,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.30.1...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.30.2...HEAD
+[0.30.2]: https://github.com/l0kifs/docir/compare/v0.30.1...v0.30.2
 [0.30.1]: https://github.com/l0kifs/docir/compare/v0.30.0...v0.30.1
 [0.30.0]: https://github.com/l0kifs/docir/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/l0kifs/docir/compare/v0.28.0...v0.29.0

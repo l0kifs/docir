@@ -101,11 +101,20 @@ def parse(text: str, path: str) -> Document:
     mapping YAML onto the aggregate is this module's. ``path`` is carried only
     so a refusal can name the file the reader has to go and fix.
     """
+    return parse_with_repeats(text, path)[0]
+
+
+def parse_with_repeats(text: str, path: str) -> tuple[Document, dict[str, tuple[str, ...]]]:
+    """:func:`parse` and :func:`repeated_entries` from one YAML parse.
+
+    The parse is most of what reading a file costs, and `check` needs both
+    answers for every file in the corpus.
+    """
     try:
         post = frontmatter.loads(text)
     except yaml.YAMLError as exc:
         raise ValidationError(f"malformed frontmatter in {path}: {exc}") from exc
-    return _to_document(post.metadata, post.content, path)
+    return _to_document(post.metadata, post.content, path), _repeats(post.metadata)
 
 
 def repeated_entries(text: str) -> dict[str, tuple[str, ...]]:
@@ -117,7 +126,10 @@ def repeated_entries(text: str) -> dict[str, tuple[str, ...]]:
     edge named twice, while two kinds to one target are two edges. Call it only
     on text :func:`parse` accepts.
     """
-    metadata = frontmatter.loads(text).metadata
+    return _repeats(frontmatter.loads(text).metadata)
+
+
+def _repeats(metadata: dict[str, object]) -> dict[str, tuple[str, ...]]:
     lists = {
         "tags": _as_str_tuple(metadata.get("tags")),
         "code": _as_str_tuple(metadata.get("code")),

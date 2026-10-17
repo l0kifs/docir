@@ -160,6 +160,37 @@ class TestMarkdownStore:
         assert any("adr-9999-bad.md" in path for path, _reason in store.find_malformed())
 
 
+class TestSurvey:
+    """`check` reads the corpus once through `survey`; it must answer what the three scans do."""
+
+    def test_it_answers_exactly_what_the_three_scans_answer(self, tmp_path) -> None:
+        store = MarkdownDocumentFileStore(tmp_path)
+        store.write(_doc())
+        # A second file claiming the same id — what a branch merge leaves behind.
+        (tmp_path / "decisions" / "adr-0001-copy.md").write_text(
+            markdown_format.render(_doc(title="Copy")), encoding="utf-8"
+        )
+        (tmp_path / "decisions" / "adr-9999-bad.md").write_text(_MALFORMED, encoding="utf-8")
+        (tmp_path / "decisions" / "adr-0003-repeats.md").write_text(
+            "---\nid: adr-0003\ntitle: Repeats\ndescription: d\ntype: decision\n"
+            "status: proposed\ncreated: 2026-01-01\nupdated: 2026-01-01\n"
+            "tags: [auth, auth]\nrelated: []\n---\n\nbody\n",
+            encoding="utf-8",
+        )
+
+        survey = store.survey()
+
+        assert survey.documents == tuple(store.scan())
+        assert survey.malformed == tuple(store.find_malformed())
+        assert survey.repeated == tuple(store.find_repeated_entries())
+        # Which items, not just that the two sides agree: an empty corpus agrees too.
+        assert sorted(d.id for d in survey.documents) == ["adr-0001", "adr-0001", "adr-0003"]
+        assert [path for path, _reason in survey.malformed] == ["decisions/adr-9999-bad.md"]
+        assert [(r.doc_id, dict(r.repeats)) for r in survey.repeated] == [
+            ("adr-0003", {"tags": ("auth",)})
+        ]
+
+
 class TestRelocate:
     """The paired write for a retype (adr-f8cce745d0d5)."""
 

@@ -25,7 +25,7 @@ from docir.platform.errors import (
     ValidationError,
 )
 from docir.platform.filesystem import markdown_format
-from docir.platform.filesystem.ports import DocumentFileStore, RepeatedEntries
+from docir.platform.filesystem.ports import DocumentFileStore, RepeatedEntries, StoreSurvey
 from docir.platform.naming.slug import slugify
 
 
@@ -142,6 +142,22 @@ class MarkdownDocumentFileStore(DocumentFileStore):
             if repeats:
                 found.append(RepeatedEntries(rel, document.id, repeats))
         return found
+
+    def survey(self) -> StoreSurvey:
+        """One read and one frontmatter parse per file, for all three answers."""
+        documents: list[Document] = []
+        malformed: list[tuple[str, str]] = []
+        repeated: list[RepeatedEntries] = []
+        for rel, text in self._sources():
+            try:
+                document, repeats = markdown_format.parse_with_repeats(text, rel)
+            except ValidationError as exc:
+                malformed.append((rel, str(exc)))
+                continue
+            documents.append(document)
+            if repeats:
+                repeated.append(RepeatedEntries(rel, document.id, repeats))
+        return StoreSurvey(tuple(documents), tuple(malformed), tuple(repeated))
 
     def _sources(self) -> Iterator[tuple[str, str]]:
         """Every ``.md`` file under the root, as ``(relative path, text)``, sorted."""

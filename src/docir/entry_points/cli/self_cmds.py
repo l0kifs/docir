@@ -12,7 +12,7 @@ import typer
 from docir import __version__
 from docir.config.settings import Settings
 from docir.entry_points.cli import rendering
-from docir.entry_points.cli.agent_cmds import _setup_file
+from docir.entry_points.cli.agent_cmds import _setup_file, warn_kept
 from docir.entry_points.cli.runner import (
     execute_with,
     get_state,
@@ -168,6 +168,7 @@ def _emit_release_status(status: ReleaseStatus) -> None:
 
 def _emit_upgrade(result: UpgradeResult) -> None:
     """Emit one report for the three steps, rather than three commands' output."""
+    warn_kept(result.agents)
     agents = [_setup_file(file) for file in result.agents]
     findings = list(result.findings)
     state = get_state()

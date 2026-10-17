@@ -170,6 +170,17 @@ schema, and `docir doctor` names it directly; the entry above says what to do.
   what docir would run — and resolve it there. Never work around it by editing files docir
   owns or by pinning the store to an older shape; report it instead.
 
+- **A `kept` row from `docir agent update` or `docir self upgrade` means a newer docir wrote
+  that file.** This docir is behind whoever last refreshed the skill — a teammate, another
+  machine — so it left the file alone rather than replace the newer guidance with its own,
+  and wrote nothing. Upgrade this docir and run the command again. Only when the older text
+  is what the team wants, because the repository is pinned to this release on purpose, write
+  it anyway:
+
+  ```bash
+  docir agent update --force
+  ```
+
 ## When docir itself is the defect
 
 Some failures survive `doctor`, `reindex` and an upgrade because they are docir's,

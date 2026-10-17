@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **An older docir no longer overwrites agent files a newer one wrote** (issue-af3f335688f4).
+  `docir agent update` regenerated every file from the running build's templates whatever its
+  stamp said, so a teammate behind on releases — or `docir self upgrade` after an install that
+  did not move the version — replaced newer skill guidance with older text, reported `updated`
+  and exited 0. A file stamped by a newer docir is now kept: its row says `kept` and names the
+  version that wrote it, a warning goes to stderr, and nothing is written. `--force` on
+  `docir agent install` and `docir agent update` writes it anyway, for a team pinned below the
+  stamp on purpose. A build released before this one still overwrites; the guard protects
+  files from this release on.
+
 ## [0.30.2] - 2026-10-17
 
 ### Changed

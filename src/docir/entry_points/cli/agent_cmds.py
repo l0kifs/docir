@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Annotated
 
@@ -13,6 +14,7 @@ from docir.entry_points.cli.runner import get_state, run_local, use_json
 from docir.modules.agents.api import (
     AGENT_NAMES,
     DEFAULT_AGENTS,
+    InstallAction,
     InstalledFile,
     InstallRequest,
     SetupResult,
@@ -34,14 +36,25 @@ def agent_install(
         bool,
         typer.Option("--global", help="Install the skill under ~/ instead of the project."),
     ] = False,
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force", help="Write this build's files even over ones a newer docir wrote."
+        ),
+    ] = False,
 ) -> None:
-    """Install docir's agent instructions (a Claude skill; AGENTS.md links to it)."""
+    """Install docir's agent instructions (a Claude skill; AGENTS.md links to it).
+
+    A file a newer docir already wrote is kept rather than replaced with this
+    build's older text; see `docir agent update` for what that row means.
+    """
     service = build_agent_service(__version__)
     request = InstallRequest(
         project_root=directory.resolve(),
         global_root=Path.home(),
         agents=tuple(agent) if agent else DEFAULT_AGENTS,
         use_global=use_global,
+        force=force,
     )
     _emit_setup(run_local(lambda: service.install(request)))
 
@@ -57,14 +70,34 @@ def agent_update(
         bool,
         typer.Option("--global", help="Refresh the skill under ~/ instead of the project."),
     ] = False,
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force", help="Write this build's files even over ones a newer docir wrote."
+        ),
+    ] = False,
 ) -> None:
-    """Refresh already-installed agent instructions to the current docir version."""
+    """Refresh already-installed agent instructions to the current docir version.
+
+    A file a newer docir wrote is kept, not downgraded: its row says `kept` and
+    names the version that wrote it, and a warning goes to stderr. It means this
+    docir is behind whoever last refreshed the skill — a teammate, or another
+    machine — so upgrade it and run this again:
+
+        docir self upgrade
+
+    When the older text is what you want — a team pinned to this release on
+    purpose — write it anyway:
+
+        docir agent update --force
+    """
     service = build_agent_service(__version__)
     request = UpdateRequest(
         project_root=directory.resolve(),
         global_root=Path.home(),
         agents=tuple(agent) if agent else (),
         use_global=use_global,
+        force=force,
     )
     _emit_setup(run_local(lambda: service.update(request)))
 
@@ -92,7 +125,20 @@ def _setup_file(file: InstalledFile) -> dict[str, object]:
     }
 
 
+def warn_kept(files: Iterable[InstalledFile]) -> None:
+    """Say on stderr which files a newer docir wrote and this build left alone.
+
+    Stderr in both output modes: the JSON row carries the same note for an agent,
+    and a person running the command — `agent update` or `self upgrade` — would
+    otherwise read a green exit past the one line saying their docir is behind.
+    """
+    for file in files:
+        if file.action is InstallAction.KEPT and file.note:
+            rendering.render_warning(f"{file.path} kept — {file.note}")
+
+
 def _emit_setup(result: SetupResult) -> None:
+    warn_kept(result.files)
     files = [_setup_file(file) for file in result.files]
     state = get_state()
     if use_json(state):

@@ -26,12 +26,13 @@ opt-in upstream-feedback skill, so a caller that suggests it cannot print a name
 the catalogue no longer has.
 
 `InstallRequest`/`UpdateRequest` carry `project_root`, `global_root`, an `agents`
-tuple of target names (`AGENT_NAMES`), and `use_global`. `SetupResult.files` is a
+tuple of target names (`AGENT_NAMES`), `use_global`, and `force` (write over a
+file a newer docir wrote; default `False`). `SetupResult.files` is a
 tuple of `InstalledFile{target, path, action, previous_version, new_version,
 note, extras, removed}` — one row per *target*, where `path` is the entry point,
 `extras` names the bundled files written beside it (`/`-separated, relative to
 its directory) and `removed` names the files swept from a skill's directory.
-`action` is an `InstallAction` (`created`/`updated`/`unchanged`/`skipped`). A
+`action` is an `InstallAction` (`created`/`updated`/`unchanged`/`skipped`/`kept`). A
 `--global` install of a target with no global location (e.g. `agents`) raises
 `AgentSetupError`.
 
@@ -64,6 +65,11 @@ its directory) and `removed` names the files swept from a skill's directory.
   `update`, reported as a note on that file.
 - Generated files carry a parseable version stamp so `update` reports the
   installed→refreshed transition.
+- A target whose stamp names a newer docir than the running one (PEP 440) is
+  **not written**: it is reported `kept`, with `previous_version == new_version`
+  equal to that stamp and a note naming both versions, by `install`, `update` and
+  every caller of them (`self upgrade`). `force` writes it anyway. An absent or
+  unparseable stamp is written over as before (issue-af3f335688f4).
 - A release that ships no change to a target's content is reported as
   `unchanged`, not `updated`: the file is still rewritten so its stamp names the
   running build, but a stamp that moved on its own is not a content change.

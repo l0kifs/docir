@@ -45,6 +45,8 @@ class InstallRequest:
     global_root: Path
     agents: tuple[str, ...] = DEFAULT_AGENTS
     use_global: bool = False
+    #: Write over files a newer docir wrote, instead of keeping them.
+    force: bool = False
 
 
 @dataclass(frozen=True)
@@ -55,6 +57,8 @@ class UpdateRequest:
     global_root: Path
     agents: tuple[str, ...] = ()
     use_global: bool = False
+    #: Write over files a newer docir wrote, instead of keeping them.
+    force: bool = False
 
 
 @dataclass(frozen=True)
@@ -78,7 +82,7 @@ class AgentSetupService:
         # Adding a skill beside an installed index makes that index wrong, so
         # refresh it in the same run rather than waiting for an `update`.
         names |= self._installed(root, use_global=request.use_global, form=AgentForm.POINTER)
-        return self._emit(names, root, use_global=request.use_global)
+        return self._emit(names, root, use_global=request.use_global, force=request.force)
 
     def update(self, request: UpdateRequest) -> SetupResult:
         # Explicitly-named additions are validated against ``--global`` up front;
@@ -86,11 +90,11 @@ class AgentSetupService:
         root = request.global_root if request.use_global else request.project_root
         names = {t.name for t in self._resolve(request.agents, use_global=request.use_global)}
         names |= self._installed(root, use_global=request.use_global)
-        return self._emit(names, root, use_global=request.use_global)
+        return self._emit(names, root, use_global=request.use_global, force=request.force)
 
     # -- internals ----------------------------------------------------------
 
-    def _emit(self, names: set[str], root: Path, *, use_global: bool) -> SetupResult:
+    def _emit(self, names: set[str], root: Path, *, use_global: bool, force: bool) -> SetupResult:
         """Write every named target under ``root``, skills before the index.
 
         Writing a pointer always writes the skills it names, so the index cannot
@@ -102,7 +106,7 @@ class AgentSetupService:
             required.update(AGENT_TARGETS[name].points_to)
         return SetupResult(
             files=tuple(
-                self._write(target, root)
+                self._write(target, root, force=force)
                 for target in self._local_targets(use_global=use_global)
                 if target.name in required
             )
@@ -158,7 +162,38 @@ class AgentSetupService:
             return rendering.has_block(existing)
         return True
 
-    def _write(self, target: AgentTarget, root: Path) -> InstalledFile:
+    def _write(self, target: AgentTarget, root: Path, *, force: bool) -> InstalledFile:
+        """Write one target, unless a newer docir wrote what is there.
+
+        Every target is regenerated from this build's templates, so an older
+        docir run in a repository a newer one set up — a teammate behind on
+        releases, or `self upgrade` after an install that did not move the
+        version — replaced the newer guidance with its own and called it an
+        update (issue-af3f335688f4). The stamp already said which build wrote
+        the file; this is the first reader that acts on it. ``force`` is the
+        deliberate downgrade: a team pinned below the stamp wants the text that
+        matches its pin.
+        """
+        path = self._path(target, root)
+        existing = self._sink.read(path)
+        newer = (
+            None
+            if force or existing is None
+            else rendering.written_by_newer(existing, self._version)
+        )
+        if newer is not None:
+            return InstalledFile(
+                target=target.name,
+                path=str(path),
+                action=InstallAction.KEPT,
+                previous_version=newer,
+                new_version=newer,
+                note=(
+                    f"written by docir {newer}, newer than this build ({self._version}); "
+                    f"upgrade docir, or run `docir agent update --force` to write "
+                    f"{self._version}'s text"
+                ),
+            )
         if target.form is AgentForm.SKILL:
             return self._write_skill(target, root)
         return self._write_pointer(target, root)

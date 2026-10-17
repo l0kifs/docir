@@ -24,6 +24,11 @@ class InstallAction(enum.Enum):
     UNCHANGED = "unchanged"
     #: The file existed but was left untouched (e.g. a foreign ``AGENTS.md``).
     SKIPPED = "skipped"
+    #: A newer docir wrote the file, so it was left as it is: this build's
+    #: templates are older, and writing them would delete guidance the newer
+    #: build added while reporting an update (issue-af3f335688f4). ``force``
+    #: writes it anyway.
+    KEPT = "kept"
 
 
 @dataclass(frozen=True)

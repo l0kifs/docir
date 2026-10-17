@@ -31,6 +31,8 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from packaging.version import InvalidVersion, Version
+
 #: Opening marker of docir's block inside a shared file (e.g. ``AGENTS.md``).
 MARK_START = "<!-- docir:start -->"
 #: Closing marker of docir's block.
@@ -68,6 +70,24 @@ def parse_version(text: str) -> str | None:
     """Read the docir version stamped into ``text``, or ``None`` if absent."""
     match = _STAMP_RE.search(text)
     return match.group(1) if match else None
+
+
+def written_by_newer(text: str, version: str) -> str | None:
+    """The stamp in ``text`` when it names a newer docir than ``version``, else ``None``.
+
+    PEP 440 ordering, as the release check orders versions: compared as strings
+    `0.9.0` outranks `0.10.0`. A stamp that is absent or does not parse is not
+    newer — the file is treated as it always was, written over — because the
+    guard exists to stop one known build undoing another, not to second-guess a
+    file whose author it cannot name.
+    """
+    stamped = parse_version(text)
+    if stamped is None:
+        return None
+    try:
+        return stamped if Version(stamped) > Version(version) else None
+    except InvalidVersion:
+        return None
 
 
 def differs_only_by_stamp(existing: str, rendered: str) -> bool:

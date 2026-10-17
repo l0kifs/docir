@@ -8,6 +8,7 @@ files into the tmp project directory passed as the argument.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -162,3 +163,24 @@ class TestAgentUpdate:
     def test_update_with_nothing_installed_is_ok(self, tmp_path: Path) -> None:
         result = run("agent", "update", str(tmp_path))
         assert result.exit_code == 0
+
+    def test_a_skill_a_newer_docir_wrote_is_kept_until_forced(self, tmp_path: Path) -> None:
+        # An older build used to replace it with its own text and exit 0
+        # (issue-af3f335688f4); the stamp below plays the newer build.
+        assert run("agent", "install", str(tmp_path)).exit_code == 0
+        skill = _skill(tmp_path)
+        newer = re.sub(r"docir:v\S+", "docir:v99.0.0", skill.read_text(encoding="utf-8"), count=1)
+        skill.write_text(newer, encoding="utf-8")
+
+        result = run("--json", "agent", "update", str(tmp_path))
+
+        assert result.exit_code == 0
+        row = json.loads(result.stdout)[0]
+        assert (row["action"], row["previous_version"]) == ("kept", "99.0.0")
+        assert "kept" in result.stderr and "--force" in result.stderr
+        assert skill.read_text(encoding="utf-8") == newer
+
+        forced = run("--json", "agent", "update", str(tmp_path), "--force")
+        assert forced.exit_code == 0
+        assert json.loads(forced.stdout)[0]["action"] != "kept"
+        assert "docir:v99.0.0" not in skill.read_text(encoding="utf-8")

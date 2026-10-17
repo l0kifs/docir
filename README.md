@@ -204,6 +204,7 @@ never watch, so CI still needs the explicit command.
 | `docir lint --deep` | Advisory heuristics, never a gate — the one that earns the run is `duplicate`: two *unlinked* documents whose vectors sit above 0.90, the same document written twice in words full-text search cannot connect |
 | `docir doctor` | Diagnose the *environment* — the installation, this store's index, the embedding model, the daemon, the peers (`--strict` gates a setup step on errors) |
 | `docir agent install` | Teach this repo's AI agent to drive docir (`--agent claude-writing` the writing rules, `--agent claude-feedback` upstream bug reports) |
+| `docir agent update` | Refresh the installed agent files to this docir; a file a newer docir wrote is kept rather than downgraded (`--force` writes over it) |
 | `docir self upgrade` | Upgrade docir, then resync this store: reindex, refresh the agent files, report what `check` finds |
 | `docir bench fixture.yaml` | Score this store's retrieval against tasks whose answers you know |
 | `docir build --out site/` | Render the store as a self-contained static site for humans |

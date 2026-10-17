@@ -449,3 +449,79 @@ class TestUpdate:
         result = svc2.update(update_req(use_global=True))
         assert [f.target for f in result.files] == ["claude"]
         assert "<!-- docir:v2.0.0" in sink.files[GLOBAL_SKILL_PATH]
+
+
+#: What an *older* build ships: different text, and no reference file — so a
+#: write would both change the entry point and delete ``reference/schema.md``.
+OLDER_TEMPLATES: dict[str, dict[str, str]] = {
+    "skill": {"SKILL.md": TEMPLATE.replace("body line", "older body line")},
+    "writing": {"SKILL.md": WRITING},
+}
+
+
+class TestANewerBuildsFilesAreKept:
+    """An older docir does not replace what a newer one wrote (issue-af3f335688f4).
+
+    Every target used to be regenerated from the running build's templates, so
+    a teammate behind on releases — or `self upgrade` after an install that did
+    not move the version — deleted the newer guidance and reported `updated`.
+    """
+
+    def _installed_by(self, version: str, **kw: object) -> FakeSink:
+        svc, sink = make(version)
+        svc.install(install_req(**kw))
+        return sink
+
+    def test_an_older_update_keeps_every_file_and_says_why(self) -> None:
+        sink = self._installed_by("2.0.0", agents=("claude", "agents"))
+        before = dict(sink.files)
+        older, _ = make("1.0.0", sink=sink, templates=OLDER_TEMPLATES)
+
+        rows = by_target(older.update(update_req()))
+
+        assert {name: row.action for name, row in rows.items()} == {
+            "claude": InstallAction.KEPT,
+            "agents": InstallAction.KEPT,
+        }
+        assert rows["claude"].previous_version == rows["claude"].new_version == "2.0.0"
+        assert "docir agent update --force" in (rows["claude"].note or "")
+        assert sink.files == before
+        assert sink.removed == []
+
+    def test_an_older_install_keeps_them_too(self) -> None:
+        sink = self._installed_by("2.0.0")
+        older, _ = make("1.0.0", sink=sink, templates=OLDER_TEMPLATES)
+        assert by_target(older.install(install_req()))["claude"].action is InstallAction.KEPT
+        assert "older body line" not in sink.files[SKILL_PATH]
+
+    def test_force_writes_the_older_text(self) -> None:
+        # A team pinned below the stamp on purpose wants the skill its pin ships.
+        sink = self._installed_by("2.0.0")
+        older, _ = make("1.0.0", sink=sink, templates=OLDER_TEMPLATES)
+
+        row = by_target(older.update(update_req(force=True)))["claude"]
+
+        assert row.action is InstallAction.UPDATED
+        assert (row.previous_version, row.new_version) == ("2.0.0", "1.0.0")
+        assert "older body line" in sink.files[SKILL_PATH]
+        assert row.removed == ("reference/schema.md",)
+
+    def test_versions_are_ordered_as_pep_440_not_as_text(self) -> None:
+        # As strings "0.9.0" outranks "0.10.0", which would keep the older file
+        # and write over the newer one — the guard exactly backwards.
+        sink = self._installed_by("0.10.0")
+        older, _ = make("0.9.0", sink=sink)
+        assert by_target(older.update(update_req()))["claude"].action is InstallAction.KEPT
+
+        sink = self._installed_by("0.9.0")
+        newer, _ = make("0.10.0", sink=sink)
+        assert by_target(newer.update(update_req()))["claude"].action is not InstallAction.KEPT
+
+    def test_a_stamp_that_names_no_version_is_written_over_as_before(self) -> None:
+        sink = self._installed_by("1.0.0")
+        sink.files[SKILL_PATH] = sink.files[SKILL_PATH].replace(
+            "docir:v1.0.0", "docir:vlocal-build"
+        )
+        svc, _ = make("1.0.0", sink=sink)
+        assert by_target(svc.update(update_req()))["claude"].action is not InstallAction.KEPT
+        assert "docir:v1.0.0" in sink.files[SKILL_PATH]

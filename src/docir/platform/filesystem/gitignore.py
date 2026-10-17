@@ -54,10 +54,12 @@ class _Rule:
 class GitignoreIndex:
     """Answers "would git ignore this path", for one working tree.
 
-    Built per matcher and thrown away with it. Ignore files are parsed on first
-    use and every verdict about a *directory* is cached, because `check`
-    fingerprints many files under the same few directories and the ancestor walk
-    would otherwise re-answer the same question once per file.
+    Built per batch of patterns and thrown away with it — never per matcher,
+    which in the daemon lives as long as the process and would keep a deleted
+    rule in force (issue-3a505835cd7e). Ignore files are parsed on first use and
+    every verdict about a *directory* is cached, because `check` fingerprints
+    many files under the same few directories and the ancestor walk would
+    otherwise re-answer the same question once per file.
     """
 
     def __init__(self, root: Path) -> None:

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
 from docir.platform.filesystem.gitignore import GitignoreIndex
@@ -45,11 +45,26 @@ _SKIPPED_DIRS = frozenset({".git", "__pycache__", ".mypy_cache", ".ruff_cache", 
 
 
 class RepositoryCodeMatcher(CodeMatcher):
-    """Globs a repository working tree, short-circuiting on the first hit."""
+    """Globs a repository working tree, short-circuiting on the first hit.
+
+    Holds no answer between batches. The composition root builds one matcher
+    per container and the daemon keeps its container for life, so the
+    `.gitignore` index this used to build once, here, outlived every edit to
+    the ignore files: `check` through the daemon kept the old rules until the
+    process was replaced (issue-3a505835cd7e). Each batch now reads them
+    afresh and shares what it learns across its own patterns only.
+    """
 
     def __init__(self, root: Path) -> None:
         self._root = root
-        self._ignored = GitignoreIndex(root)
+
+    def matches_all(self, patterns: Iterable[str]) -> dict[str, bool]:
+        skipped = self._skipped_by(GitignoreIndex(self._root))
+        return {pattern: self._matches(pattern, skipped) for pattern in patterns}
+
+    def fingerprint_all(self, patterns: Iterable[str]) -> dict[str, str | None]:
+        skipped = self._skipped_by(GitignoreIndex(self._root))
+        return {pattern: self._fingerprint(pattern, skipped) for pattern in patterns}
 
     def matches(self, pattern: str) -> bool:
         """Whether the pattern names at least one existing path.
@@ -68,8 +83,11 @@ class RepositoryCodeMatcher(CodeMatcher):
         else — the second pass below, and the rule :meth:`_files_under` states
         in full.
         """
+        return self.matches_all((pattern,))[pattern]
+
+    def _matches(self, pattern: str, skipped: Callable[[Path], bool]) -> bool:
         try:
-            if any(not self._skipped(path) for path in self._root.glob(pattern)):
+            if any(not skipped(path) for path in self._root.glob(pattern)):
                 return True
             return any(not self._generated(path) for path in self._root.glob(pattern))
         except (ValueError, NotImplementedError, IndexError, OSError):
@@ -94,8 +112,11 @@ class RepositoryCodeMatcher(CodeMatcher):
         rather than to under-report an edit in a language nobody wrote a parser
         for. This is where to start if the noise turns out to be real.
         """
+        return self.fingerprint_all((pattern,))[pattern]
+
+    def _fingerprint(self, pattern: str, skipped: Callable[[Path], bool]) -> str | None:
         try:
-            matched = self._files_under(pattern)
+            matched = self._files_under(pattern, skipped)
         except (ValueError, NotImplementedError, IndexError, OSError):
             return None
         if not matched:
@@ -116,7 +137,7 @@ class RepositoryCodeMatcher(CodeMatcher):
             digest.update(b"\n")
         return digest.hexdigest()[:DIGEST_LENGTH]
 
-    def _files_under(self, pattern: str) -> dict[str, Path]:
+    def _files_under(self, pattern: str, skipped: Callable[[Path], bool]) -> dict[str, Path]:
         """Every file the pattern reaches, keyed by repo-relative posix path.
 
         A directory the glob names is expanded into the files inside it, because
@@ -158,7 +179,7 @@ class RepositoryCodeMatcher(CodeMatcher):
         the second pass would hash bytecode again — issue-68df009b4e43 through
         the door this method just opened.
         """
-        tracked = self._collect(pattern, self._skipped)
+        tracked = self._collect(pattern, skipped)
         return tracked or self._collect(pattern, self._generated)
 
     def _collect(self, pattern: str, skip: Callable[[Path], bool]) -> dict[str, Path]:
@@ -205,11 +226,11 @@ class RepositoryCodeMatcher(CodeMatcher):
         """
         return any(part in _SKIPPED_DIRS for part in path.relative_to(self._root).parts)
 
-    def _skipped(self, path: Path) -> bool:
-        """Whether ``path`` is generated rather than written.
+    def _skipped_by(self, ignored: GitignoreIndex) -> Callable[[Path], bool]:
+        """Whether a path is generated rather than written, by one batch's rules.
 
         Two sources, and the order is an optimisation only: the always-skipped
         floor is a set lookup per path part, while the ignore files cost a parse
         the first time a directory is asked about.
         """
-        return self._generated(path) or self._ignored.ignores(path)
+        return lambda path: self._generated(path) or ignored.ignores(path)

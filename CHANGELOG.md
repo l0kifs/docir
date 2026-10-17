@@ -37,6 +37,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `repeated-entry` and `--against` checks each read and parsed every document; they now share
   one pass.
 
+### Fixed
+
+- **An edit to `.gitignore` reaches `docir check` through the daemon** (issue-3a505835cd7e).
+  Since 0.28.0 the daemon read the repository's ignore files once, when it started, so after
+  an edit it kept fingerprinting `code:` globs under the old rules — no `code-drifted` where
+  `--no-daemon` on the same tree reported one — until the daemon was replaced, and a
+  `--verified` run through it recorded digests a fresh process disagrees with. The rules are
+  now read afresh for every command.
+
 ## [0.30.1] - 2026-10-16
 
 ### Fixed

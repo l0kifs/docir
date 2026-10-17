@@ -26,12 +26,8 @@ def fingerprint_patterns(matcher: CodeMatcher | None, patterns: Iterable[str]) -
     """
     if matcher is None:
         return {}
-    digests: dict[str, str] = {}
-    for pattern in patterns:
-        digest = matcher.fingerprint(pattern)
-        if digest is not None:
-            digests[pattern] = digest
-    return digests
+    digests = matcher.fingerprint_all(patterns)
+    return {pattern: digest for pattern, digest in digests.items() if digest is not None}
 
 
 def mint_baseline(

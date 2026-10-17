@@ -8,7 +8,7 @@ use cases stay ignorant of paths, YAML, and frontmatter encoding.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -183,6 +183,23 @@ class CodeMatcher(ABC):
     @abstractmethod
     def matches(self, pattern: str) -> bool:
         """Whether ``pattern`` matches at least one path in the tree."""
+
+    def matches_all(self, patterns: Iterable[str]) -> dict[str, bool]:
+        """:meth:`matches` for each pattern, as one look at the tree.
+
+        A batch is the unit an implementation may share what it learns about
+        the tree across — and the longest it may keep it. The daemon holds one
+        matcher for its whole life, so an answer kept past the batch is an
+        answer about a tree that may no longer exist.
+        """
+        return {pattern: self.matches(pattern) for pattern in patterns}
+
+    def fingerprint_all(self, patterns: Iterable[str]) -> dict[str, str | None]:
+        """:meth:`fingerprint` for each pattern, as one look at the tree.
+
+        Same batch rule as :meth:`matches_all`.
+        """
+        return {pattern: self.fingerprint(pattern) for pattern in patterns}
 
     @abstractmethod
     def fingerprint(self, pattern: str) -> str | None:

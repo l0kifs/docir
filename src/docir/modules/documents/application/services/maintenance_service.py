@@ -497,7 +497,7 @@ class MaintenanceService:
         if self._code_matcher is None:
             return None
         patterns = {pattern for document in documents for pattern in document.code}
-        return {pattern: self._code_matcher.matches(pattern) for pattern in sorted(patterns)}
+        return self._code_matcher.matches_all(sorted(patterns))
 
     def _resolve_code_digests(self, documents: list[Document]) -> dict[str, str] | None:
         """Fingerprint every glob some document holds evidence for.
@@ -527,12 +527,8 @@ class MaintenanceService:
             for pattern in document.code
             if pattern in document.verified_code or pattern in document.code_baseline
         }
-        digests = {}
-        for pattern in sorted(evidenced):
-            digest = self._code_matcher.fingerprint(pattern)
-            if digest is not None:
-                digests[pattern] = digest
-        return digests
+        digests = self._code_matcher.fingerprint_all(sorted(evidenced))
+        return {pattern: digest for pattern, digest in digests.items() if digest is not None}
 
     def _find_malformed(self, malformed: Sequence[tuple[str, str]]) -> list[CheckIssue]:
         """Report source files that do not parse (skipped by reindex/scan)."""

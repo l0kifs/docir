@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`docir check` does half the work it did, with identical output.** A warm `check` on this
+  repository's store went ~835ms -> ~440ms, and `docir --no-daemon check` 1.83s -> 1.43s
+  (interleaved against 0.30.1's source). Each `code:` glob walked its tree once for every
+  directory level above each file — 62% of the command — and now walks each subtree once,
+  pruning ignored directories as it goes, which also stops a governed directory holding a
+  `node_modules` or `target/` being walked file by file. The duplicate-id, `malformed`,
+  `repeated-entry` and `--against` checks each read and parsed every document; they now share
+  one pass.
+
 ## [0.30.1] - 2026-10-16
 
 ### Fixed

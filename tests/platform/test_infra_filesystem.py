@@ -160,6 +160,37 @@ class TestMarkdownStore:
         assert any("adr-9999-bad.md" in path for path, _reason in store.find_malformed())
 
 
+class TestSurvey:
+    """`check` reads the corpus once through `survey`; it must answer what the three scans do."""
+
+    def test_it_answers_exactly_what_the_three_scans_answer(self, tmp_path) -> None:
+        store = MarkdownDocumentFileStore(tmp_path)
+        store.write(_doc())
+        # A second file claiming the same id — what a branch merge leaves behind.
+        (tmp_path / "decisions" / "adr-0001-copy.md").write_text(
+            markdown_format.render(_doc(title="Copy")), encoding="utf-8"
+        )
+        (tmp_path / "decisions" / "adr-9999-bad.md").write_text(_MALFORMED, encoding="utf-8")
+        (tmp_path / "decisions" / "adr-0003-repeats.md").write_text(
+            "---\nid: adr-0003\ntitle: Repeats\ndescription: d\ntype: decision\n"
+            "status: proposed\ncreated: 2026-01-01\nupdated: 2026-01-01\n"
+            "tags: [auth, auth]\nrelated: []\n---\n\nbody\n",
+            encoding="utf-8",
+        )
+
+        survey = store.survey()
+
+        assert survey.documents == tuple(store.scan())
+        assert survey.malformed == tuple(store.find_malformed())
+        assert survey.repeated == tuple(store.find_repeated_entries())
+        # Which items, not just that the two sides agree: an empty corpus agrees too.
+        assert sorted(d.id for d in survey.documents) == ["adr-0001", "adr-0001", "adr-0003"]
+        assert [path for path, _reason in survey.malformed] == ["decisions/adr-9999-bad.md"]
+        assert [(r.doc_id, dict(r.repeats)) for r in survey.repeated] == [
+            ("adr-0003", {"tags": ("auth",)})
+        ]
+
+
 class TestRelocate:
     """The paired write for a retype (adr-f8cce745d0d5)."""
 
@@ -253,6 +284,29 @@ class TestCodeFingerprint:
         assert matcher.fingerprint("src/auth/**") == first
         (tmp_path / "src" / "auth" / "login.py").write_text("edited\n", encoding="utf-8")
         assert matcher.fingerprint("src/auth/**") != first
+
+    def test_a_file_several_levels_down_still_moves_the_digest(self, tmp_path: Path) -> None:
+        # Each subtree is walked once and pruned as it goes; a walk that stopped
+        # descending would digest the top level and call the rest unchanged.
+        matcher = self._tree(tmp_path)
+        deep = tmp_path / "src" / "auth" / "providers" / "oidc" / "claims.py"
+        deep.parent.mkdir(parents=True)
+        deep.write_text("a\n", encoding="utf-8")
+        before = matcher.fingerprint("src/auth/**")
+        deep.write_text("edited\n", encoding="utf-8")
+        assert matcher.fingerprint("src/auth/**") != before
+
+    def test_a_sibling_sharing_a_name_prefix_is_its_own_subtree(self, tmp_path: Path) -> None:
+        # Everything under an expanded directory is skipped as already reached.
+        # `pkg2` is not under `pkg` — a prefix test without the separator says
+        # it is, and its files would silently leave the digest.
+        for name in ("pkg", "pkg2"):
+            (tmp_path / name).mkdir()
+            (tmp_path / name / "mod.py").write_text("a\n", encoding="utf-8")
+        matcher = RepositoryCodeMatcher(tmp_path)
+        before = matcher.fingerprint("pkg*")
+        (tmp_path / "pkg2" / "mod.py").write_text("edited\n", encoding="utf-8")
+        assert matcher.fingerprint("pkg*") != before
 
     def test_a_directory_glob_reaches_the_files_inside_it(self, tmp_path: Path) -> None:
         # `**` yields directories, not files. Without the expansion the most

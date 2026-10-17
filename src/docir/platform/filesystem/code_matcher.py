@@ -9,6 +9,7 @@ the matcher is optional at the seam rather than defaulting to "matches nothing".
 from __future__ import annotations
 
 import hashlib
+import os
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
@@ -187,16 +188,34 @@ class RepositoryCodeMatcher(CodeMatcher):
         The predicate is a parameter rather than a flag because it is also the
         pruning rule for the walk: a directory ``skip`` refuses is not descended
         into, so the pass that drops ignored files never enters an ignored
-        subtree.
+        subtree. That prunes nothing a per-file test would keep — a file under a
+        skipped directory is itself skipped, by the floor's path parts and by
+        `.gitignore`'s ancestors-first rule alike.
+
+        Each subtree is walked once. ``**`` yields every directory under its
+        root, and expanding each of them walked a file at depth *d* *d* times
+        and asked `.gitignore` about it as often — half of a warm `check` on this
+        repository. Yielded paths are taken shallowest first, so anything under a
+        directory already expanded is skipped: that expansion reached it through
+        the same ``skip``.
         """
         found: dict[str, Path] = {}
-        for path in self._root.glob(pattern):
-            if skip(path):
+        expanded: list[str] = []
+        for path in sorted(self._root.glob(pattern), key=lambda path: (len(path.parts), path)):
+            text = str(path)
+            if any(text.startswith(prefix) for prefix in expanded) or skip(path):
                 continue
-            candidates = (path,) if path.is_file() else path.rglob("*")
-            for candidate in candidates:
-                if candidate.is_file() and not skip(candidate):
-                    found[candidate.relative_to(self._root).as_posix()] = candidate
+            if path.is_file():
+                found[path.relative_to(self._root).as_posix()] = path
+                continue
+            expanded.append(text + os.sep)
+            for directory, subdirectories, files in os.walk(path):
+                base = Path(directory)
+                subdirectories[:] = [name for name in subdirectories if not skip(base / name)]
+                for name in files:
+                    candidate = base / name
+                    if candidate.is_file() and not skip(candidate):
+                        found[candidate.relative_to(self._root).as_posix()] = candidate
         return found
 
     def _generated(self, path: Path) -> bool:

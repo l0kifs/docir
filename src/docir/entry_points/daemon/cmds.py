@@ -9,7 +9,6 @@ from docir.entry_points.cli import rendering
 from docir.entry_points.cli.runner import get_state, run_local
 from docir.entry_points.daemon import lifecycle
 from docir.entry_points.daemon.release_watch import ReleaseWatcher
-from docir.entry_points.daemon.watcher import DocsWatcher
 from docir.platform.errors import DaemonError
 from docir.platform.transport.messages import SerializingExecutor
 from docir.platform.transport.server import DaemonServer
@@ -86,6 +85,10 @@ def stop() -> None:
 
 def _run_server(settings: Settings) -> None:
     from docir.entry_points.composition import InProcessExecutor, build_container
+
+    # Only the daemon watches: `watchfiles` and the `anyio` it pulls in cost
+    # every client command ~30ms of imports when this sat at module scope.
+    from docir.entry_points.daemon.watcher import DocsWatcher
 
     # Digest the schema *before* the container resolves it. Recording what the
     # file says after the load would stamp a schema this daemon may not be

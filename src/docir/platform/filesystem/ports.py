@@ -36,6 +36,20 @@ class RepeatedEntries:
         return "; ".join(f"{field}: {', '.join(values)}" for field, values in self.repeats.items())
 
 
+@dataclass(frozen=True, slots=True)
+class StoreSurvey:
+    """Every source file read once: what parsed, what did not, and what repeats.
+
+    The three file findings `check` reports — duplicate ids, `malformed`,
+    `repeated-entry` — each used to read and parse the whole corpus on its own,
+    which was four frontmatter parses per file on every `check`.
+    """
+
+    documents: tuple[Document, ...]
+    malformed: tuple[tuple[str, str], ...]
+    repeated: tuple[RepeatedEntries, ...]
+
+
 class DocumentFileStore(ABC):
     """Reads and writes the canonical ``docs/<type>s/<id>-<slug>.md`` files."""
 
@@ -110,6 +124,18 @@ class DocumentFileStore(ABC):
         are :meth:`find_malformed`'s to report, and are skipped here.
         """
         return []
+
+    def survey(self) -> StoreSurvey:
+        """:meth:`scan`, :meth:`find_malformed` and :meth:`find_repeated_entries` at once.
+
+        Defined by those three, which is the whole contract: a store overrides
+        it only to answer in one pass, never to answer differently.
+        """
+        return StoreSurvey(
+            documents=tuple(self.scan()),
+            malformed=tuple(self.find_malformed()),
+            repeated=tuple(self.find_repeated_entries()),
+        )
 
 
 class FileHistory(ABC):

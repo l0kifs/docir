@@ -8,7 +8,7 @@ synchronous embedding recompute.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from docir.modules.documents.application.services.index_rebuilder import (
@@ -37,6 +37,7 @@ from docir.platform.filesystem.ports import (
     CodeMatcher,
     DocumentFileStore,
     FileHistory,
+    RepeatedEntries,
     TagFileStore,
 )
 from docir.platform.filesystem.schema_store import YamlSchemaFileStore
@@ -237,10 +238,13 @@ class MaintenanceService:
         )
         issues.extend(self._unbuilt_index_issue())
         issues.extend(self._unresolved_code_issue(documents))
-        issues.extend(self._find_duplicate_ids())
-        issues.extend(self._find_repeated_entries())
-        issues.extend(self._find_branch_id_collisions(against))
-        issues.extend(self._find_malformed())
+        # The file half: one read of the corpus answers all four, where each
+        # used to read and parse every file itself.
+        survey = self._file_store.survey()
+        issues.extend(self._find_duplicate_ids(survey.documents))
+        issues.extend(self._find_repeated_entries(survey.repeated))
+        issues.extend(self._find_branch_id_collisions(against, survey.documents))
+        issues.extend(self._find_malformed(survey.malformed))
         issues.extend(self._drift_issues())
         issues.extend(self._format_issues())
         issues.extend(self._build_issues())
@@ -530,14 +534,13 @@ class MaintenanceService:
                 digests[pattern] = digest
         return digests
 
-    def _find_malformed(self) -> list[CheckIssue]:
+    def _find_malformed(self, malformed: Sequence[tuple[str, str]]) -> list[CheckIssue]:
         """Report source files that do not parse (skipped by reindex/scan)."""
         return [
-            CheckIssue(kind="malformed", message=reason, doc_ids=())
-            for _path, reason in self._file_store.find_malformed()
+            CheckIssue(kind="malformed", message=reason, doc_ids=()) for _path, reason in malformed
         ]
 
-    def _find_repeated_entries(self) -> list[CheckIssue]:
+    def _find_repeated_entries(self, repeated: Sequence[RepeatedEntries]) -> list[CheckIssue]:
         """Files naming one tag, glob or edge twice, which every read holds once.
 
         A warning: nothing is lost, and the document reads, indexes and takes
@@ -554,10 +557,12 @@ class MaintenanceService:
                 ),
                 doc_ids=(found.doc_id,),
             )
-            for found in self._file_store.find_repeated_entries()
+            for found in repeated
         ]
 
-    def _find_branch_id_collisions(self, against: str | None) -> list[CheckIssue]:
+    def _find_branch_id_collisions(
+        self, against: str | None, documents: Sequence[Document]
+    ) -> list[CheckIssue]:
         """Ids this branch allocated that a base ref already uses.
 
         Only files **new on this branch** are compared. A document present at
@@ -616,7 +621,7 @@ class MaintenanceService:
                 )
             ]
         issues: list[CheckIssue] = []
-        for document in sorted(self._file_store.scan(), key=lambda doc: doc.id):
+        for document in sorted(documents, key=lambda doc: doc.id):
             path = document.path or ""
             if path in theirs.values():
                 continue
@@ -637,9 +642,9 @@ class MaintenanceService:
             )
         return issues
 
-    def _find_duplicate_ids(self) -> list[CheckIssue]:
+    def _find_duplicate_ids(self, documents: Sequence[Document]) -> list[CheckIssue]:
         paths_by_id: dict[str, list[str]] = {}
-        for document in self._file_store.scan():
+        for document in documents:
             paths_by_id.setdefault(document.id, []).append(document.path or "?")
         issues: list[CheckIssue] = []
         for doc_id, paths in sorted(paths_by_id.items()):

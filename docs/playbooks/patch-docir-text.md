@@ -18,5 +18,6 @@ Exit 0 prints `{"id": ..., "updated": ..., "verified": ..., "revoked": ...}`; an
 - In section mode the heading line is stripped before matching, so never put `## Heading` in a pair; in body mode you may, which is how a heading is renamed.
 - Section mode resolves a repeated heading to the first one; use body mode for the second.
 - Editing a verified document withdraws its stamp and records `revoked` — intended, the review covered the old text. A `--set-code`, `--verified` or any other flag on the same write also moves `updated`, so expect two frontmatter lines in the diff.
+- A body edit that *lengthens* a document over its type's `max_body_chars` is refused (exit 9); one that keeps it the same length or shorter still lands. A `docir update` run separately with metadata flags lands either way and withdraws the stamp: keep those after `--` in the same write, so a refusal leaves nothing half-applied.
 - `old` in a table row is safest as the cell plus its `|` delimiters, since a bare number or path may occur elsewhere.
 - Runs `uv run docir`, so it needs the repo environment (`uv sync`) and the store the CWD resolves to.

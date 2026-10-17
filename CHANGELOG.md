@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Every command starts ~90ms sooner** (issue-9509f9fa3631). The client imported the docs
+  watcher (`watchfiles`, `anyio`) and the site builder (`markdown_it`) for every command,
+  though only `daemon serve` and `build` use them; both now load inside those commands.
+  `docir version` loads 570 modules instead of 704, and its p50 went 0.574s -> 0.486s
+  (interleaved against 0.30.1's source, 25 pairs). `tests/entry_points/test_cli_import_graph.py`
+  fails if any of them reaches the client again.
+- **`context` scores its vectors ~8x faster.** `Embedding.cosine_similarity` runs on
+  `math.sumprod` instead of generator sums: over this repository's 1,947 vectors the scan went
+  ~60ms -> ~7ms, a warm `context` dispatch 94ms -> 46ms, and `lint --deep` — which compares
+  document vectors the same way — 2.09s -> 1.12s. No new dependency.
+
+### Measured and rejected
+
+- **numpy for the vector scan.** Building its matrix from the decoded vectors costs 13ms, which
+  leaves it slower than `sumprod` end to end. It wins only by reading the stored bytes directly,
+  which changes the repository port to save ~20ms that process start hides.
+
 ## [0.30.1] - 2026-10-16
 
 ### Fixed

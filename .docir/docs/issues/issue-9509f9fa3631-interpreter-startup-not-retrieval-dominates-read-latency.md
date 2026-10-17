@@ -2,19 +2,24 @@
 code:
 - benchmarks/latency.py
 - src/docir/entry_points/cli/**
+- src/docir/entry_points/daemon/cmds.py
+- tests/entry_points/test_cli_import_graph.py
 code_baseline:
   benchmarks/latency.py: 492ab63bc432
   src/docir/entry_points/cli/**: 8b97a450d4c1
+  src/docir/entry_points/daemon/cmds.py: 22bb79cde96e
+  tests/entry_points/test_cli_import_graph.py: 6e2efd676827
 created: '2026-08-14'
-description: 'Startup still dominates after the SQLAlchemy fix: ~0.49s of a 0.53s
-  warm-daemon read is process start and imports. What remains is pydantic-settings
-  (~97ms) and docir''s own 130 modules.'
+description: 'Startup, not retrieval, dominates a warm-daemon read: ~0.49s of docir
+  version is process start, and with SQLAlchemy, the docs watcher and the site builder
+  deferred, what is left is pydantic-settings and the documents.api graph.'
 id: issue-9509f9fa3631
 owner: maintainer
 related:
 - adr-ab9c454b760c
 - adr-fe7c91f61f32
 - arch-1cfb1b212237
+revoked: '2026-10-17'
 status: open
 tags:
 - cli
@@ -22,12 +27,10 @@ tags:
 - material
 title: Interpreter startup, not retrieval, dominates read latency
 type: issue
-updated: '2026-09-22'
-verified: '2026-09-22'
+updated: '2026-10-17'
 verified_code:
   benchmarks/latency.py: 492ab63bc432
   src/docir/entry_points/cli/**: 8b97a450d4c1
-verified_content: 307b540da181
 ---
 
 ## What was measured
@@ -70,57 +73,22 @@ carrying into other decisions:
 
 ## What to try
 
-Profile first: `python -X importtime -m docir version` names the expensive imports. The
-known candidates are Typer/rich at module scope in `entry_points/cli`, and anything the
-CLI imports eagerly that only one command needs — `fastmcp` is already lazy in
-`mcp/cmds.py` for exactly this reason, and that is the pattern to copy.
+Profile first: `python -X importtime -m docir version` names the expensive imports, and
+anything the CLI imports eagerly that only one command needs is the pattern to fix —
+`fastmcp` in `mcp/cmds.py` was the first, and the watcher and the site builder followed.
+Time a change with the interleaved A/B in `docs/playbooks/ab-time-a-startup-change.md`:
+`benchmarks/latency.py` cannot resolve anything under ~0.15s. Two candidates were measured
+and reverted, and [[ref-71c621c5532f]] has the numbers and the reasons — read it before retrying one.
 
 ## What not to conclude
 
 That the semantic scan is fine forever. `context` is the one command that grows with the
 corpus, and it grows in *vectors* rather than documents (10 000 at 2 000 documents, since
-every `##` section is embedded, adr-927aa43d9635): warm p50 moves 0.86 -> 1.42 across the
-sweep. Past a few thousand documents that scan, not the startup cost, becomes the number
-to attack.
-
-## Profile — where the 0.8s goes
-
-`python -X importtime -m docir version` loads **925 modules**. Attributing self-time to the
-top-level package, the same three lead every run: `sqlalchemy` (145 modules, 156-419 ms),
-`docir` itself (134 modules), `alembic` (50 modules, 47-240 ms), then `rich` + `pygments` +
-`markdown_it` (150 modules together) and `pydantic`/`pydantic_settings`.
-
-None of that is needed to print a version, and — the point — **none of it is needed to run a
-command against a warm daemon**, where the CLI is a socket client. The chain that pulls it in
-is module-scope: `cli/app.py` -> `cli/runner.py` -> `entry_points/composition.py`, which
-imports `sqlalchemy` and the whole in-process object graph at line 18; `cli/rendering.py`
-imports `rich.console`/`panel`/`table` at line 17.
-
-Measured with the venv interpreter, minimum of 7 runs (the minimum is the stable statistic
-here; medians on this laptop wander by 300 ms):
-
-| what is imported | min |
-|---|---|
-| bare interpreter | 39 ms |
-| `typer` only | 100 ms |
-| `typer` + settings + transport + payload (a socket-only client) | 147 ms |
-| the same, but with `rich` (today's `rendering`) | 339 ms |
-| `docir.entry_points.cli.app` (today) | 952 ms |
-
-So a daemon-mode client that imported only what it uses would start in ~150-340 ms against
-~950 ms today. Two candidate changes, in order of return:
-
-1. **`runner.py` should not import `composition` at module scope.** `Container`,
-   `build_in_process_executor` and `peer_status` are needed only on the in-process path;
-   moving them inside the functions that use them (types under `TYPE_CHECKING`, which
-   already works — the module has `from __future__ import annotations`) keeps `sqlalchemy`
-   and `alembic` out of every daemon-mode command.
-2. **`rendering.py` should import `rich` inside the human-output path.** Captured stdout
-   takes the JSON path, which needs `json` and `payload.trim` and nothing else; `rich` and
-   its `pygments`/`markdown_it` dependencies cost ~190 ms that an agent never uses.
-
-Neither changes behaviour, and `--no-daemon` still pays the full cost — correctly, since it
-does build the container.
+every `##` section is embedded, adr-927aa43d9635): warm p50 moved 0.86 -> 1.42 across the
+sweep. `Embedding.cosine_similarity` now runs on `math.sumprod` rather than generator sums,
+which cut the scan over this repo's 1,947 vectors from ~60ms to ~7ms and a warm `context`
+dispatch from 94ms to 46ms. The scan is still linear, only eight times cheaper per vector:
+past tens of thousands of vectors it, not the startup cost, is the number to attack.
 
 ## Fixed: the SQLAlchemy chain
 
@@ -146,67 +114,19 @@ A warm read is ~0.33s cheaper — about 38%. `--no-daemon` is unchanged, which i
 the change is correct rather than lucky: that mode does build a container, so it still pays for
 SQLAlchemy, and only the modes that never needed it stopped paying.
 
-## The `rich` half was measured and rejected
+## Fixed: the watcher and site-builder imports
 
-The obvious companion change — defer `rich` out of `cli/rendering.py`, since the JSON path never
-renders a table — moves ~10ms. In a warm process `import docir.entry_points.cli.rendering` costs
-about 2ms more than `docir.entry_points.payload` alone, and `typer` does not pull `rich` in on its
-own (checked: zero rich modules after `from typer.main import get_command`), so there is no large
-transitive graph hiding behind it. Against 30 call sites and the `conftest` console-width pinning
-that would have to move to a `COLUMNS` env var, it is not worth the churn. Do not retry it without
-a fresh measurement.
+`daemon/cmds.py` imported `DocsWatcher` at module scope, and with it `watchfiles` and
+`anyio`; `cli/app.py` imported `publishing.api`, and with it `markdown_it` and the page
+templates. Only `daemon serve` and `build` use them, so both imports moved inside those
+functions. `docir version` loads 570 modules instead of 704, and
+`tests/entry_points/test_cli_import_graph.py` fails if any of the four packages reaches the
+client again (checked by re-hoisting each import).
 
-## What is left
-
-The floor is now `pydantic` + `pydantic_settings` (~276ms, from `config/settings.py`, needed by
-every command) and docir's own 130 modules (~190ms). Removing pydantic-settings from `Settings` is
-a design change, not a lazy import, and it should be prototyped and measured before it is chosen.
-
-## Candidate 1 was measured and rejected
-
-Deferring `composition` out of `cli/runner.py` module scope moves nothing on its own, and
-the reason is `cli/app.py`: it imports `composition` at module scope too, for `init` /
-`schema validate` / `self upgrade`, and `DEFAULT_INIT_ID_STYLE` is a Typer parameter
-default — evaluated at import, so no lazy import reaches it.
-
-Both halves were applied together (the constant inlined to make the experiment run), then
-reverted. Same machine and docir 0.13.1; the floor reproduced at 0.53 against the 0.49
-recorded on 2026-08-14.
-
-| measure | before | after |
-|---|---|---|
-| `import docir.entry_points.cli.app`, min of 9 | 416 ms | 375 ms |
-| modules loaded by `docir version` | 657 | 646 |
-
-`benchmarks/latency.py --sizes 25 --samples 15`, p50 seconds:
-
-| command | mode | before | after |
-|---|---|---|---|
-| `context` | warm daemon | 0.515 | 0.551 |
-| `search` | warm daemon | 0.538 | 0.568 |
-| `get` | warm daemon | 0.536 | 0.561 |
-| `version` | floor | 0.539 | 0.530 |
-
-Every warm p50 moved *up*, inside the ~0.15s this benchmark already documents as noise.
-The ~40 ms is real, and only visible at import scope.
-
-## Why candidate 1 is spent
-
-`composition`'s expensive imports are `documents.api`, `tags.api` and `agents.api` — and
-`app.py` imports those *directly*, for its Typer defaults (`ID_STYLES`, `PROFILE_NAMES`,
-`AGENT_NAMES`, `DEFAULT_TAG_PAGE`, `DEFAULT_CONTEXT_EXPAND`). Those are evaluated when the
-command tree is built, so they cannot be deferred without moving the constants. Deferring
-`composition` therefore drops ~10 modules, not a graph: the SQLAlchemy fix above already
-took everything this candidate was pointing at, and what was left of it is docir's own
-modules under a different name.
-
-Keeping the change would also mean relocating `DEFAULT_INIT_ID_STYLE` out of
-`composition` — a public name, so a `CONTRACT.md` change — to buy ~40 ms that no
-end-to-end measurement can see. Same verdict and the same rule as the `rich` half: do not
-retry without a fresh measurement.
-
-This does not touch **What is left**: `pydantic-settings` and docir's own ~130 modules are
-still the floor, and still the only remaining candidates.
+Interleaved A/B against a HEAD worktree, same interpreter, 25 pairs, p50 (min):
+`docir version` 0.574s (0.517) -> 0.486s (0.389); `import docir.entry_points.cli.app`
+0.553s (0.484) -> 0.459s (0.392). `benchmarks/latency.py --sizes 25 --samples 9` could not
+see it: its warm rows moved +0.03-0.05s and its floor -0.11s, inside its ~0.15s noise.
 
 ## Batching removes it four times out of five
 
@@ -240,3 +160,17 @@ with the document object rather than an envelope.
 Over MCP the process cost is already amortised — the server is long-lived — and
 the win is a different one: five tool calls are five model turns, and one is
 one.
+
+## What is left
+
+The floor is `pydantic` + `pydantic_settings` (~65ms self time, from `config/settings.py`,
+needed by every command) and the `documents.api` graph (~87ms cumulative), which the client
+reaches through `cli/app.py`'s Typer defaults — the chain
+[[ref-71c621c5532f#Why candidate 1 is spent]] traces. A socket-only client (`typer` + settings +
+transport) imports in ~0.16s against ~0.46s for `cli.app`, interpreter included: that gap is
+what is left to win.
+
+Both remaining candidates are design changes, not lazy imports: removing pydantic-settings
+from `Settings`, or moving the Typer-default constants out of `documents.api`, `tags.api` and
+`agents.api` so the command tree builds without importing the aggregates — a `CONTRACT.md`
+change in each module. Prototype either and measure it before choosing it.

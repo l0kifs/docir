@@ -13,4 +13,5 @@ The index below is generated from each playbook's `**When:**` line by that skill
 - [Patch a sentence in a docir document](patch-docir-text.md) — a docir document is wrong in one place and the fix is `--replace-section` or `--replace-body`, which take the whole text back.
 - [Prove a guard by injecting the bug it claims to catch](prove-guard-by-injection.md) — you wrote or changed a test that guards a behaviour or a piece of prose and CLAUDE.md's rule applies: a test that has never failed has not been shown to work.
 - [Re-point code citations an edit shifted](repoint-shifted-code-citations.md) — `test_code_citations.py` fails with "names `X`, but line N is in `Y`" after you added or removed lines in a cited source file.
+- [Test-merge two open branches before either lands](test-merge-open-branches.md) — two open PRs touch the same files and you need to know they merge, and pass, together before the first one lands.
 <!-- index:end -->

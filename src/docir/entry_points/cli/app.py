@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import typer
 from typer.main import get_command
@@ -42,8 +42,10 @@ from docir.modules.documents.api import (
     ID_STYLES,
     PROFILE_NAMES,
 )
-from docir.modules.publishing.api import PublishRequest, PublishResult, build_site_builder
 from docir.platform.errors import ValidationError
+
+if TYPE_CHECKING:
+    from docir.modules.publishing.api import PublishResult
 
 #: How many documents one `build` enumerates. `query` pages, and a site build
 #: wants the whole corpus rather than a page of it — high enough that no real
@@ -249,6 +251,10 @@ def build(
     An .mjs runtime is refused with that URL in the message, rather than copied
     into a page whose script never runs.
     """
+    # Only `build` renders a site: `markdown_it` and the page templates cost
+    # every other command ~50ms of imports when this sat at module scope.
+    from docir.modules.publishing.api import PublishRequest, build_site_builder
+
     emit.warn_on_global_fallback()
     state = get_state()
     # Local only, explicitly: a site is a projection of *one* repository's

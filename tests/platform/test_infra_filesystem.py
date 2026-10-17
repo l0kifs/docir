@@ -353,6 +353,20 @@ class TestTheRepositorysOwnIgnoreFiles:
 
         assert RepositoryCodeMatcher(tmp_path).fingerprint("src/**") == before
 
+    def test_the_same_matcher_reads_an_edited_ignore_file(self, tmp_path: Path) -> None:
+        # Every other test here asks a *fresh* matcher the second question,
+        # which is how one that read `.gitignore` once and kept it passed them
+        # all while the daemon — one matcher for its whole life — answered from
+        # rules somebody had since changed (issue-3a505835cd7e).
+        matcher = self._repo(tmp_path, "")
+        before = matcher.fingerprint("src/**")
+
+        (tmp_path / ".gitignore").write_text("bin/\n", encoding="utf-8")
+
+        after = matcher.fingerprint("src/**")
+        assert after != before
+        assert after == RepositoryCodeMatcher(tmp_path).fingerprint("src/**")
+
     def test_an_edit_to_tracked_source_still_does(self, tmp_path: Path) -> None:
         # The half that makes the test above mean something: a matcher that
         # ignored everything would pass it and detect nothing.

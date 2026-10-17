@@ -541,6 +541,29 @@ class TestCodeBaseline:
         finally:
             container.close()
 
+    def test_a_gitignore_edit_reaches_the_next_check_of_the_same_container(
+        self, settings: Settings, tmp_path: Path
+    ) -> None:
+        # The daemon builds one container and keeps it, and its matcher read
+        # `.gitignore` once: an edit went unseen by every later `check` until the
+        # daemon was replaced, while `--no-daemon` on the same tree reported it
+        # (issue-3a505835cd7e). This container stands in for the daemon's.
+        (tmp_path / "src" / "gen").mkdir(parents=True)
+        (tmp_path / "src" / "main.py").write_text("print(1)\n", encoding="utf-8")
+        (tmp_path / "src" / "gen" / "out.txt").write_text("generated\n", encoding="utf-8")
+        container = _repo_dispatcher(settings, tmp_path)
+        try:
+            docs = container.dispatcher
+            doc_id = self._governing(docs, "src/**")
+            assert not self._drifted(docs)
+
+            # The repository now calls `src/gen/` build output: the files the
+            # glob governs changed, which is what a fresh process reports.
+            (tmp_path / ".gitignore").write_text("src/gen/\n", encoding="utf-8")
+            assert [i["doc_ids"] for i in self._drifted(docs)] == [(doc_id,)]
+        finally:
+            container.close()
+
     def test_a_pattern_that_was_verified_is_reported_once_and_as_code_changed(
         self, settings: Settings, tmp_path: Path
     ) -> None:

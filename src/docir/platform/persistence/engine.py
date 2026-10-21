@@ -17,8 +17,9 @@ from typing import Any
 from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
-from sqlalchemy import Engine, create_engine, event
+from sqlalchemy import Connection, Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from docir.platform.errors import UnknownIndexRevisionError
 
@@ -31,6 +32,13 @@ _ALEMBIC_DIR = Path(__file__).resolve().parent / "alembic"
 #: instead of simply waiting its turn. Matches pysqlite's own default, set
 #: explicitly so it is a decision rather than an inherited accident.
 _BUSY_TIMEOUT_MS = 5000
+
+#: How long :func:`begin_immediate` waits for the write lock. Not
+#: `_BUSY_TIMEOUT_MS`: what holds the lock then is usually another process's
+#: rebuild, which takes as long as the corpus is big (~20s at 2,000 documents),
+#: and the waiter needs exactly what that rebuild is producing. Finite, so a
+#: process stopped while holding the lock is an error rather than a hang.
+_LOCK_WAIT_MS = 300_000
 
 
 def create_index_engine(database_url: str) -> Engine:
@@ -45,6 +53,21 @@ def create_index_engine(database_url: str) -> Engine:
         cursor.close()
 
     return engine
+
+
+def begin_immediate(connection: Connection) -> None:
+    """Open the transaction holding the write lock, before anything is read.
+
+    pysqlite opens a transaction lazily, at the first write, so whatever was
+    read before it may be older than what another process has committed since.
+    Waits up to `_LOCK_WAIT_MS` for the lock, then puts the ordinary busy
+    timeout back for the statements that follow.
+    """
+    connection.exec_driver_sql(f"PRAGMA busy_timeout={_LOCK_WAIT_MS}")
+    try:
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
+    finally:
+        connection.exec_driver_sql(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
 
 
 def create_session_factory(engine: Engine) -> sessionmaker[Session]:
@@ -67,6 +90,10 @@ def run_migrations(database_url: str) -> None:
     The condition is already detectable: :func:`known_revisions` and
     :func:`index_revision` exist for the federation peer check, which asks this
     exact question of *someone else's* store and never asked it of this one.
+
+    An index already at head is left alone without taking a lock, because that
+    is every open but the first. Anything else is upgraded under the write lock
+    (:func:`_upgrade_under_lock`).
     """
     db_path = _database_path(database_url)
     recorded = index_revision(db_path)
@@ -78,7 +105,34 @@ def run_migrations(database_url: str) -> None:
             "with `docir reindex` after deleting it (the newer build will migrate it "
             "again the next time it runs)"
         )
-    command.upgrade(_alembic_config(database_url), "head")
+    if recorded == head_revision():
+        return
+    _upgrade_under_lock(database_url)
+
+
+def _upgrade_under_lock(database_url: str) -> None:
+    """Run the migrations inside one transaction that holds the write lock.
+
+    pysqlite runs DDL outside a transaction, so two processes opening the same
+    fresh index — two first commands in a new `git worktree` — each read "no
+    version table" and each created the tables: the slower one failed with
+    ``table alembic_version already exists`` or ``table documents already
+    exists`` (GitHub #42). ``BEGIN IMMEDIATE`` makes the second wait for the
+    first to commit and then find the index at head, where Alembic does nothing.
+
+    Not :func:`create_index_engine`: foreign keys stay off here, as they always
+    were for migrations, because a migration that rebuilds a table drops the old
+    one, and with them on the drop cascades into every row that references it.
+    """
+    engine = create_engine(database_url, poolclass=NullPool, future=True)
+    try:
+        with engine.connect() as connection, connection.begin():
+            begin_immediate(connection)
+            config = _alembic_config(database_url)
+            config.attributes["connection"] = connection
+            command.upgrade(config, "head")
+    finally:
+        engine.dispose()
 
 
 def _database_path(database_url: str) -> Path:

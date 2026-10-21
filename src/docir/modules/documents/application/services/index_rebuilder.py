@@ -27,6 +27,23 @@ from docir.platform.persistence.unit_of_work import UnitOfWork
 UnitOfWorkFactory = Callable[[], UnitOfWork]
 
 
+def index_is_empty(*, documents: int, documents_on_disk: int) -> bool:
+    """Whether the index holds nothing while the files hold documents.
+
+    One function because two reporters answer with it and must not disagree:
+    `check` raises it as an `empty-index` error, and `docir doctor` reads the
+    same pair out of :class:`StoreStatus`. Two copies of a two-term comparison
+    is exactly the drift `validation.is_absent` exists to prevent, one size
+    down. It lives here because :meth:`IndexRebuilder.bootstrap` is the one
+    caller that acts on it.
+
+    An empty *store* — freshly ``docir init``-ed, nothing written yet — has no
+    files either, so the two agree at zero and this is ``False``. The condition
+    is specifically "there are documents and the projection of them is blank".
+    """
+    return documents == 0 and documents_on_disk > 0
+
+
 @dataclass(frozen=True, slots=True)
 class ReindexResult:
     """Summary of a reindex run.
@@ -112,12 +129,13 @@ class IndexRebuilder:
             vectors_written=drained.vectors,
         )
 
-    def bootstrap(self) -> ReindexResult:
-        """Rebuild the index, leaving the vectors to the queue.
+    def bootstrap(self) -> ReindexResult | None:
+        """Rebuild an empty index, leaving the vectors to the queue.
 
         :meth:`reindex` without the drain, for the one state where a store has
         files and no projection of them at all — a fresh clone, a new `git
-        worktree`. It is what makes that state recoverable without a command,
+        worktree`. ``None`` means the index was not empty, which is every open
+        but the first. It is what makes that state recoverable without a command,
         so it has to cost what a command would not be worth: measured on this
         repository's 191 documents, the rebuild is ~0.9s while the drain that
         follows it in `reindex` is ~70s, because the drain loads the embedding
@@ -138,8 +156,22 @@ class IndexRebuilder:
         this does the whole rebuild — both stamps included, so `check` does not
         immediately report drift against a store docir has just built — and
         defers only the vectors.
+
+        Emptiness is asked twice. The first time is unlocked, so an index that
+        exists costs an open a count and no write lock. Only the second answer,
+        given under the lock, decides. Two first commands in a fresh worktree
+        both see "empty" before either commits, and the one that loses the lock
+        must find the index built rather than rebuild it (GitHub #42).
         """
-        indexed, removed, tags_indexed = self._rebuild(changed_only=False)
+        with self._uow_factory() as uow:
+            documents = uow.documents.count()
+        if not index_is_empty(documents=documents, documents_on_disk=self._file_store.count()):
+            return None
+        with self._uow_factory() as uow:
+            uow.lock()
+            if uow.documents.count():
+                return None
+            indexed, removed, tags_indexed = self._rebuild_in(uow, changed_only=False)
         return ReindexResult(
             documents_indexed=indexed,
             documents_removed=removed,
@@ -150,27 +182,33 @@ class IndexRebuilder:
         )
 
     def _rebuild(self, *, changed_only: bool) -> tuple[int, int, int]:
+        with self._uow_factory() as uow:
+            uow.lock()
+            return self._rebuild_in(uow, changed_only=changed_only)
+
+    def _rebuild_in(self, uow: UnitOfWork, *, changed_only: bool) -> tuple[int, int, int]:
         """The transaction both rebuild paths share, without the drain.
 
         One writer for the two stamps, so a rebuild that defers its vectors
         cannot also forget to record which schema and which build produced the
-        rows it wrote.
+        rows it wrote. The caller holds the write lock: a rebuild compares the
+        rows it reads with the files and writes the difference, so a read taken
+        before another process's commit writes a stale difference.
         """
-        with self._uow_factory() as uow:
-            tags_indexed = self._reindex_tags(uow)
-            indexed, removed = self._reindex_documents(uow, changed_only=changed_only)
-            # The schema baseline advances here and nowhere else. `reindex` is
-            # already the "make the derived state agree with the sources"
-            # command, and the baseline is derived state; giving drift its own
-            # acknowledge verb would add a ritual whose only effect is to
-            # silence a report (the argument adr-bd7c4f3c5764 makes about
-            # staleness). Until it is run, `check` keeps naming the change.
-            uow.schema_baseline.set(schema_shape.describe(self._schema))
-            # Same writer, same argument, a different question: the baseline
-            # compares schemas and so cannot see a release that changed how
-            # documents are read rather than what they must contain.
-            uow.index_build.set(self._version)
-            uow.commit()
+        tags_indexed = self._reindex_tags(uow)
+        indexed, removed = self._reindex_documents(uow, changed_only=changed_only)
+        # The schema baseline advances here and nowhere else. `reindex` is
+        # already the "make the derived state agree with the sources"
+        # command, and the baseline is derived state; giving drift its own
+        # acknowledge verb would add a ritual whose only effect is to
+        # silence a report (the argument adr-bd7c4f3c5764 makes about
+        # staleness). Until it is run, `check` keeps naming the change.
+        uow.schema_baseline.set(schema_shape.describe(self._schema))
+        # Same writer, same argument, a different question: the baseline
+        # compares schemas and so cannot see a release that changed how
+        # documents are read rather than what they must contain.
+        uow.index_build.set(self._version)
+        uow.commit()
         return indexed, removed, tags_indexed
 
     def resync(self) -> ReindexResult:

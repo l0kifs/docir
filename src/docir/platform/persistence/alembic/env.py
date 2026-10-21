@@ -29,6 +29,14 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
+    # `run_migrations` hands over a connection already holding the write lock;
+    # the transaction is its to commit, so Alembic runs inside it.
+    connection = config.attributes.get("connection")
+    if connection is not None:
+        context.configure(connection=connection, target_metadata=target_metadata)
+        with context.begin_transaction():
+            context.run_migrations()
+        return
     url = config.get_main_option("sqlalchemy.url")
     assert url is not None
     connectable = create_engine(url, poolclass=pool.NullPool, future=True)

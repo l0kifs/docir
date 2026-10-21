@@ -51,6 +51,18 @@ class UnitOfWork(ABC):
             self.rollback()  # no-op if already committed; discards uncommitted work
 
     @abstractmethod
+    def lock(self) -> None:
+        """Take the store's write lock now, before anything is read.
+
+        For a unit of work that overwrites what it reads, like a rebuild. Left
+        to the first write, the lock arrives after the reads, and another
+        process can commit in between. Two first commands in a fresh worktree
+        did exactly that: the loser read an empty tag table, waited on the lock,
+        then inserted rows the winner had just committed (GitHub #42). Call it
+        first or not at all; commit and rollback release it.
+        """
+
+    @abstractmethod
     def commit(self) -> None:
         """Flush and durably persist everything staged in this unit of work."""
 

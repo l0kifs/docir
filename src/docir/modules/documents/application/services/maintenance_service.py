@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from docir.modules.documents.application.services.index_rebuilder import (
     IndexRebuilder,
     ReindexResult,
+    index_is_empty,
 )
 from docir.modules.documents.application.services.store_repairer import (
     RepairAction,
@@ -44,22 +45,6 @@ from docir.platform.filesystem.schema_store import YamlSchemaFileStore
 from docir.platform.persistence.unit_of_work import UnitOfWork
 
 UnitOfWorkFactory = Callable[[], UnitOfWork]
-
-
-def index_is_empty(*, documents: int, documents_on_disk: int) -> bool:
-    """Whether the index holds nothing while the files hold documents.
-
-    One function because two reporters answer with it and must not disagree:
-    `check` raises it as an `empty-index` error, and `docir doctor` reads the
-    same pair out of :class:`StoreStatus`. Two copies of a two-term comparison
-    is exactly the drift `validation.is_absent` exists to prevent, one size
-    down.
-
-    An empty *store* — freshly ``docir init``-ed, nothing written yet — has no
-    files either, so the two agree at zero and this is ``False``. The condition
-    is specifically "there are documents and the projection of them is blank".
-    """
-    return documents == 0 and documents_on_disk > 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,8 +170,8 @@ class MaintenanceService:
         """Rebuild the index from the canonical files (``docir reindex``)."""
         return self._rebuilder.reindex(changed_only=changed_only)
 
-    def bootstrap(self) -> ReindexResult:
-        """Rebuild the index, leaving the vectors to the queue."""
+    def bootstrap(self) -> ReindexResult | None:
+        """Rebuild an empty index, leaving the vectors to the queue."""
         return self._rebuilder.bootstrap()
 
     def resync(self) -> ReindexResult:

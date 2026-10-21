@@ -256,6 +256,8 @@ enough to stop a wrong edit and never enough to argue with.
   migration `0001`, not an ORM model.
 - SQLite foreign keys are enabled **per-connection** by a `PRAGMA` listener; a raw connection
   without it orphans rows.
+- A rebuild and a migration take the write lock **before** they read, and decide only on what
+  they read under it; an index already at head opens with no lock at all.
 
 ### The daemon and the transport — [`.claude/rules/daemon-transport.md`](.claude/rules/daemon-transport.md)
 

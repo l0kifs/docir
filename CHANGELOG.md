@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.4] - 2026-10-21
+
 ### Fixed
 
 - **Two first commands in a fresh clone or worktree both answer** (issue-308e5207c77b,
@@ -3045,7 +3047,8 @@ truth, the index is a rebuildable compile artifact.
 - **Modular DDD architecture** — vertical bounded-context modules (`documents`, `tags`,
   `indexing`, `agents`) over a shared `platform`, with boundaries enforced by `tach` in CI.
 
-[Unreleased]: https://github.com/l0kifs/docir/compare/v0.30.3...HEAD
+[Unreleased]: https://github.com/l0kifs/docir/compare/v0.30.4...HEAD
+[0.30.4]: https://github.com/l0kifs/docir/compare/v0.30.3...v0.30.4
 [0.30.3]: https://github.com/l0kifs/docir/compare/v0.30.2...v0.30.3
 [0.30.2]: https://github.com/l0kifs/docir/compare/v0.30.1...v0.30.2
 [0.30.1]: https://github.com/l0kifs/docir/compare/v0.30.0...v0.30.1

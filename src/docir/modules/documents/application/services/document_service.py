@@ -31,7 +31,7 @@ from docir.modules.documents.application.services.document_patch import (
 )
 from docir.modules.documents.application.services.document_saving import save_with_mentions
 from docir.modules.documents.application.services.id_generator import IdGenerator
-from docir.modules.documents.application.services.maintenance_service import index_is_empty
+from docir.modules.documents.application.services.index_rebuilder import index_is_empty
 from docir.modules.documents.application.services.retrieval_bench import RetrievalBench
 from docir.modules.documents.domain.entities.document import Document
 from docir.modules.documents.domain.schema import SEQUENTIAL_ID_STYLE, Schema

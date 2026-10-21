@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import sqlite3
+import threading
+import time
 from collections.abc import Callable
 from contextlib import closing
 
@@ -13,12 +15,15 @@ from docir import __version__
 from docir.config.settings import Settings
 from docir.entry_points.composition import Container, build_container
 from docir.entry_points.dispatch import Dispatcher
+from docir.modules.documents.application.services import index_rebuilder
 from docir.platform.errors import (
     DocumentNotFoundError,
     MissingRequiredFieldError,
     UnknownRelationKindError,
     ValidationError,
 )
+from docir.platform.persistence.engine import run_migrations
+from docir.platform.persistence.sqlalchemy_uow import SqlAlchemyUnitOfWork
 from docir.platform.persistence.unit_of_work import UnitOfWork
 
 # Valid YAML, but `created`/`updated` are not ISO dates — a hand-edit/foreign file.
@@ -1361,6 +1366,106 @@ class TestOpeningAStoreWithNoIndexBuildsOne:
             assert first.bootstrapped is not None
         with closing(build_container(settings, background_embeddings=False)) as second:
             assert second.bootstrapped is None
+
+    def test_an_opener_that_waited_for_the_lock_does_not_build_again(
+        self, settings: Settings, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The deterministic half of GitHub #42: another opener builds and
+        commits between this one's unlocked look and its lock. Only the answer
+        given under the lock may decide, or this opener rebuilds a built index."""
+        self._write_two_documents(settings)
+        looked: list[bool] = []
+        real_is_empty = index_rebuilder.index_is_empty
+
+        def the_other_opener_wins_after_the_look(**counts: int) -> bool:
+            verdict = real_is_empty(**counts)
+            if not looked:
+                looked.append(verdict)
+                with closing(build_container(settings, background_embeddings=False)) as other:
+                    assert other.bootstrapped is not None
+            return verdict
+
+        monkeypatch.setattr(index_rebuilder, "index_is_empty", the_other_opener_wins_after_the_look)
+        with closing(build_container(settings, background_embeddings=False)) as opened:
+            assert opened.bootstrapped is None
+        assert looked == [True], "the race never happened, so nothing was tested"
+
+    def test_a_reindex_reads_under_the_write_lock(
+        self, dispatcher: Dispatcher, settings: Settings, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Every rebuild compares what it reads with the files and writes the
+        difference, so `docir reindex` racing another writer has #42's shape too."""
+        self._write_two_documents(settings)
+        another_could_write: list[bool] = []
+        real_reindex_tags = index_rebuilder.IndexRebuilder._reindex_tags
+
+        def probing(rebuilder: index_rebuilder.IndexRebuilder, uow: UnitOfWork) -> int:
+            with closing(sqlite3.connect(settings.db_path, timeout=0)) as other:
+                try:
+                    other.execute("BEGIN IMMEDIATE")
+                    another_could_write.append(True)
+                except sqlite3.OperationalError:
+                    another_could_write.append(False)
+            return real_reindex_tags(rebuilder, uow)
+
+        monkeypatch.setattr(index_rebuilder.IndexRebuilder, "_reindex_tags", probing)
+        dispatcher.dispatch("reindex", {})
+        assert another_could_write == [False]
+
+    def test_two_openers_racing_both_answer_and_one_builds(
+        self, settings: Settings, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """GitHub #42 replayed on real connections: two first commands in a fresh
+        worktree both look at the empty index before either commits. The loser
+        used to rebuild from that stale look, wait for the write lock, and fail
+        inserting rows the winner had just committed (`UNIQUE constraint failed`)."""
+        self._write_two_documents(settings)
+        settings.ensure_directories()
+        run_migrations(settings.database_url)  # so the race is the rebuild's
+        winner_is_committing = threading.Event()
+        loser_has_looked = threading.Event()
+        loser_looked: list[bool] = []
+        real_commit = SqlAlchemyUnitOfWork.commit
+        real_is_empty = index_rebuilder.index_is_empty
+
+        def commit(uow: SqlAlchemyUnitOfWork) -> None:
+            if threading.current_thread().name == "winner" and not winner_is_committing.is_set():
+                winner_is_committing.set()
+                loser_has_looked.wait(10)
+                time.sleep(0.3)  # long enough for the loser to reach the lock
+            real_commit(uow)
+
+        def is_empty(**counts: int) -> bool:
+            verdict = real_is_empty(**counts)
+            if threading.current_thread().name == "loser":
+                loser_looked.append(verdict)
+                loser_has_looked.set()
+            return verdict
+
+        monkeypatch.setattr(SqlAlchemyUnitOfWork, "commit", commit)
+        monkeypatch.setattr(index_rebuilder, "index_is_empty", is_empty)
+        outcomes: dict[str, object] = {}
+
+        def open_and_query() -> None:
+            name = threading.current_thread().name
+            try:
+                with closing(build_container(settings, background_embeddings=False)) as opened:
+                    rows = opened.dispatcher.dispatch("query", {"limit": 10})
+                    outcomes[name] = (opened.bootstrapped is not None, {r["id"] for r in rows})
+            except Exception as exc:  # the defect: the loser raised
+                outcomes[name] = exc
+
+        winner = threading.Thread(target=open_and_query, name="winner", daemon=True)
+        winner.start()
+        assert winner_is_committing.wait(10)
+        loser = threading.Thread(target=open_and_query, name="loser", daemon=True)
+        loser.start()
+        winner.join(30)
+        loser.join(30)
+
+        assert loser_looked[:1] == [True], "the loser looked after the winner committed"
+        both = {"adr-0001", "adr-0002"}
+        assert outcomes == {"winner": (True, both), "loser": (False, both)}
 
 
 class TestCheckRefusesToReportAVerdictItCouldNotReach:

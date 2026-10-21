@@ -16,6 +16,7 @@ related:
 - adr-909734bced92
 - arch-90c90751344f
 - issue-e5a0cb196607
+revoked: '2026-10-21'
 status: accepted
 tags:
 - architecture
@@ -24,12 +25,10 @@ tags:
 - integrity
 title: Opening a store with no index builds one, deferring the vectors
 type: decision
-updated: '2026-09-22'
-verified: '2026-09-22'
+updated: '2026-10-21'
 verified_code:
   src/docir/entry_points/composition.py: 88d0cea954b3
   src/docir/modules/documents/application/services/index_rebuilder.py: 9b1fe093b10d
-verified_content: 414abc54170b
 ---
 
 ## Context
@@ -99,10 +98,12 @@ repository nobody asked us to touch — the rule adr-fb938175f72a already sets.
   `empty-index`. That strengthens the merge gate issue-87410666c867 created rather than
   removing it; the finding stays, unreachable in the ordinary case and correct in the rest.
 - Opening a store can now write. With `--no-daemon`, parallel processes queue on SQLite's
-  write lock; the emptiness check and the rebuild are separate transactions, so a process
-  that read the count before the winner committed rebuilds again — idempotently, the same
-  rows — rather than skipping. Nothing pins that path; a sequential second open is what
-  the test covers.
+  write lock. Emptiness is asked twice: once unlocked, so an open of a built index takes no
+  lock, and again under the lock, which is the answer that decides. A process that saw the
+  index empty before the winner committed finds it built and skips the rebuild; the
+  migration that creates the tables runs under the same lock. Both are pinned with two
+  openers racing on real connections (GitHub #42). The lock waits up to five minutes, not
+  the usual five seconds, because what holds it is a corpus-sized rebuild.
 - The in-process CLI says what it did, once, on a terminal. Over the daemon the rebuild
   happens at daemon start and is visible where every other environment fact is: `docir
   doctor`.

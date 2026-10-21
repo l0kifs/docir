@@ -13,6 +13,7 @@ from types import TracebackType
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from docir.platform.persistence.engine import begin_immediate
 from docir.platform.persistence.repositories import (
     SqlAlchemyChunkEmbeddingRepository,
     SqlAlchemyDocumentRepository,
@@ -59,6 +60,10 @@ class SqlAlchemyUnitOfWork(UnitOfWork):
             if self._session is not None:
                 self._session.close()
                 self._session = None
+
+    def lock(self) -> None:
+        assert self._session is not None, "unit of work is not active"
+        begin_immediate(self._session.connection())
 
     def commit(self) -> None:
         assert self._session is not None, "unit of work is not active"

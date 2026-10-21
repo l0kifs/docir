@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Two first commands in a fresh clone or worktree both answer** (issue-308e5207c77b,
+  GitHub #42). Both found the index unbuilt and both built it; the slower one exited 1 with
+  `UNIQUE constraint failed: tags.key`, or `table alembic_version already exists` when they
+  started within ~0.2s, and a second daemon died at startup the same way. Creating the index
+  tables and the first rebuild now take SQLite's write lock before they look, so the second
+  command waits for the first and finds the index built. The wait is up to five minutes
+  rather than five seconds, which is what lets four simultaneous first commands on a
+  2,000-document store all succeed. Opening a built index takes no lock, so ordinary
+  commands do not queue behind a writer.
+
 ## [0.30.3] - 2026-10-17
 
 ### Fixed

@@ -35,7 +35,6 @@ from docir.modules.documents.api import (
     MaintenanceService,
     ReindexResult,
     check_schema_conformance,
-    index_is_empty,
     load_schema,
     render_schema_yaml,
 )
@@ -294,7 +293,7 @@ def build_container(
     )
     dispatcher = Dispatcher(document_service, tag_service, maintenance_service, clock)
     bootstrapped = _bootstrap_index(
-        maintenance_service, uow_factory, file_store, scheduler, background=background_embeddings
+        maintenance_service, scheduler, background=background_embeddings
     )
 
     def open_peer(home: Path) -> tuple[Reader | None, str]:
@@ -312,8 +311,6 @@ def build_container(
 
 def _bootstrap_index(
     maintenance: MaintenanceService,
-    uow_factory: Callable[[], UnitOfWork],
-    file_store: MarkdownDocumentFileStore,
     scheduler: EmbeddingScheduler,
     *,
     background: bool,
@@ -329,9 +326,11 @@ def _bootstrap_index(
 
     The condition is `index_is_empty`, the same comparison behind `check`'s and
     `doctor`'s `empty-index` — so a store that is merely *behind* is untouched
-    and stays their business. The rebuild is safe for the reason the whole
-    architecture rests on: the files are canonical and the index is derived, so
-    it can only make the two agree, and it writes no markdown.
+    and stays their business. The bootstrap asks it again under the write
+    lock, so of two first commands only one builds (GitHub #42). The rebuild
+    is safe for the reason the whole architecture rests on: the files are
+    canonical and the index is derived, so it can only make the two agree, and
+    it writes no markdown.
 
     It is affordable because it defers the vectors — ~0.9s against ~70s on this
     repository's 191 documents — and :meth:`MaintenanceService.bootstrap`
@@ -343,12 +342,8 @@ def _bootstrap_index(
     and a federated read that rebuilt somebody else's index would make a read
     a write in a repository nobody asked us to touch.
     """
-    with uow_factory() as uow:
-        documents = uow.documents.count()
-    if not index_is_empty(documents=documents, documents_on_disk=file_store.count()):
-        return None
     result = maintenance.bootstrap()
-    if background:
+    if result is not None and background:
         scheduler.wake()
     return result
 
